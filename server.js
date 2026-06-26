@@ -164,7 +164,7 @@ app.get('/api/tickets', async (req, res) => {
         serviceTypes: svcNames,
         serviceTypeIds: svcIds,
         description: t.ufCrm8_1760688207256 || t.ufCrm8_1732855669306 || null,
-        bitrixUrl: `https://crm.prolabsupport.kz/crm/type/${ENTITY_TYPE_ID}/item/${t.id}/`,
+        bitrixUrl: `https://crm.prolabsupport.kz/crm/type/${ENTITY_TYPE_ID}/details/${t.id}/`,
       };
     });
 
