@@ -85,7 +85,7 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); font-si
 .tscroll { overflow-x:auto; }
 table { width:100%; border-collapse:collapse; }
 col.c-id { width:60px; } col.c-title { min-width:200px; } col.c-svc { width:160px; }
-col.c-stage { width:170px; } col.c-coord { width:125px; } col.c-eng { width:135px; }
+col.c-stage { width:170px; } col.c-days { width:68px; } col.c-coord { width:125px; } col.c-eng { width:135px; }
 col.c-urg { width:115px; } col.c-date { width:95px; } col.c-ovd { width:85px; } col.c-act { width:76px; }
 thead tr { background:var(--bg); }
 th { padding:10px 14px; text-align:left; font-size:11px; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:.6px; border-bottom:1px solid var(--border); white-space:nowrap; }
@@ -108,6 +108,13 @@ tr.tr:hover td { background:#fafbfd; }
 .dold { color:var(--red);font-weight:500; } .dnorm { color:var(--text-3); }
 .oyes { display:inline-flex;align-items:center;gap:4px;color:var(--red);font-weight:600;font-size:12px; }
 .ono { color:var(--text-4);font-size:12px; }
+/* Days on stage */
+col.c-days { width:68px; }
+.days-badge { display:inline-flex;align-items:center;justify-content:center;border-radius:6px;padding:3px 8px;font-size:12px;font-weight:700;min-width:36px;font-variant-numeric:tabular-nums; }
+.days-ok   { background:rgba(5,150,105,.1);color:#065f46; }
+.days-warn { background:rgba(217,119,6,.1);color:#92400e; }
+.days-crit { background:rgba(220,38,38,.1);color:#991b1b; }
+.days-none { color:var(--text-4);font-size:12px; }
 .person-row { display:flex;align-items:center;gap:6px; }
 .eng-av { width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;text-transform:uppercase; }
 .eng-av.coord { background:linear-gradient(135deg,#f093fb,#f5576c); }
@@ -564,6 +571,16 @@ function renderTable(items) {
     const dateStr=t.createdTime?new Date(t.createdTime).toLocaleDateString('ru',{day:'2-digit',month:'2-digit',year:'2-digit'}):'—';
     const dcls=days>14?'dold':'dnorm';
     const ovd=t.isOverdue?`<span class="oyes"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Да</span>`:`<span class="ono">—</span>`;
+    // Days on stage badge
+    let daysHtml;
+    if (t.daysOnStage !== null && t.daysOnStage !== undefined) {
+      const d = t.daysOnStage;
+      const cls = d <= 2 ? 'days-ok' : d <= 5 ? 'days-warn' : 'days-crit';
+      const label = d === 0 ? '<1' : d;
+      daysHtml = `<span class="days-badge ${cls}" title="На стадии ${d} дн.">${label}</span>`;
+    } else {
+      daysHtml = '<span class="days-none">—</span>';
+    }
     const ci=t.coordinator?t.coordinator.trim().split(' ').map(w=>w[0]||'').join('').slice(0,2):'';
     const coordHtml=t.coordinator?`<div class="person-row"><div class="eng-av coord">${esc(ci)}</div><span class="person-name">${esc(t.coordinator)}</span></div>`:`<span style="color:var(--text-4);font-size:12px">—</span>`;
     const ei=t.engineer?t.engineer.trim().split(' ').map(w=>w[0]||'').join('').slice(0,2):'';
@@ -576,6 +593,7 @@ function renderTable(items) {
       <td><div class="tname">${esc(title)}</div>${t.description?`<div class="tdesc">${esc(t.description)}</div>`:''}</td>
       <td>${svcHtml}</td>
       <td>${pill}</td>
+      <td style="text-align:center">${daysHtml}</td>
       <td>${coordHtml}</td>
       <td>${engHtml}</td>
       <td>${urgHtml}</td>
@@ -598,8 +616,8 @@ function renderTable(items) {
   }).join('');
 
   wrap.innerHTML=`<table>
-    <colgroup><col class="c-id"><col class="c-title"><col class="c-svc"><col class="c-stage"><col class="c-coord"><col class="c-eng"><col class="c-urg"><col class="c-date"><col class="c-ovd"><col class="c-act"></colgroup>
-    <thead><tr><th>ID</th><th>Заявка</th><th>Тип услуги</th><th>Стадия</th><th>Координатор</th><th>Инженер</th><th>Срочность</th><th>Создана</th><th>Просрочена</th><th>Действия</th></tr></thead>
+    <colgroup><col class="c-id"><col class="c-title"><col class="c-svc"><col class="c-stage"><col class="c-days"><col class="c-coord"><col class="c-eng"><col class="c-urg"><col class="c-date"><col class="c-ovd"><col class="c-act"></colgroup>
+    <thead><tr><th>ID</th><th>Заявка</th><th>Тип услуги</th><th>Стадия</th><th title="Дней на текущей стадии">Дней</th><th>Координатор</th><th>Инженер</th><th>Срочность</th><th>Создана</th><th>Просрочена</th><th>Действия</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
 }

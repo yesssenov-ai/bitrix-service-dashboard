@@ -134,6 +134,8 @@ function enrichItem(t) {
     serviceTypes: svcIds.map(id => SERVICE_TYPES[id] || `Тип ${id}`),
     description: t.ufCrm8_1760688207256 || t.ufCrm8_1732855669306 || null,
     comment: t.ufCrm8_1732856926809 || null,
+    movedTime: t.movedTime || null,
+    daysOnStage: t.movedTime ? Math.floor((Date.now() - new Date(t.movedTime)) / 86400000) : null,
     bitrixUrl: `https://crm.prolabsupport.kz/crm/type/${ENTITY_TYPE_ID}/details/${t.id}/`,
   };
 }
@@ -160,7 +162,7 @@ app.get('/api/tickets', async (req, res) => {
         entityTypeId: ENTITY_TYPE_ID, filter,
         select: ['id','title','stageId','createdTime','updatedTime','assignedById',
           'ufCrm8_1744300223','ufCrm8_1732856252874','ufCrm8_1732856215147',
-          'ufCrm8_1760688207256','ufCrm8_1732855669306','ufCrm8_1732856926809'],
+          'ufCrm8_1760688207256','ufCrm8_1732855669306','ufCrm8_1732856926809','movedTime'],
         order: { createdTime: 'DESC' }, start,
       });
       if (!data.result?.items?.length) break;
