@@ -144,7 +144,7 @@ function enrichItem(t) {
 
 app.get('/api/tickets', async (req, res) => {
   try {
-    const { stage, urgent, overdue, search, engineer, coordinator, serviceType } = req.query;
+    const { stage, urgent, overdue, search, engineer, coordinator, serviceType, presetSvcTypes } = req.query;
 
     const filter = { categoryId: CATEGORY_ID };
     if (stage && stage !== 'all' && stage !== 'active') {
@@ -182,6 +182,17 @@ app.get('/api/tickets', async (req, res) => {
 
     if (engineer && engineer !== 'all') enriched = enriched.filter(t => t.engineer === engineer);
     if (coordinator && coordinator !== 'all') enriched = enriched.filter(t => t.coordinator === coordinator);
+
+    // Preset service type filter (client-side OR logic across multiple types)
+    if (presetSvcTypes && presetSvcTypes !== '') {
+      const allowedIds = new Set(presetSvcTypes.split(','));
+      enriched = enriched.filter(t =>
+        t.serviceTypeIds && t.serviceTypeIds.length > 0
+          ? t.serviceTypeIds.some(id => allowedIds.has(String(id)))
+          : false
+      );
+    }
+
     if (search?.trim()) {
       const q = search.toLowerCase();
       enriched = enriched.filter(t =>

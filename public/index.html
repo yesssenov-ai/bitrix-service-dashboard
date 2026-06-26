@@ -235,9 +235,39 @@ col.c-days { width:68px; }
     </div>
   </div>
 
-  <div class="stage-wrap" id="stageTabs">
-    <button class="stab active" data-s="active" onclick="selectStage('active',this)" style="--tc:#2563eb;--tc-bg:rgba(37,99,235,.08)">Все активные</button>
-    <button class="stab" data-s="all" onclick="selectStage('all',this)" style="--tc:#6b7280;--tc-bg:rgba(107,114,128,.08)">Все заявки</button>
+  <div class="stage-wrap" id="presetTabs">
+    <button class="stab active" data-preset="tickets" onclick="selectPreset('tickets',this)"
+      style="--tc:#dc2626;--tc-bg:rgba(220,38,38,.08)">
+      🎫 Tickets
+      <span class="stab-cnt" id="cnt-tickets">—</span>
+    </button>
+    <button class="stab" data-preset="docs" onclick="selectPreset('docs',this)"
+      style="--tc:#7c3aed;--tc-bg:rgba(124,58,237,.08)">
+      📄 Подготовка доков и допов
+      <span class="stab-cnt" id="cnt-docs">—</span>
+    </button>
+    <button class="stab" data-preset="obligations" onclick="selectPreset('obligations',this)"
+      style="--tc:#0369a1;--tc-bg:rgba(37,99,235,.08)">
+      🔧 Текущие обязательства
+      <span class="stab-cnt" id="cnt-obligations">—</span>
+    </button>
+    <button class="stab" data-preset="overdue" onclick="selectPreset('overdue',this)"
+      style="--tc:#dc2626;--tc-bg:rgba(220,38,38,.08)">
+      ⚠️ Просроченные
+      <span class="stab-cnt" id="cnt-overdue">—</span>
+    </button>
+    <button class="stab" data-preset="all" onclick="selectPreset('all',this)"
+      style="--tc:#6b7280;--tc-bg:rgba(107,114,128,.08)">
+      Все заявки
+      <span class="stab-cnt" id="cnt-all">—</span>
+    </button>
+    <button class="stab" data-preset="reset" onclick="resetFilters()"
+      style="--tc:#059669;--tc-bg:rgba(5,150,105,.08)">
+      ↺ Сброс фильтров
+    </button>
+  </div>
+  <!-- Stage sub-tabs (hidden by default, shown when needed) -->
+  <div class="stage-wrap" id="stageTabs" style="display:none">
   </div>
 
   <div class="fbar">
@@ -451,14 +481,57 @@ const SSTYLE = {
   'DT1058_11:FAIL':        {f:'#7f1d1d',b:'rgba(220,38,38,.06)',r:'rgba(220,38,38,.15)'},
 };
 
-let curStage='active', dbt=null, allStages={}, allUsers=[], curTicketId=null, curTab='remind', curChat='ops';
+let curStage='active', curPreset='tickets', dbt=null, allStages={}, allUsers=[], curTicketId=null, curTab='remind', curChat='ops';
+
+// Preset definitions
+const PRESETS = {
+  tickets:     { serviceTypes: ['619','114','109'], label: 'Tickets' },
+  docs:        { serviceTypes: ['402','111'], label: 'Подготовка доков и допов' },
+  obligations: { serviceTypes: ['103','104','105','106','108','110'], label: 'Текущие обязательства' },
+  overdue:     { overdue: 'yes', label: 'Просроченные' },
+  all:         { label: 'Все заявки' },
+};
 
 // ── Load ──────────────────────────────────────────────────────────────────────
 
+function selectPreset(preset, el) {
+  curPreset = preset;
+  document.querySelectorAll('#presetTabs .stab').forEach(b=>b.classList.remove('active'));
+  (el||document.querySelector(`[data-preset="${preset}"]`))?.classList.add('active');
+
+  // Apply preset filters
+  const def = PRESETS[preset] || {};
+
+  // Reset manual filters
+  document.getElementById('fsvc').value = 'all';
+  document.getElementById('fovd').value = def.overdue || 'all';
+  document.getElementById('furg').value = 'all';
+  document.getElementById('feng').value = 'all';
+  document.getElementById('fcoord').value = 'all';
+  document.getElementById('fsearch').value = '';
+
+  curStage = 'active';
+  load();
+}
+
+function resetFilters() {
+  curPreset = 'tickets';
+  document.querySelectorAll('#presetTabs .stab').forEach(b=>b.classList.remove('active'));
+  document.querySelector('[data-preset="tickets"]')?.classList.add('active');
+  document.getElementById('fsvc').value = 'all';
+  document.getElementById('fovd').value = 'all';
+  document.getElementById('furg').value = 'all';
+  document.getElementById('feng').value = 'all';
+  document.getElementById('fcoord').value = 'all';
+  document.getElementById('fsearch').value = '';
+  curStage = 'active';
+  load();
+}
+
 function selectStage(s,el) {
   curStage=s;
-  document.querySelectorAll('.stab').forEach(b=>b.classList.remove('active'));
-  (el||document.querySelector(`.stab[data-s="${s}"]`))?.classList.add('active');
+  document.querySelectorAll('#stageTabs .stab').forEach(b=>b.classList.remove('active'));
+  (el||document.querySelector(`#stageTabs .stab[data-s="${s}"]`))?.classList.add('active');
   load();
 }
 function setF(id,val){document.getElementById(id).value=val;load();}
@@ -466,11 +539,19 @@ function debLoad(){clearTimeout(dbt);dbt=setTimeout(load,380);}
 
 async function load() {
   document.getElementById('btnRef').classList.add('loading');
+  // Apply preset service type filter
+  const preset = PRESETS[curPreset] || {};
+  const manualSvc = document.getElementById('fsvc').value;
+  let serviceTypeParam = manualSvc !== 'all' ? manualSvc : 'all';
+
+  // If preset has serviceTypes and no manual override, we filter client-side
   const p=new URLSearchParams({
     stage:curStage, search:document.getElementById('fsearch').value,
-    urgent:document.getElementById('furg').value, overdue:document.getElementById('fovd').value,
+    urgent:document.getElementById('furg').value,
+    overdue:document.getElementById('fovd').value || (preset.overdue||'all'),
     engineer:document.getElementById('feng').value, coordinator:document.getElementById('fcoord').value,
-    serviceType:document.getElementById('fsvc').value,
+    serviceType:serviceTypeParam,
+    presetSvcTypes: preset.serviceTypes ? preset.serviceTypes.join(',') : '',
   });
   try {
     const r=await fetch('/api/tickets?'+p);
@@ -483,6 +564,14 @@ async function load() {
     document.getElementById('kUrg').textContent=d.stats.urgent;
     document.getElementById('kOvd').textContent=d.stats.overdue;
     document.getElementById('kClose').textContent=d.stats.byStage['DT1058_11:SUCCESS']?.count??0;
+
+    // Update preset counts if available
+    if(d.presetCounts) {
+      Object.entries(d.presetCounts).forEach(([k,v])=>{
+        const el=document.getElementById('cnt-'+k);
+        if(el) el.textContent=v;
+      });
+    }
 
     buildTabs(d.stages,d.stats.byStage);
     populateSvc(d.serviceTypes);
@@ -741,7 +830,7 @@ function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
 
 setInterval(load, 5*60*1000);
 loadUsers();
-load();
+selectPreset('tickets', document.querySelector('[data-preset="tickets"]'));
 </script>
 </body>
 </html>
