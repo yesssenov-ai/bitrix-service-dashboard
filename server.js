@@ -186,10 +186,11 @@ app.get('/api/tickets', async (req, res) => {
     // Preset service type filter (client-side OR logic)
     if (presetSvcTypes && presetSvcTypes !== '') {
       const allowedIds = new Set(presetSvcTypes.split(','));
-      enriched = enriched.filter(t => {
-        if (!t.serviceTypeIds || t.serviceTypeIds.length === 0) return false;
-        return t.serviceTypeIds.some(id => allowedIds.has(String(id)));
-      });
+      enriched = enriched.filter(t =>
+        Array.isArray(t.serviceTypeIds) &&
+        t.serviceTypeIds.length > 0 &&
+        t.serviceTypeIds.some(id => allowedIds.has(String(id)))
+      );
     }
 
     if (search?.trim()) {
