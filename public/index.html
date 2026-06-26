@@ -586,8 +586,7 @@ function renderTable(items) {
     const ei=t.engineer?t.engineer.trim().split(' ').map(w=>w[0]||'').join('').slice(0,2):'';
     const engHtml=t.engineer?`<div class="person-row"><div class="eng-av">${esc(ei)}</div><span class="person-name">${esc(t.engineer)}</span></div>`:`<span style="color:var(--text-4);font-size:12px">—</span>`;
     const title=(t.title||'').replace(/^[-\s–—]+/,'').replace(/[-\s–—]+$/,'').trim()||'(без названия)';
-    const tidStr=JSON.stringify(t.id);
-    const titleStr=JSON.stringify(title);
+
     return `<tr class="tr">
       <td><span class="idbadge">${t.id}</span></td>
       <td><div class="tname">${esc(title)}</div>${t.description?`<div class="tdesc">${esc(t.description)}</div>`:''}</td>
@@ -601,10 +600,10 @@ function renderTable(items) {
       <td>${ovd}</td>
       <td>
         <div class="act-btns">
-          <button class="act-btn edit" title="Редактировать / комментарий" onclick="openEdit(${tidStr},${titleStr})">
+          <button class="act-btn edit" title="Редактировать / комментарий" data-id="${t.id}" data-title="${esc(title)}" onclick="openEditBtn(this)">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           </button>
-          <button class="act-btn bell" title="Напоминание / задача" onclick="openBell(${tidStr},${titleStr})">
+          <button class="act-btn bell" title="Напоминание / задача" data-id="${t.id}" data-title="${esc(title)}" onclick="openBellBtn(this)">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
           </button>
           <a href="${esc(t.bitrixUrl)}" target="_blank" class="act-btn link" title="Открыть в Б24">
@@ -728,6 +727,8 @@ function toast(msg, type='success') {
   setTimeout(()=>el.classList.remove('show'), 3500);
 }
 
+function openEditBtn(btn) { openEdit(Number(btn.dataset.id), btn.dataset.title); }
+function openBellBtn(btn) { openBell(Number(btn.dataset.id), btn.dataset.title); }
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 setInterval(load, 5*60*1000);
