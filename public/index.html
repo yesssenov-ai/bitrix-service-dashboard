@@ -9,165 +9,164 @@
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --white: #ffffff;
-  --bg: #f5f6fa;
-  --bg2: #eef0f7;
-  --surface: #ffffff;
-  --border: #e3e6ef;
-  --border2: #d0d4e4;
-  --text: #111827;
-  --text-2: #374151;
-  --text-3: #6b7280;
-  --text-4: #9ca3af;
-  --accent: #C53B2F;
-  --accent-h: #a83226;
-  --accent-light: rgba(197,59,47,.08);
-  --blue: #2563eb;
-  --blue-light: rgba(37,99,235,.08);
-  --green: #059669;
-  --orange: #d97706;
-  --orange-light: rgba(217,119,6,.09);
-  --red: #dc2626;
-  --red-light: rgba(220,38,38,.08);
-  --purple: #7c3aed;
-  --purple-light: rgba(124,58,237,.08);
-  --teal: #0f766e;
-  --teal-light: rgba(15,118,110,.08);
-  --shadow-sm: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
-  --shadow: 0 4px 16px rgba(0,0,0,.07), 0 1px 4px rgba(0,0,0,.04);
-  --radius: 10px;
-  --font: 'Inter', system-ui, sans-serif;
+  --white:#ffffff; --bg:#f5f6fa; --bg2:#eef0f7; --surface:#ffffff;
+  --border:#e3e6ef; --border2:#d0d4e4;
+  --text:#111827; --text-2:#374151; --text-3:#6b7280; --text-4:#9ca3af;
+  --accent:#C53B2F; --accent-h:#a83226; --accent-light:rgba(197,59,47,.08);
+  --blue:#2563eb; --blue-light:rgba(37,99,235,.08);
+  --green:#059669; --green-light:rgba(5,150,105,.08);
+  --orange:#d97706; --orange-light:rgba(217,119,6,.09);
+  --red:#dc2626; --red-light:rgba(220,38,38,.08);
+  --purple:#7c3aed; --purple-light:rgba(124,58,237,.08);
+  --teal:#0f766e; --teal-light:rgba(15,118,110,.08);
+  --shadow-sm:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --shadow:0 4px 16px rgba(0,0,0,.07),0 1px 4px rgba(0,0,0,.04);
+  --shadow-lg:0 20px 60px rgba(0,0,0,.15);
+  --radius:10px; --font:'Inter',system-ui,sans-serif;
 }
-body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+body { font-family:var(--font); background:var(--bg); color:var(--text); font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; }
 
 /* HEADER */
-.header { background: var(--white); border-bottom: 1px solid var(--border); height: 60px; display: flex; align-items: center; padding: 0 28px; position: sticky; top: 0; z-index: 200; box-shadow: 0 2px 8px rgba(0,0,0,.04); gap: 0; }
-.logo { display: flex; align-items: center; gap: 11px; font-weight: 700; font-size: 15px; letter-spacing: -.3px; flex-shrink: 0; }
-.logo-mark { width: 32px; height: 32px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
-.logo-mark svg { width: 16px; height: 16px; }
-.hdiv { width: 1px; height: 24px; background: var(--border2); margin: 0 18px; }
-.h-sub { font-size: 13.5px; font-weight: 500; color: var(--text-3); }
-.h-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
-.h-time { font-size: 12px; color: var(--text-4); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; }
-.btn { display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; padding: 7px 14px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border2); background: transparent; color: var(--text-2); transition: all .15s; font-family: var(--font); white-space: nowrap; }
-.btn:hover { background: var(--bg); }
-.btn.loading svg { animation: spin .7s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.header { background:var(--white); border-bottom:1px solid var(--border); height:60px; display:flex; align-items:center; padding:0 28px; position:sticky; top:0; z-index:200; box-shadow:0 2px 8px rgba(0,0,0,.04); }
+.logo { display:flex; align-items:center; gap:11px; font-weight:700; font-size:15px; letter-spacing:-.3px; flex-shrink:0; }
+.logo-mark { width:32px; height:32px; background:var(--accent); border-radius:8px; display:flex; align-items:center; justify-content:center; }
+.logo-mark svg { width:16px; height:16px; }
+.hdiv { width:1px; height:24px; background:var(--border2); margin:0 18px; }
+.h-sub { font-size:13.5px; font-weight:500; color:var(--text-3); }
+.h-right { margin-left:auto; display:flex; align-items:center; gap:10px; }
+.h-time { font-size:12px; color:var(--text-4); background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:4px 10px; }
+.btn { display:inline-flex; align-items:center; gap:6px; border-radius:8px; padding:7px 14px; font-size:13px; font-weight:500; cursor:pointer; border:1px solid var(--border2); background:transparent; color:var(--text-2); transition:all .15s; font-family:var(--font); white-space:nowrap; }
+.btn:hover { background:var(--bg); }
+.btn-primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+.btn-primary:hover { background:var(--accent-h); }
+.btn.loading svg { animation:spin .7s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
 
 /* PAGE */
-.page { max-width: 1600px; margin: 0 auto; padding: 24px 28px 60px; }
-.ph { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 22px; }
-.ph h1 { font-size: 21px; font-weight: 700; letter-spacing: -.4px; margin-bottom: 2px; }
-.ph p { font-size: 13px; color: var(--text-3); }
+.page { max-width:1640px; margin:0 auto; padding:24px 28px 60px; }
+.ph { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:22px; }
+.ph h1 { font-size:21px; font-weight:700; letter-spacing:-.4px; margin-bottom:2px; }
+.ph p { font-size:13px; color:var(--text-3); }
 
 /* KPI */
-.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 12px; margin-bottom: 20px; }
-.kpi { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow-sm); cursor: pointer; transition: box-shadow .15s, border-color .15s, transform .1s; position: relative; overflow: hidden; }
-.kpi:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
-.kpi.active { border-color: var(--kc, var(--accent)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--kc, var(--accent)) 12%, transparent), var(--shadow); }
-.kpi-bar { position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--kc, var(--accent)); }
-.kpi-icon { width: 34px; height: 34px; border-radius: 8px; background: color-mix(in srgb, var(--kc, var(--accent)) 10%, transparent); display: flex; align-items: center; justify-content: center; margin-bottom: 12px; color: var(--kc, var(--accent)); }
-.kpi-num { font-size: 30px; font-weight: 800; color: var(--text); line-height: 1; letter-spacing: -1px; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
-.kpi-label { font-size: 11.5px; color: var(--text-3); font-weight: 500; text-transform: uppercase; letter-spacing: .5px; }
+.kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(175px,1fr)); gap:12px; margin-bottom:20px; }
+.kpi { background:var(--white); border:1px solid var(--border); border-radius:var(--radius); padding:18px 20px; box-shadow:var(--shadow-sm); cursor:pointer; transition:box-shadow .15s,border-color .15s,transform .1s; position:relative; overflow:hidden; }
+.kpi:hover { box-shadow:var(--shadow); transform:translateY(-1px); }
+.kpi.active { border-color:var(--kc,var(--accent)); box-shadow:0 0 0 3px color-mix(in srgb,var(--kc,var(--accent)) 12%,transparent),var(--shadow); }
+.kpi-bar { position:absolute; top:0; left:0; right:0; height:3px; background:var(--kc,var(--accent)); }
+.kpi-icon { width:34px; height:34px; border-radius:8px; background:color-mix(in srgb,var(--kc,var(--accent)) 10%,transparent); display:flex; align-items:center; justify-content:center; margin-bottom:12px; color:var(--kc,var(--accent)); }
+.kpi-num { font-size:30px; font-weight:800; color:var(--text); line-height:1; letter-spacing:-1px; margin-bottom:4px; font-variant-numeric:tabular-nums; }
+.kpi-label { font-size:11.5px; color:var(--text-3); font-weight:500; text-transform:uppercase; letter-spacing:.5px; }
 
 /* STAGE TABS */
-.stage-wrap { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px; margin-bottom: 14px; box-shadow: var(--shadow-sm); display: flex; gap: 2px; flex-wrap: wrap; }
-.stab { display: inline-flex; align-items: center; gap: 6px; border-radius: 7px; padding: 7px 12px; font-size: 12.5px; font-weight: 500; cursor: pointer; border: none; background: transparent; color: var(--text-3); transition: all .15s; font-family: var(--font); white-space: nowrap; }
-.stab:hover { background: var(--bg); color: var(--text); }
-.stab.active { background: var(--tc-bg, var(--accent-light)); color: var(--tc, var(--accent)); font-weight: 600; }
-.stab-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-.stab-cnt { background: color-mix(in srgb, currentColor 15%, transparent); border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 700; min-width: 20px; text-align: center; }
+.stage-wrap { background:var(--white); border:1px solid var(--border); border-radius:var(--radius); padding:4px; margin-bottom:14px; box-shadow:var(--shadow-sm); display:flex; gap:2px; flex-wrap:wrap; }
+.stab { display:inline-flex; align-items:center; gap:6px; border-radius:7px; padding:7px 12px; font-size:12.5px; font-weight:500; cursor:pointer; border:none; background:transparent; color:var(--text-3); transition:all .15s; font-family:var(--font); white-space:nowrap; }
+.stab:hover { background:var(--bg); color:var(--text); }
+.stab.active { background:var(--tc-bg,var(--accent-light)); color:var(--tc,var(--accent)); font-weight:600; }
+.stab-dot { width:7px; height:7px; border-radius:50%; background:currentColor; flex-shrink:0; }
+.stab-cnt { background:color-mix(in srgb,currentColor 15%,transparent); border-radius:10px; padding:1px 7px; font-size:11px; font-weight:700; min-width:20px; text-align:center; }
 
 /* FILTER BAR */
-.fbar { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 14px; box-shadow: var(--shadow-sm); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.sw { flex: 1; min-width: 220px; position: relative; }
-.si { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-4); pointer-events: none; }
-.sinput { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px 8px 34px; font-size: 13px; color: var(--text); font-family: var(--font); outline: none; transition: border-color .15s, box-shadow .15s; }
-.sinput:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); background: var(--white); }
-.sinput::placeholder { color: var(--text-4); }
-.fsel { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 13px; color: var(--text); font-family: var(--font); outline: none; cursor: pointer; min-width: 160px; transition: border-color .15s; }
-.fsel:focus { border-color: var(--accent); }
-.fdiv { width: 1px; height: 24px; background: var(--border); flex-shrink: 0; }
+.fbar { background:var(--white); border:1px solid var(--border); border-radius:var(--radius); padding:12px 16px; margin-bottom:14px; box-shadow:var(--shadow-sm); display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.sw { flex:1; min-width:220px; position:relative; }
+.si { position:absolute; left:11px; top:50%; transform:translateY(-50%); color:var(--text-4); pointer-events:none; }
+.sinput { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:8px 12px 8px 34px; font-size:13px; color:var(--text); font-family:var(--font); outline:none; transition:border-color .15s,box-shadow .15s; }
+.sinput:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-light); background:var(--white); }
+.sinput::placeholder { color:var(--text-4); }
+.fsel { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:13px; color:var(--text); font-family:var(--font); outline:none; cursor:pointer; min-width:150px; transition:border-color .15s; }
+.fsel:focus { border-color:var(--accent); }
+.fdiv { width:1px; height:24px; background:var(--border); flex-shrink:0; }
 
 /* TABLE */
-.tcard { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; }
-.ttbar { display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; border-bottom: 1px solid var(--border); }
-.ttitle { font-size: 13px; font-weight: 600; color: var(--text); }
-.cpill { display: inline-flex; align-items: center; background: var(--bg); border: 1px solid var(--border); border-radius: 20px; padding: 2px 10px; font-size: 12px; font-weight: 600; color: var(--text-2); margin-left: 8px; }
-.tscroll { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; }
-col.c-id { width: 64px; }
-col.c-title { min-width: 220px; }
-col.c-svc { width: 180px; }
-col.c-stage { width: 180px; }
-col.c-coord { width:130px; }
-col.c-eng { width:145px; }
-col.c-urg { width: 125px; }
-col.c-date { width: 105px; }
-col.c-ovd { width: 95px; }
-col.c-lnk { width: 48px; }
-thead tr { background: var(--bg); }
-th { padding: 10px 15px; text-align: left; font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-td { padding: 12px 15px; border-bottom: 1px solid var(--border); vertical-align: middle; font-size: 13px; color: var(--text-2); }
-tr:last-child td { border-bottom: none; }
-tr.tr:hover td { background: #fafbfd; }
+.tcard { background:var(--white); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-sm); overflow:hidden; }
+.ttbar { display:flex; align-items:center; justify-content:space-between; padding:13px 18px; border-bottom:1px solid var(--border); }
+.ttitle { font-size:13px; font-weight:600; color:var(--text); }
+.cpill { display:inline-flex; align-items:center; background:var(--bg); border:1px solid var(--border); border-radius:20px; padding:2px 10px; font-size:12px; font-weight:600; color:var(--text-2); margin-left:8px; }
+.tscroll { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; }
+col.c-id { width:60px; } col.c-title { min-width:200px; } col.c-svc { width:160px; }
+col.c-stage { width:170px; } col.c-coord { width:125px; } col.c-eng { width:135px; }
+col.c-urg { width:115px; } col.c-date { width:95px; } col.c-ovd { width:85px; } col.c-act { width:76px; }
+thead tr { background:var(--bg); }
+th { padding:10px 14px; text-align:left; font-size:11px; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:.6px; border-bottom:1px solid var(--border); white-space:nowrap; }
+td { padding:11px 14px; border-bottom:1px solid var(--border); vertical-align:middle; font-size:13px; color:var(--text-2); }
+tr:last-child td { border-bottom:none; }
+tr.tr:hover td { background:#fafbfd; }
 
 /* Cells */
-.idbadge { font-size: 11.5px; font-weight: 600; color: var(--text-4); font-variant-numeric: tabular-nums; background: var(--bg); border-radius: 5px; padding: 2px 6px; border: 1px solid var(--border); }
-.tname { font-weight: 500; color: var(--text); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 2px; }
-.tdesc { font-size: 12px; color: var(--text-4); display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
-
-/* Service type tags */
-.svc-tags { display: flex; flex-wrap: wrap; gap: 4px; }
-.svc-tag { display: inline-block; background: var(--teal-light); color: var(--teal); border: 1px solid rgba(15,118,110,.2); border-radius: 5px; padding: 2px 7px; font-size: 11px; font-weight: 600; white-space: nowrap; }
-
-.spill { display: inline-flex; align-items: center; gap: 5px; border-radius: 6px; padding: 4px 9px; font-size: 11.5px; font-weight: 600; white-space: nowrap; background: var(--pb); color: var(--pf); border: 1px solid var(--pbr); }
-.pdot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-
+.idbadge { font-size:11.5px; font-weight:600; color:var(--text-4); font-variant-numeric:tabular-nums; background:var(--bg); border-radius:5px; padding:2px 6px; border:1px solid var(--border); }
+.tname { font-weight:500; color:var(--text); line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; margin-bottom:2px; }
+.tdesc { font-size:12px; color:var(--text-4); display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden; }
+.svc-tags { display:flex; flex-wrap:wrap; gap:4px; }
+.svc-tag { display:inline-block; background:var(--teal-light); color:var(--teal); border:1px solid rgba(15,118,110,.2); border-radius:5px; padding:2px 7px; font-size:11px; font-weight:600; white-space:nowrap; }
+.spill { display:inline-flex; align-items:center; gap:5px; border-radius:6px; padding:4px 9px; font-size:11.5px; font-weight:600; white-space:nowrap; background:var(--pb); color:var(--pf); border:1px solid var(--pbr); }
+.pdot { width:6px; height:6px; border-radius:50%; background:currentColor; flex-shrink:0; }
 .u-urgent { display:inline-flex;align-items:center;gap:5px;background:var(--orange-light);color:var(--orange);border:1px solid rgba(217,119,6,.2);border-radius:6px;padding:3px 8px;font-size:11.5px;font-weight:600; }
 .u-normal { display:inline-flex;align-items:center;gap:5px;background:var(--bg);color:var(--text-3);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11.5px; }
 .u-training { display:inline-flex;align-items:center;gap:5px;background:var(--purple-light);color:var(--purple);border:1px solid rgba(124,58,237,.2);border-radius:6px;padding:3px 8px;font-size:11.5px;font-weight:600; }
-
 .dval { font-size:12.5px;font-variant-numeric:tabular-nums; }
-.dold { color:var(--red);font-weight:500; }
-.dnorm { color:var(--text-3); }
-
+.dold { color:var(--red);font-weight:500; } .dnorm { color:var(--text-3); }
 .oyes { display:inline-flex;align-items:center;gap:4px;color:var(--red);font-weight:600;font-size:12px; }
 .ono { color:var(--text-4);font-size:12px; }
-
-.eng-w { display:flex;align-items:center;gap:7px; }
+.person-row { display:flex;align-items:center;gap:6px; }
 .eng-av { width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;text-transform:uppercase; }
 .eng-av.coord { background:linear-gradient(135deg,#f093fb,#f5576c); }
-.eng-n { font-size:12.5px;color:var(--text-2); }
-.person-row { display:flex;align-items:center;gap:6px;margin-bottom:4px; }
-.person-row:last-child { margin-bottom:0; }
-.person-lbl { font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;padding:1px 5px;border-radius:4px;flex-shrink:0; }
-.lbl-coord { background:rgba(124,58,237,.1);color:var(--purple); }
-.lbl-eng { background:var(--blue-light);color:var(--blue); }
 .person-name { font-size:12.5px;color:var(--text-2); }
 
-.extlnk { display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;color:var(--text-4);text-decoration:none;border:1px solid transparent;transition:all .15s; }
-.extlnk:hover { background:var(--blue-light);color:var(--blue);border-color:rgba(37,99,235,.2); }
-.role-badge { display:inline-block;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px; }
-.role-eng { background:var(--blue-light);color:var(--blue); }
-.role-coord { background:rgba(124,58,237,.1);color:var(--purple); }
+/* Action buttons */
+.act-btns { display:flex; gap:4px; align-items:center; }
+.act-btn { width:30px;height:30px;border-radius:7px;border:1px solid var(--border);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-3);transition:all .15s;font-family:var(--font); }
+.act-btn:hover { background:var(--bg2); border-color:var(--border2); color:var(--text); }
+.act-btn.edit:hover { background:var(--blue-light); color:var(--blue); border-color:rgba(37,99,235,.25); }
+.act-btn.bell:hover { background:var(--orange-light); color:var(--orange); border-color:rgba(217,119,6,.25); }
+.act-btn.link:hover { background:var(--green-light); color:var(--green); border-color:rgba(5,150,105,.25); }
+
+/* MODAL */
+.overlay { position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px); }
+.overlay.show { display:flex; }
+.modal { background:var(--white);border-radius:14px;box-shadow:var(--shadow-lg);width:100%;max-width:520px;max-height:90vh;overflow-y:auto;animation:mslide .2s ease; }
+@keyframes mslide { from { transform:translateY(16px);opacity:0; } to { transform:translateY(0);opacity:1; } }
+.modal-head { padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:12px; }
+.modal-head h2 { font-size:16px;font-weight:700;color:var(--text);letter-spacing:-.3px; }
+.modal-head p { font-size:12.5px;color:var(--text-3);margin-top:2px; }
+.modal-close { width:30px;height:30px;border-radius:7px;border:1px solid var(--border);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-3);flex-shrink:0; font-size:16px; }
+.modal-close:hover { background:var(--bg); }
+.modal-body { padding:20px 24px; }
+.modal-footer { padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end; }
+
+/* Form elements */
+.form-group { margin-bottom:16px; }
+.form-label { display:block;font-size:12px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px; }
+.form-input,.form-select,.form-textarea { width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:var(--font);outline:none;transition:border-color .15s,box-shadow .15s; }
+.form-textarea { resize:vertical;min-height:90px; }
+.form-input:focus,.form-select:focus,.form-textarea:focus { border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-light);background:var(--white); }
+.form-input::placeholder,.form-textarea::placeholder { color:var(--text-4); }
+.ticket-badge { display:inline-flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:6px 12px;font-size:12.5px;color:var(--text-2);margin-bottom:16px; }
+
+/* TG selector */
+.tg-options { display:flex;gap:8px;flex-wrap:wrap; }
+.tg-opt { flex:1;min-width:120px;border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;text-align:center;transition:all .15s; }
+.tg-opt:hover { border-color:var(--accent);background:var(--accent-light); }
+.tg-opt.active { border-color:var(--accent);background:var(--accent-light);color:var(--accent); }
+.tg-opt-icon { font-size:20px;margin-bottom:4px; }
+.tg-opt-label { font-size:11.5px;font-weight:600; }
+
+/* Toast */
+.toast { position:fixed;bottom:24px;right:24px;background:var(--text);color:#fff;border-radius:10px;padding:12px 18px;font-size:13px;font-weight:500;box-shadow:var(--shadow-lg);z-index:2000;transform:translateY(80px);transition:transform .3s ease;display:flex;align-items:center;gap:8px; }
+.toast.show { transform:translateY(0); }
+.toast.success { background:#059669; }
+.toast.error { background:var(--red); }
 
 /* States */
 .empty { text-align:center;padding:64px 24px;color:var(--text-3); }
 .empty-icon { width:48px;height:48px;background:var(--bg);border:1px solid var(--border);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;color:var(--text-4); }
 .empty h3 { font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px; }
 .empty p { font-size:13px; }
-
 .ebar { display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:var(--radius);padding:12px 16px;margin-bottom:14px;color:var(--red);font-size:13px;font-weight:500; }
 .ebar.show { display:flex;align-items:center;gap:8px; }
 
-@media(max-width:900px) {
-  .page { padding:16px; }
-  .kpi-grid { grid-template-columns:repeat(2,1fr); }
-  .h-time { display:none; }
-  col.c-eng, col.c-urg, col.c-ovd, col.c-svc { display:none; }
-  td:nth-child(4), td:nth-child(5), td:nth-child(6), td:nth-child(8),
-  th:nth-child(4), th:nth-child(5), th:nth-child(6), th:nth-child(8) { display:none; }
+@media(max-width:900px){
+  .page{padding:16px;} .kpi-grid{grid-template-columns:repeat(2,1fr);} .h-time{display:none;}
 }
 </style>
 </head>
@@ -206,7 +205,6 @@ tr.tr:hover td { background: #fafbfd; }
 
   <div class="ebar" id="ebar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span id="emsg"></span></div>
 
-  <!-- KPI -->
   <div class="kpi-grid">
     <div class="kpi" style="--kc:#2563eb" onclick="selectStage('active',null)">
       <div class="kpi-bar"></div>
@@ -230,44 +228,41 @@ tr.tr:hover td { background: #fafbfd; }
     </div>
   </div>
 
-  <!-- Stage tabs -->
   <div class="stage-wrap" id="stageTabs">
     <button class="stab active" data-s="active" onclick="selectStage('active',this)" style="--tc:#2563eb;--tc-bg:rgba(37,99,235,.08)">Все активные</button>
     <button class="stab" data-s="all" onclick="selectStage('all',this)" style="--tc:#6b7280;--tc-bg:rgba(107,114,128,.08)">Все заявки</button>
   </div>
 
-  <!-- Filters -->
   <div class="fbar">
     <div class="sw">
       <svg class="si" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <input class="sinput" type="text" id="fsearch" placeholder="Поиск по названию, описанию…" oninput="debLoad()">
     </div>
     <div class="fdiv"></div>
-    <select class="fsel" id="fsvc" onchange="load()" style="min-width:195px">
+    <select class="fsel" id="fsvc" onchange="load()">
       <option value="all">Все типы услуг</option>
     </select>
-    <select class="fsel" id="fcoord" onchange="load()" style="min-width:170px">
+    <select class="fsel" id="fcoord" onchange="load()">
       <option value="all">Все координаторы</option>
       <option value="Азамат Аннабаев">Азамат Аннабаев</option>
       <option value="Арман Манасаев">Арман Манасаев</option>
     </select>
-    <select class="fsel" id="feng" onchange="load()" style="min-width:180px">
+    <select class="fsel" id="feng" onchange="load()">
       <option value="all">Все инженеры</option>
     </select>
     <div class="fdiv"></div>
-    <select class="fsel" id="furg" onchange="load()" style="min-width:145px">
+    <select class="fsel" id="furg" onchange="load()">
       <option value="all">Любая срочность</option>
       <option value="1809">⚡ Срочная</option>
       <option value="1810">Не срочная</option>
       <option value="1811">Обучение ТЦ</option>
     </select>
-    <select class="fsel" id="fovd" onchange="load()" style="min-width:155px">
+    <select class="fsel" id="fovd" onchange="load()">
       <option value="all">Все заявки</option>
       <option value="yes">⚠ Только просроченные</option>
     </select>
   </div>
 
-  <!-- Table -->
   <div class="tcard">
     <div class="ttbar">
       <div><span class="ttitle">Список заявок</span><span class="cpill" id="cpill">0</span></div>
@@ -284,11 +279,151 @@ tr.tr:hover td { background: #fafbfd; }
   </div>
 </div>
 
-<script>
-let curStage = 'active';
-let dbt = null;
-let lastEngineers = [];
+<!-- MODAL: Редактировать -->
+<div class="overlay" id="editOverlay" onclick="if(event.target===this)closeEdit()">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2>✏️ Редактировать заявку</h2>
+        <p id="editTicketTitle" style="color:var(--text-3);font-size:12.5px;margin-top:3px"></p>
+      </div>
+      <button class="modal-close" onclick="closeEdit()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Комментарий координатора</label>
+        <textarea class="form-textarea" id="editComment" placeholder="Введите комментарий — он сохранится в карточке Б24 и будет отправлен в Telegram…"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Сменить стадию</label>
+        <select class="form-select" id="editStage">
+          <option value="">— не менять —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Назначить инженера</label>
+        <select class="form-select" id="editEngineer">
+          <option value="">— не менять —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ваше имя (для уведомления)</label>
+        <input class="form-input" type="text" id="editAuthor" placeholder="Азамат Аннабаев">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeEdit()">Отмена</button>
+      <button class="btn btn-primary" onclick="submitEdit()" id="btnEditSave">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        Сохранить и отправить в TG
+      </button>
+    </div>
+  </div>
+</div>
 
+<!-- MODAL: Напоминание/Задача -->
+<div class="overlay" id="bellOverlay" onclick="if(event.target===this)closeBell()">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2>🔔 Напоминание / Задача</h2>
+        <p id="bellTicketTitle" style="color:var(--text-3);font-size:12.5px;margin-top:3px"></p>
+      </div>
+      <button class="modal-close" onclick="closeBell()">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Tabs -->
+      <div style="display:flex;gap:4px;margin-bottom:20px;background:var(--bg);border-radius:8px;padding:4px;">
+        <button class="btn" id="tabRemind" onclick="switchTab('remind')"
+          style="flex:1;justify-content:center;background:var(--white);border-color:var(--border2)">
+          ⏰ Напоминание в TG
+        </button>
+        <button class="btn" id="tabTask" onclick="switchTab('task')"
+          style="flex:1;justify-content:center;background:transparent;border-color:transparent">
+          📋 Задача в Б24
+        </button>
+      </div>
+
+      <!-- Remind tab -->
+      <div id="paneRemind">
+        <div class="form-group">
+          <label class="form-label">Текст напоминания</label>
+          <textarea class="form-textarea" id="remindMsg" placeholder="Проверить статус заявки, связаться с клиентом…" style="min-height:70px"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Отправить через</label>
+          <select class="form-select" id="remindDelay">
+            <option value="0">Сейчас</option>
+            <option value="15">Через 15 минут</option>
+            <option value="30">Через 30 минут</option>
+            <option value="60">Через 1 час</option>
+            <option value="120">Через 2 часа</option>
+            <option value="240">Через 4 часа</option>
+            <option value="480">Через 8 часов</option>
+            <option value="1440">Завтра (24 часа)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Отправить в</label>
+          <div class="tg-options">
+            <div class="tg-opt active" data-chat="ops" onclick="selectChat(this)">
+              <div class="tg-opt-icon">🔧</div>
+              <div class="tg-opt-label">Оперативная</div>
+            </div>
+            <div class="tg-opt" data-chat="mgt" onclick="selectChat(this)">
+              <div class="tg-opt-icon">📊</div>
+              <div class="tg-opt-label">Руководство</div>
+            </div>
+            <div class="tg-opt" data-chat="both" onclick="selectChat(this)">
+              <div class="tg-opt-icon">📢</div>
+              <div class="tg-opt-label">Обе группы</div>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ваше имя</label>
+          <input class="form-input" type="text" id="remindAuthor" placeholder="Азамат Аннабаев">
+        </div>
+      </div>
+
+      <!-- Task tab -->
+      <div id="paneTask" style="display:none">
+        <div class="form-group">
+          <label class="form-label">Название задачи</label>
+          <input class="form-input" type="text" id="taskTitle" placeholder="Провести диагностику прибора">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Описание</label>
+          <textarea class="form-textarea" id="taskDesc" placeholder="Подробное описание задачи…" style="min-height:70px"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ответственный</label>
+          <select class="form-select" id="taskResponsible"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Дедлайн</label>
+          <input class="form-input" type="datetime-local" id="taskDeadline">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ваше имя</label>
+          <input class="form-input" type="text" id="taskAuthor" placeholder="Азамат Аннабаев">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeBell()">Отмена</button>
+      <button class="btn btn-primary" onclick="submitBell()" id="btnBellSave">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 17H2a3 3 0 0 0 3-3V9a7 7 0 0 1 14 0v5a3 3 0 0 0 3 3zm-8.27 4a2 2 0 0 1-3.46 0"/></svg>
+        Отправить
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
 const SSTYLE = {
   'DT1058_11:NEW':         {f:'#1d4ed8',b:'rgba(37,99,235,.09)',r:'rgba(37,99,235,.22)'},
   'DT1058_11:PREPARATION': {f:'#3730a3',b:'rgba(99,102,241,.09)',r:'rgba(99,102,241,.22)'},
@@ -301,146 +436,141 @@ const SSTYLE = {
   'DT1058_11:FAIL':        {f:'#7f1d1d',b:'rgba(220,38,38,.06)',r:'rgba(220,38,38,.15)'},
 };
 
-function selectStage(s, el) {
-  curStage = s;
-  document.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
-  (el || document.querySelector(`.stab[data-s="${s}"]`))?.classList.add('active');
+let curStage='active', dbt=null, allStages={}, allUsers=[], curTicketId=null, curTab='remind', curChat='ops';
+
+// ── Load ──────────────────────────────────────────────────────────────────────
+
+function selectStage(s,el) {
+  curStage=s;
+  document.querySelectorAll('.stab').forEach(b=>b.classList.remove('active'));
+  (el||document.querySelector(`.stab[data-s="${s}"]`))?.classList.add('active');
   load();
 }
-function setF(id, val) { document.getElementById(id).value = val; load(); }
-function debLoad() { clearTimeout(dbt); dbt = setTimeout(load, 380); }
+function setF(id,val){document.getElementById(id).value=val;load();}
+function debLoad(){clearTimeout(dbt);dbt=setTimeout(load,380);}
 
 async function load() {
   document.getElementById('btnRef').classList.add('loading');
-  const p = new URLSearchParams({
-    stage: curStage,
-    search: document.getElementById('fsearch').value,
-    urgent: document.getElementById('furg').value,
-    overdue: document.getElementById('fovd').value,
-    engineer: document.getElementById('feng').value,
-    serviceType: document.getElementById('fsvc').value,
+  const p=new URLSearchParams({
+    stage:curStage, search:document.getElementById('fsearch').value,
+    urgent:document.getElementById('furg').value, overdue:document.getElementById('fovd').value,
+    engineer:document.getElementById('feng').value, coordinator:document.getElementById('fcoord').value,
+    serviceType:document.getElementById('fsvc').value,
   });
-
   try {
-    const r = await fetch('/api/tickets?' + p);
-    const d = await r.json();
-    if (!d.ok) throw new Error(d.error);
+    const r=await fetch('/api/tickets?'+p);
+    const d=await r.json();
+    if(!d.ok) throw new Error(d.error);
     document.getElementById('ebar').classList.remove('show');
+    allStages=d.stages||{};
 
-    // KPIs
-    document.getElementById('kActive').textContent = d.stats.total;
-    document.getElementById('kUrg').textContent = d.stats.urgent;
-    document.getElementById('kOvd').textContent = d.stats.overdue;
-    document.getElementById('kClose').textContent = d.stats.byStage['DT1058_11:SUCCESS']?.count ?? 0;
+    document.getElementById('kActive').textContent=d.stats.total;
+    document.getElementById('kUrg').textContent=d.stats.urgent;
+    document.getElementById('kOvd').textContent=d.stats.overdue;
+    document.getElementById('kClose').textContent=d.stats.byStage['DT1058_11:SUCCESS']?.count??0;
 
-    // Stage tabs
-    buildTabs(d.stages, d.stats.byStage);
-
-    // Service type filter (populate once)
+    buildTabs(d.stages,d.stats.byStage);
     populateSvc(d.serviceTypes);
     populateEng(d.engineers);
-
-    // Table
     renderTable(d.items);
-    document.getElementById('cpill').textContent = d.items.length;
-    document.getElementById('htime').textContent = 'Обновлено в ' + new Date().toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'});
+    document.getElementById('cpill').textContent=d.items.length;
+    document.getElementById('htime').textContent='Обновлено в '+new Date().toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'});
   } catch(e) {
-    document.getElementById('emsg').textContent = 'Ошибка: ' + e.message;
+    document.getElementById('emsg').textContent='Ошибка: '+e.message;
     document.getElementById('ebar').classList.add('show');
   } finally {
     document.getElementById('btnRef').classList.remove('loading');
   }
 }
 
-let svcPopulated = false;
+// Load users for task modal
+async function loadUsers() {
+  try {
+    const r=await fetch('/api/users');
+    const d=await r.json();
+    if(d.ok) allUsers=d.users;
+    const sel=document.getElementById('taskResponsible');
+    sel.innerHTML='';
+    allUsers.forEach(u=>{const o=new Option(u.name,u.id);sel.add(o);});
+
+    // Prefill edit engineer dropdown
+    const esel=document.getElementById('editEngineer');
+    esel.innerHTML='<option value="">— не менять —</option>';
+    allUsers.forEach(u=>{const o=new Option(u.name,u.id);esel.add(o);});
+  } catch(e){}
+}
+
+// Populate stages in edit modal
+function populateEditStages(stages) {
+  const sel=document.getElementById('editStage');
+  sel.innerHTML='<option value="">— не менять —</option>';
+  Object.entries(stages).sort((a,b)=>a[1].order-b[1].order).forEach(([sid,cfg])=>{
+    sel.add(new Option(cfg.name,sid));
+  });
+}
+
+let svcDone=false;
 function populateSvc(types) {
-  if (svcPopulated) return;
-  svcPopulated = true;
-  const sel = document.getElementById('fsvc');
-  const cur = sel.value;
-  // Clear except first
-  while (sel.options.length > 1) sel.remove(1);
-  Object.entries(types).sort((a,b) => a[1].localeCompare(b[1],'ru')).forEach(([id, name]) => {
-    const o = new Option(name, id);
-    sel.add(o);
-  });
-  sel.value = cur;
+  if(svcDone) return; svcDone=true;
+  const sel=document.getElementById('fsvc');
+  const cur=sel.value;
+  while(sel.options.length>1) sel.remove(1);
+  Object.entries(types).sort((a,b)=>a[1].localeCompare(b[1],'ru')).forEach(([id,name])=>sel.add(new Option(name,id)));
+  sel.value=cur;
 }
-
 function populateEng(engineers) {
-  const sel = document.getElementById('feng');
-  const cur = sel.value;
-  while (sel.options.length > 1) sel.remove(1);
-  engineers.forEach(name => {
-    const o = new Option(name, name);
-    sel.add(o);
-  });
-  // Try to restore previous selection
-  if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
-  else sel.value = 'all';
+  const sel=document.getElementById('feng');
+  const cur=sel.value;
+  while(sel.options.length>1) sel.remove(1);
+  engineers.forEach(name=>sel.add(new Option(name,name)));
+  if([...sel.options].some(o=>o.value===cur)) sel.value=cur;
+  else sel.value='all';
 }
-
-function buildTabs(stages, counts) {
-  const wrap = document.getElementById('stageTabs');
-  wrap.querySelectorAll('[data-dyn]').forEach(el => el.remove());
-
-  Object.entries(stages).filter(([,v]) => v.active).sort((a,b) => a[1].order - b[1].order).forEach(([sid, cfg]) => {
-    const st = SSTYLE[sid] || {};
-    const cnt = counts?.[sid]?.count ?? 0;
-    const btn = document.createElement('button');
-    btn.className = 'stab';
-    btn.dataset.s = sid;
-    btn.dataset.dyn = '1';
-    btn.style.setProperty('--tc', st.f || cfg.color);
-    btn.style.setProperty('--tc-bg', st.b || 'rgba(0,0,0,.06)');
-    btn.innerHTML = `<span class="stab-dot"></span>${esc(cfg.name)}<span class="stab-cnt">${cnt}</span>`;
-    btn.onclick = () => selectStage(sid, btn);
+function buildTabs(stages,counts) {
+  const wrap=document.getElementById('stageTabs');
+  wrap.querySelectorAll('[data-dyn]').forEach(el=>el.remove());
+  Object.entries(stages).filter(([,v])=>v.active).sort((a,b)=>a[1].order-b[1].order).forEach(([sid,cfg])=>{
+    const st=SSTYLE[sid]||{};
+    const cnt=counts?.[sid]?.count??0;
+    const btn=document.createElement('button');
+    btn.className='stab'; btn.dataset.s=sid; btn.dataset.dyn='1';
+    btn.style.setProperty('--tc',st.f||cfg.color);
+    btn.style.setProperty('--tc-bg',st.b||'rgba(0,0,0,.06)');
+    btn.innerHTML=`<span class="stab-dot"></span>${esc(cfg.name)}<span class="stab-cnt">${cnt}</span>`;
+    btn.onclick=()=>selectStage(sid,btn);
     wrap.appendChild(btn);
   });
-
-  wrap.querySelectorAll('.stab').forEach(b => b.classList.toggle('active', b.dataset.s === curStage));
+  wrap.querySelectorAll('.stab').forEach(b=>b.classList.toggle('active',b.dataset.s===curStage));
 }
 
+// ── Render table ──────────────────────────────────────────────────────────────
+
 function renderTable(items) {
-  const wrap = document.getElementById('tw');
-  if (!items.length) {
-    wrap.innerHTML = `<div class="empty"><div class="empty-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg></div><h3>Нет заявок</h3><p>Попробуйте изменить фильтры</p></div>`;
+  const wrap=document.getElementById('tw');
+  if(!items.length){
+    wrap.innerHTML=`<div class="empty"><div class="empty-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg></div><h3>Нет заявок</h3><p>Попробуйте изменить фильтры</p></div>`;
     return;
   }
-
-  const rows = items.map(t => {
-    const st = SSTYLE[t.stageId] || {f:'#6b7280',b:'rgba(107,114,128,.08)',r:'rgba(107,114,128,.2)'};
-    const pill = `<span class="spill" style="--pf:${st.f};--pb:${st.b};--pbr:${st.r}"><span class="pdot"></span>${esc(t.stageName)}</span>`;
-
-    const svcHtml = t.serviceTypes?.length
-      ? `<div class="svc-tags">${t.serviceTypes.map(s => `<span class="svc-tag">${esc(s)}</span>`).join('')}</div>`
-      : `<span style="color:var(--text-4);font-size:12px">—</span>`;
-
+  const rows=items.map(t=>{
+    const st=SSTYLE[t.stageId]||{f:'#6b7280',b:'rgba(107,114,128,.08)',r:'rgba(107,114,128,.2)'};
+    const pill=`<span class="spill" style="--pf:${st.f};--pb:${st.b};--pbr:${st.r}"><span class="pdot"></span>${esc(t.stageName)}</span>`;
+    const svcHtml=t.serviceTypes?.length?`<div class="svc-tags">${t.serviceTypes.map(s=>`<span class="svc-tag">${esc(s)}</span>`).join('')}</div>`:'<span style="color:var(--text-4);font-size:12px">—</span>';
     let urgHtml;
-    if (t.urgency === 'Срочная') urgHtml = `<span class="u-urgent">⚡ Срочная</span>`;
-    else if (t.urgency === 'Обучение ТЦ') urgHtml = `<span class="u-training">📚 Обучение</span>`;
-    else if (t.urgency) urgHtml = `<span class="u-normal">${esc(t.urgency)}</span>`;
-    else urgHtml = `<span style="color:var(--text-4);font-size:12px">—</span>`;
-
-    const days = t.createdTime ? Math.floor((Date.now()-new Date(t.createdTime))/86400000) : 0;
-    const dateStr = t.createdTime ? new Date(t.createdTime).toLocaleDateString('ru',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '—';
-    const dcls = days > 14 ? 'dold' : 'dnorm';
-
-    const ovd = t.isOverdue
-      ? `<span class="oyes"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Да</span>`
-      : `<span class="ono">—</span>`;
-
-    const coordInit = t.coordinator ? t.coordinator.trim().split(' ').map(w=>w[0]||'').join('').slice(0,2) : '';
-    const coordHtml = t.coordinator
-      ? `<div class="person-row"><div class="eng-av coord">${esc(coordInit)}</div><span class="person-name">${esc(t.coordinator)}</span></div>`
-      : `<span style="color:var(--text-4);font-size:12px">—</span>`;
-    const engInit = t.engineer ? t.engineer.trim().split(' ').map(w=>w[0]||'').join('').slice(0,2) : '';
-    const engHtml = t.engineer
-      ? `<div class="person-row"><div class="eng-av">${esc(engInit)}</div><span class="person-name">${esc(t.engineer)}</span></div>`
-      : `<span style="color:var(--text-4);font-size:12px">—</span>`;
-
-    const title = (t.title||'').replace(/^[-\s–—]+/,'').replace(/[-\s–—]+$/,'').trim() || '(без названия)';
-
+    if(t.urgency==='Срочная') urgHtml=`<span class="u-urgent">⚡ Срочная</span>`;
+    else if(t.urgency==='Обучение ТЦ') urgHtml=`<span class="u-training">📚 Обучение</span>`;
+    else if(t.urgency) urgHtml=`<span class="u-normal">${esc(t.urgency)}</span>`;
+    else urgHtml=`<span style="color:var(--text-4);font-size:12px">—</span>`;
+    const days=t.createdTime?Math.floor((Date.now()-new Date(t.createdTime))/86400000):0;
+    const dateStr=t.createdTime?new Date(t.createdTime).toLocaleDateString('ru',{day:'2-digit',month:'2-digit',year:'2-digit'}):'—';
+    const dcls=days>14?'dold':'dnorm';
+    const ovd=t.isOverdue?`<span class="oyes"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Да</span>`:`<span class="ono">—</span>`;
+    const ci=t.coordinator?t.coordinator.trim().split(' ').map(w=>w[0]||'').join('').slice(0,2):'';
+    const coordHtml=t.coordinator?`<div class="person-row"><div class="eng-av coord">${esc(ci)}</div><span class="person-name">${esc(t.coordinator)}</span></div>`:`<span style="color:var(--text-4);font-size:12px">—</span>`;
+    const ei=t.engineer?t.engineer.trim().split(' ').map(w=>w[0]||'').join('').slice(0,2):'';
+    const engHtml=t.engineer?`<div class="person-row"><div class="eng-av">${esc(ei)}</div><span class="person-name">${esc(t.engineer)}</span></div>`:`<span style="color:var(--text-4);font-size:12px">—</span>`;
+    const title=(t.title||'').replace(/^[-\s–—]+/,'').replace(/[-\s–—]+$/,'').trim()||'(без названия)';
+    const tidStr=JSON.stringify(t.id);
+    const titleStr=JSON.stringify(title);
     return `<tr class="tr">
       <td><span class="idbadge">${t.id}</span></td>
       <td><div class="tname">${esc(title)}</div>${t.description?`<div class="tdesc">${esc(t.description)}</div>`:''}</td>
@@ -451,20 +581,139 @@ function renderTable(items) {
       <td>${urgHtml}</td>
       <td><span class="dval ${dcls}">${dateStr}</span></td>
       <td>${ovd}</td>
-      <td><a href="${esc(t.bitrixUrl)}" target="_blank" class="extlnk" title="Открыть в Б24"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a></td>
+      <td>
+        <div class="act-btns">
+          <button class="act-btn edit" title="Редактировать / комментарий" onclick="openEdit(${tidStr},${titleStr})">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="act-btn bell" title="Напоминание / задача" onclick="openBell(${tidStr},${titleStr})">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+          </button>
+          <a href="${esc(t.bitrixUrl)}" target="_blank" class="act-btn link" title="Открыть в Б24">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          </a>
+        </div>
+      </td>
     </tr>`;
   }).join('');
 
-  wrap.innerHTML = `<table>
-    <colgroup><col class="c-id"><col class="c-title"><col class="c-svc"><col class="c-stage"><col class="c-coord"><col class="c-eng"><col class="c-urg"><col class="c-date"><col class="c-ovd"><col class="c-lnk"></colgroup>
-    <thead><tr><th>ID</th><th>Заявка</th><th>Тип услуги</th><th>Стадия</th><th>Координатор</th><th>Инженер</th><th>Срочность</th><th>Создана</th><th>Просрочена</th><th></th></tr></thead>
+  wrap.innerHTML=`<table>
+    <colgroup><col class="c-id"><col class="c-title"><col class="c-svc"><col class="c-stage"><col class="c-coord"><col class="c-eng"><col class="c-urg"><col class="c-date"><col class="c-ovd"><col class="c-act"></colgroup>
+    <thead><tr><th>ID</th><th>Заявка</th><th>Тип услуги</th><th>Стадия</th><th>Координатор</th><th>Инженер</th><th>Срочность</th><th>Создана</th><th>Просрочена</th><th>Действия</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
+}
+
+// ── Edit Modal ────────────────────────────────────────────────────────────────
+
+function openEdit(id, title) {
+  curTicketId=id;
+  document.getElementById('editTicketTitle').textContent=`#${id} — ${title}`;
+  document.getElementById('editComment').value='';
+  document.getElementById('editStage').value='';
+  document.getElementById('editEngineer').value='';
+  populateEditStages(allStages);
+  document.getElementById('editOverlay').classList.add('show');
+  document.getElementById('editComment').focus();
+}
+function closeEdit(){ document.getElementById('editOverlay').classList.remove('show'); }
+
+async function submitEdit() {
+  const comment=document.getElementById('editComment').value.trim();
+  const stageId=document.getElementById('editStage').value;
+  const engineerId=document.getElementById('editEngineer').value;
+  const authorName=document.getElementById('editAuthor').value.trim()||'Координатор';
+  if(!comment && !stageId && !engineerId) { toast('Заполните хотя бы одно поле','error'); return; }
+
+  const btn=document.getElementById('btnEditSave');
+  btn.disabled=true; btn.textContent='Сохраняю…';
+  try {
+    const r=await fetch('/api/comment',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ticketId:curTicketId,comment,stageId,engineerId:engineerId?Number(engineerId):null,authorName})});
+    const d=await r.json();
+    if(!d.ok) throw new Error(d.error);
+    closeEdit();
+    toast('✅ Сохранено и отправлено в Telegram','success');
+    setTimeout(load, 1500);
+  } catch(e) { toast('Ошибка: '+e.message,'error'); }
+  finally { btn.disabled=false; btn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Сохранить и отправить в TG'; }
+}
+
+// ── Bell Modal ────────────────────────────────────────────────────────────────
+
+function openBell(id, title) {
+  curTicketId=id;
+  document.getElementById('bellTicketTitle').textContent=`#${id} — ${title}`;
+  document.getElementById('remindMsg').value='';
+  document.getElementById('remindDelay').value='0';
+  document.getElementById('bellOverlay').classList.add('show');
+  switchTab('remind');
+}
+function closeBell(){ document.getElementById('bellOverlay').classList.remove('show'); }
+
+function switchTab(tab) {
+  curTab=tab;
+  document.getElementById('paneRemind').style.display=tab==='remind'?'':'none';
+  document.getElementById('paneTask').style.display=tab==='task'?'':'none';
+  document.getElementById('tabRemind').style.background=tab==='remind'?'var(--white)':'transparent';
+  document.getElementById('tabRemind').style.borderColor=tab==='remind'?'var(--border2)':'transparent';
+  document.getElementById('tabTask').style.background=tab==='task'?'var(--white)':'transparent';
+  document.getElementById('tabTask').style.borderColor=tab==='task'?'var(--border2)':'transparent';
+  document.getElementById('btnBellSave').innerHTML=tab==='remind'
+    ?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 17H2a3 3 0 003-3V9a7 7 0 0114 0v5a3 3 0 003 3zm-8.27 4a2 2 0 01-3.46 0"/></svg> Запланировать'
+    :'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Создать задачу в Б24';
+}
+
+function selectChat(el) {
+  document.querySelectorAll('.tg-opt').forEach(o=>o.classList.remove('active'));
+  el.classList.add('active');
+  curChat=el.dataset.chat;
+}
+
+async function submitBell() {
+  const btn=document.getElementById('btnBellSave');
+  btn.disabled=true;
+  try {
+    if(curTab==='remind') {
+      const message=document.getElementById('remindMsg').value.trim();
+      const delayMinutes=parseInt(document.getElementById('remindDelay').value)||0;
+      const authorName=document.getElementById('remindAuthor').value.trim()||'Координатор';
+      const r=await fetch('/api/remind',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ticketId:curTicketId,message,delayMinutes,authorName,targetChat:curChat})});
+      const d=await r.json();
+      if(!d.ok) throw new Error(d.error);
+      closeBell();
+      const delayText=delayMinutes>0?` через ${delayMinutes} мин.`:'';
+      toast(`🔔 Напоминание запланировано${delayText}`,'success');
+    } else {
+      const taskTitle=document.getElementById('taskTitle').value.trim();
+      const taskDesc=document.getElementById('taskDesc').value.trim();
+      const responsibleId=parseInt(document.getElementById('taskResponsible').value)||26;
+      const deadline=document.getElementById('taskDeadline').value;
+      const authorName=document.getElementById('taskAuthor').value.trim()||'Координатор';
+      const r=await fetch('/api/task',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ticketId:curTicketId,taskTitle,taskDesc,responsibleId,deadline,authorName})});
+      const d=await r.json();
+      if(!d.ok) throw new Error(d.error);
+      closeBell();
+      toast('📋 Задача создана в Б24 и отправлена в Telegram','success');
+    }
+  } catch(e) { toast('Ошибка: '+e.message,'error'); }
+  finally { btn.disabled=false; }
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(msg, type='success') {
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.className=`toast ${type} show`;
+  setTimeout(()=>el.classList.remove('show'), 3500);
 }
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 setInterval(load, 5*60*1000);
+loadUsers();
 load();
 </script>
 </body>
