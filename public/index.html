@@ -8,7 +8,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
 :root {
   --white: #ffffff;
   --bg: #f5f6fa;
@@ -21,591 +20,150 @@
   --text-3: #6b7280;
   --text-4: #9ca3af;
   --accent: #C53B2F;
-  --accent-hover: #a83226;
+  --accent-h: #a83226;
   --accent-light: rgba(197,59,47,.08);
   --blue: #2563eb;
   --blue-light: rgba(37,99,235,.08);
   --green: #059669;
-  --green-light: rgba(5,150,105,.08);
   --orange: #d97706;
   --orange-light: rgba(217,119,6,.09);
   --red: #dc2626;
   --red-light: rgba(220,38,38,.08);
   --purple: #7c3aed;
   --purple-light: rgba(124,58,237,.08);
+  --teal: #0f766e;
+  --teal-light: rgba(15,118,110,.08);
   --shadow-sm: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
   --shadow: 0 4px 16px rgba(0,0,0,.07), 0 1px 4px rgba(0,0,0,.04);
-  --shadow-lg: 0 12px 40px rgba(0,0,0,.10);
   --radius: 10px;
-  --radius-sm: 6px;
   --font: 'Inter', system-ui, sans-serif;
 }
+body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
 
-body {
-  font-family: var(--font);
-  background: var(--bg);
-  color: var(--text);
-  font-size: 14px;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-}
-
-/* ─── HEADER ─────────────────────────────────────── */
-.header {
-  background: var(--white);
-  border-bottom: 1px solid var(--border);
-  height: 60px;
-  display: flex;
-  align-items: center;
-  padding: 0 28px;
-  position: sticky;
-  top: 0;
-  z-index: 200;
-  box-shadow: 0 1px 0 var(--border), 0 2px 8px rgba(0,0,0,.04);
-}
-
-.header-logo {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  font-weight: 700;
-  font-size: 15px;
-  color: var(--text);
-  letter-spacing: -.3px;
-  flex-shrink: 0;
-}
-
-.logo-mark {
-  width: 32px; height: 32px;
-  background: var(--accent);
-  border-radius: 8px;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-}
+/* HEADER */
+.header { background: var(--white); border-bottom: 1px solid var(--border); height: 60px; display: flex; align-items: center; padding: 0 28px; position: sticky; top: 0; z-index: 200; box-shadow: 0 2px 8px rgba(0,0,0,.04); gap: 0; }
+.logo { display: flex; align-items: center; gap: 11px; font-weight: 700; font-size: 15px; letter-spacing: -.3px; flex-shrink: 0; }
+.logo-mark { width: 32px; height: 32px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
 .logo-mark svg { width: 16px; height: 16px; }
-
-.header-divider {
-  width: 1px;
-  height: 24px;
-  background: var(--border2);
-  margin: 0 20px;
-}
-
-.header-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-3);
-}
-
-.header-right {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.header-time {
-  font-size: 12px;
-  color: var(--text-4);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 4px 10px;
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border-radius: 8px;
-  padding: 7px 14px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-  transition: all .15s ease;
-  font-family: var(--font);
-  white-space: nowrap;
-}
-.btn-primary {
-  background: var(--accent);
-  color: #fff;
-}
-.btn-primary:hover { background: var(--accent-hover); }
-.btn-ghost {
-  background: transparent;
-  color: var(--text-2);
-  border: 1px solid var(--border2);
-}
-.btn-ghost:hover { background: var(--bg); border-color: var(--border2); }
-.btn svg { flex-shrink: 0; }
-.btn.spin svg { animation: spin .7s linear infinite; }
+.hdiv { width: 1px; height: 24px; background: var(--border2); margin: 0 18px; }
+.h-sub { font-size: 13.5px; font-weight: 500; color: var(--text-3); }
+.h-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.h-time { font-size: 12px; color: var(--text-4); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; }
+.btn { display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; padding: 7px 14px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border2); background: transparent; color: var(--text-2); transition: all .15s; font-family: var(--font); white-space: nowrap; }
+.btn:hover { background: var(--bg); }
+.btn.loading svg { animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ─── MAIN LAYOUT ────────────────────────────────── */
-.page { max-width: 1520px; margin: 0 auto; padding: 28px 28px 60px; }
+/* PAGE */
+.page { max-width: 1600px; margin: 0 auto; padding: 24px 28px 60px; }
+.ph { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 22px; }
+.ph h1 { font-size: 21px; font-weight: 700; letter-spacing: -.4px; margin-bottom: 2px; }
+.ph p { font-size: 13px; color: var(--text-3); }
 
-/* ─── PAGE HEADING ───────────────────────────────── */
-.page-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 24px;
-  gap: 16px;
-}
-.page-head-left h1 {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: -.4px;
-  margin-bottom: 3px;
-}
-.page-head-left p {
-  font-size: 13px;
-  color: var(--text-3);
-}
+/* KPI */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.kpi { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow-sm); cursor: pointer; transition: box-shadow .15s, border-color .15s, transform .1s; position: relative; overflow: hidden; }
+.kpi:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
+.kpi.active { border-color: var(--kc, var(--accent)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--kc, var(--accent)) 12%, transparent), var(--shadow); }
+.kpi-bar { position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--kc, var(--accent)); }
+.kpi-icon { width: 34px; height: 34px; border-radius: 8px; background: color-mix(in srgb, var(--kc, var(--accent)) 10%, transparent); display: flex; align-items: center; justify-content: center; margin-bottom: 12px; color: var(--kc, var(--accent)); }
+.kpi-num { font-size: 30px; font-weight: 800; color: var(--text); line-height: 1; letter-spacing: -1px; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+.kpi-label { font-size: 11.5px; color: var(--text-3); font-weight: 500; text-transform: uppercase; letter-spacing: .5px; }
 
-/* ─── KPI CARDS ──────────────────────────────────── */
-.kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 14px;
-  margin-bottom: 24px;
-}
+/* STAGE TABS */
+.stage-wrap { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px; margin-bottom: 14px; box-shadow: var(--shadow-sm); display: flex; gap: 2px; flex-wrap: wrap; }
+.stab { display: inline-flex; align-items: center; gap: 6px; border-radius: 7px; padding: 7px 12px; font-size: 12.5px; font-weight: 500; cursor: pointer; border: none; background: transparent; color: var(--text-3); transition: all .15s; font-family: var(--font); white-space: nowrap; }
+.stab:hover { background: var(--bg); color: var(--text); }
+.stab.active { background: var(--tc-bg, var(--accent-light)); color: var(--tc, var(--accent)); font-weight: 600; }
+.stab-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.stab-cnt { background: color-mix(in srgb, currentColor 15%, transparent); border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 700; min-width: 20px; text-align: center; }
 
-.kpi-card {
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 18px 20px;
-  box-shadow: var(--shadow-sm);
-  cursor: pointer;
-  transition: box-shadow .15s, border-color .15s, transform .1s;
-  position: relative;
-  overflow: hidden;
-}
-.kpi-card:hover {
-  box-shadow: var(--shadow);
-  border-color: var(--border2);
-  transform: translateY(-1px);
-}
-.kpi-card.active {
-  border-color: var(--kpi-color, var(--accent));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--kpi-color, var(--accent)) 12%, transparent), var(--shadow);
-}
+/* FILTER BAR */
+.fbar { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 14px; box-shadow: var(--shadow-sm); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sw { flex: 1; min-width: 220px; position: relative; }
+.si { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-4); pointer-events: none; }
+.sinput { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px 8px 34px; font-size: 13px; color: var(--text); font-family: var(--font); outline: none; transition: border-color .15s, box-shadow .15s; }
+.sinput:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); background: var(--white); }
+.sinput::placeholder { color: var(--text-4); }
+.fsel { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 13px; color: var(--text); font-family: var(--font); outline: none; cursor: pointer; min-width: 160px; transition: border-color .15s; }
+.fsel:focus { border-color: var(--accent); }
+.fdiv { width: 1px; height: 24px; background: var(--border); flex-shrink: 0; }
 
-.kpi-accent-bar {
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 3px;
-  background: var(--kpi-color, var(--accent));
-  border-radius: var(--radius) var(--radius) 0 0;
-}
-
-.kpi-icon {
-  width: 36px; height: 36px;
-  border-radius: 9px;
-  background: color-mix(in srgb, var(--kpi-color, var(--accent)) 10%, transparent);
-  display: flex; align-items: center; justify-content: center;
-  margin-bottom: 14px;
-  color: var(--kpi-color, var(--accent));
-}
-
-.kpi-num {
-  font-size: 30px;
-  font-weight: 800;
-  color: var(--text);
-  line-height: 1;
-  letter-spacing: -1px;
-  margin-bottom: 4px;
-  font-variant-numeric: tabular-nums;
-}
-.kpi-label {
-  font-size: 12px;
-  color: var(--text-3);
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: .5px;
-}
-
-/* ─── STAGE TABS ─────────────────────────────────── */
-.stage-tabs-wrap {
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 4px;
-  margin-bottom: 16px;
-  box-shadow: var(--shadow-sm);
-  display: flex;
-  gap: 2px;
-  flex-wrap: wrap;
-}
-
-.stage-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  border-radius: 7px;
-  padding: 7px 13px;
-  font-size: 12.5px;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-  background: transparent;
-  color: var(--text-3);
-  transition: all .15s;
-  font-family: var(--font);
-  white-space: nowrap;
-}
-.stage-tab:hover { background: var(--bg); color: var(--text); }
-.stage-tab.active {
-  background: var(--tab-color-bg, var(--accent-light));
-  color: var(--tab-color, var(--accent));
-  font-weight: 600;
-}
-
-.stage-tab-dot {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: currentColor;
-  flex-shrink: 0;
-}
-
-.stage-tab-count {
-  background: color-mix(in srgb, currentColor 15%, transparent);
-  border-radius: 10px;
-  padding: 1px 7px;
-  font-size: 11px;
-  font-weight: 700;
-  min-width: 20px;
-  text-align: center;
-}
-
-/* ─── FILTER BAR ─────────────────────────────────── */
-.filter-bar {
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px 16px;
-  margin-bottom: 16px;
-  box-shadow: var(--shadow-sm);
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.search-wrap {
-  flex: 1;
-  min-width: 240px;
-  position: relative;
-}
-.search-icon {
-  position: absolute;
-  left: 12px; top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-4);
-  pointer-events: none;
-}
-.search-input {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 12px 8px 36px;
-  font-size: 13px;
-  color: var(--text);
-  font-family: var(--font);
-  outline: none;
-  transition: border-color .15s, box-shadow .15s;
-}
-.search-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-light);
-  background: var(--white);
-}
-.search-input::placeholder { color: var(--text-4); }
-
-.filter-select {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 13px;
-  color: var(--text);
-  font-family: var(--font);
-  outline: none;
-  cursor: pointer;
-  transition: border-color .15s;
-}
-.filter-select:focus { border-color: var(--accent); }
-
-.filter-divider { width: 1px; height: 24px; background: var(--border); flex-shrink: 0; }
-
-/* ─── TABLE ──────────────────────────────────────── */
-.table-card {
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
-  overflow: hidden;
-}
-
-.table-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--border);
-  gap: 12px;
-}
-.table-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-}
-.count-pill {
-  display: inline-flex;
-  align-items: center;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 2px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-2);
-  margin-left: 8px;
-}
-
-.table-scroll { overflow-x: auto; }
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-}
-
-col.c-id    { width: 64px; }
-col.c-title { width: auto; min-width: 240px; }
-col.c-stage { width: 190px; }
-col.c-eng   { width: 150px; }
-col.c-urg   { width: 130px; }
-col.c-date  { width: 110px; }
-col.c-ovd   { width: 100px; }
-col.c-link  { width: 56px; }
-
+/* TABLE */
+.tcard { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; }
+.ttbar { display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; border-bottom: 1px solid var(--border); }
+.ttitle { font-size: 13px; font-weight: 600; color: var(--text); }
+.cpill { display: inline-flex; align-items: center; background: var(--bg); border: 1px solid var(--border); border-radius: 20px; padding: 2px 10px; font-size: 12px; font-weight: 600; color: var(--text-2); margin-left: 8px; }
+.tscroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+col.c-id { width: 64px; }
+col.c-title { min-width: 220px; }
+col.c-svc { width: 180px; }
+col.c-stage { width: 180px; }
+col.c-eng { width: 155px; }
+col.c-urg { width: 125px; }
+col.c-date { width: 105px; }
+col.c-ovd { width: 95px; }
+col.c-lnk { width: 48px; }
 thead tr { background: var(--bg); }
-th {
-  padding: 10px 16px;
-  text-align: left;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-3);
-  text-transform: uppercase;
-  letter-spacing: .6px;
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-}
-
-td {
-  padding: 13px 16px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: middle;
-  font-size: 13px;
-  color: var(--text-2);
-}
+th { padding: 10px 15px; text-align: left; font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+td { padding: 12px 15px; border-bottom: 1px solid var(--border); vertical-align: middle; font-size: 13px; color: var(--text-2); }
 tr:last-child td { border-bottom: none; }
-tr.ticket-row { transition: background .1s; }
-tr.ticket-row:hover td { background: var(--bg); }
+tr.tr:hover td { background: #fafbfd; }
 
-/* ID */
-.id-badge {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--text-4);
-  font-variant-numeric: tabular-nums;
-  background: var(--bg);
-  border-radius: 5px;
-  padding: 2px 6px;
-  border: 1px solid var(--border);
-}
+/* Cells */
+.idbadge { font-size: 11.5px; font-weight: 600; color: var(--text-4); font-variant-numeric: tabular-nums; background: var(--bg); border-radius: 5px; padding: 2px 6px; border: 1px solid var(--border); }
+.tname { font-weight: 500; color: var(--text); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 2px; }
+.tdesc { font-size: 12px; color: var(--text-4); display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
 
-/* Title */
-.ticket-name {
-  font-weight: 500;
-  color: var(--text);
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  margin-bottom: 3px;
-}
-.ticket-desc {
-  font-size: 12px;
-  color: var(--text-4);
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
+/* Service type tags */
+.svc-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.svc-tag { display: inline-block; background: var(--teal-light); color: var(--teal); border: 1px solid rgba(15,118,110,.2); border-radius: 5px; padding: 2px 7px; font-size: 11px; font-weight: 600; white-space: nowrap; }
 
-/* Stage pill */
-.stage-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-  background: var(--pill-bg);
-  color: var(--pill-fg);
-  border: 1px solid var(--pill-border);
-}
-.stage-pill-dot {
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  flex-shrink: 0;
-}
+.spill { display: inline-flex; align-items: center; gap: 5px; border-radius: 6px; padding: 4px 9px; font-size: 11.5px; font-weight: 600; white-space: nowrap; background: var(--pb); color: var(--pf); border: 1px solid var(--pbr); }
+.pdot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
 
-/* Urgency */
-.urg-urgent {
-  display: inline-flex; align-items: center; gap: 5px;
-  background: var(--orange-light);
-  color: var(--orange);
-  border: 1px solid rgba(217,119,6,.2);
-  border-radius: 6px;
-  padding: 3px 9px;
-  font-size: 12px;
-  font-weight: 600;
-}
-.urg-normal {
-  display: inline-flex; align-items: center; gap: 5px;
-  background: var(--bg);
-  color: var(--text-3);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 3px 9px;
-  font-size: 12px;
-}
-.urg-training {
-  display: inline-flex; align-items: center; gap: 5px;
-  background: var(--purple-light);
-  color: var(--purple);
-  border: 1px solid rgba(124,58,237,.2);
-  border-radius: 6px;
-  padding: 3px 9px;
-  font-size: 12px;
-  font-weight: 600;
-}
+.u-urgent { display:inline-flex;align-items:center;gap:5px;background:var(--orange-light);color:var(--orange);border:1px solid rgba(217,119,6,.2);border-radius:6px;padding:3px 8px;font-size:11.5px;font-weight:600; }
+.u-normal { display:inline-flex;align-items:center;gap:5px;background:var(--bg);color:var(--text-3);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11.5px; }
+.u-training { display:inline-flex;align-items:center;gap:5px;background:var(--purple-light);color:var(--purple);border:1px solid rgba(124,58,237,.2);border-radius:6px;padding:3px 8px;font-size:11.5px;font-weight:600; }
 
-/* Date */
-.date-val { font-size: 12.5px; font-variant-numeric: tabular-nums; }
-.date-old { color: var(--red); font-weight: 500; }
-.date-norm { color: var(--text-3); }
+.dval { font-size:12.5px;font-variant-numeric:tabular-nums; }
+.dold { color:var(--red);font-weight:500; }
+.dnorm { color:var(--text-3); }
 
-/* Overdue */
-.ovd-yes {
-  display: inline-flex; align-items: center; gap: 5px;
-  color: var(--red); font-weight: 600; font-size: 12px;
-}
-.ovd-no { color: var(--text-4); font-size: 12px; }
+.oyes { display:inline-flex;align-items:center;gap:4px;color:var(--red);font-weight:600;font-size:12px; }
+.ono { color:var(--text-4);font-size:12px; }
 
-/* Link */
-.ext-link {
-  display: flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px;
-  border-radius: 6px;
-  color: var(--text-4);
-  transition: all .15s;
-  text-decoration: none;
-  border: 1px solid transparent;
-}
-.ext-link:hover {
-  background: var(--blue-light);
-  color: var(--blue);
-  border-color: rgba(37,99,235,.2);
-}
+.eng-w { display:flex;align-items:center;gap:7px; }
+.eng-av { width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;text-transform:uppercase; }
+.eng-n { font-size:12.5px;color:var(--text-2); }
 
-/* Engineer */
-.eng-cell {
-  display: flex; align-items: center; gap: 7px;
-}
-.eng-avatar {
-  width: 26px; height: 26px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 10px; font-weight: 700; color: #fff;
-  flex-shrink: 0;
-  text-transform: uppercase;
-}
-.eng-name { font-size: 12.5px; color: var(--text-2); }
+.extlnk { display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;color:var(--text-4);text-decoration:none;border:1px solid transparent;transition:all .15s; }
+.extlnk:hover { background:var(--blue-light);color:var(--blue);border-color:rgba(37,99,235,.2); }
 
-/* ─── STATES ─────────────────────────────────────── */
-.state-empty {
-  text-align: center;
-  padding: 72px 24px;
-  color: var(--text-3);
-}
-.state-empty-icon {
-  width: 52px; height: 52px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  display: flex; align-items: center; justify-content: center;
-  margin: 0 auto 16px;
-  color: var(--text-4);
-}
-.state-empty h3 { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
-.state-empty p { font-size: 13px; }
+/* States */
+.empty { text-align:center;padding:64px 24px;color:var(--text-3); }
+.empty-icon { width:48px;height:48px;background:var(--bg);border:1px solid var(--border);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;color:var(--text-4); }
+.empty h3 { font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px; }
+.empty p { font-size:13px; }
 
-/* ─── ERROR ──────────────────────────────────────── */
-.error-bar {
-  display: none;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: var(--radius);
-  padding: 12px 16px;
-  margin-bottom: 16px;
-  color: var(--red);
-  font-size: 13px;
-  font-weight: 500;
-}
-.error-bar.show { display: flex; align-items: center; gap: 8px; }
+.ebar { display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:var(--radius);padding:12px 16px;margin-bottom:14px;color:var(--red);font-size:13px;font-weight:500; }
+.ebar.show { display:flex;align-items:center;gap:8px; }
 
-/* ─── LOADING SKELETON ───────────────────────────── */
-@keyframes shimmer {
-  0% { background-position: -400px 0; }
-  100% { background-position: 400px 0; }
-}
-.skel {
-  background: linear-gradient(90deg, var(--bg) 25%, var(--bg2) 50%, var(--bg) 75%);
-  background-size: 800px 100%;
-  animation: shimmer 1.4s infinite;
-  border-radius: 5px;
-  display: inline-block;
-}
-
-/* ─── RESPONSIVE ─────────────────────────────────── */
-@media (max-width: 768px) {
-  .page { padding: 16px; }
-  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
-  .header-time { display: none; }
-  col.c-eng, col.c-urg, col.c-ovd { display: none; }
-  td:nth-child(4), td:nth-child(5), td:nth-child(7),
-  th:nth-child(4), th:nth-child(5), th:nth-child(7) { display: none; }
+@media(max-width:900px) {
+  .page { padding:16px; }
+  .kpi-grid { grid-template-columns:repeat(2,1fr); }
+  .h-time { display:none; }
+  col.c-eng, col.c-urg, col.c-ovd, col.c-svc { display:none; }
+  td:nth-child(4), td:nth-child(5), td:nth-child(6), td:nth-child(8),
+  th:nth-child(4), th:nth-child(5), th:nth-child(6), th:nth-child(8) { display:none; }
 }
 </style>
 </head>
 <body>
 
-<!-- HEADER -->
 <header class="header">
-  <div class="header-logo">
+  <div class="logo">
     <div class="logo-mark">
       <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round">
         <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/>
@@ -613,11 +171,11 @@ tr.ticket-row:hover td { background: var(--bg); }
     </div>
     ProLabSupport
   </div>
-  <div class="header-divider"></div>
-  <span class="header-title">Сервисные заявки</span>
-  <div class="header-right">
-    <span class="header-time" id="lastUpdate">—</span>
-    <button class="btn btn-ghost" id="btnRefresh" onclick="loadData()">
+  <div class="hdiv"></div>
+  <span class="h-sub">Сервисные заявки</span>
+  <div class="h-right">
+    <span class="h-time" id="htime">—</span>
+    <button class="btn" id="btnRef" onclick="load()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
         <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
         <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
@@ -627,332 +185,268 @@ tr.ticket-row:hover td { background: var(--bg); }
   </div>
 </header>
 
-<!-- PAGE -->
 <div class="page">
-
-  <div class="page-head">
-    <div class="page-head-left">
+  <div class="ph">
+    <div>
       <h1>Сервисные заявки</h1>
-      <p>Мониторинг и управление входящими обращениями из Bitrix24 CRM</p>
+      <p>Мониторинг входящих обращений из Bitrix24 CRM в реальном времени</p>
     </div>
   </div>
 
-  <!-- ERROR -->
-  <div class="error-bar" id="errBar">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-    </svg>
-    <span id="errMsg"></span>
-  </div>
+  <div class="ebar" id="ebar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span id="emsg"></span></div>
 
   <!-- KPI -->
-  <div class="kpi-grid" id="kpiGrid">
-    <div class="kpi-card" style="--kpi-color:#2563eb" onclick="selectStage('active',null)">
-      <div class="kpi-accent-bar"></div>
-      <div class="kpi-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
-        </svg>
-      </div>
-      <div class="kpi-num" id="kpiActive">—</div>
-      <div class="kpi-label">Активных заявок</div>
+  <div class="kpi-grid">
+    <div class="kpi" style="--kc:#2563eb" onclick="selectStage('active',null)">
+      <div class="kpi-bar"></div>
+      <div class="kpi-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
+      <div class="kpi-num" id="kActive">—</div><div class="kpi-label">Активных</div>
     </div>
-    <div class="kpi-card" style="--kpi-color:#d97706" onclick="setUrgentFilter()">
-      <div class="kpi-accent-bar"></div>
-      <div class="kpi-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-        </svg>
-      </div>
-      <div class="kpi-num" id="kpiUrgent">—</div>
-      <div class="kpi-label">Срочных</div>
+    <div class="kpi" style="--kc:#d97706" onclick="setF('furg','1809')">
+      <div class="kpi-bar"></div>
+      <div class="kpi-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+      <div class="kpi-num" id="kUrg">—</div><div class="kpi-label">Срочных</div>
     </div>
-    <div class="kpi-card" style="--kpi-color:#dc2626" onclick="setOverdueFilter()">
-      <div class="kpi-accent-bar"></div>
-      <div class="kpi-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-        </svg>
-      </div>
-      <div class="kpi-num" id="kpiOverdue">—</div>
-      <div class="kpi-label">Просроченных</div>
+    <div class="kpi" style="--kc:#dc2626" onclick="setF('fovd','yes')">
+      <div class="kpi-bar"></div>
+      <div class="kpi-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+      <div class="kpi-num" id="kOvd">—</div><div class="kpi-label">Просроченных</div>
     </div>
-    <div class="kpi-card" style="--kpi-color:#059669">
-      <div class="kpi-accent-bar"></div>
-      <div class="kpi-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="20 6 9 17 4 12"/>
-        </svg>
-      </div>
-      <div class="kpi-num" id="kpiClosed">—</div>
-      <div class="kpi-label">Закрыто (всего)</div>
+    <div class="kpi" style="--kc:#059669">
+      <div class="kpi-bar"></div>
+      <div class="kpi-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div>
+      <div class="kpi-num" id="kClose">—</div><div class="kpi-label">Закрыто</div>
     </div>
   </div>
 
-  <!-- STAGE TABS -->
-  <div class="stage-tabs-wrap" id="stageTabs">
-    <button class="stage-tab active" data-stage="active" onclick="selectStage('active',this)"
-      style="--tab-color:#2563eb;--tab-color-bg:rgba(37,99,235,.08)">
-      Все активные
-    </button>
-    <button class="stage-tab" data-stage="all" onclick="selectStage('all',this)"
-      style="--tab-color:#6b7280;--tab-color-bg:rgba(107,114,128,.08)">
-      Все заявки
-    </button>
+  <!-- Stage tabs -->
+  <div class="stage-wrap" id="stageTabs">
+    <button class="stab active" data-s="active" onclick="selectStage('active',this)" style="--tc:#2563eb;--tc-bg:rgba(37,99,235,.08)">Все активные</button>
+    <button class="stab" data-s="all" onclick="selectStage('all',this)" style="--tc:#6b7280;--tc-bg:rgba(107,114,128,.08)">Все заявки</button>
   </div>
 
-  <!-- FILTERS -->
-  <div class="filter-bar">
-    <div class="search-wrap">
-      <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-      </svg>
-      <input class="search-input" type="text" id="searchInput"
-        placeholder="Поиск по названию, описанию, инженеру…" oninput="debounceLoad()">
+  <!-- Filters -->
+  <div class="fbar">
+    <div class="sw">
+      <svg class="si" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input class="sinput" type="text" id="fsearch" placeholder="Поиск по названию, описанию…" oninput="debLoad()">
     </div>
-    <div class="filter-divider"></div>
-    <select class="filter-select" id="selUrgent" onchange="loadData()">
+    <div class="fdiv"></div>
+    <select class="fsel" id="fsvc" onchange="load()" style="min-width:195px">
+      <option value="all">Все типы услуг</option>
+    </select>
+    <select class="fsel" id="feng" onchange="load()" style="min-width:180px">
+      <option value="all">Все инженеры</option>
+    </select>
+    <div class="fdiv"></div>
+    <select class="fsel" id="furg" onchange="load()" style="min-width:145px">
       <option value="all">Любая срочность</option>
-      <option value="1809">🔥 Срочная</option>
+      <option value="1809">⚡ Срочная</option>
       <option value="1810">Не срочная</option>
       <option value="1811">Обучение ТЦ</option>
     </select>
-    <select class="filter-select" id="selOverdue" onchange="loadData()">
+    <select class="fsel" id="fovd" onchange="load()" style="min-width:155px">
       <option value="all">Все заявки</option>
       <option value="yes">⚠ Только просроченные</option>
     </select>
   </div>
 
-  <!-- TABLE -->
-  <div class="table-card">
-    <div class="table-toolbar">
-      <div>
-        <span class="table-title">Список заявок</span>
-        <span class="count-pill" id="countPill">0</span>
-      </div>
-      <span style="font-size:12px;color:var(--text-4)" id="filterDesc"></span>
+  <!-- Table -->
+  <div class="tcard">
+    <div class="ttbar">
+      <div><span class="ttitle">Список заявок</span><span class="cpill" id="cpill">0</span></div>
+      <span style="font-size:12px;color:var(--text-4)" id="fdesc"></span>
     </div>
-    <div class="table-scroll">
-      <div id="tableWrap">
-        <div class="state-empty">
-          <div class="state-empty-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-            </svg>
-          </div>
-          <h3>Загрузка данных…</h3>
-          <p>Подключение к Bitrix24</p>
+    <div class="tscroll">
+      <div id="tw">
+        <div class="empty">
+          <div class="empty-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+          <h3>Загрузка…</h3><p>Подключение к Bitrix24</p>
         </div>
       </div>
     </div>
   </div>
-
-</div><!-- /page -->
+</div>
 
 <script>
-const B24 = 'https://crm.prolabsupport.kz/crm/type/1058/item/';
-let currentStage = 'active';
-let debTimer = null;
-let allStages = {};
+let curStage = 'active';
+let dbt = null;
+let lastEngineers = [];
 
-const STAGE_STYLE = {
-  'DT1058_11:NEW':         { fg:'#1d4ed8', bg:'rgba(37,99,235,.08)',  border:'rgba(37,99,235,.2)' },
-  'DT1058_11:PREPARATION': { fg:'#1e40af', bg:'rgba(99,102,241,.08)', border:'rgba(99,102,241,.2)' },
-  'DT1058_11:CLIENT':      { fg:'#0369a1', bg:'rgba(14,165,233,.08)', border:'rgba(14,165,233,.2)' },
-  'DT1058_11:1':           { fg:'#c2410c', bg:'rgba(234,88,12,.08)',  border:'rgba(234,88,12,.2)' },
-  'DT1058_11:2':           { fg:'#6d28d9', bg:'rgba(124,58,237,.08)', border:'rgba(124,58,237,.2)' },
-  'DT1058_11:3':           { fg:'#0f766e', bg:'rgba(20,184,166,.08)', border:'rgba(20,184,166,.2)' },
-  'DT1058_11:4':           { fg:'#b91c1c', bg:'rgba(220,38,38,.08)',  border:'rgba(220,38,38,.2)' },
-  'DT1058_11:SUCCESS':     { fg:'#065f46', bg:'rgba(5,150,105,.08)',  border:'rgba(5,150,105,.2)' },
-  'DT1058_11:FAIL':        { fg:'#7f1d1d', bg:'rgba(220,38,38,.06)',  border:'rgba(220,38,38,.15)' },
+const SSTYLE = {
+  'DT1058_11:NEW':         {f:'#1d4ed8',b:'rgba(37,99,235,.09)',r:'rgba(37,99,235,.22)'},
+  'DT1058_11:PREPARATION': {f:'#3730a3',b:'rgba(99,102,241,.09)',r:'rgba(99,102,241,.22)'},
+  'DT1058_11:CLIENT':      {f:'#0369a1',b:'rgba(14,165,233,.09)',r:'rgba(14,165,233,.22)'},
+  'DT1058_11:1':           {f:'#c2410c',b:'rgba(234,88,12,.09)',r:'rgba(234,88,12,.22)'},
+  'DT1058_11:2':           {f:'#6d28d9',b:'rgba(124,58,237,.09)',r:'rgba(124,58,237,.22)'},
+  'DT1058_11:3':           {f:'#0f766e',b:'rgba(20,184,166,.09)',r:'rgba(20,184,166,.22)'},
+  'DT1058_11:4':           {f:'#b91c1c',b:'rgba(220,38,38,.09)',r:'rgba(220,38,38,.22)'},
+  'DT1058_11:SUCCESS':     {f:'#065f46',b:'rgba(5,150,105,.09)',r:'rgba(5,150,105,.22)'},
+  'DT1058_11:FAIL':        {f:'#7f1d1d',b:'rgba(220,38,38,.06)',r:'rgba(220,38,38,.15)'},
 };
 
-const URG_MAP = { '1809':'urgent', '1810':'normal', '1811':'training' };
-
-function selectStage(stage, el) {
-  currentStage = stage;
-  document.querySelectorAll('.stage-tab').forEach(b => b.classList.remove('active'));
-  if (el) el.classList.add('active');
-  else {
-    const t = document.querySelector(`.stage-tab[data-stage="${stage}"]`);
-    if (t) t.classList.add('active');
-  }
-  loadData();
+function selectStage(s, el) {
+  curStage = s;
+  document.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
+  (el || document.querySelector(`.stab[data-s="${s}"]`))?.classList.add('active');
+  load();
 }
+function setF(id, val) { document.getElementById(id).value = val; load(); }
+function debLoad() { clearTimeout(dbt); dbt = setTimeout(load, 380); }
 
-function setUrgentFilter() {
-  document.getElementById('selUrgent').value = '1809';
-  loadData();
-}
-function setOverdueFilter() {
-  document.getElementById('selOverdue').value = 'yes';
-  loadData();
-}
-
-function debounceLoad() {
-  clearTimeout(debTimer);
-  debTimer = setTimeout(loadData, 380);
-}
-
-async function loadData() {
-  const btn = document.getElementById('btnRefresh');
-  btn.classList.add('spin');
-
-  const params = new URLSearchParams({
-    stage: currentStage,
-    search: document.getElementById('searchInput').value,
-    urgent: document.getElementById('selUrgent').value,
-    overdue: document.getElementById('selOverdue').value,
+async function load() {
+  document.getElementById('btnRef').classList.add('loading');
+  const p = new URLSearchParams({
+    stage: curStage,
+    search: document.getElementById('fsearch').value,
+    urgent: document.getElementById('furg').value,
+    overdue: document.getElementById('fovd').value,
+    engineer: document.getElementById('feng').value,
+    serviceType: document.getElementById('fsvc').value,
   });
 
   try {
-    const res = await fetch(`/api/tickets?${params}`);
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error);
+    const r = await fetch('/api/tickets?' + p);
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    document.getElementById('ebar').classList.remove('show');
 
-    document.getElementById('errBar').classList.remove('show');
-    allStages = data.stages || {};
-
-    // KPI
-    document.getElementById('kpiActive').textContent = data.stats.total;
-    document.getElementById('kpiUrgent').textContent = data.stats.urgent;
-    document.getElementById('kpiOverdue').textContent = data.stats.overdue;
-    const closed = (data.stats.byStage['DT1058_11:SUCCESS']?.count || 0);
-    document.getElementById('kpiClosed').textContent = closed;
+    // KPIs
+    document.getElementById('kActive').textContent = d.stats.total;
+    document.getElementById('kUrg').textContent = d.stats.urgent;
+    document.getElementById('kOvd').textContent = d.stats.overdue;
+    document.getElementById('kClose').textContent = d.stats.byStage['DT1058_11:SUCCESS']?.count ?? 0;
 
     // Stage tabs
-    buildStageTabs(data.stages, data.stats.byStage);
+    buildTabs(d.stages, d.stats.byStage);
+
+    // Service type filter (populate once)
+    populateSvc(d.serviceTypes);
+
+    // Engineer filter (dynamic from current results)
+    populateEng(d.engineers);
 
     // Table
-    renderTable(data.items);
-    document.getElementById('countPill').textContent = data.items.length;
-    document.getElementById('lastUpdate').textContent =
-      'Обновлено в ' + new Date().toLocaleTimeString('ru', {hour:'2-digit',minute:'2-digit'});
-
+    renderTable(d.items);
+    document.getElementById('cpill').textContent = d.items.length;
+    document.getElementById('htime').textContent = 'Обновлено в ' + new Date().toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'});
   } catch(e) {
-    const b = document.getElementById('errBar');
-    document.getElementById('errMsg').textContent = 'Ошибка загрузки: ' + e.message;
-    b.classList.add('show');
+    document.getElementById('emsg').textContent = 'Ошибка: ' + e.message;
+    document.getElementById('ebar').classList.add('show');
   } finally {
-    btn.classList.remove('spin');
+    document.getElementById('btnRef').classList.remove('loading');
   }
 }
 
-function buildStageTabs(stages, counts) {
+let svcPopulated = false;
+function populateSvc(types) {
+  if (svcPopulated) return;
+  svcPopulated = true;
+  const sel = document.getElementById('fsvc');
+  const cur = sel.value;
+  // Clear except first
+  while (sel.options.length > 1) sel.remove(1);
+  Object.entries(types).sort((a,b) => a[1].localeCompare(b[1],'ru')).forEach(([id, name]) => {
+    const o = new Option(name, id);
+    sel.add(o);
+  });
+  sel.value = cur;
+}
+
+function populateEng(engineers) {
+  const sel = document.getElementById('feng');
+  const cur = sel.value;
+  while (sel.options.length > 1) sel.remove(1);
+  engineers.forEach(name => {
+    const o = new Option(name, name);
+    sel.add(o);
+  });
+  // Try to restore previous selection
+  if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
+  else sel.value = 'all';
+}
+
+function buildTabs(stages, counts) {
   const wrap = document.getElementById('stageTabs');
-  wrap.querySelectorAll('[data-dynamic]').forEach(el => el.remove());
+  wrap.querySelectorAll('[data-dyn]').forEach(el => el.remove());
 
-  const active = Object.entries(stages)
-    .filter(([,v]) => v.active)
-    .sort((a,b) => a[1].order - b[1].order);
-
-  active.forEach(([sid, cfg]) => {
+  Object.entries(stages).filter(([,v]) => v.active).sort((a,b) => a[1].order - b[1].order).forEach(([sid, cfg]) => {
+    const st = SSTYLE[sid] || {};
     const cnt = counts?.[sid]?.count ?? 0;
-    const style = STAGE_STYLE[sid] || {};
     const btn = document.createElement('button');
-    btn.className = 'stage-tab';
-    btn.dataset.stage = sid;
-    btn.dataset.dynamic = '1';
-    btn.style.setProperty('--tab-color', style.fg || cfg.color);
-    btn.style.setProperty('--tab-color-bg', style.bg || 'rgba(0,0,0,.05)');
-    btn.innerHTML = `<span class="stage-tab-dot"></span>${esc(cfg.name)}<span class="stage-tab-count">${cnt}</span>`;
+    btn.className = 'stab';
+    btn.dataset.s = sid;
+    btn.dataset.dyn = '1';
+    btn.style.setProperty('--tc', st.f || cfg.color);
+    btn.style.setProperty('--tc-bg', st.b || 'rgba(0,0,0,.06)');
+    btn.innerHTML = `<span class="stab-dot"></span>${esc(cfg.name)}<span class="stab-cnt">${cnt}</span>`;
     btn.onclick = () => selectStage(sid, btn);
-    if (sid === currentStage) btn.classList.add('active');
     wrap.appendChild(btn);
   });
 
-  wrap.querySelectorAll('.stage-tab').forEach(b => {
-    b.classList.toggle('active', b.dataset.stage === currentStage);
-  });
+  wrap.querySelectorAll('.stab').forEach(b => b.classList.toggle('active', b.dataset.s === curStage));
 }
 
 function renderTable(items) {
-  const wrap = document.getElementById('tableWrap');
+  const wrap = document.getElementById('tw');
   if (!items.length) {
-    wrap.innerHTML = `<div class="state-empty">
-      <div class="state-empty-icon">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-          <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
-          <rect x="9" y="3" width="6" height="4" rx="1"/>
-        </svg>
-      </div>
-      <h3>Нет заявок</h3>
-      <p>Попробуйте изменить фильтры или выбрать другую стадию</p>
-    </div>`;
+    wrap.innerHTML = `<div class="empty"><div class="empty-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg></div><h3>Нет заявок</h3><p>Попробуйте изменить фильтры</p></div>`;
     return;
   }
 
   const rows = items.map(t => {
-    const st = STAGE_STYLE[t.stageId] || { fg:'#6b7280', bg:'rgba(107,114,128,.08)', border:'rgba(107,114,128,.2)' };
-    const stagePill = `<span class="stage-pill" style="--pill-fg:${st.fg};--pill-bg:${st.bg};--pill-border:${st.border}">
-      <span class="stage-pill-dot"></span>${esc(t.stageName)}</span>`;
+    const st = SSTYLE[t.stageId] || {f:'#6b7280',b:'rgba(107,114,128,.08)',r:'rgba(107,114,128,.2)'};
+    const pill = `<span class="spill" style="--pf:${st.f};--pb:${st.b};--pbr:${st.r}"><span class="pdot"></span>${esc(t.stageName)}</span>`;
 
-    const urgType = URG_MAP[t.urgencyRaw] || (t.urgency === 'Срочная' ? 'urgent' : t.urgency === 'Обучение ТЦ' ? 'training' : 'normal');
-    let urgBadge;
-    if (t.urgency === 'Срочная') urgBadge = `<span class="urg-urgent">⚡ Срочная</span>`;
-    else if (t.urgency === 'Обучение ТЦ') urgBadge = `<span class="urg-training">📚 Обучение</span>`;
-    else if (t.urgency) urgBadge = `<span class="urg-normal">${esc(t.urgency)}</span>`;
-    else urgBadge = `<span style="color:var(--text-4);font-size:12px">—</span>`;
-
-    const daysOld = t.createdTime ? Math.floor((Date.now() - new Date(t.createdTime)) / 86400000) : 0;
-    const dateClass = daysOld > 14 ? 'date-old' : 'date-norm';
-    const dateStr = t.createdTime ? new Date(t.createdTime).toLocaleDateString('ru', {day:'2-digit',month:'2-digit',year:'2-digit'}) : '—';
-
-    const ovd = t.isOverdue
-      ? `<span class="ovd-yes"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Да</span>`
-      : `<span class="ovd-no">—</span>`;
-
-    const engInit = t.engineer ? t.engineer.trim().split(' ').map(w=>w[0]).join('').slice(0,2) : '';
-    const engCell = t.engineer
-      ? `<div class="eng-cell"><div class="eng-avatar">${esc(engInit)}</div><span class="eng-name">${esc(t.engineer)}</span></div>`
+    const svcHtml = t.serviceTypes?.length
+      ? `<div class="svc-tags">${t.serviceTypes.map(s => `<span class="svc-tag">${esc(s)}</span>`).join('')}</div>`
       : `<span style="color:var(--text-4);font-size:12px">—</span>`;
 
-    const title = cleanTitle(t.title);
+    let urgHtml;
+    if (t.urgency === 'Срочная') urgHtml = `<span class="u-urgent">⚡ Срочная</span>`;
+    else if (t.urgency === 'Обучение ТЦ') urgHtml = `<span class="u-training">📚 Обучение</span>`;
+    else if (t.urgency) urgHtml = `<span class="u-normal">${esc(t.urgency)}</span>`;
+    else urgHtml = `<span style="color:var(--text-4);font-size:12px">—</span>`;
 
-    return `<tr class="ticket-row">
-      <td><span class="id-badge">${t.id}</span></td>
-      <td>
-        <div class="ticket-name">${esc(title)}</div>
-        ${t.description ? `<div class="ticket-desc">${esc(t.description)}</div>` : ''}
-      </td>
-      <td>${stagePill}</td>
-      <td>${engCell}</td>
-      <td>${urgBadge}</td>
-      <td><span class="date-val ${dateClass}">${dateStr}</span></td>
+    const days = t.createdTime ? Math.floor((Date.now()-new Date(t.createdTime))/86400000) : 0;
+    const dateStr = t.createdTime ? new Date(t.createdTime).toLocaleDateString('ru',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '—';
+    const dcls = days > 14 ? 'dold' : 'dnorm';
+
+    const ovd = t.isOverdue
+      ? `<span class="oyes"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Да</span>`
+      : `<span class="ono">—</span>`;
+
+    const init = t.engineer ? t.engineer.trim().split(' ').map(w=>w[0]||'').join('').slice(0,2) : '';
+    const engHtml = t.engineer
+      ? `<div class="eng-w"><div class="eng-av">${esc(init)}</div><span class="eng-n">${esc(t.engineer)}</span></div>`
+      : `<span style="color:var(--text-4);font-size:12px">—</span>`;
+
+    const title = (t.title||'').replace(/^[-\s–—]+/,'').replace(/[-\s–—]+$/,'').trim() || '(без названия)';
+
+    return `<tr class="tr">
+      <td><span class="idbadge">${t.id}</span></td>
+      <td><div class="tname">${esc(title)}</div>${t.description?`<div class="tdesc">${esc(t.description)}</div>`:''}</td>
+      <td>${svcHtml}</td>
+      <td>${pill}</td>
+      <td>${engHtml}</td>
+      <td>${urgHtml}</td>
+      <td><span class="dval ${dcls}">${dateStr}</span></td>
       <td>${ovd}</td>
-      <td>
-        <a href="${esc(t.bitrixUrl)}" target="_blank" class="ext-link" title="Открыть в Битрикс24">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
-            <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-          </svg>
-        </a>
-      </td>
+      <td><a href="${esc(t.bitrixUrl)}" target="_blank" class="extlnk" title="Открыть в Б24"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a></td>
     </tr>`;
   }).join('');
 
   wrap.innerHTML = `<table>
-    <colgroup>
-      <col class="c-id"><col class="c-title"><col class="c-stage"><col class="c-eng">
-      <col class="c-urg"><col class="c-date"><col class="c-ovd"><col class="c-link">
-    </colgroup>
-    <thead><tr>
-      <th>ID</th><th>Заявка</th><th>Стадия</th><th>Инженер</th>
-      <th>Срочность</th><th>Создана</th><th>Просрочена</th><th></th>
-    </tr></thead>
+    <colgroup><col class="c-id"><col class="c-title"><col class="c-svc"><col class="c-stage"><col class="c-eng"><col class="c-urg"><col class="c-date"><col class="c-ovd"><col class="c-lnk"></colgroup>
+    <thead><tr><th>ID</th><th>Заявка</th><th>Тип услуги</th><th>Стадия</th><th>Инженер</th><th>Срочность</th><th>Создана</th><th>Просрочена</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
 }
 
-function cleanTitle(t) {
-  return (t||'').replace(/^[-\s]+/, '').replace(/[-\s]+$/, '').trim() || '(без названия)';
-}
-function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-setInterval(loadData, 5 * 60 * 1000);
-loadData();
+setInterval(load, 5*60*1000);
+load();
 </script>
 </body>
 </html>
