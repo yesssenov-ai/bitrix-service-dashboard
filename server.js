@@ -14,30 +14,30 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-async function b24(method, params = {}) {
-  const url = `${BITRIX_WEBHOOK}${method}.json`;
-  const qs = new URLSearchParams(flattenParams(params)).toString();
-  const res = await fetch(`${url}?${qs}`);
-  if (!res.ok) throw new Error(`Bitrix API error: ${res.status}`);
-  return res.json();
-}
-
-function flattenParams(obj, prefix = '') {
-  const result = {};
+function flattenInto(parts, obj, prefix) {
   for (const [k, v] of Object.entries(obj)) {
     const key = prefix ? `${prefix}[${k}]` : k;
-    if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
-      Object.assign(result, flattenParams(v, key));
-    } else if (Array.isArray(v)) {
+    if (v === null || v === undefined) continue;
+    if (Array.isArray(v)) {
       v.forEach((item, i) => {
-        if (typeof item === 'object') Object.assign(result, flattenParams(item, `${key}[${i}]`));
-        else result[`${key}[${i}]`] = item;
+        if (item !== null && typeof item === 'object') flattenInto(parts, item, `${key}[${i}]`);
+        else parts.push(`${encodeURIComponent(`${key}[${i}]`)}=${encodeURIComponent(item)}`);
       });
+    } else if (typeof v === 'object') {
+      flattenInto(parts, v, key);
     } else {
-      result[key] = v;
+      parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(v)}`);
     }
   }
-  return result;
+}
+
+async function b24(method, params = {}) {
+  const parts = [];
+  flattenInto(parts, params, '');
+  const url = `${BITRIX_WEBHOOK}${method}.json?${parts.join('&')}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Bitrix API error: ${res.status}`);
+  return res.json();
 }
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -54,7 +54,6 @@ const STAGES = {
   'DT1058_11:FAIL':        { name: 'Заявка отменена', color: '#ff4444', order: 9, active: false },
 };
 
-// Тип оказываемых услуг (iblock ID 25)
 const SERVICE_TYPES = {
   '103': 'Установка',
   '104': 'Техническое обслуживание',
@@ -79,15 +78,18 @@ app.get('/api/tickets', async (req, res) => {
   try {
     const { stage, urgent, overdue, search, engineer, serviceType } = req.query;
 
+    // Build filter object — stageId as array for Bitrix OR logic
     const filter = { categoryId: CATEGORY_ID };
 
-    // Stage filter
     if (stage && stage !== 'all' && stage !== 'active') {
       filter.stageId = stage;
     } else if (!stage || stage === 'active') {
-      const activeStages = Object.entries(STAGES).filter(([,v]) => v.active).map(([k]) => k);
-      activeStages.forEach((s, i) => { filter[`stageId[${i}]`] = s; });
+      // Pass as array — Bitrix treats array of stageId as OR
+      filter.stageId = Object.entries(STAGES)
+        .filter(([, v]) => v.active)
+        .map(([k]) => k);
     }
+    // stage === 'all' → no stageId → all tickets
 
     if (urgent && urgent !== 'all') filter['ufCrm8_1732856252874'] = urgent;
     if (overdue === 'yes') filter['ufCrm8_1732856215147'] = '1807';
@@ -104,14 +106,13 @@ app.get('/api/tickets', async (req, res) => {
         filter,
         select: [
           'id', 'title', 'stageId', 'createdTime', 'updatedTime',
-          'assignedById', 'companyId',
-          'ufCrm8_1744300223',     // Тип услуг (iblock)
-          'ufCrm8_1732856252874',  // Срочность
-          'ufCrm8_1732856215147',  // Просрочена
-          'ufCrm8_1757924163789',  // Ответств.инженер (текст)
-          'ufCrm8_1760688207256',  // Краткое описание
-          'ufCrm8_1732855669306',  // Текст запроса
-          'ufCrmPribor',           // Название прибора
+          'assignedById',
+          'ufCrm8_1744300223',    // Тип услуг
+          'ufCrm8_1732856252874', // Срочность
+          'ufCrm8_1732856215147', // Просрочена
+          'ufCrm8_1757924163789', // Инженер (текст)
+          'ufCrm8_1760688207256', // Краткое описание
+          'ufCrm8_1732855669306', // Текст запроса
         ],
         order: { createdTime: 'DESC' },
         start,
@@ -137,18 +138,16 @@ app.get('/api/tickets', async (req, res) => {
       );
     }
 
-    // Collect unique engineers from results (for filter dropdown)
     const engineerSet = new Set();
 
     const enriched = items.map(t => {
       const eng = t.ufCrm8_1757924163789 || null;
       if (eng) engineerSet.add(eng);
 
-      // Resolve service type names
       const svcIds = Array.isArray(t.ufCrm8_1744300223)
         ? t.ufCrm8_1744300223.map(String)
         : t.ufCrm8_1744300223 ? [String(t.ufCrm8_1744300223)] : [];
-      const svcNames = svcIds.map(id => SERVICE_TYPES[id] || `ID:${id}`);
+      const svcNames = svcIds.map(id => SERVICE_TYPES[id] || `Тип ${id}`);
 
       return {
         id: t.id,
@@ -190,6 +189,7 @@ app.get('/api/tickets', async (req, res) => {
       engineers: [...engineerSet].sort(),
       serviceTypes: SERVICE_TYPES,
     });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, error: err.message });
