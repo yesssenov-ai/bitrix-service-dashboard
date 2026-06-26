@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProLabSupport — Сервисные тикеты</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #232634;
+    --border: #2e3148;
+    --text: #e8eaf0;
+    --text-muted: #7c82a0;
+    --accent: #C53B2F;
+    --accent-light: #e04a3d;
+    --blue: #4a90e2;
+    --radius: 10px;
+    --font: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+  }
+
+  /* ── Header ── */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 58px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.3px;
+  }
+  .logo-dot {
+    width: 28px; height: 28px;
+    background: var(--accent);
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 900; color: #fff;
+  }
+  .header-right {
+    display: flex; align-items: center; gap: 16px;
+  }
+  .last-update {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .btn-refresh {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 6px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex; align-items: center; gap: 6px;
+    transition: background .15s;
+  }
+  .btn-refresh:hover { background: var(--border); }
+  .btn-refresh.loading svg { animation: spin .6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Layout ── */
+  .main { padding: 20px 24px; max-width: 1600px; margin: 0 auto; }
+
+  /* ── KPI Cards ── */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--stage-color, var(--accent));
+  }
+  .kpi-card:hover, .kpi-card.active {
+    border-color: var(--stage-color, var(--accent));
+    background: var(--surface2);
+  }
+  .kpi-num {
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 4px;
+    color: var(--stage-color, var(--text));
+  }
+  .kpi-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    line-height: 1.3;
+  }
+
+  /* ── Filters ── */
+  .filters {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .search-box {
+    flex: 1;
+    min-width: 220px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .search-box:focus { border-color: var(--accent); }
+  .search-box::placeholder { color: var(--text-muted); }
+
+  .filter-select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+  }
+  .filter-select:focus { border-color: var(--accent); }
+  .filter-select option { background: var(--surface2); }
+
+  .filter-badge {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+  }
+  .filter-badge:hover { border-color: var(--accent); color: var(--text); }
+  .filter-badge.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  /* ── Table ── */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .table-header-row {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .count-badge {
+    background: var(--surface2);
+    border-radius: 12px;
+    padding: 2px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  thead tr {
+    background: var(--surface2);
+  }
+  th {
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    font-size: 13px;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,.02); }
+
+  /* Column widths */
+  th:nth-child(1), td:nth-child(1) { width: 60px; }
+  th:nth-child(2), td:nth-child(2) { width: auto; min-width: 200px; }
+  th:nth-child(3), td:nth-child(3) { width: 170px; }
+  th:nth-child(4), td:nth-child(4) { width: 130px; }
+  th:nth-child(5), td:nth-child(5) { width: 110px; }
+  th:nth-child(6), td:nth-child(6) { width: 110px; }
+  th:nth-child(7), td:nth-child(7) { width: 80px; }
+
+  /* Ticket title */
+  .ticket-title {
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .ticket-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 3px;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Stage pill */
+  .stage-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border-radius: 5px;
+    padding: 3px 9px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    background: color-mix(in srgb, var(--pill-color) 18%, transparent);
+    color: var(--pill-color);
+    border: 1px solid color-mix(in srgb, var(--pill-color) 35%, transparent);
+  }
+  .stage-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+
+  /* Urgency */
+  .urgent-badge {
+    display: inline-block;
+    background: rgba(255,107,53,.15);
+    color: #FF6B35;
+    border: 1px solid rgba(255,107,53,.3);
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .normal-badge {
+    display: inline-block;
+    background: rgba(124,130,160,.1);
+    color: var(--text-muted);
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-size: 11px;
+  }
+
+  /* Overdue */
+  .overdue-yes {
+    color: #FF5752;
+    font-weight: 600;
+    font-size: 12px;
+  }
+  .overdue-no {
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  /* Date */
+  .date-cell { font-size: 12px; color: var(--text-muted); }
+  .date-cell.old { color: #FF5752; }
+
+  /* Engineer */
+  .engineer-cell {
+    font-size: 12px;
+    color: var(--text);
+  }
+
+  /* Link */
+  .ticket-link {
+    color: var(--blue);
+    text-decoration: none;
+    font-size: 12px;
+    opacity: 0;
+    transition: opacity .15s;
+  }
+  tr:hover .ticket-link { opacity: 1; }
+
+  /* ID cell */
+  .id-cell { font-size: 12px; color: var(--text-muted); font-family: monospace; }
+
+  /* Empty/Loading states */
+  .state-box {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+  }
+  .state-box .icon { font-size: 40px; margin-bottom: 12px; }
+  .state-box .msg { font-size: 15px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+  .state-box .sub { font-size: 13px; }
+
+  /* Error banner */
+  .error-banner {
+    background: rgba(255,87,82,.1);
+    border: 1px solid rgba(255,87,82,.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    color: #FF5752;
+    font-size: 13px;
+    display: none;
+  }
+  .error-banner.show { display: block; }
+
+  /* Scroll */
+  @media (max-width: 900px) {
+    .table-wrap { overflow-x: auto; }
+    table { min-width: 700px; }
+    .kpi-row { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo">
+    <div class="logo-dot">P</div>
+    ProLabSupport · Сервисные тикеты
+  </div>
+  <div class="header-right">
+    <span class="last-update" id="lastUpdate">Загрузка...</span>
+    <button class="btn-refresh" id="btnRefresh" onclick="loadData()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+      </svg>
+      Обновить
+    </button>
+  </div>
+</div>
+
+<div class="main">
+
+  <div class="error-banner" id="errBanner"></div>
+
+  <!-- KPI Cards -->
+  <div class="kpi-row" id="kpiRow">
+    <div class="kpi-card" style="--stage-color:#e8eaf0">
+      <div class="kpi-num" id="kpiTotal">—</div>
+      <div class="kpi-label">Всего активных</div>
+    </div>
+    <div class="kpi-card" style="--stage-color:#FF6B35" onclick="setFilter('urgent','1809')">
+      <div class="kpi-num" id="kpiUrgent">—</div>
+      <div class="kpi-label">Срочных</div>
+    </div>
+    <div class="kpi-card" style="--stage-color:#FF5752" onclick="setFilter('overdue','yes')">
+      <div class="kpi-num" id="kpiOverdue">—</div>
+      <div class="kpi-label">Просроченных</div>
+    </div>
+  </div>
+
+  <!-- Stage pills row -->
+  <div class="filters" id="stagePills" style="margin-bottom:12px">
+    <span class="filter-badge active" data-stage="active" onclick="selectStage('active',this)">Активные</span>
+    <span class="filter-badge" data-stage="all" onclick="selectStage('all',this)">Все</span>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters">
+    <input class="search-box" type="text" id="searchBox" placeholder="🔍  Поиск по названию, описанию, инженеру..." oninput="debounceLoad()">
+    <select class="filter-select" id="filterUrgent" onchange="loadData()">
+      <option value="all">Любая срочность</option>
+      <option value="1809">Срочная</option>
+      <option value="1810">Не срочная</option>
+      <option value="1811">Обучение ТЦ</option>
+    </select>
+    <select class="filter-select" id="filterOverdue" onchange="loadData()">
+      <option value="all">Все заявки</option>
+      <option value="yes">Только просроченные</option>
+    </select>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <div class="table-header-row">
+      <span>Список заявок <span class="count-badge" id="countBadge">0</span></span>
+      <span style="font-size:12px" id="filterDesc"></span>
+    </div>
+    <div id="tableContainer">
+      <div class="state-box">
+        <div class="icon">⏳</div>
+        <div class="msg">Загрузка данных...</div>
+        <div class="sub">Подключение к Bitrix24</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const BITRIX_URL = 'https://crm.prolabsupport.kz/crm/type/1058/item/';
+let currentStage = 'active';
+let debTimer = null;
+
+// Stage filter
+function selectStage(stage, el) {
+  currentStage = stage;
+  document.querySelectorAll('#stagePills .filter-badge').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  loadData();
+}
+
+// Dynamic stage pills - built after first load
+function buildStagePills(stages, stageCounts) {
+  const container = document.getElementById('stagePills');
+  // Keep first two (active / all)
+  const fixed = container.querySelectorAll('[data-stage="active"],[data-stage="all"]');
+  // Remove dynamic ones
+  container.querySelectorAll('[data-dynamic]').forEach(el => el.remove());
+
+  // Add stage pills
+  const ordered = Object.entries(stages)
+    .filter(([, v]) => v.active)
+    .sort((a, b) => a[1].order - b[1].order);
+
+  ordered.forEach(([sid, cfg]) => {
+    const cnt = stageCounts?.[sid] ?? 0;
+    const pill = document.createElement('span');
+    pill.className = 'filter-badge';
+    pill.dataset.stage = sid;
+    pill.dataset.dynamic = '1';
+    pill.style.setProperty('--pill-c', cfg.color);
+    pill.innerHTML = `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${cfg.color};margin-right:4px;vertical-align:middle"></span>${cfg.name} <b style="opacity:.7">${cnt}</b>`;
+    pill.onclick = () => selectStage(sid, pill);
+    if (sid === currentStage) pill.classList.add('active');
+    container.appendChild(pill);
+  });
+
+  // Re-sync active
+  container.querySelectorAll('.filter-badge').forEach(b => {
+    b.classList.toggle('active', b.dataset.stage === currentStage);
+  });
+}
+
+function setFilter(type, val) {
+  if (type === 'urgent') { document.getElementById('filterUrgent').value = val; }
+  if (type === 'overdue') { document.getElementById('filterOverdue').value = val; }
+  loadData();
+}
+
+function debounceLoad() {
+  clearTimeout(debTimer);
+  debTimer = setTimeout(loadData, 400);
+}
+
+async function loadData() {
+  const btn = document.getElementById('btnRefresh');
+  btn.classList.add('loading');
+
+  const params = new URLSearchParams({
+    stage: currentStage,
+    search: document.getElementById('searchBox').value,
+    urgent: document.getElementById('filterUrgent').value,
+    overdue: document.getElementById('filterOverdue').value,
+  });
+
+  try {
+    const res = await fetch(`/api/tickets?${params}`);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    document.getElementById('errBanner').classList.remove('show');
+
+    // KPI
+    document.getElementById('kpiTotal').textContent = data.stats.total;
+    document.getElementById('kpiUrgent').textContent = data.stats.urgent;
+    document.getElementById('kpiOverdue').textContent = data.stats.overdue;
+
+    // Stage pills
+    buildStagePills(data.stages, data.stats.byStage);
+
+    // Table
+    renderTable(data.items);
+    document.getElementById('countBadge').textContent = data.items.length;
+    document.getElementById('lastUpdate').textContent = 'Обновлено: ' + new Date().toLocaleTimeString('ru');
+
+  } catch (e) {
+    const b = document.getElementById('errBanner');
+    b.textContent = '⚠️ Ошибка загрузки: ' + e.message;
+    b.classList.add('show');
+    console.error(e);
+  } finally {
+    btn.classList.remove('loading');
+  }
+}
+
+function renderTable(items) {
+  const container = document.getElementById('tableContainer');
+  if (!items.length) {
+    container.innerHTML = `<div class="state-box"><div class="icon">📋</div><div class="msg">Нет заявок</div><div class="sub">Попробуйте изменить фильтры</div></div>`;
+    return;
+  }
+
+  const rows = items.map(t => {
+    const created = fmtDate(t.createdTime);
+    const updated = fmtDate(t.updatedTime);
+    const isOldUpdate = daysDiff(t.updatedTime) > 7;
+
+    const stagePill = `<span class="stage-pill" style="--pill-color:${t.stageColor}"><span class="stage-dot"></span>${escHtml(t.stageName)}</span>`;
+    const urgencyBadge = t.urgency === 'Срочная'
+      ? `<span class="urgent-badge">🔥 Срочная</span>`
+      : t.urgency ? `<span class="normal-badge">${escHtml(t.urgency)}</span>` : '<span style="color:var(--text-muted);font-size:12px">—</span>';
+    const overdueBadge = t.isOverdue
+      ? `<span class="overdue-yes">⚠ Да</span>`
+      : `<span class="overdue-no">Нет</span>`;
+
+    const titleText = cleanTitle(t.title);
+
+    return `<tr>
+      <td><span class="id-cell">#${t.id}</span></td>
+      <td>
+        <div class="ticket-title">${escHtml(titleText)}</div>
+        ${t.description ? `<div class="ticket-desc">${escHtml(t.description)}</div>` : ''}
+        <a href="${escHtml(t.bitrixUrl)}" target="_blank" class="ticket-link">Открыть в Б24 ↗</a>
+      </td>
+      <td>${stagePill}</td>
+      <td>${t.engineer ? `<span class="engineer-cell">${escHtml(t.engineer)}</span>` : '<span style="color:var(--text-muted);font-size:12px">—</span>'}</td>
+      <td>${urgencyBadge}</td>
+      <td><span class="date-cell">${created}</span></td>
+      <td>${overdueBadge}</td>
+    </tr>`;
+  }).join('');
+
+  container.innerHTML = `<table>
+    <thead><tr>
+      <th>ID</th>
+      <th>Заявка</th>
+      <th>Стадия</th>
+      <th>Инженер</th>
+      <th>Срочность</th>
+      <th>Создана</th>
+      <th>Просрочена</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function cleanTitle(title) {
+  // Remove excessive dashes and spaces from auto-generated titles
+  return (title || '').replace(/^(-\s*)+/, '').replace(/(-\s*)+$/, '').trim() || '(без названия)';
+}
+
+function fmtDate(str) {
+  if (!str) return '—';
+  const d = new Date(str);
+  return d.toLocaleDateString('ru', { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+
+function daysDiff(str) {
+  if (!str) return 0;
+  return (Date.now() - new Date(str)) / 86400000;
+}
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Auto-refresh every 5 minutes
+setInterval(loadData, 5 * 60 * 1000);
+
+// Initial load
+loadData();
+</script>
+</body>
+</html>
