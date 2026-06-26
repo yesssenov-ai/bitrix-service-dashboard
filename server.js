@@ -92,7 +92,7 @@ const USERS = {
   46:'Жандос Кунаев',47:'Дмитрий Сорокин',48:'Дарын Негметжанов',50:'Нурбек Ибраемов',
   55:'Нурхат Оразгалиев',67:'Айнель Сеитова',68:'Игорь Бодров',71:'Азамат Алиев',
   73:'Ерасыл Махаш',76:'Аскат Көбей',77:'Адиль Тасмагамбетов',78:'Дмитрий Волков',
-  79:'Арман Манасаев',85:'Максим Мазняк',86:'Аманжол Сыздыков',88:'Асем Жарылгап',
+  79:'Арман Манаспаев',85:'Максим Мазняк',86:'Аманжол Сыздыков',88:'Асем Жарылгап',
   90:'Ерқанат Сырғабек',
 };
 
@@ -183,14 +183,13 @@ app.get('/api/tickets', async (req, res) => {
     if (engineer && engineer !== 'all') enriched = enriched.filter(t => t.engineer === engineer);
     if (coordinator && coordinator !== 'all') enriched = enriched.filter(t => t.coordinator === coordinator);
 
-    // Preset service type filter (client-side OR logic across multiple types)
+    // Preset service type filter (client-side OR logic)
     if (presetSvcTypes && presetSvcTypes !== '') {
       const allowedIds = new Set(presetSvcTypes.split(','));
-      enriched = enriched.filter(t =>
-        t.serviceTypeIds && t.serviceTypeIds.length > 0
-          ? t.serviceTypeIds.some(id => allowedIds.has(String(id)))
-          : false
-      );
+      enriched = enriched.filter(t => {
+        if (!t.serviceTypeIds || t.serviceTypeIds.length === 0) return false;
+        return t.serviceTypeIds.some(id => allowedIds.has(String(id)));
+      });
     }
 
     if (search?.trim()) {

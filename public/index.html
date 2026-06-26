@@ -9,7 +9,7 @@
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --white:#ffffff; --bg:#f5f6fa; --bg2:#eef0f7; --surface:#ffffff;
+  --white:#ffffff; --bg:#f5f6fa; --bg2:#eef0f7;
   --border:#e3e6ef; --border2:#d0d4e4;
   --text:#111827; --text-2:#374151; --text-3:#6b7280; --text-4:#9ca3af;
   --accent:#C53B2F; --accent-h:#a83226; --accent-light:rgba(197,59,47,.08);
@@ -44,27 +44,33 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); font-si
 
 /* PAGE */
 .page { max-width:1640px; margin:0 auto; padding:24px 28px 60px; }
-.ph { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:22px; }
+.ph { margin-bottom:22px; }
 .ph h1 { font-size:21px; font-weight:700; letter-spacing:-.4px; margin-bottom:2px; }
 .ph p { font-size:13px; color:var(--text-3); }
 
-/* KPI */
-.kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(175px,1fr)); gap:12px; margin-bottom:20px; }
-.kpi { background:var(--white); border:1px solid var(--border); border-radius:var(--radius); padding:18px 20px; box-shadow:var(--shadow-sm); cursor:pointer; transition:box-shadow .15s,border-color .15s,transform .1s; position:relative; overflow:hidden; }
-.kpi:hover { box-shadow:var(--shadow); transform:translateY(-1px); }
-.kpi.active { border-color:var(--kc,var(--accent)); box-shadow:0 0 0 3px color-mix(in srgb,var(--kc,var(--accent)) 12%,transparent),var(--shadow); }
-.kpi-bar { position:absolute; top:0; left:0; right:0; height:3px; background:var(--kc,var(--accent)); }
-.kpi-icon { width:34px; height:34px; border-radius:8px; background:color-mix(in srgb,var(--kc,var(--accent)) 10%,transparent); display:flex; align-items:center; justify-content:center; margin-bottom:12px; color:var(--kc,var(--accent)); }
-.kpi-num { font-size:30px; font-weight:800; color:var(--text); line-height:1; letter-spacing:-1px; margin-bottom:4px; font-variant-numeric:tabular-nums; }
-.kpi-label { font-size:11.5px; color:var(--text-3); font-weight:500; text-transform:uppercase; letter-spacing:.5px; }
+/* PRESET CARDS - replace KPI */
+.preset-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:12px; margin-bottom:20px; }
+@media(max-width:1200px){ .preset-grid { grid-template-columns:repeat(3,1fr); } }
+@media(max-width:700px){ .preset-grid { grid-template-columns:repeat(2,1fr); } }
 
-/* STAGE TABS */
-.stage-wrap { background:var(--white); border:1px solid var(--border); border-radius:var(--radius); padding:4px; margin-bottom:14px; box-shadow:var(--shadow-sm); display:flex; gap:2px; flex-wrap:wrap; }
-.stab { display:inline-flex; align-items:center; gap:6px; border-radius:7px; padding:7px 12px; font-size:12.5px; font-weight:500; cursor:pointer; border:none; background:transparent; color:var(--text-3); transition:all .15s; font-family:var(--font); white-space:nowrap; }
-.stab:hover { background:var(--bg); color:var(--text); }
-.stab.active { background:var(--tc-bg,var(--accent-light)); color:var(--tc,var(--accent)); font-weight:600; }
-.stab-dot { width:7px; height:7px; border-radius:50%; background:currentColor; flex-shrink:0; }
-.stab-cnt { background:color-mix(in srgb,currentColor 15%,transparent); border-radius:10px; padding:1px 7px; font-size:11px; font-weight:700; min-width:20px; text-align:center; }
+.preset-card {
+  background:var(--white); border:2px solid var(--border); border-radius:var(--radius);
+  padding:16px 18px; cursor:pointer; transition:all .15s; position:relative; overflow:hidden;
+  text-align:left; font-family:var(--font);
+}
+.preset-card:hover { box-shadow:var(--shadow); transform:translateY(-1px); border-color:var(--pc,var(--border2)); }
+.preset-card.active {
+  border-color:var(--pc,var(--accent));
+  background:color-mix(in srgb,var(--pc,var(--accent)) 6%,white);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--pc,var(--accent)) 15%,transparent),var(--shadow);
+}
+.preset-bar { position:absolute; top:0; left:0; right:0; height:3px; background:var(--pc,var(--accent)); }
+.preset-icon { font-size:22px; margin-bottom:10px; display:block; }
+.preset-count { font-size:28px; font-weight:800; color:var(--text); line-height:1; letter-spacing:-1px; margin-bottom:4px; font-variant-numeric:tabular-nums; }
+.preset-label { font-size:11px; color:var(--text-3); font-weight:600; text-transform:uppercase; letter-spacing:.5px; line-height:1.3; }
+.preset-reset { background:var(--bg); border-color:var(--border); }
+.preset-reset:hover { background:var(--bg2); border-color:var(--border2); }
+.preset-reset .preset-count { font-size:20px; color:var(--text-3); }
 
 /* FILTER BAR */
 .fbar { background:var(--white); border:1px solid var(--border); border-radius:var(--radius); padding:12px 16px; margin-bottom:14px; box-shadow:var(--shadow-sm); display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
@@ -73,7 +79,7 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); font-si
 .sinput { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:8px 12px 8px 34px; font-size:13px; color:var(--text); font-family:var(--font); outline:none; transition:border-color .15s,box-shadow .15s; }
 .sinput:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-light); background:var(--white); }
 .sinput::placeholder { color:var(--text-4); }
-.fsel { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:13px; color:var(--text); font-family:var(--font); outline:none; cursor:pointer; min-width:150px; transition:border-color .15s; }
+.fsel { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:13px; color:var(--text); font-family:var(--font); outline:none; cursor:pointer; min-width:150px; }
 .fsel:focus { border-color:var(--accent); }
 .fdiv { width:1px; height:24px; background:var(--border); flex-shrink:0; }
 
@@ -84,9 +90,10 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); font-si
 .cpill { display:inline-flex; align-items:center; background:var(--bg); border:1px solid var(--border); border-radius:20px; padding:2px 10px; font-size:12px; font-weight:600; color:var(--text-2); margin-left:8px; }
 .tscroll { overflow-x:auto; }
 table { width:100%; border-collapse:collapse; }
-col.c-id { width:60px; } col.c-title { min-width:200px; } col.c-svc { width:160px; }
-col.c-stage { width:170px; } col.c-days { width:68px; } col.c-coord { width:125px; } col.c-eng { width:135px; }
-col.c-urg { width:115px; } col.c-date { width:95px; } col.c-ovd { width:85px; } col.c-act { width:76px; }
+col.c-id{width:60px} col.c-title{min-width:200px} col.c-svc{width:155px}
+col.c-stage{width:165px} col.c-days{width:65px} col.c-coord{width:125px}
+col.c-eng{width:135px} col.c-urg{width:115px} col.c-date{width:95px}
+col.c-ovd{width:85px} col.c-act{width:76px}
 thead tr { background:var(--bg); }
 th { padding:10px 14px; text-align:left; font-size:11px; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:.6px; border-bottom:1px solid var(--border); white-space:nowrap; }
 td { padding:11px 14px; border-bottom:1px solid var(--border); vertical-align:middle; font-size:13px; color:var(--text-2); }
@@ -101,80 +108,62 @@ tr.tr:hover td { background:#fafbfd; }
 .svc-tag { display:inline-block; background:var(--teal-light); color:var(--teal); border:1px solid rgba(15,118,110,.2); border-radius:5px; padding:2px 7px; font-size:11px; font-weight:600; white-space:nowrap; }
 .spill { display:inline-flex; align-items:center; gap:5px; border-radius:6px; padding:4px 9px; font-size:11.5px; font-weight:600; white-space:nowrap; background:var(--pb); color:var(--pf); border:1px solid var(--pbr); }
 .pdot { width:6px; height:6px; border-radius:50%; background:currentColor; flex-shrink:0; }
-.u-urgent { display:inline-flex;align-items:center;gap:5px;background:var(--orange-light);color:var(--orange);border:1px solid rgba(217,119,6,.2);border-radius:6px;padding:3px 8px;font-size:11.5px;font-weight:600; }
-.u-normal { display:inline-flex;align-items:center;gap:5px;background:var(--bg);color:var(--text-3);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11.5px; }
-.u-training { display:inline-flex;align-items:center;gap:5px;background:var(--purple-light);color:var(--purple);border:1px solid rgba(124,58,237,.2);border-radius:6px;padding:3px 8px;font-size:11.5px;font-weight:600; }
-.dval { font-size:12.5px;font-variant-numeric:tabular-nums; }
-.dold { color:var(--red);font-weight:500; } .dnorm { color:var(--text-3); }
-.oyes { display:inline-flex;align-items:center;gap:4px;color:var(--red);font-weight:600;font-size:12px; }
-.ono { color:var(--text-4);font-size:12px; }
-/* Days on stage */
-col.c-days { width:68px; }
-.days-badge { display:inline-flex;align-items:center;justify-content:center;border-radius:6px;padding:3px 8px;font-size:12px;font-weight:700;min-width:36px;font-variant-numeric:tabular-nums; }
-.days-ok   { background:rgba(5,150,105,.1);color:#065f46; }
-.days-warn { background:rgba(217,119,6,.1);color:#92400e; }
-.days-crit { background:rgba(220,38,38,.1);color:#991b1b; }
-.days-none { color:var(--text-4);font-size:12px; }
-.person-row { display:flex;align-items:center;gap:6px; }
-.eng-av { width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;text-transform:uppercase; }
-.eng-av.coord { background:linear-gradient(135deg,#f093fb,#f5576c); }
-.person-name { font-size:12.5px;color:var(--text-2); }
-
-/* Action buttons */
-.act-btns { display:flex; gap:4px; align-items:center; }
-.act-btn { width:30px;height:30px;border-radius:7px;border:1px solid var(--border);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-3);transition:all .15s;font-family:var(--font); }
-.act-btn:hover { background:var(--bg2); border-color:var(--border2); color:var(--text); }
-.act-btn.edit:hover { background:var(--blue-light); color:var(--blue); border-color:rgba(37,99,235,.25); }
-.act-btn.bell:hover { background:var(--orange-light); color:var(--orange); border-color:rgba(217,119,6,.25); }
-.act-btn.link:hover { background:var(--green-light); color:var(--green); border-color:rgba(5,150,105,.25); }
+.u-urgent{display:inline-flex;align-items:center;gap:5px;background:var(--orange-light);color:var(--orange);border:1px solid rgba(217,119,6,.2);border-radius:6px;padding:3px 8px;font-size:11.5px;font-weight:600;}
+.u-normal{display:inline-flex;align-items:center;gap:5px;background:var(--bg);color:var(--text-3);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11.5px;}
+.u-training{display:inline-flex;align-items:center;gap:5px;background:var(--purple-light);color:var(--purple);border:1px solid rgba(124,58,237,.2);border-radius:6px;padding:3px 8px;font-size:11.5px;font-weight:600;}
+.dval{font-size:12.5px;font-variant-numeric:tabular-nums;}
+.dold{color:var(--red);font-weight:500;} .dnorm{color:var(--text-3);}
+.oyes{display:inline-flex;align-items:center;gap:4px;color:var(--red);font-weight:600;font-size:12px;}
+.ono{color:var(--text-4);font-size:12px;}
+.days-badge{display:inline-flex;align-items:center;justify-content:center;border-radius:6px;padding:3px 8px;font-size:12px;font-weight:700;min-width:36px;font-variant-numeric:tabular-nums;}
+.days-ok{background:rgba(5,150,105,.1);color:#065f46;}
+.days-warn{background:rgba(217,119,6,.1);color:#92400e;}
+.days-crit{background:rgba(220,38,38,.1);color:#991b1b;}
+.days-none{color:var(--text-4);font-size:12px;}
+.person-row{display:flex;align-items:center;gap:6px;}
+.eng-av{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;text-transform:uppercase;}
+.eng-av.coord{background:linear-gradient(135deg,#f093fb,#f5576c);}
+.person-name{font-size:12.5px;color:var(--text-2);}
+.act-btns{display:flex;gap:4px;align-items:center;}
+.act-btn{width:30px;height:30px;border-radius:7px;border:1px solid var(--border);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-3);transition:all .15s;font-family:var(--font);text-decoration:none;}
+.act-btn:hover{background:var(--bg2);border-color:var(--border2);color:var(--text);}
+.act-btn.edit:hover{background:var(--blue-light);color:var(--blue);border-color:rgba(37,99,235,.25);}
+.act-btn.bell:hover{background:var(--orange-light);color:var(--orange);border-color:rgba(217,119,6,.25);}
+.act-btn.link:hover{background:var(--green-light);color:var(--green);border-color:rgba(5,150,105,.25);}
 
 /* MODAL */
-.overlay { position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px); }
-.overlay.show { display:flex; }
-.modal { background:var(--white);border-radius:14px;box-shadow:var(--shadow-lg);width:100%;max-width:520px;max-height:90vh;overflow-y:auto;animation:mslide .2s ease; }
-@keyframes mslide { from { transform:translateY(16px);opacity:0; } to { transform:translateY(0);opacity:1; } }
-.modal-head { padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:12px; }
-.modal-head h2 { font-size:16px;font-weight:700;color:var(--text);letter-spacing:-.3px; }
-.modal-head p { font-size:12.5px;color:var(--text-3);margin-top:2px; }
-.modal-close { width:30px;height:30px;border-radius:7px;border:1px solid var(--border);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-3);flex-shrink:0; font-size:16px; }
-.modal-close:hover { background:var(--bg); }
-.modal-body { padding:20px 24px; }
-.modal-footer { padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end; }
-
-/* Form elements */
-.form-group { margin-bottom:16px; }
-.form-label { display:block;font-size:12px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px; }
-.form-input,.form-select,.form-textarea { width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:var(--font);outline:none;transition:border-color .15s,box-shadow .15s; }
-.form-textarea { resize:vertical;min-height:90px; }
-.form-input:focus,.form-select:focus,.form-textarea:focus { border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-light);background:var(--white); }
-.form-input::placeholder,.form-textarea::placeholder { color:var(--text-4); }
-.ticket-badge { display:inline-flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:6px 12px;font-size:12.5px;color:var(--text-2);margin-bottom:16px; }
-
-/* TG selector */
-.tg-options { display:flex;gap:8px;flex-wrap:wrap; }
-.tg-opt { flex:1;min-width:120px;border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;text-align:center;transition:all .15s; }
-.tg-opt:hover { border-color:var(--accent);background:var(--accent-light); }
-.tg-opt.active { border-color:var(--accent);background:var(--accent-light);color:var(--accent); }
-.tg-opt-icon { font-size:20px;margin-bottom:4px; }
-.tg-opt-label { font-size:11.5px;font-weight:600; }
-
-/* Toast */
-.toast { position:fixed;bottom:24px;right:24px;background:var(--text);color:#fff;border-radius:10px;padding:12px 18px;font-size:13px;font-weight:500;box-shadow:var(--shadow-lg);z-index:2000;transform:translateY(80px);transition:transform .3s ease;display:flex;align-items:center;gap:8px; }
-.toast.show { transform:translateY(0); }
-.toast.success { background:#059669; }
-.toast.error { background:var(--red); }
-
-/* States */
-.empty { text-align:center;padding:64px 24px;color:var(--text-3); }
-.empty-icon { width:48px;height:48px;background:var(--bg);border:1px solid var(--border);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;color:var(--text-4); }
-.empty h3 { font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px; }
-.empty p { font-size:13px; }
-.ebar { display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:var(--radius);padding:12px 16px;margin-bottom:14px;color:var(--red);font-size:13px;font-weight:500; }
-.ebar.show { display:flex;align-items:center;gap:8px; }
-
-@media(max-width:900px){
-  .page{padding:16px;} .kpi-grid{grid-template-columns:repeat(2,1fr);} .h-time{display:none;}
-}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px);}
+.overlay.show{display:flex;}
+.modal{background:var(--white);border-radius:14px;box-shadow:var(--shadow-lg);width:100%;max-width:520px;max-height:90vh;overflow-y:auto;animation:mslide .2s ease;}
+@keyframes mslide{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-head{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+.modal-head h2{font-size:16px;font-weight:700;color:var(--text);letter-spacing:-.3px;}
+.modal-close{width:30px;height:30px;border-radius:7px;border:1px solid var(--border);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:16px;flex-shrink:0;}
+.modal-close:hover{background:var(--bg);}
+.modal-body{padding:20px 24px;}
+.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;}
+.form-group{margin-bottom:16px;}
+.form-label{display:block;font-size:12px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;}
+.form-input,.form-select,.form-textarea{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:var(--font);outline:none;transition:border-color .15s,box-shadow .15s;}
+.form-textarea{resize:vertical;min-height:90px;}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-light);background:var(--white);}
+.form-input::placeholder,.form-textarea::placeholder{color:var(--text-4);}
+.tg-options{display:flex;gap:8px;flex-wrap:wrap;}
+.tg-opt{flex:1;min-width:100px;border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;text-align:center;transition:all .15s;}
+.tg-opt:hover{border-color:var(--accent);background:var(--accent-light);}
+.tg-opt.active{border-color:var(--accent);background:var(--accent-light);color:var(--accent);}
+.tg-opt-icon{font-size:20px;margin-bottom:4px;}
+.tg-opt-label{font-size:11.5px;font-weight:600;}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--text);color:#fff;border-radius:10px;padding:12px 18px;font-size:13px;font-weight:500;box-shadow:var(--shadow-lg);z-index:2000;transform:translateY(80px);transition:transform .3s ease;display:flex;align-items:center;gap:8px;}
+.toast.show{transform:translateY(0);}
+.toast.success{background:#059669;}
+.toast.error{background:var(--red);}
+.empty{text-align:center;padding:64px 24px;color:var(--text-3);}
+.empty-icon{width:48px;height:48px;background:var(--bg);border:1px solid var(--border);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;color:var(--text-4);}
+.empty h3{font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px;}
+.empty p{font-size:13px;}
+.ebar{display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:var(--radius);padding:12px 16px;margin-bottom:14px;color:var(--red);font-size:13px;font-weight:500;}
+.ebar.show{display:flex;align-items:center;gap:8px;}
 </style>
 </head>
 <body>
@@ -204,85 +193,65 @@ col.c-days { width:68px; }
 
 <div class="page">
   <div class="ph">
-    <div>
-      <h1>Сервисные заявки</h1>
-      <p>Мониторинг входящих обращений из Bitrix24 CRM в реальном времени</p>
-    </div>
+    <h1>Сервисные заявки</h1>
+    <p>Мониторинг входящих обращений из Bitrix24 CRM в реальном времени</p>
   </div>
 
   <div class="ebar" id="ebar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span id="emsg"></span></div>
 
-  <div class="kpi-grid">
-    <div class="kpi" style="--kc:#2563eb" onclick="selectStage('active',null)">
-      <div class="kpi-bar"></div>
-      <div class="kpi-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
-      <div class="kpi-num" id="kActive">—</div><div class="kpi-label">Активных</div>
+  <!-- PRESET CARDS -->
+  <div class="preset-grid">
+    <div class="preset-card active" data-preset="tickets" style="--pc:#dc2626" onclick="selectPreset('tickets',this)">
+      <div class="preset-bar"></div>
+      <span class="preset-icon">🎫</span>
+      <div class="preset-count" id="cnt-tickets">—</div>
+      <div class="preset-label">Tickets<br><span style="font-weight:400;text-transform:none;font-size:10px;color:var(--text-4)">Заявки, Претензии</span></div>
     </div>
-    <div class="kpi" style="--kc:#d97706" onclick="setF('furg','1809')">
-      <div class="kpi-bar"></div>
-      <div class="kpi-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
-      <div class="kpi-num" id="kUrg">—</div><div class="kpi-label">Срочных</div>
+    <div class="preset-card" data-preset="docs" style="--pc:#7c3aed" onclick="selectPreset('docs',this)">
+      <div class="preset-bar"></div>
+      <span class="preset-icon">📄</span>
+      <div class="preset-count" id="cnt-docs">—</div>
+      <div class="preset-label">Доки и допы<br><span style="font-weight:400;text-transform:none;font-size:10px;color:var(--text-4)">Документы, оборудование</span></div>
     </div>
-    <div class="kpi" style="--kc:#dc2626" onclick="setF('fovd','yes')">
-      <div class="kpi-bar"></div>
-      <div class="kpi-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-      <div class="kpi-num" id="kOvd">—</div><div class="kpi-label">Просроченных</div>
+    <div class="preset-card" data-preset="obligations" style="--pc:#0369a1" onclick="selectPreset('obligations',this)">
+      <div class="preset-bar"></div>
+      <span class="preset-icon">🔧</span>
+      <div class="preset-count" id="cnt-obligations">—</div>
+      <div class="preset-label">Обязательства<br><span style="font-weight:400;text-transform:none;font-size:10px;color:var(--text-4)">Установка, ТО, Диагностика</span></div>
     </div>
-    <div class="kpi" style="--kc:#059669">
-      <div class="kpi-bar"></div>
-      <div class="kpi-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div>
-      <div class="kpi-num" id="kClose">—</div><div class="kpi-label">Закрыто</div>
+    <div class="preset-card" data-preset="overdue" style="--pc:#dc2626" onclick="selectPreset('overdue',this)">
+      <div class="preset-bar"></div>
+      <span class="preset-icon">⚠️</span>
+      <div class="preset-count" id="cnt-overdue">—</div>
+      <div class="preset-label">Просроченные<br><span style="font-weight:400;text-transform:none;font-size:10px;color:var(--text-4)">Статус просрочена = Да</span></div>
+    </div>
+    <div class="preset-card" data-preset="all" style="--pc:#6b7280" onclick="selectPreset('all',this)">
+      <div class="preset-bar"></div>
+      <span class="preset-icon">📋</span>
+      <div class="preset-count" id="cnt-all">—</div>
+      <div class="preset-label">Все заявки<br><span style="font-weight:400;text-transform:none;font-size:10px;color:var(--text-4)">Без фильтра</span></div>
+    </div>
+    <div class="preset-card preset-reset" data-preset="reset" onclick="resetFilters()">
+      <span class="preset-icon">↺</span>
+      <div class="preset-count" style="font-size:14px;color:var(--text-3);font-weight:600">Сброс</div>
+      <div class="preset-label">Сбросить<br><span style="font-weight:400;text-transform:none;font-size:10px;color:var(--text-4)">Все фильтры</span></div>
     </div>
   </div>
 
-  <div class="stage-wrap" id="presetTabs">
-    <button class="stab active" data-preset="tickets" onclick="selectPreset('tickets',this)"
-      style="--tc:#dc2626;--tc-bg:rgba(220,38,38,.08)">
-      🎫 Tickets
-      <span class="stab-cnt" id="cnt-tickets">—</span>
-    </button>
-    <button class="stab" data-preset="docs" onclick="selectPreset('docs',this)"
-      style="--tc:#7c3aed;--tc-bg:rgba(124,58,237,.08)">
-      📄 Подготовка доков и допов
-      <span class="stab-cnt" id="cnt-docs">—</span>
-    </button>
-    <button class="stab" data-preset="obligations" onclick="selectPreset('obligations',this)"
-      style="--tc:#0369a1;--tc-bg:rgba(37,99,235,.08)">
-      🔧 Текущие обязательства
-      <span class="stab-cnt" id="cnt-obligations">—</span>
-    </button>
-    <button class="stab" data-preset="overdue" onclick="selectPreset('overdue',this)"
-      style="--tc:#dc2626;--tc-bg:rgba(220,38,38,.08)">
-      ⚠️ Просроченные
-      <span class="stab-cnt" id="cnt-overdue">—</span>
-    </button>
-    <button class="stab" data-preset="all" onclick="selectPreset('all',this)"
-      style="--tc:#6b7280;--tc-bg:rgba(107,114,128,.08)">
-      Все заявки
-      <span class="stab-cnt" id="cnt-all">—</span>
-    </button>
-    <button class="stab" data-preset="reset" onclick="resetFilters()"
-      style="--tc:#059669;--tc-bg:rgba(5,150,105,.08)">
-      ↺ Сброс фильтров
-    </button>
-  </div>
-  <!-- Stage sub-tabs (hidden by default, shown when needed) -->
-  <div class="stage-wrap" id="stageTabs" style="display:none">
-  </div>
-
+  <!-- FILTERS -->
   <div class="fbar">
     <div class="sw">
       <svg class="si" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <input class="sinput" type="text" id="fsearch" placeholder="Поиск по названию, описанию…" oninput="debLoad()">
     </div>
     <div class="fdiv"></div>
-    <select class="fsel" id="fsvc" onchange="load()">
+    <select class="fsel" id="fsvc" onchange="clearPreset();load()">
       <option value="all">Все типы услуг</option>
     </select>
     <select class="fsel" id="fcoord" onchange="load()">
       <option value="all">Все координаторы</option>
       <option value="Азамат Аннабаев">Азамат Аннабаев</option>
-      <option value="Арман Манасаев">Арман Манасаев</option>
+      <option value="Арман Манаспаев">Арман Манаспаев</option>
     </select>
     <select class="fsel" id="feng" onchange="load()">
       <option value="all">Все инженеры</option>
@@ -300,10 +269,10 @@ col.c-days { width:68px; }
     </select>
   </div>
 
+  <!-- TABLE -->
   <div class="tcard">
     <div class="ttbar">
-      <div><span class="ttitle">Список заявок</span><span class="cpill" id="cpill">0</span></div>
-      <span style="font-size:12px;color:var(--text-4)" id="fdesc"></span>
+      <div><span class="ttitle" id="ttitle">Список заявок</span><span class="cpill" id="cpill">0</span></div>
     </div>
     <div class="tscroll">
       <div id="tw">
@@ -316,156 +285,82 @@ col.c-days { width:68px; }
   </div>
 </div>
 
-<!-- MODAL: Редактировать -->
+<!-- MODAL: Edit -->
 <div class="overlay" id="editOverlay" onclick="if(event.target===this)closeEdit()">
   <div class="modal">
     <div class="modal-head">
-      <div>
-        <h2>✏️ Редактировать заявку</h2>
-        <p id="editTicketTitle" style="color:var(--text-3);font-size:12.5px;margin-top:3px"></p>
-      </div>
+      <div><h2>✏️ Редактировать заявку</h2><p id="editTicketTitle" style="color:var(--text-3);font-size:12.5px;margin-top:3px"></p></div>
       <button class="modal-close" onclick="closeEdit()">✕</button>
     </div>
     <div class="modal-body">
-      <div class="form-group">
-        <label class="form-label">Комментарий координатора</label>
-        <textarea class="form-textarea" id="editComment" placeholder="Введите комментарий — он сохранится в карточке Б24 и будет отправлен в Telegram…"></textarea>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Сменить стадию</label>
-        <select class="form-select" id="editStage">
-          <option value="">— не менять —</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Назначить инженера</label>
-        <select class="form-select" id="editEngineer">
-          <option value="">— не менять —</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Ваше имя (для уведомления)</label>
-        <input class="form-input" type="text" id="editAuthor" placeholder="Азамат Аннабаев">
-      </div>
+      <div class="form-group"><label class="form-label">Комментарий координатора</label><textarea class="form-textarea" id="editComment" placeholder="Введите комментарий…"></textarea></div>
+      <div class="form-group"><label class="form-label">Сменить стадию</label><select class="form-select" id="editStage"><option value="">— не менять —</option></select></div>
+      <div class="form-group"><label class="form-label">Назначить инженера</label><select class="form-select" id="editEngineer"><option value="">— не менять —</option></select></div>
+      <div class="form-group"><label class="form-label">Ваше имя</label><input class="form-input" type="text" id="editAuthor" placeholder="Азамат Аннабаев"></div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeEdit()">Отмена</button>
       <button class="btn" onclick="submitEdit(false)" id="btnEditSaveOnly">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-        Сохранить
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Сохранить
       </button>
       <button class="btn btn-primary" onclick="submitEdit(true)" id="btnEditSave">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>
-        Сохранить + TG
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>Сохранить + TG
       </button>
     </div>
   </div>
 </div>
 
-<!-- MODAL: Напоминание/Задача -->
+<!-- MODAL: Bell -->
 <div class="overlay" id="bellOverlay" onclick="if(event.target===this)closeBell()">
   <div class="modal">
     <div class="modal-head">
-      <div>
-        <h2>🔔 Напоминание / Задача</h2>
-        <p id="bellTicketTitle" style="color:var(--text-3);font-size:12.5px;margin-top:3px"></p>
-      </div>
+      <div><h2>🔔 Напоминание / Задача</h2><p id="bellTicketTitle" style="color:var(--text-3);font-size:12.5px;margin-top:3px"></p></div>
       <button class="modal-close" onclick="closeBell()">✕</button>
     </div>
     <div class="modal-body">
-      <!-- Tabs -->
       <div style="display:flex;gap:4px;margin-bottom:20px;background:var(--bg);border-radius:8px;padding:4px;">
-        <button class="btn" id="tabRemind" onclick="switchTab('remind')"
-          style="flex:1;justify-content:center;background:var(--white);border-color:var(--border2)">
-          ⏰ Напоминание в TG
-        </button>
-        <button class="btn" id="tabTask" onclick="switchTab('task')"
-          style="flex:1;justify-content:center;background:transparent;border-color:transparent">
-          📋 Задача в Б24
-        </button>
+        <button class="btn" id="tabRemind" onclick="switchTab('remind')" style="flex:1;justify-content:center;background:var(--white);border-color:var(--border2)">⏰ Напоминание в TG</button>
+        <button class="btn" id="tabTask" onclick="switchTab('task')" style="flex:1;justify-content:center;background:transparent;border-color:transparent">📋 Задача в Б24</button>
       </div>
-
-      <!-- Remind tab -->
       <div id="paneRemind">
-        <div class="form-group">
-          <label class="form-label">Текст напоминания</label>
-          <textarea class="form-textarea" id="remindMsg" placeholder="Проверить статус заявки, связаться с клиентом…" style="min-height:70px"></textarea>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Отправить через</label>
+        <div class="form-group"><label class="form-label">Текст напоминания</label><textarea class="form-textarea" id="remindMsg" placeholder="Проверить статус заявки…" style="min-height:70px"></textarea></div>
+        <div class="form-group"><label class="form-label">Отправить через</label>
           <select class="form-select" id="remindDelay">
-            <option value="0">Сейчас</option>
-            <option value="15">Через 15 минут</option>
-            <option value="30">Через 30 минут</option>
-            <option value="60">Через 1 час</option>
-            <option value="120">Через 2 часа</option>
-            <option value="240">Через 4 часа</option>
-            <option value="480">Через 8 часов</option>
-            <option value="1440">Завтра (24 часа)</option>
+            <option value="0">Сейчас</option><option value="15">15 минут</option>
+            <option value="30">30 минут</option><option value="60">1 час</option>
+            <option value="120">2 часа</option><option value="240">4 часа</option>
+            <option value="480">8 часов</option><option value="1440">24 часа</option>
           </select>
         </div>
-        <div class="form-group">
-          <label class="form-label">Отправить в</label>
+        <div class="form-group"><label class="form-label">Отправить в</label>
           <div class="tg-options">
-            <div class="tg-opt active" data-chat="ops" onclick="selectChat(this)">
-              <div class="tg-opt-icon">🔧</div>
-              <div class="tg-opt-label">Оперативная</div>
-            </div>
-            <div class="tg-opt" data-chat="mgt" onclick="selectChat(this)">
-              <div class="tg-opt-icon">📊</div>
-              <div class="tg-opt-label">Руководство</div>
-            </div>
-            <div class="tg-opt" data-chat="both" onclick="selectChat(this)">
-              <div class="tg-opt-icon">📢</div>
-              <div class="tg-opt-label">Обе группы</div>
-            </div>
+            <div class="tg-opt active" data-chat="ops" onclick="selectChat(this)"><div class="tg-opt-icon">🔧</div><div class="tg-opt-label">Оперативная</div></div>
+            <div class="tg-opt" data-chat="mgt" onclick="selectChat(this)"><div class="tg-opt-icon">📊</div><div class="tg-opt-label">Руководство</div></div>
+            <div class="tg-opt" data-chat="both" onclick="selectChat(this)"><div class="tg-opt-icon">📢</div><div class="tg-opt-label">Обе группы</div></div>
           </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">Ваше имя</label>
-          <input class="form-input" type="text" id="remindAuthor" placeholder="Азамат Аннабаев">
-        </div>
+        <div class="form-group"><label class="form-label">Ваше имя</label><input class="form-input" type="text" id="remindAuthor" placeholder="Азамат Аннабаев"></div>
       </div>
-
-      <!-- Task tab -->
       <div id="paneTask" style="display:none">
-        <div class="form-group">
-          <label class="form-label">Название задачи</label>
-          <input class="form-input" type="text" id="taskTitle" placeholder="Провести диагностику прибора">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Описание</label>
-          <textarea class="form-textarea" id="taskDesc" placeholder="Подробное описание задачи…" style="min-height:70px"></textarea>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Ответственный</label>
-          <select class="form-select" id="taskResponsible"></select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Дедлайн</label>
-          <input class="form-input" type="datetime-local" id="taskDeadline">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Ваше имя</label>
-          <input class="form-input" type="text" id="taskAuthor" placeholder="Азамат Аннабаев">
-        </div>
+        <div class="form-group"><label class="form-label">Название задачи</label><input class="form-input" type="text" id="taskTitle" placeholder="Провести диагностику…"></div>
+        <div class="form-group"><label class="form-label">Описание</label><textarea class="form-textarea" id="taskDesc" placeholder="Подробное описание…" style="min-height:70px"></textarea></div>
+        <div class="form-group"><label class="form-label">Ответственный</label><select class="form-select" id="taskResponsible"></select></div>
+        <div class="form-group"><label class="form-label">Дедлайн</label><input class="form-input" type="datetime-local" id="taskDeadline"></div>
+        <div class="form-group"><label class="form-label">Ваше имя</label><input class="form-input" type="text" id="taskAuthor" placeholder="Азамат Аннабаев"></div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeBell()">Отмена</button>
-      <button class="btn" onclick="submitBell(false)" id="btnBellSaveOnly">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-        Сохранить
+      <button class="btn" id="btnBellSaveOnly" onclick="submitBell(false)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Сохранить
       </button>
       <button class="btn btn-primary" onclick="submitBell(true)" id="btnBellSave">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>
-        Сохранить + TG
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>Сохранить + TG
       </button>
     </div>
   </div>
 </div>
 
-<!-- TOAST -->
 <div class="toast" id="toast"></div>
 
 <script>
@@ -481,78 +376,75 @@ const SSTYLE = {
   'DT1058_11:FAIL':        {f:'#7f1d1d',b:'rgba(220,38,38,.06)',r:'rgba(220,38,38,.15)'},
 };
 
-let curStage='active', curPreset='tickets', dbt=null, allStages={}, allUsers=[], curTicketId=null, curTab='remind', curChat='ops';
-
-// Preset definitions
+// Preset definitions - service type IDs to include
 const PRESETS = {
-  tickets:     { serviceTypes: ['619','114','109'], label: 'Tickets' },
-  docs:        { serviceTypes: ['402','111'], label: 'Подготовка доков и допов' },
-  obligations: { serviceTypes: ['103','104','105','106','108','110'], label: 'Текущие обязательства' },
-  overdue:     { overdue: 'yes', label: 'Просроченные' },
-  all:         { label: 'Все заявки' },
+  tickets:     { svcTypes: new Set(['619','114','4']), label: '🎫 Tickets' },
+  docs:        { svcTypes: new Set(['402','111']), label: '📄 Доки и допы' },
+  obligations: { svcTypes: new Set(['103','104','105','106','108','109','110']), label: '🔧 Обязательства' },
+  overdue:     { overdueOnly: true, label: '⚠️ Просроченные' },
+  all:         { label: '📋 Все заявки' },
 };
 
-// ── Load ──────────────────────────────────────────────────────────────────────
+let curPreset='tickets', dbt=null, allStages={}, allUsers=[], curTicketId=null, curTab='remind', curChat='ops';
+
+// ── Preset ────────────────────────────────────────────────────────────────────
 
 function selectPreset(preset, el) {
-  curPreset = preset;
-  document.querySelectorAll('#presetTabs .stab').forEach(b=>b.classList.remove('active'));
+  if(preset==='reset'){resetFilters();return;}
+  curPreset=preset;
+  document.querySelectorAll('.preset-card').forEach(c=>c.classList.remove('active'));
   (el||document.querySelector(`[data-preset="${preset}"]`))?.classList.add('active');
-
-  // Apply preset filters
-  const def = PRESETS[preset] || {};
-
-  // Reset manual filters
-  document.getElementById('fsvc').value = 'all';
-  document.getElementById('fovd').value = def.overdue || 'all';
-  document.getElementById('furg').value = 'all';
-  document.getElementById('feng').value = 'all';
-  document.getElementById('fcoord').value = 'all';
-  document.getElementById('fsearch').value = '';
-
-  curStage = 'active';
+  // Reset manual filters when switching preset
+  document.getElementById('fsvc').value='all';
+  document.getElementById('fovd').value='all';
+  document.getElementById('furg').value='all';
+  document.getElementById('feng').value='all';
+  document.getElementById('fcoord').value='all';
+  document.getElementById('fsearch').value='';
   load();
+}
+
+function clearPreset() {
+  curPreset='all';
+  document.querySelectorAll('.preset-card').forEach(c=>c.classList.remove('active'));
+  document.querySelector('[data-preset="all"]')?.classList.add('active');
 }
 
 function resetFilters() {
-  curPreset = 'tickets';
-  document.querySelectorAll('#presetTabs .stab').forEach(b=>b.classList.remove('active'));
+  curPreset='tickets';
+  document.querySelectorAll('.preset-card').forEach(c=>c.classList.remove('active'));
   document.querySelector('[data-preset="tickets"]')?.classList.add('active');
-  document.getElementById('fsvc').value = 'all';
-  document.getElementById('fovd').value = 'all';
-  document.getElementById('furg').value = 'all';
-  document.getElementById('feng').value = 'all';
-  document.getElementById('fcoord').value = 'all';
-  document.getElementById('fsearch').value = '';
-  curStage = 'active';
+  document.getElementById('fsvc').value='all';
+  document.getElementById('fovd').value='all';
+  document.getElementById('furg').value='all';
+  document.getElementById('feng').value='all';
+  document.getElementById('fcoord').value='all';
+  document.getElementById('fsearch').value='';
   load();
 }
 
-function selectStage(s,el) {
-  curStage=s;
-  document.querySelectorAll('#stageTabs .stab').forEach(b=>b.classList.remove('active'));
-  (el||document.querySelector(`#stageTabs .stab[data-s="${s}"]`))?.classList.add('active');
-  load();
-}
-function setF(id,val){document.getElementById(id).value=val;load();}
 function debLoad(){clearTimeout(dbt);dbt=setTimeout(load,380);}
+
+// ── Load ──────────────────────────────────────────────────────────────────────
 
 async function load() {
   document.getElementById('btnRef').classList.add('loading');
-  // Apply preset service type filter
-  const preset = PRESETS[curPreset] || {};
-  const manualSvc = document.getElementById('fsvc').value;
-  let serviceTypeParam = manualSvc !== 'all' ? manualSvc : 'all';
+  const def=PRESETS[curPreset]||{};
 
-  // If preset has serviceTypes and no manual override, we filter client-side
+  // For overdue preset, set overdue filter
+  const overdueVal = def.overdueOnly ? 'yes' : document.getElementById('fovd').value;
+
   const p=new URLSearchParams({
-    stage:curStage, search:document.getElementById('fsearch').value,
-    urgent:document.getElementById('furg').value,
-    overdue:document.getElementById('fovd').value || (preset.overdue||'all'),
-    engineer:document.getElementById('feng').value, coordinator:document.getElementById('fcoord').value,
-    serviceType:serviceTypeParam,
-    presetSvcTypes: preset.serviceTypes ? preset.serviceTypes.join(',') : '',
+    search: document.getElementById('fsearch').value,
+    urgent: document.getElementById('furg').value,
+    overdue: overdueVal,
+    engineer: document.getElementById('feng').value,
+    coordinator: document.getElementById('fcoord').value,
+    serviceType: document.getElementById('fsvc').value,
+    // Pass preset svcTypes as comma-separated for server
+    presetSvcTypes: def.svcTypes ? [...def.svcTypes].join(',') : '',
   });
+
   try {
     const r=await fetch('/api/tickets?'+p);
     const d=await r.json();
@@ -560,26 +452,23 @@ async function load() {
     document.getElementById('ebar').classList.remove('show');
     allStages=d.stages||{};
 
-    document.getElementById('kActive').textContent=d.stats.total;
-    document.getElementById('kUrg').textContent=d.stats.urgent;
-    document.getElementById('kOvd').textContent=d.stats.overdue;
-    document.getElementById('kClose').textContent=d.stats.byStage['DT1058_11:SUCCESS']?.count??0;
-
-    // Update preset counts if available
-    if(d.presetCounts) {
+    // Update preset counts
+    if(d.presetCounts){
       Object.entries(d.presetCounts).forEach(([k,v])=>{
         const el=document.getElementById('cnt-'+k);
         if(el) el.textContent=v;
       });
     }
 
-    buildTabs(d.stages,d.stats.byStage);
+    // Update table title
+    document.getElementById('ttitle').textContent=(def.label||'Список заявок')+' — заявки';
+
     populateSvc(d.serviceTypes);
     populateEng(d.engineers);
     renderTable(d.items);
     document.getElementById('cpill').textContent=d.items.length;
     document.getElementById('htime').textContent='Обновлено в '+new Date().toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'});
-  } catch(e) {
+  } catch(e){
     document.getElementById('emsg').textContent='Ошибка: '+e.message;
     document.getElementById('ebar').classList.add('show');
   } finally {
@@ -587,69 +476,36 @@ async function load() {
   }
 }
 
-// Load users for task modal
-async function loadUsers() {
-  try {
-    const r=await fetch('/api/users');
-    const d=await r.json();
-    if(d.ok) allUsers=d.users;
-    const sel=document.getElementById('taskResponsible');
-    sel.innerHTML='';
-    allUsers.forEach(u=>{const o=new Option(u.name,u.id);sel.add(o);});
+let svcDone=false;
+function populateSvc(types){
+  if(svcDone)return;svcDone=true;
+  const sel=document.getElementById('fsvc');
+  while(sel.options.length>1)sel.remove(1);
+  Object.entries(types).sort((a,b)=>a[1].localeCompare(b[1],'ru')).forEach(([id,name])=>sel.add(new Option(name,id)));
+}
+function populateEng(engineers){
+  const sel=document.getElementById('feng');const cur=sel.value;
+  while(sel.options.length>1)sel.remove(1);
+  engineers.forEach(name=>sel.add(new Option(name,name)));
+  if([...sel.options].some(o=>o.value===cur))sel.value=cur;else sel.value='all';
+}
 
-    // Prefill edit engineer dropdown
+// Load users for modals
+async function loadUsers(){
+  try{
+    const r=await fetch('/api/users');const d=await r.json();
+    if(d.ok){allUsers=d.users;}
+    const sel=document.getElementById('taskResponsible');
+    sel.innerHTML='';allUsers.forEach(u=>{sel.add(new Option(u.name,u.id));});
     const esel=document.getElementById('editEngineer');
     esel.innerHTML='<option value="">— не менять —</option>';
-    allUsers.forEach(u=>{const o=new Option(u.name,u.id);esel.add(o);});
-  } catch(e){}
+    allUsers.forEach(u=>{esel.add(new Option(u.name,u.id));});
+  }catch(e){}
 }
 
-// Populate stages in edit modal
-function populateEditStages(stages) {
-  const sel=document.getElementById('editStage');
-  sel.innerHTML='<option value="">— не менять —</option>';
-  Object.entries(stages).sort((a,b)=>a[1].order-b[1].order).forEach(([sid,cfg])=>{
-    sel.add(new Option(cfg.name,sid));
-  });
-}
+// ── Render ────────────────────────────────────────────────────────────────────
 
-let svcDone=false;
-function populateSvc(types) {
-  if(svcDone) return; svcDone=true;
-  const sel=document.getElementById('fsvc');
-  const cur=sel.value;
-  while(sel.options.length>1) sel.remove(1);
-  Object.entries(types).sort((a,b)=>a[1].localeCompare(b[1],'ru')).forEach(([id,name])=>sel.add(new Option(name,id)));
-  sel.value=cur;
-}
-function populateEng(engineers) {
-  const sel=document.getElementById('feng');
-  const cur=sel.value;
-  while(sel.options.length>1) sel.remove(1);
-  engineers.forEach(name=>sel.add(new Option(name,name)));
-  if([...sel.options].some(o=>o.value===cur)) sel.value=cur;
-  else sel.value='all';
-}
-function buildTabs(stages,counts) {
-  const wrap=document.getElementById('stageTabs');
-  wrap.querySelectorAll('[data-dyn]').forEach(el=>el.remove());
-  Object.entries(stages).filter(([,v])=>v.active).sort((a,b)=>a[1].order-b[1].order).forEach(([sid,cfg])=>{
-    const st=SSTYLE[sid]||{};
-    const cnt=counts?.[sid]?.count??0;
-    const btn=document.createElement('button');
-    btn.className='stab'; btn.dataset.s=sid; btn.dataset.dyn='1';
-    btn.style.setProperty('--tc',st.f||cfg.color);
-    btn.style.setProperty('--tc-bg',st.b||'rgba(0,0,0,.06)');
-    btn.innerHTML=`<span class="stab-dot"></span>${esc(cfg.name)}<span class="stab-cnt">${cnt}</span>`;
-    btn.onclick=()=>selectStage(sid,btn);
-    wrap.appendChild(btn);
-  });
-  wrap.querySelectorAll('.stab').forEach(b=>b.classList.toggle('active',b.dataset.s===curStage));
-}
-
-// ── Render table ──────────────────────────────────────────────────────────────
-
-function renderTable(items) {
+function renderTable(items){
   const wrap=document.getElementById('tw');
   if(!items.length){
     wrap.innerHTML=`<div class="empty"><div class="empty-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg></div><h3>Нет заявок</h3><p>Попробуйте изменить фильтры</p></div>`;
@@ -658,32 +514,28 @@ function renderTable(items) {
   const rows=items.map(t=>{
     const st=SSTYLE[t.stageId]||{f:'#6b7280',b:'rgba(107,114,128,.08)',r:'rgba(107,114,128,.2)'};
     const pill=`<span class="spill" style="--pf:${st.f};--pb:${st.b};--pbr:${st.r}"><span class="pdot"></span>${esc(t.stageName)}</span>`;
-    const svcHtml=t.serviceTypes?.length?`<div class="svc-tags">${t.serviceTypes.map(s=>`<span class="svc-tag">${esc(s)}</span>`).join('')}</div>`:'<span style="color:var(--text-4);font-size:12px">—</span>';
+    const svcHtml=t.serviceTypes?.length?`<div class="svc-tags">${t.serviceTypes.map(s=>`<span class="svc-tag">${esc(s)}</span>`).join('')}</div>`:`<span style="color:var(--text-4);font-size:12px">—</span>`;
     let urgHtml;
-    if(t.urgency==='Срочная') urgHtml=`<span class="u-urgent">⚡ Срочная</span>`;
-    else if(t.urgency==='Обучение ТЦ') urgHtml=`<span class="u-training">📚 Обучение</span>`;
-    else if(t.urgency) urgHtml=`<span class="u-normal">${esc(t.urgency)}</span>`;
+    if(t.urgency==='Срочная')urgHtml=`<span class="u-urgent">⚡ Срочная</span>`;
+    else if(t.urgency==='Обучение ТЦ')urgHtml=`<span class="u-training">📚 Обучение</span>`;
+    else if(t.urgency)urgHtml=`<span class="u-normal">${esc(t.urgency)}</span>`;
     else urgHtml=`<span style="color:var(--text-4);font-size:12px">—</span>`;
     const days=t.createdTime?Math.floor((Date.now()-new Date(t.createdTime))/86400000):0;
     const dateStr=t.createdTime?new Date(t.createdTime).toLocaleDateString('ru',{day:'2-digit',month:'2-digit',year:'2-digit'}):'—';
     const dcls=days>14?'dold':'dnorm';
     const ovd=t.isOverdue?`<span class="oyes"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Да</span>`:`<span class="ono">—</span>`;
-    // Days on stage badge
+    // Days on stage
     let daysHtml;
-    if (t.daysOnStage !== null && t.daysOnStage !== undefined) {
-      const d = t.daysOnStage;
-      const cls = d <= 2 ? 'days-ok' : d <= 5 ? 'days-warn' : 'days-crit';
-      const label = d === 0 ? '<1' : d;
-      daysHtml = `<span class="days-badge ${cls}" title="На стадии ${d} дн.">${label}</span>`;
-    } else {
-      daysHtml = '<span class="days-none">—</span>';
-    }
+    if(t.daysOnStage!==null&&t.daysOnStage!==undefined){
+      const d=t.daysOnStage;
+      const cls=d<=2?'days-ok':d<=5?'days-warn':'days-crit';
+      daysHtml=`<span class="days-badge ${cls}" title="На стадии ${d} дн.">${d===0?'<1':d}</span>`;
+    }else{daysHtml=`<span class="days-none">—</span>`;}
     const ci=t.coordinator?t.coordinator.trim().split(' ').map(w=>w[0]||'').join('').slice(0,2):'';
     const coordHtml=t.coordinator?`<div class="person-row"><div class="eng-av coord">${esc(ci)}</div><span class="person-name">${esc(t.coordinator)}</span></div>`:`<span style="color:var(--text-4);font-size:12px">—</span>`;
     const ei=t.engineer?t.engineer.trim().split(' ').map(w=>w[0]||'').join('').slice(0,2):'';
     const engHtml=t.engineer?`<div class="person-row"><div class="eng-av">${esc(ei)}</div><span class="person-name">${esc(t.engineer)}</span></div>`:`<span style="color:var(--text-4);font-size:12px">—</span>`;
     const title=(t.title||'').replace(/^[-\s–—]+/,'').replace(/[-\s–—]+$/,'').trim()||'(без названия)';
-
     return `<tr class="tr">
       <td><span class="idbadge">${t.id}</span></td>
       <td><div class="tname">${esc(title)}</div>${t.description?`<div class="tdesc">${esc(t.description)}</div>`:''}</td>
@@ -695,32 +547,38 @@ function renderTable(items) {
       <td>${urgHtml}</td>
       <td><span class="dval ${dcls}">${dateStr}</span></td>
       <td>${ovd}</td>
-      <td>
-        <div class="act-btns">
-          <button class="act-btn edit" title="Редактировать / комментарий" data-id="${t.id}" data-title="${esc(title)}" onclick="openEditBtn(this)">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          </button>
-          <button class="act-btn bell" title="Напоминание / задача" data-id="${t.id}" data-title="${esc(title)}" onclick="openBellBtn(this)">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-          </button>
-          <a href="${esc(t.bitrixUrl)}" target="_blank" class="act-btn link" title="Открыть в Б24">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-          </a>
-        </div>
-      </td>
+      <td><div class="act-btns">
+        <button class="act-btn edit" title="Редактировать" data-id="${t.id}" data-title="${esc(title)}" onclick="openEditBtn(this)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="act-btn bell" title="Напоминание / задача" data-id="${t.id}" data-title="${esc(title)}" onclick="openBellBtn(this)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        </button>
+        <a href="${esc(t.bitrixUrl)}" target="_blank" class="act-btn link" title="Открыть в Б24">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div></td>
     </tr>`;
   }).join('');
-
   wrap.innerHTML=`<table>
     <colgroup><col class="c-id"><col class="c-title"><col class="c-svc"><col class="c-stage"><col class="c-days"><col class="c-coord"><col class="c-eng"><col class="c-urg"><col class="c-date"><col class="c-ovd"><col class="c-act"></colgroup>
-    <thead><tr><th>ID</th><th>Заявка</th><th>Тип услуги</th><th>Стадия</th><th title="Дней на текущей стадии">Дней</th><th>Координатор</th><th>Инженер</th><th>Срочность</th><th>Создана</th><th>Просрочена</th><th>Действия</th></tr></thead>
+    <thead><tr><th>ID</th><th>Заявка</th><th>Тип услуги</th><th>Стадия</th><th title="Дней на стадии">Дней</th><th>Координатор</th><th>Инженер</th><th>Срочность</th><th>Создана</th><th>Просрочена</th><th>Действия</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
 }
 
-// ── Edit Modal ────────────────────────────────────────────────────────────────
+// ── Modals ────────────────────────────────────────────────────────────────────
 
-function openEdit(id, title) {
+function openEditBtn(btn){openEdit(Number(btn.dataset.id),btn.dataset.title);}
+function openBellBtn(btn){openBell(Number(btn.dataset.id),btn.dataset.title);}
+
+function populateEditStages(stages){
+  const sel=document.getElementById('editStage');
+  sel.innerHTML='<option value="">— не менять —</option>';
+  Object.entries(stages).sort((a,b)=>a[1].order-b[1].order).forEach(([sid,cfg])=>sel.add(new Option(cfg.name,sid)));
+}
+
+function openEdit(id,title){
   curTicketId=id;
   document.getElementById('editTicketTitle').textContent=`#${id} — ${title}`;
   document.getElementById('editComment').value='';
@@ -728,34 +586,31 @@ function openEdit(id, title) {
   document.getElementById('editEngineer').value='';
   populateEditStages(allStages);
   document.getElementById('editOverlay').classList.add('show');
-  document.getElementById('editComment').focus();
+  setTimeout(()=>document.getElementById('editComment').focus(),100);
 }
-function closeEdit(){ document.getElementById('editOverlay').classList.remove('show'); }
+function closeEdit(){document.getElementById('editOverlay').classList.remove('show');}
 
-async function submitEdit(sendTg=true) {
+async function submitEdit(sendTg=true){
   const comment=document.getElementById('editComment').value.trim();
   const stageId=document.getElementById('editStage').value;
   const engineerId=document.getElementById('editEngineer').value;
   const authorName=document.getElementById('editAuthor').value.trim()||'Координатор';
-  if(!comment && !stageId && !engineerId) { toast('Заполните хотя бы одно поле','error'); return; }
-
+  if(!comment&&!stageId&&!engineerId){toast('Заполните хотя бы одно поле','error');return;}
   const btn=document.getElementById('btnEditSave');
-  btn.disabled=true; btn.textContent='Сохраняю…';
-  try {
+  btn.disabled=true;
+  try{
     const r=await fetch('/api/comment',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({ticketId:curTicketId,comment,stageId,engineerId:engineerId?Number(engineerId):null,authorName,sendTg})});
     const d=await r.json();
-    if(!d.ok) throw new Error(d.error);
+    if(!d.ok)throw new Error(d.error);
     closeEdit();
-    toast(sendTg ? '✅ Сохранено и отправлено в Telegram' : '✅ Сохранено в Битрикс24','success');
-    setTimeout(load, 1500);
-  } catch(e) { toast('Ошибка: '+e.message,'error'); }
-  finally { btn.disabled=false; btn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Сохранить и отправить в TG'; }
+    toast(sendTg?'✅ Сохранено и отправлено в Telegram':'✅ Сохранено в Битрикс24','success');
+    setTimeout(load,1500);
+  }catch(e){toast('Ошибка: '+e.message,'error');}
+  finally{btn.disabled=false;}
 }
 
-// ── Bell Modal ────────────────────────────────────────────────────────────────
-
-function openBell(id, title) {
+function openBell(id,title){
   curTicketId=id;
   document.getElementById('bellTicketTitle').textContent=`#${id} — ${title}`;
   document.getElementById('remindMsg').value='';
@@ -763,9 +618,9 @@ function openBell(id, title) {
   document.getElementById('bellOverlay').classList.add('show');
   switchTab('remind');
 }
-function closeBell(){ document.getElementById('bellOverlay').classList.remove('show'); }
+function closeBell(){document.getElementById('bellOverlay').classList.remove('show');}
 
-function switchTab(tab) {
+function switchTab(tab){
   curTab=tab;
   document.getElementById('paneRemind').style.display=tab==='remind'?'':'none';
   document.getElementById('paneTask').style.display=tab==='task'?'':'none';
@@ -773,33 +628,29 @@ function switchTab(tab) {
   document.getElementById('tabRemind').style.borderColor=tab==='remind'?'var(--border2)':'transparent';
   document.getElementById('tabTask').style.background=tab==='task'?'var(--white)':'transparent';
   document.getElementById('tabTask').style.borderColor=tab==='task'?'var(--border2)':'transparent';
-  // Update save-only button visibility
-  const saveOnly = document.getElementById('btnBellSaveOnly');
-  if(saveOnly) saveOnly.style.display = tab==='remind' ? 'none' : '';
+  // Hide save-only for remind tab
+  document.getElementById('btnBellSaveOnly').style.display=tab==='remind'?'none':'';
 }
 
-function selectChat(el) {
+function selectChat(el){
   document.querySelectorAll('.tg-opt').forEach(o=>o.classList.remove('active'));
-  el.classList.add('active');
-  curChat=el.dataset.chat;
+  el.classList.add('active');curChat=el.dataset.chat;
 }
 
-async function submitBell(sendTg=true) {
-  const btn=document.getElementById('btnBellSave');
-  btn.disabled=true;
-  try {
-    if(curTab==='remind') {
+async function submitBell(sendTg=true){
+  const btn=document.getElementById('btnBellSave');btn.disabled=true;
+  try{
+    if(curTab==='remind'){
       const message=document.getElementById('remindMsg').value.trim();
       const delayMinutes=parseInt(document.getElementById('remindDelay').value)||0;
       const authorName=document.getElementById('remindAuthor').value.trim()||'Координатор';
       const r=await fetch('/api/remind',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({ticketId:curTicketId,message,delayMinutes,authorName,targetChat:curChat,sendTg})});
-      const d=await r.json();
-      if(!d.ok) throw new Error(d.error);
+      const d=await r.json();if(!d.ok)throw new Error(d.error);
       closeBell();
-      if(sendTg){const delayText=delayMinutes>0?` через ${delayMinutes} мин.`:'';toast(`🔔 Напоминание запланировано${delayText}`,'success');}
-      else toast('✅ Сохранено','success');
-    } else {
+      const dt=delayMinutes>0?` через ${delayMinutes} мин.`:'';
+      toast(sendTg?`🔔 Напоминание запланировано${dt}`:'✅ Сохранено','success');
+    }else{
       const taskTitle=document.getElementById('taskTitle').value.trim();
       const taskDesc=document.getElementById('taskDesc').value.trim();
       const responsibleId=parseInt(document.getElementById('taskResponsible').value)||26;
@@ -807,30 +658,24 @@ async function submitBell(sendTg=true) {
       const authorName=document.getElementById('taskAuthor').value.trim()||'Координатор';
       const r=await fetch('/api/task',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({ticketId:curTicketId,taskTitle,taskDesc,responsibleId,deadline,authorName,sendTg})});
-      const d=await r.json();
-      if(!d.ok) throw new Error(d.error);
+      const d=await r.json();if(!d.ok)throw new Error(d.error);
       closeBell();
-      toast(sendTg?'📋 Задача создана в Б24 и отправлена в Telegram':'📋 Задача создана в Б24','success');
+      toast(sendTg?'📋 Задача создана и отправлена в Telegram':'📋 Задача создана в Б24','success');
     }
-  } catch(e) { toast('Ошибка: '+e.message,'error'); }
-  finally { btn.disabled=false; }
+  }catch(e){toast('Ошибка: '+e.message,'error');}
+  finally{btn.disabled=false;}
 }
 
-// ── Toast ─────────────────────────────────────────────────────────────────────
-function toast(msg, type='success') {
+function toast(msg,type='success'){
   const el=document.getElementById('toast');
-  el.textContent=msg;
-  el.className=`toast ${type} show`;
-  setTimeout(()=>el.classList.remove('show'), 3500);
+  el.textContent=msg;el.className=`toast ${type} show`;
+  setTimeout(()=>el.classList.remove('show'),3500);
 }
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
-function openEditBtn(btn) { openEdit(Number(btn.dataset.id), btn.dataset.title); }
-function openBellBtn(btn) { openBell(Number(btn.dataset.id), btn.dataset.title); }
-function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-
-setInterval(load, 5*60*1000);
+setInterval(load,5*60*1000);
 loadUsers();
-selectPreset('tickets', document.querySelector('[data-preset="tickets"]'));
+selectPreset('tickets',document.querySelector('[data-preset="tickets"]'));
 </script>
 </body>
 </html>
