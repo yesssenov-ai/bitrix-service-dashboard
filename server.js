@@ -213,7 +213,7 @@ app.get('/api/tickets', async (req, res) => {
 
 app.post('/api/comment', async (req, res) => {
   try {
-    const { ticketId, comment, stageId, engineerId, authorName } = req.body;
+    const { ticketId, comment, stageId, engineerId, authorName, sendTg } = req.body;
     if (!ticketId) return res.status(400).json({ ok: false, error: 'ticketId required' });
 
     const fields = {};
@@ -249,7 +249,7 @@ app.post('/api/comment', async (req, res) => {
       `📋 ${cleanTitle}${stageChange}${engChange}${commentLine}\n` +
       `🔗 <a href="${t.bitrixUrl}">Открыть в Битрикс24</a>`;
 
-    await tgBroadcast(tgText);
+    if (sendTg !== false) await tgBroadcast(tgText);
 
     res.json({ ok: true });
   } catch (err) {
@@ -262,7 +262,7 @@ app.post('/api/comment', async (req, res) => {
 
 app.post('/api/remind', async (req, res) => {
   try {
-    const { ticketId, message, delayMinutes, authorName, targetChat } = req.body;
+    const { ticketId, message, delayMinutes, authorName, targetChat, sendTg } = req.body;
     if (!ticketId) return res.status(400).json({ ok: false, error: 'ticketId required' });
 
     const data = await b24('crm.item.get', { entityTypeId: ENTITY_TYPE_ID, id: ticketId });
@@ -277,8 +277,10 @@ app.post('/api/remind', async (req, res) => {
         `🔗 <a href="${t.bitrixUrl}">Открыть в Битрикс24</a>`;
 
       const chat = targetChat === 'mgt' ? TG_MGT : targetChat === 'both' ? null : TG_OPS;
-      if (chat === null) await tgBroadcast(tgText);
-      else await tgSend(chat, tgText);
+      if (sendTg !== false) {
+        if (chat === null) await tgBroadcast(tgText);
+        else await tgSend(chat, tgText);
+      }
     };
 
     const delay = Math.max(0, Math.min(parseInt(delayMinutes)||0, 1440)) * 60 * 1000;
@@ -296,7 +298,7 @@ app.post('/api/remind', async (req, res) => {
 
 app.post('/api/task', async (req, res) => {
   try {
-    const { ticketId, taskTitle, taskDesc, responsibleId, deadline, authorName } = req.body;
+    const { ticketId, taskTitle, taskDesc, responsibleId, deadline, authorName, sendTg } = req.body;
     if (!ticketId) return res.status(400).json({ ok: false, error: 'ticketId required' });
 
     const data = await b24('crm.item.get', { entityTypeId: ENTITY_TYPE_ID, id: ticketId });
@@ -325,7 +327,7 @@ app.post('/api/task', async (req, res) => {
       `👤 Создал: ${authorName || 'Координатор'}\n` +
       `🔗 <a href="${t.bitrixUrl}">Открыть заявку в Б24</a>`;
 
-    await tgBroadcast(tgText);
+    if (sendTg !== false) await tgBroadcast(tgText);
 
     res.json({ ok: true, taskId });
   } catch (err) {

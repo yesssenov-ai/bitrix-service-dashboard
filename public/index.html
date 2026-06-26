@@ -320,9 +320,13 @@ col.c-days { width:68px; }
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeEdit()">Отмена</button>
-      <button class="btn btn-primary" onclick="submitEdit()" id="btnEditSave">
+      <button class="btn" onclick="submitEdit(false)" id="btnEditSaveOnly">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-        Сохранить и отправить в TG
+        Сохранить
+      </button>
+      <button class="btn btn-primary" onclick="submitEdit(true)" id="btnEditSave">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>
+        Сохранить + TG
       </button>
     </div>
   </div>
@@ -419,9 +423,13 @@ col.c-days { width:68px; }
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeBell()">Отмена</button>
-      <button class="btn btn-primary" onclick="submitBell()" id="btnBellSave">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 17H2a3 3 0 0 0 3-3V9a7 7 0 0 1 14 0v5a3 3 0 0 0 3 3zm-8.27 4a2 2 0 0 1-3.46 0"/></svg>
-        Отправить
+      <button class="btn" onclick="submitBell(false)" id="btnBellSaveOnly">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        Сохранить
+      </button>
+      <button class="btn btn-primary" onclick="submitBell(true)" id="btnBellSave">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>
+        Сохранить + TG
       </button>
     </div>
   </div>
@@ -635,7 +643,7 @@ function openEdit(id, title) {
 }
 function closeEdit(){ document.getElementById('editOverlay').classList.remove('show'); }
 
-async function submitEdit() {
+async function submitEdit(sendTg=true) {
   const comment=document.getElementById('editComment').value.trim();
   const stageId=document.getElementById('editStage').value;
   const engineerId=document.getElementById('editEngineer').value;
@@ -646,11 +654,11 @@ async function submitEdit() {
   btn.disabled=true; btn.textContent='Сохраняю…';
   try {
     const r=await fetch('/api/comment',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ticketId:curTicketId,comment,stageId,engineerId:engineerId?Number(engineerId):null,authorName})});
+      body:JSON.stringify({ticketId:curTicketId,comment,stageId,engineerId:engineerId?Number(engineerId):null,authorName,sendTg})});
     const d=await r.json();
     if(!d.ok) throw new Error(d.error);
     closeEdit();
-    toast('✅ Сохранено и отправлено в Telegram','success');
+    toast(sendTg ? '✅ Сохранено и отправлено в Telegram' : '✅ Сохранено в Битрикс24','success');
     setTimeout(load, 1500);
   } catch(e) { toast('Ошибка: '+e.message,'error'); }
   finally { btn.disabled=false; btn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Сохранить и отправить в TG'; }
@@ -676,9 +684,9 @@ function switchTab(tab) {
   document.getElementById('tabRemind').style.borderColor=tab==='remind'?'var(--border2)':'transparent';
   document.getElementById('tabTask').style.background=tab==='task'?'var(--white)':'transparent';
   document.getElementById('tabTask').style.borderColor=tab==='task'?'var(--border2)':'transparent';
-  document.getElementById('btnBellSave').innerHTML=tab==='remind'
-    ?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 17H2a3 3 0 003-3V9a7 7 0 0114 0v5a3 3 0 003 3zm-8.27 4a2 2 0 01-3.46 0"/></svg> Запланировать'
-    :'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Создать задачу в Б24';
+  // Update save-only button visibility
+  const saveOnly = document.getElementById('btnBellSaveOnly');
+  if(saveOnly) saveOnly.style.display = tab==='remind' ? 'none' : '';
 }
 
 function selectChat(el) {
@@ -687,7 +695,7 @@ function selectChat(el) {
   curChat=el.dataset.chat;
 }
 
-async function submitBell() {
+async function submitBell(sendTg=true) {
   const btn=document.getElementById('btnBellSave');
   btn.disabled=true;
   try {
@@ -696,12 +704,12 @@ async function submitBell() {
       const delayMinutes=parseInt(document.getElementById('remindDelay').value)||0;
       const authorName=document.getElementById('remindAuthor').value.trim()||'Координатор';
       const r=await fetch('/api/remind',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({ticketId:curTicketId,message,delayMinutes,authorName,targetChat:curChat})});
+        body:JSON.stringify({ticketId:curTicketId,message,delayMinutes,authorName,targetChat:curChat,sendTg})});
       const d=await r.json();
       if(!d.ok) throw new Error(d.error);
       closeBell();
-      const delayText=delayMinutes>0?` через ${delayMinutes} мин.`:'';
-      toast(`🔔 Напоминание запланировано${delayText}`,'success');
+      if(sendTg){const delayText=delayMinutes>0?` через ${delayMinutes} мин.`:'';toast(`🔔 Напоминание запланировано${delayText}`,'success');}
+      else toast('✅ Сохранено','success');
     } else {
       const taskTitle=document.getElementById('taskTitle').value.trim();
       const taskDesc=document.getElementById('taskDesc').value.trim();
@@ -709,11 +717,11 @@ async function submitBell() {
       const deadline=document.getElementById('taskDeadline').value;
       const authorName=document.getElementById('taskAuthor').value.trim()||'Координатор';
       const r=await fetch('/api/task',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({ticketId:curTicketId,taskTitle,taskDesc,responsibleId,deadline,authorName})});
+        body:JSON.stringify({ticketId:curTicketId,taskTitle,taskDesc,responsibleId,deadline,authorName,sendTg})});
       const d=await r.json();
       if(!d.ok) throw new Error(d.error);
       closeBell();
-      toast('📋 Задача создана в Б24 и отправлена в Telegram','success');
+      toast(sendTg?'📋 Задача создана в Б24 и отправлена в Telegram':'📋 Задача создана в Б24','success');
     }
   } catch(e) { toast('Ошибка: '+e.message,'error'); }
   finally { btn.disabled=false; }
