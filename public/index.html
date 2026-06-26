@@ -100,7 +100,8 @@ col.c-id { width: 64px; }
 col.c-title { min-width: 220px; }
 col.c-svc { width: 180px; }
 col.c-stage { width: 180px; }
-col.c-eng { width: 155px; }
+col.c-coord { width:130px; }
+col.c-eng { width:145px; }
 col.c-urg { width: 125px; }
 col.c-date { width: 105px; }
 col.c-ovd { width: 95px; }
@@ -136,10 +137,20 @@ tr.tr:hover td { background: #fafbfd; }
 
 .eng-w { display:flex;align-items:center;gap:7px; }
 .eng-av { width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;text-transform:uppercase; }
+.eng-av.coord { background:linear-gradient(135deg,#f093fb,#f5576c); }
 .eng-n { font-size:12.5px;color:var(--text-2); }
+.person-row { display:flex;align-items:center;gap:6px;margin-bottom:4px; }
+.person-row:last-child { margin-bottom:0; }
+.person-lbl { font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;padding:1px 5px;border-radius:4px;flex-shrink:0; }
+.lbl-coord { background:rgba(124,58,237,.1);color:var(--purple); }
+.lbl-eng { background:var(--blue-light);color:var(--blue); }
+.person-name { font-size:12.5px;color:var(--text-2); }
 
 .extlnk { display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;color:var(--text-4);text-decoration:none;border:1px solid transparent;transition:all .15s; }
 .extlnk:hover { background:var(--blue-light);color:var(--blue);border-color:rgba(37,99,235,.2); }
+.role-badge { display:inline-block;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px; }
+.role-eng { background:var(--blue-light);color:var(--blue); }
+.role-coord { background:rgba(124,58,237,.1);color:var(--purple); }
 
 /* States */
 .empty { text-align:center;padding:64px 24px;color:var(--text-3); }
@@ -235,6 +246,11 @@ tr.tr:hover td { background: #fafbfd; }
     <select class="fsel" id="fsvc" onchange="load()" style="min-width:195px">
       <option value="all">Все типы услуг</option>
     </select>
+    <select class="fsel" id="fcoord" onchange="load()" style="min-width:170px">
+      <option value="all">Все координаторы</option>
+      <option value="Азамат Аннабаев">Азамат Аннабаев</option>
+      <option value="Арман Манасаев">Арман Манасаев</option>
+    </select>
     <select class="fsel" id="feng" onchange="load()" style="min-width:180px">
       <option value="all">Все инженеры</option>
     </select>
@@ -322,8 +338,6 @@ async function load() {
 
     // Service type filter (populate once)
     populateSvc(d.serviceTypes);
-
-    // Engineer filter (dynamic from current results)
     populateEng(d.engineers);
 
     // Table
@@ -416,9 +430,13 @@ function renderTable(items) {
       ? `<span class="oyes"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Да</span>`
       : `<span class="ono">—</span>`;
 
-    const init = t.engineer ? t.engineer.trim().split(' ').map(w=>w[0]||'').join('').slice(0,2) : '';
+    const coordInit = t.coordinator ? t.coordinator.trim().split(' ').map(w=>w[0]||'').join('').slice(0,2) : '';
+    const coordHtml = t.coordinator
+      ? `<div class="person-row"><div class="eng-av coord">${esc(coordInit)}</div><span class="person-name">${esc(t.coordinator)}</span></div>`
+      : `<span style="color:var(--text-4);font-size:12px">—</span>`;
+    const engInit = t.engineer ? t.engineer.trim().split(' ').map(w=>w[0]||'').join('').slice(0,2) : '';
     const engHtml = t.engineer
-      ? `<div class="eng-w"><div class="eng-av">${esc(init)}</div><span class="eng-n">${esc(t.engineer)}</span></div>`
+      ? `<div class="person-row"><div class="eng-av">${esc(engInit)}</div><span class="person-name">${esc(t.engineer)}</span></div>`
       : `<span style="color:var(--text-4);font-size:12px">—</span>`;
 
     const title = (t.title||'').replace(/^[-\s–—]+/,'').replace(/[-\s–—]+$/,'').trim() || '(без названия)';
@@ -428,6 +446,7 @@ function renderTable(items) {
       <td><div class="tname">${esc(title)}</div>${t.description?`<div class="tdesc">${esc(t.description)}</div>`:''}</td>
       <td>${svcHtml}</td>
       <td>${pill}</td>
+      <td>${coordHtml}</td>
       <td>${engHtml}</td>
       <td>${urgHtml}</td>
       <td><span class="dval ${dcls}">${dateStr}</span></td>
@@ -437,8 +456,8 @@ function renderTable(items) {
   }).join('');
 
   wrap.innerHTML = `<table>
-    <colgroup><col class="c-id"><col class="c-title"><col class="c-svc"><col class="c-stage"><col class="c-eng"><col class="c-urg"><col class="c-date"><col class="c-ovd"><col class="c-lnk"></colgroup>
-    <thead><tr><th>ID</th><th>Заявка</th><th>Тип услуги</th><th>Стадия</th><th>Инженер</th><th>Срочность</th><th>Создана</th><th>Просрочена</th><th></th></tr></thead>
+    <colgroup><col class="c-id"><col class="c-title"><col class="c-svc"><col class="c-stage"><col class="c-coord"><col class="c-eng"><col class="c-urg"><col class="c-date"><col class="c-ovd"><col class="c-lnk"></colgroup>
+    <thead><tr><th>ID</th><th>Заявка</th><th>Тип услуги</th><th>Стадия</th><th>Координатор</th><th>Инженер</th><th>Срочность</th><th>Создана</th><th>Просрочена</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
 }
