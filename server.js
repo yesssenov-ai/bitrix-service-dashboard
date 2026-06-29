@@ -4,13 +4,12 @@ const fetch = require('node-fetch');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const { initDB, requireAuth, auditLog, canEdit } = require('./auth');
+const { tgMgt, tgOps, tgBoth, notifyNewTicket, notifyOverdueNew } = require('./notifications');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const BITRIX_WEBHOOK = process.env.BITRIX_WEBHOOK;
-const TG_TOKEN = process.env.TG_TOKEN;
-const TG_OPS = process.env.TG_OPS_CHAT;
-const TG_MGT = process.env.TG_MGT_CHAT;
+// TG handled via notifications.js
 const ENTITY_TYPE_ID = 1058;
 const CATEGORY_ID = 11;
 
@@ -55,20 +54,7 @@ async function b24(method, params = {}) {
   return res.json();
 }
 
-async function tgSend(chatId, text, extra = {}) {
-  if (!TG_TOKEN || !chatId) return;
-  try {
-    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', ...extra }),
-    });
-  } catch(e) { console.error('TG error:', e.message); }
-}
-
-async function tgBroadcast(text, extra = {}) {
-  await Promise.all([tgSend(TG_OPS, text, extra), tgSend(TG_MGT, text, extra)]);
-}
+// tg functions from notifications module
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const STAGES = {
@@ -248,7 +234,7 @@ app.post('/api/comment', requireAuth(['admin','coordinator','engineer']), async 
       const sc=stageId?`\n📌 Стадия → <b>${STAGES[stageId]?.name||stageId}</b>`:'';
       const ec=engineerId?`\n👤 Инженер → <b>${USERS[engineerId]||engineerId}</b>`:'';
       const cc=comment?`\n💬 <b>${authorName}:</b> ${comment}`:'';
-      await tgBroadcast(`✏️ <b>Обновление заявки #${ticketId}</b>\n📋 ${cleanTitle}${sc}${ec}${cc}\n🔗 <a href="${t.bitrixUrl}">Открыть в Битрикс24</a>`);
+      await tgBoth(`✏️ <b>Обновление заявки #${ticketId}</b>\n📋 ${cleanTitle}${sc}${ec}${cc}\n🔗 <a href="${t.bitrixUrl}">Открыть в Битрикс24</a>`);
     }
 
     res.json({ok:true});
@@ -268,7 +254,7 @@ app.post('/api/remind', requireAuth(['admin','coordinator']), async (req, res) =
     const sendReminder=async()=>{
       const tgText=`🔔 <b>Напоминание по заявке #${ticketId}</b>\n📋 ${cleanTitle}\n${message?`📝 ${message}\n`:''}👤 От: ${authorName}\n🔗 <a href="${t.bitrixUrl}">Открыть в Битрикс24</a>`;
       const chat=targetChat==='mgt'?TG_MGT:targetChat==='both'?null:TG_OPS;
-      if(chat===null) await tgBroadcast(tgText); else await tgSend(chat,tgText);
+      if(chat===null) await tgBoth(tgText); else await tgSend(chat,tgText);
     };
 
     const delay=Math.max(0,Math.min(parseInt(delayMinutes)||0,1440))*60*1000;
@@ -301,7 +287,7 @@ app.post('/api/task', requireAuth(['admin','coordinator']), async (req, res) => 
 
     if(sendTg!==false){
       const tgText=`📋 <b>Создана задача в Битрикс24</b>\n🎫 Заявка #${ticketId}: ${cleanTitle}\n📝 ${taskTitle||'Без названия'}\n${deadline?`⏰ Дедлайн: ${new Date(deadline).toLocaleDateString('ru')}\n`:''}👤 Ответственный: ${USERS[responsibleId]||'—'}\n👤 Создал: ${authorName}\n🔗 <a href="${t.bitrixUrl}">Открыть заявку</a>`;
-      await tgBroadcast(tgText);
+      await tgBoth(tgText);
     }
     res.json({ok:true,taskId});
   } catch(err){ console.error(err); res.status(500).json({ok:false,error:err.message}); }
@@ -324,8 +310,97 @@ app.get('*', (req, res) => {
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
+// Track already notified new tickets
+const notifiedNewTickets = new Set();
+let lastKnownTicketIds = new Set();
+let isFirstLoad = true;
+
+async function checkNewAndOverdue() {
+  try {
+    // Fetch all NEW stage tickets
+    const parts = [];
+    flattenInto(parts, {
+      entityTypeId: ENTITY_TYPE_ID,
+      filter: { categoryId: CATEGORY_ID, stageId: 'DT1058_11:NEW' },
+      select: ['id','title','stageId','createdTime','movedTime','assignedById',
+        'ufCrm8_1744300223','ufCrm8_1732856252874','ufCrm8_1732856215147',
+        'ufCrm8_1760688207256'],
+      order: { createdTime: 'DESC' },
+      start: 0,
+    }, '');
+    const url = `${BITRIX_WEBHOOK}crm.item.list.json?${parts.join('&')}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const items = data.result?.items || [];
+    const enriched = items.map(t => enrichItem(t));
+
+    const currentIds = new Set(enriched.map(t => t.id));
+
+    // New tickets (appeared since last check)
+    if (!isFirstLoad) {
+      for (const t of enriched) {
+        if (!lastKnownTicketIds.has(t.id) && !notifiedNewTickets.has(t.id)) {
+          notifiedNewTickets.add(t.id);
+          await notifyNewTicket(t);
+        }
+      }
+    } else {
+      // On first load just record existing IDs
+      enriched.forEach(t => notifiedNewTickets.add(t.id));
+      isFirstLoad = false;
+    }
+    lastKnownTicketIds = currentIds;
+
+    // Overdue NEW: movedTime > 8 hours ago
+    const EIGHT_HOURS = 8 * 60 * 60 * 1000;
+    const overdueNew = enriched.filter(t => {
+      if (!t.movedTime) return false;
+      return (Date.now() - new Date(t.movedTime)) > EIGHT_HOURS;
+    });
+    if (overdueNew.length > 0) {
+      await notifyOverdueNew(overdueNew);
+    }
+  } catch(e) {
+    console.error('checkNewAndOverdue error:', e.message);
+  }
+}
+
 initDB().then(()=>{
-  app.listen(PORT, ()=>console.log(`✅ Dashboard running on port ${PORT}`));
+  app.listen(PORT, ()=>{
+    console.log(`✅ Dashboard running on port ${PORT}`);
+    // Check immediately then every hour
+    checkNewAndOverdue();
+    setInterval(checkNewAndOverdue, 60 * 60 * 1000);
+    // Also check for new tickets every 2 minutes
+    setInterval(async () => {
+      try {
+        const parts = [];
+        flattenInto(parts, {
+          entityTypeId: ENTITY_TYPE_ID,
+          filter: { categoryId: CATEGORY_ID, stageId: 'DT1058_11:NEW' },
+          select: ['id','title','stageId','createdTime','movedTime','assignedById',
+            'ufCrm8_1744300223','ufCrm8_1732856252874','ufCrm8_1732856215147',
+            'ufCrm8_1760688207256'],
+          order: { createdTime: 'DESC' },
+          start: 0,
+        }, '');
+        const url = `${BITRIX_WEBHOOK}crm.item.list.json?${parts.join('&')}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        const items = (data.result?.items || []).map(t => enrichItem(t));
+        const currentIds = new Set(items.map(t => t.id));
+        if (!isFirstLoad) {
+          for (const t of items) {
+            if (!lastKnownTicketIds.has(t.id) && !notifiedNewTickets.has(t.id)) {
+              notifiedNewTickets.add(t.id);
+              await notifyNewTicket(t);
+            }
+          }
+        }
+        lastKnownTicketIds = currentIds;
+      } catch(e) { console.error('New ticket check error:', e.message); }
+    }, 30 * 60 * 1000);
+  });
 }).catch(err=>{
   console.error('DB init failed:', err);
   process.exit(1);
