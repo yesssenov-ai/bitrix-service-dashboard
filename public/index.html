@@ -181,6 +181,7 @@ tr.tr:hover td { background:#fafbfd; }
   <span class="h-sub">Сервисные заявки</span>
   <div class="h-right">
     <span class="h-time" id="htime">—</span>
+    <button class="btn" onclick="logout()" style="font-size:12px">Выйти</button>
     <button class="btn" id="btnRef" onclick="load()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
         <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
@@ -673,9 +674,53 @@ function toast(msg,type='success'){
 }
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
+// Auth check on load
+async function checkAuth() {
+  try {
+    const r = await fetch('/auth/me');
+    if (!r.ok || r.status === 401) { window.location.href = '/login.html'; return false; }
+    const d = await r.json();
+    if (!d.ok) { window.location.href = '/login.html'; return false; }
+    // Show user info
+    window._currentUser = d.user;
+    // Show admin link if admin
+    if (d.user.role === 'admin') {
+      const hright = document.querySelector('.h-right');
+      if (hright) {
+        const adminLink = document.createElement('a');
+        adminLink.href = '/admin.html';
+        adminLink.className = 'btn';
+        adminLink.style.fontSize = '12px';
+        adminLink.textContent = '⚙️ Админ';
+        hright.insertBefore(adminLink, hright.firstChild);
+      }
+    }
+    // Show current user
+    const htime = document.getElementById('htime');
+    if (htime) htime.textContent = d.user.displayName + ' · ' + d.user.role;
+    // Hide action buttons for viewer role
+    if (d.user.role === 'viewer') {
+      document.querySelectorAll('.act-btn.edit, .act-btn.bell').forEach(b => b.style.display = 'none');
+    }
+    return true;
+  } catch(e) {
+    window.location.href = '/login.html';
+    return false;
+  }
+}
+
+async function logout() {
+  await fetch('/auth/logout', { method: 'POST' });
+  window.location.href = '/login.html';
+}
+
 setInterval(load,5*60*1000);
-loadUsers();
-selectPreset('tickets',document.querySelector('[data-preset="tickets"]'));
+checkAuth().then(ok => {
+  if (ok) {
+    loadUsers();
+    selectPreset('tickets',document.querySelector('[data-preset="tickets"]'));
+  }
+});
 </script>
 </body>
 </html>
