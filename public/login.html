@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProLabSupport — Вход</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{--accent:#C53B2F;--accent-h:#a83226;--border:#e3e6ef;--bg:#f5f6fa;--text:#111827;--text-3:#6b7280;--font:'Inter',system-ui,sans-serif;}
+body{font-family:var(--font);background:var(--bg);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+.card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:40px;width:100%;max-width:400px;box-shadow:0 8px 40px rgba(0,0,0,.08);}
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:32px;justify-content:center;}
+.logo-mark{width:40px;height:40px;background:var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:center;}
+.logo-mark svg{width:20px;height:20px;}
+.logo-name{font-size:18px;font-weight:700;color:var(--text);}
+h2{font-size:20px;font-weight:700;color:var(--text);margin-bottom:6px;text-align:center;}
+.sub{font-size:13px;color:var(--text-3);text-align:center;margin-bottom:28px;}
+.field{margin-bottom:16px;}
+label{display:block;font-size:12px;font-weight:600;color:var(--text);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;}
+input{width:100%;border:1.5px solid var(--border);border-radius:9px;padding:11px 14px;font-size:14px;color:var(--text);font-family:var(--font);outline:none;transition:border-color .15s,box-shadow .15s;background:#f9fafb;}
+input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(197,59,47,.1);background:#fff;}
+.btn{width:100%;background:var(--accent);color:#fff;border:none;border-radius:9px;padding:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font);transition:background .15s;margin-top:8px;}
+.btn:hover{background:var(--accent-h);}
+.btn:disabled{opacity:.6;cursor:not-allowed;}
+.err{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;font-size:13px;color:#dc2626;margin-bottom:16px;display:none;}
+.err.show{display:block;}
+.totp-hint{font-size:12px;color:var(--text-3);text-align:center;margin-top:12px;}
+.back-link{display:block;text-align:center;font-size:13px;color:var(--accent);cursor:pointer;margin-top:16px;background:none;border:none;font-family:var(--font);}
+.step{display:none;} .step.active{display:block;}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <div class="logo-mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round">
+        <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/>
+      </svg>
+    </div>
+    <span class="logo-name">ProLabSupport</span>
+  </div>
+
+  <div class="err" id="err"></div>
+
+  <!-- Step 1: Login -->
+  <div class="step active" id="step1">
+    <h2>Вход в систему</h2>
+    <p class="sub">Сервисный модуль — управление заявками</p>
+    <div class="field">
+      <label>Логин</label>
+      <input type="text" id="username" placeholder="username" autocomplete="username">
+    </div>
+    <div class="field">
+      <label>Пароль</label>
+      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="btn" id="btnLogin" onclick="doLogin()">Войти</button>
+  </div>
+
+  <!-- Step 2: TOTP -->
+  <div class="step" id="step2">
+    <h2>Двухфакторная аутентификация</h2>
+    <p class="sub" id="totpSub">Введите 6-значный код из приложения</p>
+    <div class="field" style="margin-top:20px">
+      <label>Код подтверждения</label>
+      <input type="text" id="totpCode" placeholder="000 000" maxlength="7"
+        inputmode="numeric" autocomplete="one-time-code" style="font-size:24px;letter-spacing:4px;text-align:center">
+    </div>
+    <button class="btn" id="btnTotp" onclick="doTotp()">Подтвердить</button>
+    <button class="back-link" onclick="backToLogin()">← Назад</button>
+  </div>
+</div>
+
+<script>
+let tempToken = '';
+
+async function doLogin() {
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  if (!username || !password) return showErr('Введите логин и пароль');
+  setLoading('btnLogin', true, 'Вхожу…');
+  try {
+    const r = await fetch('/auth/login', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ username, password })
+    });
+    const d = await r.json();
+    if (!d.ok) { showErr(d.error); return; }
+    if (d.requireTotp) {
+      tempToken = d.tempToken;
+      document.getElementById('totpSub').textContent = `Добро пожаловать, ${d.displayName}. Введите код из Google Authenticator`;
+      showStep('step2');
+      setTimeout(() => document.getElementById('totpCode').focus(), 100);
+    } else {
+      window.location.href = '/';
+    }
+  } catch(e) { showErr('Ошибка сети'); }
+  finally { setLoading('btnLogin', false, 'Войти'); }
+}
+
+async function doTotp() {
+  const code = document.getElementById('totpCode').value.replace(/\s/g,'');
+  if (code.length < 6) return showErr('Введите 6-значный код');
+  setLoading('btnTotp', true, 'Проверяю…');
+  try {
+    const r = await fetch('/auth/totp', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ tempToken, code })
+    });
+    const d = await r.json();
+    if (!d.ok) { showErr(d.error); return; }
+    window.location.href = '/';
+  } catch(e) { showErr('Ошибка сети'); }
+  finally { setLoading('btnTotp', false, 'Подтвердить'); }
+}
+
+function backToLogin() { showStep('step1'); clearErr(); document.getElementById('totpCode').value = ''; }
+function showStep(id) { document.querySelectorAll('.step').forEach(s => s.classList.remove('active')); document.getElementById(id).classList.add('active'); clearErr(); }
+function showErr(msg) { const e = document.getElementById('err'); e.textContent = msg; e.classList.add('show'); }
+function clearErr() { document.getElementById('err').classList.remove('show'); }
+function setLoading(id, on, label) { const b = document.getElementById(id); b.disabled = on; b.textContent = label; }
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    if (document.getElementById('step1').classList.contains('active')) doLogin();
+    else if (document.getElementById('step2').classList.contains('active')) doTotp();
+  }
+});
+
+// Format TOTP code with space
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('totpCode').addEventListener('input', function() {
+    let v = this.value.replace(/\D/g,'').slice(0,6);
+    this.value = v.length > 3 ? v.slice(0,3) + ' ' + v.slice(3) : v;
+  });
+});
+</script>
+</body>
+</html>

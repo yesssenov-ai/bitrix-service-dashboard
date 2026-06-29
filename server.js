@@ -2,22 +2,33 @@ require('dotenv').config();
 const express = require('express');
 const fetch = require('node-fetch');
 const path = require('path');
+const cookieParser = require('cookie-parser');
+const { initDB, requireAuth, auditLog, canEdit } = require('./auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const BITRIX_WEBHOOK = process.env.BITRIX_WEBHOOK;
 const TG_TOKEN = process.env.TG_TOKEN;
-const TG_OPS = process.env.TG_OPS_CHAT;    // Оперативная группа
-const TG_MGT = process.env.TG_MGT_CHAT;    // Руководство
+const TG_OPS = process.env.TG_OPS_CHAT;
+const TG_MGT = process.env.TG_MGT_CHAT;
 const ENTITY_TYPE_ID = 1058;
 const CATEGORY_ID = 11;
-const DASH_URL = process.env.DASH_URL || 'https://bitrix-service-dashboard-production.up.railway.app';
 
 app.use(express.json());
+app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Auth routes (public) ──────────────────────────────────────────────────────
+app.use('/auth', require('./routes/auth-routes'));
 
+// ── Admin routes (admin only) ─────────────────────────────────────────────────
+app.use('/admin', require('./routes/admin-routes'));
+
+// ── Login redirect ────────────────────────────────────────────────────────────
+app.get('/login', (_, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
+app.get('/admin-panel', requireAuth(['admin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function flattenInto(parts, obj, prefix) {
   for (const [k, v] of Object.entries(obj)) {
     const key = prefix ? `${prefix}[${k}]` : k;
@@ -52,32 +63,28 @@ async function tgSend(chatId, text, extra = {}) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', ...extra }),
     });
-  } catch (e) { console.error('TG error:', e.message); }
+  } catch(e) { console.error('TG error:', e.message); }
 }
 
 async function tgBroadcast(text, extra = {}) {
-  await Promise.all([
-    tgSend(TG_OPS, text, extra),
-    tgSend(TG_MGT, text, extra),
-  ]);
+  await Promise.all([tgSend(TG_OPS, text, extra), tgSend(TG_MGT, text, extra)]);
 }
 
 // ── Config ────────────────────────────────────────────────────────────────────
-
 const STAGES = {
-  'DT1058_11:NEW':         { name: 'Необработанные',      color: '#22B9FF', order: 1, active: true },
-  'DT1058_11:PREPARATION': { name: 'Досбор / Назначение', color: '#88B9FF', order: 2, active: true },
-  'DT1058_11:CLIENT':      { name: 'Заявка в работе',     color: '#10e5fc', order: 3, active: true },
-  'DT1058_11:1':           { name: 'Срочная в работе',    color: '#FF6B35', order: 4, active: true },
-  'DT1058_11:2':           { name: 'Заявка на обучение',  color: '#9B59B6', order: 5, active: true },
-  'DT1058_11:3':           { name: 'Заявка исполнена',    color: '#55D0E0', order: 6, active: true },
-  'DT1058_11:4':           { name: 'Претензия',           color: '#FF5752', order: 7, active: true },
-  'DT1058_11:SUCCESS':     { name: 'Заявка закрыта',      color: '#00C851', order: 8, active: false },
-  'DT1058_11:FAIL':        { name: 'Заявка отменена',     color: '#ff4444', order: 9, active: false },
+  'DT1058_11:NEW':         { name:'Необработанные',      color:'#22B9FF', order:1, active:true },
+  'DT1058_11:PREPARATION': { name:'Досбор / Назначение', color:'#88B9FF', order:2, active:true },
+  'DT1058_11:CLIENT':      { name:'Заявка в работе',     color:'#10e5fc', order:3, active:true },
+  'DT1058_11:1':           { name:'Срочная в работе',    color:'#FF6B35', order:4, active:true },
+  'DT1058_11:2':           { name:'Заявка на обучение',  color:'#9B59B6', order:5, active:true },
+  'DT1058_11:3':           { name:'Заявка исполнена',    color:'#55D0E0', order:6, active:true },
+  'DT1058_11:4':           { name:'Претензия',           color:'#FF5752', order:7, active:true },
+  'DT1058_11:SUCCESS':     { name:'Заявка закрыта',      color:'#00C851', order:8, active:false },
+  'DT1058_11:FAIL':        { name:'Заявка отменена',     color:'#ff4444', order:9, active:false },
 };
 
-const COORDINATOR_STAGES = new Set(['DT1058_11:NEW', 'DT1058_11:PREPARATION']);
-const COORDINATORS = new Set([26, 79]);
+const COORDINATOR_STAGES = new Set(['DT1058_11:NEW','DT1058_11:PREPARATION']);
+const COORDINATORS = new Set([26,79]);
 
 const USERS = {
   1:'Администратор',4:'Куаныш Есенов',7:'Мирас Актайлаков',8:'Рустам Абылкасимов',
@@ -92,272 +99,234 @@ const USERS = {
   46:'Жандос Кунаев',47:'Дмитрий Сорокин',48:'Дарын Негметжанов',50:'Нурбек Ибраемов',
   55:'Нурхат Оразгалиев',67:'Айнель Сеитова',68:'Игорь Бодров',71:'Азамат Алиев',
   73:'Ерасыл Махаш',76:'Аскат Көбей',77:'Адиль Тасмагамбетов',78:'Дмитрий Волков',
-  79:'Арман Манаспаев',85:'Максим Мазняк',86:'Аманжол Сыздыков',88:'Асем Жарылгап',
-  90:'Ерқанат Сырғабек',
+  79:'Арман Манаспаев',85:'Максим Мазняк',86:'Аманжол Сыздыков',88:'Асем Жарылгап',90:'Ерқанат Сырғабек',
 };
 
 const SERVICE_TYPES = {
   '103':'Установка','104':'Техническое обслуживание','105':'Диагностика',
   '106':'Ремонт','108':'Обучение','109':'Обучение ТЦ','110':'Квалификация (IQ/OQ/PQ)',
-  '111':'Подбор доп. оборудования','114':'Другое','402':'Подготовка документов',
-  '619':'Заявка клиента',
+  '111':'Подбор доп. оборудования','114':'Другое','402':'Подготовка документов','619':'Заявка клиента',
 };
 
-const URGENCY_MAP = { '1809':'Срочная','1810':'Не срочная','1811':'Обучение ТЦ' };
-
-// ── Enrich helper ─────────────────────────────────────────────────────────────
+const URGENCY_MAP = {'1809':'Срочная','1810':'Не срочная','1811':'Обучение ТЦ'};
 
 function enrichItem(t) {
   const uid = t.assignedById;
   const userName = USERS[uid] || `Пользователь ${uid}`;
   const isCoordUser = COORDINATORS.has(uid);
   const isCoordStage = COORDINATOR_STAGES.has(t.stageId);
-  const coordName = isCoordUser ? userName : null;
-  const engName = (!isCoordUser && !isCoordStage) ? userName : null;
-
   const svcIds = Array.isArray(t.ufCrm8_1744300223)
     ? t.ufCrm8_1744300223.map(String)
     : t.ufCrm8_1744300223 ? [String(t.ufCrm8_1744300223)] : [];
-
   return {
     id: t.id,
-    title: t.title || '—',
+    title: t.title||'—',
     stageId: t.stageId,
-    stageName: STAGES[t.stageId]?.name || t.stageId,
-    stageColor: STAGES[t.stageId]?.color || '#ccc',
-    isActive: STAGES[t.stageId]?.active ?? true,
+    stageName: STAGES[t.stageId]?.name||t.stageId,
+    stageColor: STAGES[t.stageId]?.color||'#ccc',
+    isActive: STAGES[t.stageId]?.active??true,
     createdTime: t.createdTime,
-    urgency: URGENCY_MAP[t.ufCrm8_1732856252874] || null,
-    isOverdue: t.ufCrm8_1732856215147 === '1807',
-    coordinator: coordName,
-    engineer: engName,
-    serviceTypes: svcIds.map(id => SERVICE_TYPES[id] || `Тип ${id}`),
-    description: t.ufCrm8_1760688207256 || t.ufCrm8_1732855669306 || null,
-    comment: t.ufCrm8_1732856926809 || null,
-    movedTime: t.movedTime || null,
-    daysOnStage: t.movedTime ? Math.floor((Date.now() - new Date(t.movedTime)) / 86400000) : null,
+    urgency: URGENCY_MAP[t.ufCrm8_1732856252874]||null,
+    isOverdue: t.ufCrm8_1732856215147==='1807',
+    coordinator: isCoordUser ? userName : null,
+    engineer: (!isCoordUser&&!isCoordStage) ? userName : null,
+    serviceTypes: svcIds.map(id=>SERVICE_TYPES[id]||`Тип ${id}`),
+    serviceTypeIds: svcIds,
+    description: t.ufCrm8_1760688207256||t.ufCrm8_1732855669306||null,
+    comment: t.ufCrm8_1732856926809||null,
+    movedTime: t.movedTime||null,
+    daysOnStage: t.movedTime ? Math.floor((Date.now()-new Date(t.movedTime))/86400000) : null,
     bitrixUrl: `https://crm.prolabsupport.kz/crm/type/${ENTITY_TYPE_ID}/details/${t.id}/`,
   };
 }
 
-// ── GET /api/tickets ──────────────────────────────────────────────────────────
-
-app.get('/api/tickets', async (req, res) => {
+// ── GET /api/tickets — requires auth ─────────────────────────────────────────
+app.get('/api/tickets', requireAuth(), async (req, res) => {
   try {
-    const { stage, urgent, overdue, search, engineer, coordinator, serviceType, presetSvcTypes } = req.query;
-
+    const { urgent, overdue, search, engineer, coordinator, serviceType, presetSvcTypes } = req.query;
     const filter = { categoryId: CATEGORY_ID };
-    if (stage && stage !== 'all' && stage !== 'active') {
-      filter.stageId = stage;
-    } else if (!stage || stage === 'active') {
-      filter.stageId = Object.entries(STAGES).filter(([,v]) => v.active).map(([k]) => k);
-    }
-    if (urgent && urgent !== 'all') filter['ufCrm8_1732856252874'] = urgent;
-    if (overdue === 'yes') filter['ufCrm8_1732856215147'] = '1807';
-    if (serviceType && serviceType !== 'all') filter['ufCrm8_1744300223'] = serviceType;
+    filter.stageId = Object.entries(STAGES).filter(([,v])=>v.active).map(([k])=>k);
+    if (urgent && urgent!=='all') filter['ufCrm8_1732856252874']=urgent;
+    if (overdue==='yes') filter['ufCrm8_1732856215147']='1807';
+    if (serviceType && serviceType!=='all') filter['ufCrm8_1744300223']=serviceType;
 
-    let items = [], start = 0, total = Infinity;
-    while (items.length < Math.min(total, 500)) {
-      const data = await b24('crm.item.list', {
-        entityTypeId: ENTITY_TYPE_ID, filter,
-        select: ['id','title','stageId','createdTime','updatedTime','assignedById',
+    let items=[],start=0,total=Infinity;
+    while(items.length<Math.min(total,500)){
+      const data=await b24('crm.item.list',{
+        entityTypeId:ENTITY_TYPE_ID,filter,
+        select:['id','title','stageId','createdTime','updatedTime','assignedById',
           'ufCrm8_1744300223','ufCrm8_1732856252874','ufCrm8_1732856215147',
           'ufCrm8_1760688207256','ufCrm8_1732855669306','ufCrm8_1732856926809','movedTime'],
-        order: { createdTime: 'DESC' }, start,
+        order:{createdTime:'DESC'},start,
       });
-      if (!data.result?.items?.length) break;
-      items = items.concat(data.result.items);
-      total = data.total ?? data.result?.total ?? items.length;
-      start = items.length;
-      if (!data.next || items.length >= total) break;
+      if(!data.result?.items?.length) break;
+      items=items.concat(data.result.items);
+      total=data.total??data.result?.total??items.length;
+      start=items.length;
+      if(!data.next||items.length>=total) break;
     }
 
-    const engineerSet = new Set(), coordSet = new Set();
-    let enriched = items.map(t => {
-      const e = enrichItem(t);
-      if (e.engineer) engineerSet.add(e.engineer);
-      if (e.coordinator) coordSet.add(e.coordinator);
+    const engineerSet=new Set(),coordSet=new Set();
+    let enriched=items.map(t=>{
+      const e=enrichItem(t);
+      if(e.engineer) engineerSet.add(e.engineer);
+      if(e.coordinator) coordSet.add(e.coordinator);
       return e;
     });
 
-    if (engineer && engineer !== 'all') enriched = enriched.filter(t => t.engineer === engineer);
-    if (coordinator && coordinator !== 'all') enriched = enriched.filter(t => t.coordinator === coordinator);
-
-    // Preset service type filter (client-side OR logic)
-    if (presetSvcTypes && presetSvcTypes !== '') {
-      const allowedIds = new Set(presetSvcTypes.split(','));
-      enriched = enriched.filter(t =>
-        Array.isArray(t.serviceTypeIds) &&
-        t.serviceTypeIds.length > 0 &&
-        t.serviceTypeIds.some(id => allowedIds.has(String(id)))
-      );
+    if(engineer&&engineer!=='all') enriched=enriched.filter(t=>t.engineer===engineer);
+    if(coordinator&&coordinator!=='all') enriched=enriched.filter(t=>t.coordinator===coordinator);
+    if(presetSvcTypes&&presetSvcTypes!==''){
+      const allowed=new Set(presetSvcTypes.split(','));
+      enriched=enriched.filter(t=>Array.isArray(t.serviceTypeIds)&&t.serviceTypeIds.length>0&&t.serviceTypeIds.some(id=>allowed.has(String(id))));
+    }
+    if(search?.trim()){
+      const q=search.toLowerCase();
+      enriched=enriched.filter(t=>(t.title||'').toLowerCase().includes(q)||(t.description||'').toLowerCase().includes(q)||(t.engineer||'').toLowerCase().includes(q)||(t.coordinator||'').toLowerCase().includes(q));
     }
 
-    if (search?.trim()) {
-      const q = search.toLowerCase();
-      enriched = enriched.filter(t =>
-        (t.title||'').toLowerCase().includes(q) ||
-        (t.description||'').toLowerCase().includes(q) ||
-        (t.engineer||'').toLowerCase().includes(q) ||
-        (t.coordinator||'').toLowerCase().includes(q)
-      );
+    // Preset counts
+    const allEnriched=items.map(t=>enrichItem(t));
+    const PRESET_SVC={
+      tickets:new Set(['619','114','4']),
+      docs:new Set(['402','111']),
+      obligations:new Set(['103','104','105','106','108','109','110']),
+    };
+    const presetCounts={all:allEnriched.length};
+    for(const[key,svcSet] of Object.entries(PRESET_SVC)){
+      presetCounts[key]=allEnriched.filter(t=>Array.isArray(t.serviceTypeIds)&&t.serviceTypeIds.length>0&&t.serviceTypeIds.some(id=>svcSet.has(String(id)))).length;
+    }
+    presetCounts.overdue=allEnriched.filter(t=>t.isOverdue).length;
+
+    const stats={total:enriched.length,urgent:enriched.filter(t=>t.urgency==='Срочная').length,overdue:enriched.filter(t=>t.isOverdue).length,byStage:{}};
+    for(const[sid,cfg] of Object.entries(STAGES)){
+      stats.byStage[sid]={name:cfg.name,color:cfg.color,count:enriched.filter(t=>t.stageId===sid).length};
     }
 
-    const stats = { total: enriched.length, urgent: 0, overdue: 0, byStage: {} };
-    for (const t of enriched) {
-      if (t.urgency === 'Срочная') stats.urgent++;
-      if (t.isOverdue) stats.overdue++;
-    }
-    for (const [sid, cfg] of Object.entries(STAGES)) {
-      stats.byStage[sid] = { name: cfg.name, color: cfg.color, count: enriched.filter(t => t.stageId === sid).length };
-    }
-
-    res.json({ ok: true, items: enriched, stats, stages: STAGES,
-      engineers: [...engineerSet].sort(), coordinators: [...coordSet].sort(), serviceTypes: SERVICE_TYPES });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ ok: false, error: err.message });
-  }
+    res.json({ok:true,items:enriched,stats,stages:STAGES,engineers:[...engineerSet].sort(),coordinators:[...coordSet].sort(),serviceTypes:SERVICE_TYPES,presetCounts,
+      currentUser:{role:req.user.role,engineerName:req.user.engineer_name,displayName:req.user.display_name}});
+  } catch(err){ console.error(err); res.status(500).json({ok:false,error:err.message}); }
 });
 
 // ── POST /api/comment ─────────────────────────────────────────────────────────
-
-app.post('/api/comment', async (req, res) => {
+app.post('/api/comment', requireAuth(['admin','coordinator','engineer']), async (req, res) => {
   try {
-    const { ticketId, comment, stageId, engineerId, authorName, sendTg } = req.body;
-    if (!ticketId) return res.status(400).json({ ok: false, error: 'ticketId required' });
+    const { ticketId, comment, stageId, engineerId, sendTg } = req.body;
+    const authorName = req.user.display_name;
+    const ip = req.headers['x-forwarded-for']||req.ip;
 
-    const fields = {};
-    if (comment) fields['ufCrm8_1732856926809'] = comment;
-    if (stageId) fields.stageId = stageId;
-    if (engineerId) fields.assignedById = engineerId;
-
-    if (Object.keys(fields).length > 0) {
-      await b24('crm.item.update', { entityTypeId: ENTITY_TYPE_ID, id: ticketId, fields });
+    // Engineer can only edit own tickets
+    if(req.user.role==='engineer') {
+      const data=await b24('crm.item.get',{entityTypeId:ENTITY_TYPE_ID,id:ticketId});
+      const t=enrichItem(data.result?.item||{});
+      if(!canEdit(req.user,t)) return res.status(403).json({ok:false,error:'Нет прав на редактирование этой заявки'});
     }
 
-    // Also add to timeline
-    if (comment) {
-      await b24('crm.timeline.comment.add', {
-        fields: {
-          ENTITY_ID: ticketId,
-          ENTITY_TYPE: 'dynamic_1058',
-          COMMENT: `💬 ${authorName || 'Координатор'}: ${comment}`,
-        }
-      }).catch(() => {});
+    const fields={};
+    if(comment) fields['ufCrm8_1732856926809']=comment;
+    if(stageId) fields.stageId=stageId;
+    if(engineerId) fields.assignedById=engineerId;
+    if(Object.keys(fields).length>0) await b24('crm.item.update',{entityTypeId:ENTITY_TYPE_ID,id:ticketId,fields});
+
+    if(comment) {
+      await b24('crm.timeline.comment.add',{fields:{ENTITY_ID:ticketId,ENTITY_TYPE:'dynamic_1058',COMMENT:`💬 ${authorName}: ${comment}`}}).catch(()=>{});
     }
 
-    // Fetch updated ticket for TG message
-    const data = await b24('crm.item.get', { entityTypeId: ENTITY_TYPE_ID, id: ticketId });
-    const t = enrichItem(data.result?.item || { id: ticketId, stageId: '', title: '' });
-    const cleanTitle = (t.title||'').replace(/^[-\s–—]+/,'').replace(/[-\s–—]+$/,'').trim() || `Заявка #${ticketId}`;
+    // Audit log
+    const details={};
+    if(comment) details.comment=comment.slice(0,100);
+    if(stageId) details.stage=STAGES[stageId]?.name||stageId;
+    if(engineerId) details.engineer=USERS[engineerId]||engineerId;
+    if(comment) await auditLog(req.user.id,req.user.username,'COMMENT_ADDED',ticketId,details,ip,req.headers['user-agent']);
+    if(stageId) await auditLog(req.user.id,req.user.username,'STAGE_CHANGED',ticketId,{from:'?',to:STAGES[stageId]?.name||stageId},ip,req.headers['user-agent']);
+    if(engineerId) await auditLog(req.user.id,req.user.username,'ENGINEER_ASSIGNED',ticketId,{engineer:USERS[engineerId]||engineerId},ip,req.headers['user-agent']);
 
-    const stageChange = stageId ? `\n📌 Стадия → <b>${STAGES[stageId]?.name || stageId}</b>` : '';
-    const engChange = engineerId ? `\n👤 Инженер → <b>${USERS[engineerId] || engineerId}</b>` : '';
-    const commentLine = comment ? `\n💬 <b>${authorName || 'Координатор'}:</b> ${comment}` : '';
+    if(sendTg!==false) {
+      const data=await b24('crm.item.get',{entityTypeId:ENTITY_TYPE_ID,id:ticketId}).catch(()=>({result:{item:{id:ticketId,title:'',stageId:''}}}));
+      const t=enrichItem(data.result?.item||{id:ticketId,title:'',stageId:''});
+      const cleanTitle=(t.title||'').replace(/^[-\s–—]+/,'').replace(/[-\s–—]+$/,'').trim()||`Заявка #${ticketId}`;
+      const sc=stageId?`\n📌 Стадия → <b>${STAGES[stageId]?.name||stageId}</b>`:'';
+      const ec=engineerId?`\n👤 Инженер → <b>${USERS[engineerId]||engineerId}</b>`:'';
+      const cc=comment?`\n💬 <b>${authorName}:</b> ${comment}`:'';
+      await tgBroadcast(`✏️ <b>Обновление заявки #${ticketId}</b>\n📋 ${cleanTitle}${sc}${ec}${cc}\n🔗 <a href="${t.bitrixUrl}">Открыть в Битрикс24</a>`);
+    }
 
-    const tgText = `✏️ <b>Обновление заявки #${ticketId}</b>\n` +
-      `📋 ${cleanTitle}${stageChange}${engChange}${commentLine}\n` +
-      `🔗 <a href="${t.bitrixUrl}">Открыть в Битрикс24</a>`;
-
-    if (sendTg !== false) await tgBroadcast(tgText);
-
-    res.json({ ok: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ ok: false, error: err.message });
-  }
+    res.json({ok:true});
+  } catch(err){ console.error(err); res.status(500).json({ok:false,error:err.message}); }
 });
 
 // ── POST /api/remind ──────────────────────────────────────────────────────────
-
-app.post('/api/remind', async (req, res) => {
+app.post('/api/remind', requireAuth(['admin','coordinator']), async (req, res) => {
   try {
-    const { ticketId, message, delayMinutes, authorName, targetChat, sendTg } = req.body;
-    if (!ticketId) return res.status(400).json({ ok: false, error: 'ticketId required' });
+    const {ticketId,message,delayMinutes,targetChat,sendTg}=req.body;
+    const authorName=req.user.display_name;
+    const ip=req.headers['x-forwarded-for']||req.ip;
+    const data=await b24('crm.item.get',{entityTypeId:ENTITY_TYPE_ID,id:ticketId}).catch(()=>({result:{item:{id:ticketId,title:'',stageId:''}}}));
+    const t=enrichItem(data.result?.item||{id:ticketId,title:'',stageId:''});
+    const cleanTitle=(t.title||'').replace(/^[-\s–—]+/,'').replace(/[-\s–—]+$/,'').trim()||`Заявка #${ticketId}`;
 
-    const data = await b24('crm.item.get', { entityTypeId: ENTITY_TYPE_ID, id: ticketId });
-    const t = enrichItem(data.result?.item || { id: ticketId, stageId: '', title: '' });
-    const cleanTitle = (t.title||'').replace(/^[-\s–—]+/,'').replace(/[-\s–—]+$/,'').trim() || `Заявка #${ticketId}`;
-
-    const sendReminder = async () => {
-      const tgText = `🔔 <b>Напоминание по заявке #${ticketId}</b>\n` +
-        `📋 ${cleanTitle}\n` +
-        (message ? `📝 ${message}\n` : '') +
-        `👤 От: ${authorName || 'Координатор'}\n` +
-        `🔗 <a href="${t.bitrixUrl}">Открыть в Битрикс24</a>`;
-
-      const chat = targetChat === 'mgt' ? TG_MGT : targetChat === 'both' ? null : TG_OPS;
-      if (sendTg !== false) {
-        if (chat === null) await tgBroadcast(tgText);
-        else await tgSend(chat, tgText);
-      }
+    const sendReminder=async()=>{
+      const tgText=`🔔 <b>Напоминание по заявке #${ticketId}</b>\n📋 ${cleanTitle}\n${message?`📝 ${message}\n`:''}👤 От: ${authorName}\n🔗 <a href="${t.bitrixUrl}">Открыть в Битрикс24</a>`;
+      const chat=targetChat==='mgt'?TG_MGT:targetChat==='both'?null:TG_OPS;
+      if(chat===null) await tgBroadcast(tgText); else await tgSend(chat,tgText);
     };
 
-    const delay = Math.max(0, Math.min(parseInt(delayMinutes)||0, 1440)) * 60 * 1000;
-    if (delay > 0) setTimeout(sendReminder, delay);
-    else await sendReminder();
-
-    res.json({ ok: true, scheduledIn: delay / 60000 });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ ok: false, error: err.message });
-  }
+    const delay=Math.max(0,Math.min(parseInt(delayMinutes)||0,1440))*60*1000;
+    if(delay>0) setTimeout(sendReminder,delay); else if(sendTg!==false) await sendReminder();
+    await auditLog(req.user.id,req.user.username,'REMIND_SENT',ticketId,{message:message?.slice(0,100),delay:delayMinutes,chat:targetChat},ip,req.headers['user-agent']);
+    res.json({ok:true,scheduledIn:delay/60000});
+  } catch(err){ console.error(err); res.status(500).json({ok:false,error:err.message}); }
 });
 
 // ── POST /api/task ────────────────────────────────────────────────────────────
-
-app.post('/api/task', async (req, res) => {
+app.post('/api/task', requireAuth(['admin','coordinator']), async (req, res) => {
   try {
-    const { ticketId, taskTitle, taskDesc, responsibleId, deadline, authorName, sendTg } = req.body;
-    if (!ticketId) return res.status(400).json({ ok: false, error: 'ticketId required' });
+    const {ticketId,taskTitle,taskDesc,responsibleId,deadline,sendTg}=req.body;
+    const authorName=req.user.display_name;
+    const ip=req.headers['x-forwarded-for']||req.ip;
+    const data=await b24('crm.item.get',{entityTypeId:ENTITY_TYPE_ID,id:ticketId}).catch(()=>({result:{item:{id:ticketId,title:'',stageId:''}}}));
+    const t=enrichItem(data.result?.item||{id:ticketId,title:'',stageId:''});
+    const cleanTitle=(t.title||'').replace(/^[-\s–—]+/,'').replace(/[-\s–—]+$/,'').trim()||`Заявка #${ticketId}`;
 
-    const data = await b24('crm.item.get', { entityTypeId: ENTITY_TYPE_ID, id: ticketId });
-    const t = enrichItem(data.result?.item || { id: ticketId, stageId: '', title: '' });
-    const cleanTitle = (t.title||'').replace(/^[-\s–—]+/,'').replace(/[-\s–—]+$/,'').trim() || `Заявка #${ticketId}`;
+    const taskData=await b24('tasks.task.add',{fields:{
+      TITLE:taskTitle||(cleanTitle.slice(0,100)),
+      DESCRIPTION:taskDesc||'',
+      RESPONSIBLE_ID:responsibleId||26,
+      DEADLINE:deadline||'',
+      UF_CRM_TASK:[`D_${ENTITY_TYPE_ID}_${ticketId}`],
+    }});
 
-    // Create task in B24
-    const taskData = await b24('tasks.task.add', {
-      fields: {
-        TITLE: taskTitle || `Заявка #${ticketId}: ${cleanTitle}`.slice(0, 100),
-        DESCRIPTION: taskDesc || '',
-        RESPONSIBLE_ID: responsibleId || 26,
-        DEADLINE: deadline || '',
-        UF_CRM_TASK: [`D_${ENTITY_TYPE_ID}_${ticketId}`],
-      }
-    });
+    const taskId=taskData.result?.task?.id;
+    await auditLog(req.user.id,req.user.username,'TASK_CREATED',ticketId,{taskId,taskTitle,responsibleId:USERS[responsibleId]||responsibleId},ip,req.headers['user-agent']);
 
-    const taskId = taskData.result?.task?.id;
-
-    // TG notification
-    const tgText = `📋 <b>Создана задача в Битрикс24</b>\n` +
-      `🎫 Заявка #${ticketId}: ${cleanTitle}\n` +
-      `📝 ${taskTitle || 'Без названия'}\n` +
-      (deadline ? `⏰ Дедлайн: ${new Date(deadline).toLocaleDateString('ru')}\n` : '') +
-      `👤 Ответственный: ${USERS[responsibleId] || 'Не назначен'}\n` +
-      `👤 Создал: ${authorName || 'Координатор'}\n` +
-      `🔗 <a href="${t.bitrixUrl}">Открыть заявку в Б24</a>`;
-
-    if (sendTg !== false) await tgBroadcast(tgText);
-
-    res.json({ ok: true, taskId });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ ok: false, error: err.message });
-  }
+    if(sendTg!==false){
+      const tgText=`📋 <b>Создана задача в Битрикс24</b>\n🎫 Заявка #${ticketId}: ${cleanTitle}\n📝 ${taskTitle||'Без названия'}\n${deadline?`⏰ Дедлайн: ${new Date(deadline).toLocaleDateString('ru')}\n`:''}👤 Ответственный: ${USERS[responsibleId]||'—'}\n👤 Создал: ${authorName}\n🔗 <a href="${t.bitrixUrl}">Открыть заявку</a>`;
+      await tgBroadcast(tgText);
+    }
+    res.json({ok:true,taskId});
+  } catch(err){ console.error(err); res.status(500).json({ok:false,error:err.message}); }
 });
 
 // ── GET /api/users ────────────────────────────────────────────────────────────
-
-app.get('/api/users', (_, res) => {
-  const engineers = Object.entries(USERS)
-    .filter(([id]) => !COORDINATORS.has(Number(id)) && Number(id) > 10)
-    .map(([id, name]) => ({ id: Number(id), name }))
-    .sort((a,b) => a.name.localeCompare(b.name, 'ru'));
-  res.json({ ok: true, users: engineers, coordinators: [...COORDINATORS].map(id => ({ id, name: USERS[id] })) });
+app.get('/api/users', requireAuth(), (_, res) => {
+  const engineers=Object.entries(USERS).filter(([id])=>!COORDINATORS.has(Number(id))&&Number(id)>10).map(([id,name])=>({id:Number(id),name})).sort((a,b)=>a.name.localeCompare(b.name,'ru'));
+  res.json({ok:true,users:engineers,coordinators:[...COORDINATORS].map(id=>({id,name:USERS[id]}))});
 });
 
-app.get('/api/health', (_, res) => res.json({ ok: true, ts: new Date().toISOString() }));
-app.get('*', (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/api/health', (_, res) => res.json({ok:true,ts:new Date().toISOString()}));
 
-app.listen(PORT, () => console.log(`✅ Dashboard running on port ${PORT}`));
+// ── SPA fallback — protect index ──────────────────────────────────────────────
+app.get('/', requireAuth(), (_, res) => res.sendFile(path.join(__dirname,'public','index.html')));
+app.get('*', (req, res) => {
+  // Public routes
+  if(req.path==='/login'||req.path==='/login.html') return res.sendFile(path.join(__dirname,'public','login.html'));
+  res.sendFile(path.join(__dirname,'public','index.html'));
+});
+
+// ── Start ─────────────────────────────────────────────────────────────────────
+initDB().then(()=>{
+  app.listen(PORT, ()=>console.log(`✅ Dashboard running on port ${PORT}`));
+}).catch(err=>{
+  console.error('DB init failed:', err);
+  process.exit(1);
+});
