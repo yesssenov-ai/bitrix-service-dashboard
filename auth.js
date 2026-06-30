@@ -42,6 +42,14 @@ async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_tm_audit_created ON ticketsmodule_audit_logs(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_tm_audit_user ON ticketsmodule_audit_logs(user_id);
     CREATE INDEX IF NOT EXISTS idx_tm_audit_ticket ON ticketsmodule_audit_logs(ticket_id);
+
+    CREATE TABLE IF NOT EXISTS ticketsmodule_telegram_links (
+      id SERIAL PRIMARY KEY,
+      bitrix_user_id INTEGER UNIQUE NOT NULL,
+      telegram_chat_id BIGINT NOT NULL,
+      telegram_username VARCHAR(200),
+      linked_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
 
   // Create default admin if no users exist

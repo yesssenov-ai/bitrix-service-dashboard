@@ -16,6 +16,13 @@ const SMART_TYPES = {
   1074: { name: 'Заявка на командировку', categoryField: null },
 };
 
+// Тип оказываемых услуг (УС) — для подсветки заявок созданных напрямую от сделки
+const SERVICE_TYPES = {
+  '103':'Установка','104':'Техническое обслуживание','105':'Диагностика',
+  '106':'Ремонт','108':'Обучение','109':'Обучение ТЦ','110':'Квалификация (IQ/OQ/PQ)',
+  '111':'Подбор доп. оборудования','114':'Другое','402':'Подготовка документов','619':'Заявка клиента',
+};
+
 // Final/success stages per entity type (stageId suffix patterns to check)
 const FINAL_STAGE_PATTERNS = ['SUCCESS', 'WON', 'CLOSED', '3']; // adjust per actual stage IDs found
 
@@ -163,7 +170,7 @@ async function resolveStageName(entityTypeOrDeal, categoryId, stageId) {
   return map[stageId] || { name: stageId, color: '#8a8886', semantics: null };
 }
 
-async function buildTree(rootType, rootId, depth = 0, maxDepth = 6, visited = new Set()) {
+async function buildTree(rootType, rootId, depth = 0, maxDepth = 6, visited = new Set(), parentType = null) {
   const key = `${rootType}:${rootId}`;
   if (visited.has(key) || depth > maxDepth) return null;
   visited.add(key);
@@ -189,7 +196,7 @@ async function buildTree(rootType, rootId, depth = 0, maxDepth = 6, visited = ne
     };
     const childItems = await findChildrenOfDeal(rootId);
     for (const child of childItems) {
-      const childNode = await buildTree(child.entityTypeId, child.id, depth + 1, maxDepth, visited);
+      const childNode = await buildTree(child.entityTypeId, child.id, depth + 1, maxDepth, visited, 'deal');
       if (childNode) node.children.push(childNode);
     }
   } else {
@@ -197,6 +204,19 @@ async function buildTree(rootType, rootId, depth = 0, maxDepth = 6, visited = ne
     if (!item) return null;
     const info = SMART_TYPES[rootType];
     const stageInfo = await resolveStageName(rootType, item.categoryId, item.stageId);
+
+    // For Заявка на сервис (1058) created DIRECTLY from a deal (not via Запланированные работы),
+    // surface the "Тип оказываемых услуг (УС)" as a badge — typically Подбор допов / Подготовка документов.
+    let serviceBadge = null;
+    if (rootType === 1058 && parentType === 'deal') {
+      const rawIds = Array.isArray(item.ufCrm8_1744300223)
+        ? item.ufCrm8_1744300223.map(String)
+        : item.ufCrm8_1744300223 ? [String(item.ufCrm8_1744300223)] : [];
+      if (rawIds.length) {
+        serviceBadge = rawIds.map(id => SERVICE_TYPES[id] || `Тип ${id}`);
+      }
+    }
+
     node = {
       type: 'smart',
       entityTypeId: rootType,
@@ -208,12 +228,13 @@ async function buildTree(rootType, rootId, depth = 0, maxDepth = 6, visited = ne
       stageColor: stageInfo.color,
       stageSemantics: stageInfo.semantics,
       categoryId: item.categoryId,
+      serviceBadge,
       url: `https://crm.prolabsupport.kz/crm/type/${rootType}/details/${rootId}/`,
       children: [],
     };
     const childItems = await findChildrenOfItem(rootType, rootId);
     for (const child of childItems) {
-      const childNode = await buildTree(child.entityTypeId, child.id, depth + 1, maxDepth, visited);
+      const childNode = await buildTree(child.entityTypeId, child.id, depth + 1, maxDepth, visited, rootType);
       if (childNode) node.children.push(childNode);
     }
   }

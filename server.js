@@ -3,8 +3,9 @@ const express = require('express');
 const fetch = require('node-fetch');
 const path = require('path');
 const cookieParser = require('cookie-parser');
-const { initDB, requireAuth, auditLog, canEdit } = require('./auth');
+const { initDB, requireAuth, auditLog, canEdit, pool } = require('./auth');
 const { tgMgt, tgOps, tgBoth, notifyNewTicket, notifyOverdueNew } = require('./notifications');
+const telegramLinkBot = require('./telegram-link-bot');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -405,6 +406,11 @@ initDB().then(()=>{
         lastKnownTicketIds = currentIds;
       } catch(e) { console.error('New ticket check error:', e.message); }
     }, 30 * 60 * 1000);
+
+    // Start Telegram /start linking bot (polling)
+    telegramLinkBot.setPool(pool);
+    telegramLinkBot.startPolling(15000);
+    console.log('✅ Telegram link bot polling started');
   });
 }).catch(err=>{
   console.error('DB init failed:', err);

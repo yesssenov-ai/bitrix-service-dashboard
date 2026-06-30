@@ -1,6 +1,29 @@
 const express = require('express');
 const router = express.Router();
 const { pool, auditLog, bcrypt, requireAuth } = require('../auth');
+const { USERS } = require('../user-names');
+
+// GET /admin/tg-links — show Telegram connection status for all B24 users
+router.get('/tg-links', requireAuth(['admin']), async (req, res) => {
+  try {
+    const links = await pool.query('SELECT bitrix_user_id, telegram_chat_id, linked_at FROM ticketsmodule_telegram_links');
+    const linkMap = {};
+    for (const row of links.rows) linkMap[row.bitrix_user_id] = row;
+
+    const users = Object.entries(USERS)
+      .filter(([id]) => Number(id) > 10)
+      .map(([id, name]) => ({
+        id: Number(id), name,
+        linked: !!linkMap[id],
+        linkedAt: linkMap[id]?.linked_at || null,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+
+    res.json({ ok: true, users });
+  } catch(e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
 
 // GET /admin/users
 router.get('/users', requireAuth(['admin']), async (req, res) => {

@@ -1,11 +1,52 @@
 const express = require('express');
 const router = express.Router();
-const { requireAuth } = require('../auth');
+const { requireAuth, pool } = require('../auth');
 const {
-  SMART_TYPES, getItem, buildTree, searchDeals, findParent, isFinalStage, WEBHOOK_TOKEN,
-  getDealsByManager, SALES_CATEGORIES,
+  SMART_TYPES, getItem, getDeal, buildTree, searchDeals, findParent, isFinalStage, WEBHOOK_TOKEN,
+  getDealsByManager, SALES_CATEGORIES, resolveStageName,
 } = require('../relations');
 const { tgMgt } = require('../notifications');
+const { notifyProcessCompleted, notifyEngineerAssigned, setPool: setMgrNotifyPool } = require('../manager-notifications');
+const { USERS } = require('../user-names');
+
+setMgrNotifyPool(pool);
+
+// Entity types we track for completion notifications (per user request)
+const TRACKED_FOR_COMPLETION = new Set([1058, 1066, 1070]); // Заявка на сервис, Закупки, Логистика
+
+// Coordinator IDs whose assignment does NOT count as "engineer assigned"
+const COORDINATOR_IDS = new Set([26, 79]);
+
+// In-memory cache to avoid duplicate notifications for same item+stage
+const notifiedCompletions = new Set();
+const notifiedAssignments = new Map(); // itemId -> last assignedById seen
+
+// ── Resolve the responsible manager (root deal's ASSIGNED_BY_ID) ──────────────
+
+async function getRootDealManager(entityTypeId, item) {
+  // Walk up to the root deal
+  let current = { entityTypeId, item };
+  let safety = 0;
+  while (safety++ < 10) {
+    if (current.item.parentId2) {
+      const deal = await getDeal(current.item.parentId2);
+      if (!deal) return null;
+      return { managerId: parseInt(deal.ASSIGNED_BY_ID), dealId: current.item.parentId2, deal };
+    }
+    const parent = await findParent(current.entityTypeId, current.item);
+    if (!parent) return null;
+    if (parent.type === 'deal') {
+      const deal = await getDeal(parent.id);
+      if (!deal) return null;
+      return { managerId: parseInt(deal.ASSIGNED_BY_ID), dealId: parent.id, deal };
+    }
+    const parentItem = await getItem(parent.type, parent.id);
+    if (!parentItem) return null;
+    current = { entityTypeId: parent.type, item: parentItem };
+  }
+  return null;
+}
+
 
 // ── GET /relations/search?q=... ───────────────────────────────────────────────
 router.get('/search', requireAuth(), async (req, res) => {
@@ -131,14 +172,66 @@ async function handleBitrixWebhook(req, res) {
     // Respond immediately, process async
     res.status(200).send('ok');
 
-    // Fetch full item to check stage
     const item = await getItem(entityTypeId, itemId);
     if (!item) return;
 
+    // ── Case 1: Engineer assigned (only for Заявка на сервис, 1058) ────────────
+    if (entityTypeId === 1058) {
+      const assignedById = parseInt(item.assignedById);
+      const isCoordinator = COORDINATOR_IDS.has(assignedById);
+      const prevAssigned = notifiedAssignments.get(itemId);
+
+      if (!isCoordinator && assignedById && prevAssigned !== assignedById) {
+        notifiedAssignments.set(itemId, assignedById);
+        // Only notify if this is a genuine engineer assignment (not first load with same value)
+        if (prevAssigned !== undefined) {
+          const mgr = await getRootDealManager(entityTypeId, item);
+          if (mgr && mgr.managerId) {
+            const itemTitle = item.title || '';
+            const itemUrl = `https://crm.prolabsupport.kz/crm/type/1058/details/${itemId}/`;
+            const dealUrl = mgr.dealId ? `https://crm.prolabsupport.kz/crm/deal/details/${mgr.dealId}/` : null;
+            // Resolve engineer name via Bitrix user.get would need extra call; use a lightweight map fallback
+            const engineerName = USERS[assignedById] || `Пользователь #${assignedById}`;
+            await notifyEngineerAssigned(mgr.managerId, {
+              itemId, title: itemTitle, engineerName, url: itemUrl, dealUrl,
+            });
+          }
+        }
+      } else if (prevAssigned === undefined) {
+        // First time seeing this item — just record without notifying
+        notifiedAssignments.set(itemId, assignedById);
+      }
+    }
+
+    // ── Case 2: Process completion (Заявка на сервис, Закупки, Логистика) ──────
+    if (TRACKED_FOR_COMPLETION.has(entityTypeId)) {
+      const final = await isFinalStage(entityTypeId, item.categoryId, item.stageId);
+      if (final) {
+        const completionKey = `${entityTypeId}:${itemId}:${item.stageId}`;
+        if (!notifiedCompletions.has(completionKey)) {
+          notifiedCompletions.add(completionKey);
+
+          const stageInfo = await resolveStageName(entityTypeId, item.categoryId, item.stageId);
+          const typeName = SMART_TYPES[entityTypeId]?.name || `Тип ${entityTypeId}`;
+          const itemUrl = `https://crm.prolabsupport.kz/crm/type/${entityTypeId}/details/${itemId}/`;
+
+          const mgr = await getRootDealManager(entityTypeId, item);
+          if (mgr && mgr.managerId) {
+            const dealUrl = mgr.dealId ? `https://crm.prolabsupport.kz/crm/deal/details/${mgr.dealId}/` : null;
+            await notifyProcessCompleted(mgr.managerId, {
+              entityName: typeName, entityTypeId, itemId,
+              title: item.title, stageName: stageInfo.name,
+              url: itemUrl, dealUrl, dealId: mgr.dealId,
+            });
+          }
+        }
+      }
+    }
+
+    // ── Existing: notify Руководство group on any final-stage completion (kept) ─
     const final = await isFinalStage(entityTypeId, item.categoryId, item.stageId);
     if (!final) return;
 
-    // Find parent and notify
     const parent = await findParent(entityTypeId, item);
     if (!parent) return;
 

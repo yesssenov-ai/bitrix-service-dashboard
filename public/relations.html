@@ -295,6 +295,8 @@ body{
 .stage-success{background:var(--success-tint);color:var(--success);}
 .stage-fail{background:var(--danger-tint);color:var(--danger);}
 .node-dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+.node-service-badges{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+.node-service-tag{font-size:9px;font-weight:700;background:#f3f0fa;color:#8764b8;border:1px solid rgba(135,100,184,.25);border-radius:5px;padding:2px 6px;white-space:nowrap;}
 
 /* Legend */
 .legend-bar{
@@ -673,13 +675,18 @@ function renderTree(tree, focus) {
     if (n.stageSemantics === 'F') stageClass = 'stage-fail';
     const title = (n.title || '').replace(/^[-\s–—]+/, '').replace(/[-\s–—]+$/, '').trim() || `#${n.id}`;
     const stageLabel = n.stageName || n.stageId || '—';
+    const serviceBadgesHtml = (n.serviceBadge && n.serviceBadge.length)
+      ? `<div class="node-service-badges">${n.serviceBadge.map(s => `<span class="node-service-tag">${esc(s)}</span>`).join('')}</div>`
+      : '';
+    const nodeHeight = serviceBadgesHtml ? NODE_H + 24 : NODE_H;
 
-    nodesHtml += `<foreignObject class="tree-node-fo" x="${px(n) - NODE_W/2}" y="${py(n)}" width="${NODE_W}" height="${NODE_H}">
+    nodesHtml += `<foreignObject class="tree-node-fo" x="${px(n) - NODE_W/2}" y="${py(n)}" width="${NODE_W}" height="${nodeHeight}">
       <div xmlns="http://www.w3.org/1999/xhtml" class="node-card ${isDeal?'is-deal':''} ${isFocus?'is-focus':''}" onclick="window.open('${esc(n.url)}','_blank')" title="${esc(stageLabel)}">
         <span class="node-badge-id">#${n.id}</span>
         <div class="node-type">${esc(typeLabel)}</div>
         <div class="node-title">${esc(title)}</div>
         <span class="node-stage ${stageClass}"><span class="node-dot"></span>${esc(stageLabel)}</span>
+        ${serviceBadgesHtml}
       </div>
     </foreignObject>`;
   }
