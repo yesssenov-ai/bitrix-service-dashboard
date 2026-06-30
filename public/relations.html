@@ -4,107 +4,257 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ProLabSupport — Связи сделок</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
-  --white:#fff;--bg:#f5f6fa;--bg2:#eef0f7;--border:#e3e6ef;--border2:#d0d4e4;
-  --text:#111827;--text-2:#374151;--text-3:#6b7280;--text-4:#9ca3af;
-  --accent:#C53B2F;--accent-h:#a83226;--accent-light:rgba(197,59,47,.08);
-  --blue:#2563eb;--green:#059669;--red:#dc2626;--orange:#d97706;--purple:#7c3aed;
-  --shadow-sm:0 1px 3px rgba(0,0,0,.06);--shadow:0 4px 16px rgba(0,0,0,.07);
-  --radius:10px;--font:'Inter',system-ui,sans-serif;
+  --surface:#faf9f8;
+  --canvas:#f3f2f1;
+  --card:#ffffff;
+  --stroke:#e1dfdd;
+  --stroke-strong:#d2d0ce;
+  --text:#201f1e;
+  --text-2:#605e5c;
+  --text-3:#8a8886;
+  --brand:#0f6cbd;
+  --brand-2:#2899f5;
+  --brand-tint:#eff6fc;
+  --brand-tint-strong:#deecf9;
+  --accent:#C53B2F;
+  --accent-tint:#fdf1ef;
+  --success:#0e7c3f;
+  --success-tint:#dff6dd;
+  --warn:#bc4b09;
+  --warn-tint:#fed9cc;
+  --danger:#c4314b;
+  --danger-tint:#fde7eb;
+  --radius-sm:6px;
+  --radius:10px;
+  --radius-lg:14px;
+  --shadow-1:0 1px 2px rgba(0,0,0,.07),0 1px 1px rgba(0,0,0,.04);
+  --shadow-2:0 4px 8px rgba(0,0,0,.07),0 2px 4px rgba(0,0,0,.05);
+  --shadow-3:0 16px 36px rgba(0,0,0,.10),0 4px 12px rgba(0,0,0,.06);
+  --font:'Inter',-apple-system,'Segoe UI',system-ui,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+  --ease:cubic-bezier(.16,1,.3,1);
 }
-body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased;}
 
-.header{background:var(--white);border-bottom:1px solid var(--border);height:60px;display:flex;align-items:center;padding:0 28px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.04);}
-.logo{display:flex;align-items:center;gap:11px;font-weight:700;font-size:15px;flex-shrink:0;}
-.logo-mark{width:32px;height:32px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;}
-.logo-mark svg{width:16px;height:16px;}
-.hdiv{width:1px;height:24px;background:var(--border2);margin:0 16px;}
-.h-nav{display:flex;gap:4px;}
-.h-nav a{padding:6px 12px;border-radius:7px;font-size:13px;font-weight:500;color:var(--text-3);text-decoration:none;}
-.h-nav a:hover{background:var(--bg);color:var(--text);}
-.h-nav a.active{background:var(--accent-light);color:var(--accent);}
+html{scroll-behavior:smooth;}
+body{
+  font-family:var(--font);
+  background:var(--surface);
+  background-image:
+    radial-gradient(circle at 0% 0%, rgba(15,108,189,.04) 0%, transparent 45%),
+    radial-gradient(circle at 100% 0%, rgba(197,59,47,.03) 0%, transparent 40%);
+  background-attachment:fixed;
+  color:var(--text);
+  font-size:14px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+
+/* ───────────────────────── HEADER ───────────────────────── */
+.header{
+  background:rgba(255,255,255,.82);
+  backdrop-filter:blur(20px) saturate(1.4);
+  -webkit-backdrop-filter:blur(20px) saturate(1.4);
+  border-bottom:1px solid var(--stroke);
+  height:56px;display:flex;align-items:center;padding:0 24px;
+  position:sticky;top:0;z-index:200;
+}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:14.5px;letter-spacing:-.2px;flex-shrink:0;color:var(--text);}
+.logo-mark{
+  width:30px;height:30px;border-radius:7px;
+  background:linear-gradient(135deg,var(--accent) 0%,#9c2f25 100%);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 6px rgba(197,59,47,.3);
+}
+.logo-mark svg{width:15px;height:15px;}
+.hdiv{width:1px;height:22px;background:var(--stroke-strong);margin:0 16px;}
+.h-nav{display:flex;gap:2px;}
+.h-nav a{
+  padding:7px 13px;border-radius:7px;font-size:13px;font-weight:500;
+  color:var(--text-2);text-decoration:none;transition:all .15s var(--ease);
+  display:flex;align-items:center;gap:6px;
+}
+.h-nav a:hover{background:rgba(0,0,0,.04);color:var(--text);}
+.h-nav a.active{background:var(--brand-tint);color:var(--brand);font-weight:600;}
 .h-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
-.btn{display:inline-flex;align-items:center;gap:6px;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--text-2);font-family:var(--font);}
-.btn:hover{background:var(--bg);}
+.user-chip{font-size:12.5px;color:var(--text-2);background:var(--canvas);border:1px solid var(--stroke);border-radius:20px;padding:5px 12px 5px 8px;display:flex;align-items:center;gap:6px;}
+.user-dot{width:6px;height:6px;border-radius:50%;background:var(--success);box-shadow:0 0 0 2px var(--success-tint);}
 
-.page{max-width:1400px;margin:0 auto;padding:24px 28px 60px;}
-.ph{margin-bottom:20px;}
-.ph h1{font-size:20px;font-weight:700;letter-spacing:-.3px;margin-bottom:3px;}
-.ph p{font-size:13px;color:var(--text-3);}
+/* ───────────────────────── PAGE ───────────────────────── */
+.page{max-width:1480px;margin:0 auto;padding:28px 24px 80px;}
 
-.search-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow-sm);margin-bottom:20px;position:relative;}
-.search-wrap{position:relative;}
-.search-input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:11px 14px 11px 40px;font-size:14px;color:var(--text);font-family:var(--font);outline:none;}
-.search-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-light);}
-.search-icon{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--text-4);}
-.search-results{position:absolute;top:100%;left:16px;right:16px;background:var(--white);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);max-height:320px;overflow-y:auto;z-index:50;margin-top:6px;display:none;}
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:24px;gap:16px;}
+.page-head-eyebrow{
+  font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;
+  color:var(--brand);margin-bottom:6px;display:flex;align-items:center;gap:6px;
+}
+.page-head h1{font-size:24px;font-weight:700;letter-spacing:-.5px;color:var(--text);}
+.page-head p{font-size:13px;color:var(--text-2);margin-top:4px;}
+
+/* ───────────────────────── COMMAND BAR ───────────────────────── */
+.command-bar{
+  background:var(--card);border:1px solid var(--stroke);border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-1);padding:18px 20px;margin-bottom:18px;
+  transition:box-shadow .2s var(--ease);
+}
+.command-bar:focus-within{box-shadow:var(--shadow-2);}
+.command-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+
+.field-group{display:flex;flex-direction:column;gap:5px;flex:1;min-width:240px;}
+.field-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);}
+
+.select-wrap{position:relative;}
+.fsel{
+  appearance:none;width:100%;background:var(--canvas);border:1px solid var(--stroke);
+  border-radius:8px;padding:10px 36px 10px 13px;font-size:13.5px;color:var(--text);
+  font-family:var(--font);outline:none;cursor:pointer;transition:all .15s var(--ease);
+  font-weight:500;
+}
+.fsel:hover{border-color:var(--stroke-strong);background:#fff;}
+.fsel:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px var(--brand-tint);}
+.select-wrap::after{
+  content:'';position:absolute;right:13px;top:50%;transform:translateY(-50%);
+  width:8px;height:8px;border-right:2px solid var(--text-3);border-bottom:2px solid var(--text-3);
+  transform:translateY(-65%) rotate(45deg);pointer-events:none;
+}
+
+.search-wrap{position:relative;flex:2;min-width:280px;}
+.search-icon{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none;}
+.search-input{
+  width:100%;background:var(--canvas);border:1px solid var(--stroke);border-radius:8px;
+  padding:10px 14px 10px 38px;font-size:13.5px;color:var(--text);font-family:var(--font);
+  outline:none;transition:all .15s var(--ease);
+}
+.search-input:hover{border-color:var(--stroke-strong);background:#fff;}
+.search-input:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px var(--brand-tint);}
+.search-input::placeholder{color:var(--text-3);}
+
+.search-results{
+  position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--card);
+  border:1px solid var(--stroke);border-radius:var(--radius);box-shadow:var(--shadow-3);
+  max-height:340px;overflow-y:auto;z-index:80;display:none;
+  animation:dropIn .15s var(--ease);
+}
+@keyframes dropIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:translateY(0);}}
 .search-results.show{display:block;}
-.search-item{padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);}
+.search-item{padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--stroke);transition:background .1s;}
 .search-item:last-child{border-bottom:none;}
-.search-item:hover{background:var(--bg);}
-.search-item-title{font-size:13px;font-weight:500;color:var(--text);margin-bottom:2px;}
-.search-item-meta{font-size:11.5px;color:var(--text-4);}
+.search-item:hover{background:var(--brand-tint);}
+.search-item-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px;}
+.search-item-meta{font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
 
-.graph-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);min-height:500px;padding:32px;overflow-x:auto;}
-.empty{text-align:center;padding:80px 24px;color:var(--text-3);}
-.empty-icon{width:56px;height:56px;background:var(--bg);border:1px solid var(--border);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;color:var(--text-4);}
-.empty h3{font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px;}
-.empty p{font-size:13px;}
-
-/* Tree styles */
-.tree-wrap{display:flex;justify-content:center;min-width:fit-content;}
-.tree-node-group{display:flex;flex-direction:column;align-items:center;position:relative;}
-.tree-children{display:flex;gap:24px;margin-top:32px;position:relative;}
-.tree-children::before{content:'';position:absolute;top:-16px;left:0;right:0;height:1px;}
-.tree-node-group:not(:only-child) .tree-children > .tree-node-group::before{
-  content:'';position:absolute;top:-32px;left:50%;width:1px;height:32px;background:var(--border2);
+/* ───────────────────────── DEALS GRID ───────────────────────── */
+.deals-section{margin-top:18px;}
+.deals-section-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-top:14px;border-top:1px solid var(--stroke);}
+.deals-section-title{font-size:12.5px;font-weight:600;color:var(--text-2);}
+.deals-count-pill{
+  background:var(--brand-tint);color:var(--brand);font-size:11.5px;font-weight:700;
+  border-radius:20px;padding:2px 10px;font-variant-numeric:tabular-nums;
 }
-.tree-node{
-  background:var(--white);border:2px solid var(--border2);border-radius:10px;
-  padding:14px 18px;min-width:220px;max-width:280px;cursor:pointer;
-  transition:all .15s;position:relative;box-shadow:var(--shadow-sm);
+
+.deals-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px;}
+
+.deal-card{
+  background:var(--card);border:1.5px solid var(--stroke);border-radius:var(--radius);
+  padding:14px 16px;cursor:pointer;transition:all .18s var(--ease);position:relative;overflow:hidden;
 }
-.tree-node:hover{box-shadow:var(--shadow);transform:translateY(-1px);}
-.tree-node.deal{border-color:var(--accent);background:linear-gradient(135deg,#fef2f2,#fff);}
-.tree-node.focus{box-shadow:0 0 0 3px rgba(124,58,237,.3);}
-.tree-node-type{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-4);margin-bottom:4px;}
-.tree-node-title{font-size:13px;font-weight:600;color:var(--text);line-height:1.3;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-.tree-node-stage{display:inline-flex;align-items:center;gap:5px;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:600;}
-.stage-process{background:rgba(37,99,235,.1);color:#2563eb;}
-.stage-success{background:rgba(5,150,105,.1);color:#059669;}
-.stage-fail{background:rgba(220,38,38,.1);color:#dc2626;}
-.tree-node-id{position:absolute;top:-9px;right:10px;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700;color:var(--text-3);}
+.deal-card::before{
+  content:'';position:absolute;left:0;top:0;bottom:0;width:3px;
+  background:var(--cat-color,var(--brand));opacity:0;transition:opacity .18s var(--ease);
+}
+.deal-card:hover{border-color:var(--stroke-strong);box-shadow:var(--shadow-2);transform:translateY(-2px);}
+.deal-card:hover::before{opacity:1;}
+.deal-card.active{border-color:var(--brand);background:var(--brand-tint);box-shadow:var(--shadow-2);}
+.deal-card.active::before{opacity:1;}
 
-/* Connector lines via SVG-less CSS for vertical layout */
-.tree-connector{width:1px;height:24px;background:var(--border2);}
+.deal-card-cat{
+  font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+  color:var(--cat-color,var(--brand));margin-bottom:6px;
+}
+.deal-card-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:35px;}
+.deal-card-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.deal-card-stage{font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:5px;background:var(--canvas);color:var(--text-2);font-family:var(--mono);}
+.deal-card-sum{font-size:12px;font-weight:700;color:var(--success);font-variant-numeric:tabular-nums;white-space:nowrap;}
 
-.loading-spin{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
+.deals-empty{
+  grid-column:1/-1;text-align:center;padding:40px 24px;color:var(--text-3);
+  display:flex;flex-direction:column;align-items:center;gap:10px;font-size:13px;
+}
+
+/* ───────────────────────── GRAPH CANVAS ───────────────────────── */
+.graph-card{
+  background:var(--card);border:1px solid var(--stroke);border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-1);min-height:520px;overflow:auto;position:relative;
+  background-image:radial-gradient(circle,var(--stroke) 1px,transparent 1px);
+  background-size:22px 22px;background-position:-11px -11px;
+}
+
+.empty-state{
+  position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  color:var(--text-3);gap:14px;padding:40px;text-align:center;
+}
+.empty-icon{
+  width:64px;height:64px;border-radius:18px;
+  background:linear-gradient(135deg,var(--brand-tint),var(--canvas));
+  border:1px solid var(--stroke);display:flex;align-items:center;justify-content:center;color:var(--brand);
+}
+.empty-state h3{font-size:16px;font-weight:700;color:var(--text);}
+.empty-state p{font-size:13px;max-width:340px;line-height:1.5;}
+
+.loading-state{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--text-3);}
+.spinner{width:32px;height:32px;border:3px solid var(--stroke);border-top-color:var(--brand);border-radius:50%;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 
-.legend{display:flex;gap:16px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);font-size:12px;color:var(--text-3);flex-wrap:wrap;}
-.legend-item{display:flex;align-items:center;gap:6px;}
-.legend-dot{width:10px;height:10px;border-radius:3px;}
+/* ───────────────────────── TREE (SVG-based) ───────────────────────── */
+.tree-svg-wrap{padding:48px;display:inline-block;min-width:100%;}
+.tree-node-fo{overflow:visible;}
 
-/* Manager picker */
-.picker-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-.fsel{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;color:var(--text);font-family:var(--font);outline:none;cursor:pointer;min-width:220px;}
-.fsel:focus{border-color:var(--accent);}
-.divider-or{color:var(--text-4);font-size:12px;font-weight:600;text-transform:uppercase;padding:0 4px;}
+.node-card{
+  background:var(--card);border:1.5px solid var(--stroke-strong);border-radius:10px;
+  padding:13px 15px;width:220px;cursor:pointer;transition:all .15s var(--ease);
+  box-shadow:var(--shadow-1);position:relative;
+}
+.node-card:hover{box-shadow:var(--shadow-2);border-color:var(--brand);transform:translateY(-1px);}
+.node-card.is-deal{
+  border-color:var(--accent);
+  background:linear-gradient(160deg,var(--accent-tint) 0%,#fff 60%);
+}
+.node-card.is-focus{box-shadow:0 0 0 3px rgba(15,108,189,.25),var(--shadow-2);border-color:var(--brand);}
 
-/* Manager deals list */
-.deals-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-top:16px;}
-.deal-card{background:var(--white);border:1.5px solid var(--border);border-radius:9px;padding:14px;cursor:pointer;transition:all .15s;}
-.deal-card:hover{border-color:var(--accent);box-shadow:var(--shadow-sm);transform:translateY(-1px);}
-.deal-card.active{border-color:var(--accent);background:var(--accent-light);}
-.deal-card-cat{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-4);margin-bottom:5px;}
-.deal-card-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-.deal-card-footer{display:flex;align-items:center;justify-content:space-between;}
-.deal-card-stage{font-size:11px;font-weight:600;padding:2px 8px;border-radius:5px;background:var(--bg);color:var(--text-3);}
-.deal-card-sum{font-size:12px;font-weight:700;color:var(--green);}
-.deals-empty{text-align:center;padding:32px;color:var(--text-4);font-size:13px;}
+.node-badge-id{
+  position:absolute;top:-9px;right:11px;background:var(--text);color:#fff;
+  border-radius:5px;padding:1px 7px;font-size:10px;font-weight:700;font-family:var(--mono);
+  box-shadow:var(--shadow-1);
+}
+.node-type{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:5px;}
+.node-card.is-deal .node-type{color:var(--accent);}
+.node-title{font-size:12.5px;font-weight:600;color:var(--text);line-height:1.35;margin-bottom:9px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:34px;}
+.node-stage{display:inline-flex;align-items:center;gap:5px;border-radius:6px;padding:3px 9px;font-size:10.5px;font-weight:700;font-family:var(--mono);}
+.stage-process{background:var(--brand-tint);color:var(--brand);}
+.stage-success{background:var(--success-tint);color:var(--success);}
+.stage-fail{background:var(--danger-tint);color:var(--danger);}
+.node-dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+
+/* Legend */
+.legend-bar{
+  display:flex;gap:20px;padding:14px 20px;border-top:1px solid var(--stroke);
+  background:var(--canvas);border-radius:0 0 var(--radius-lg) var(--radius-lg);
+  font-size:12px;color:var(--text-2);flex-wrap:wrap;
+}
+.legend-item{display:flex;align-items:center;gap:7px;}
+.legend-dot{width:9px;height:9px;border-radius:3px;}
+
+/* Responsive */
+@media(max-width:768px){
+  .page{padding:18px;}
+  .command-row{flex-direction:column;align-items:stretch;}
+  .field-group,.search-wrap{min-width:0;}
+}
 </style>
 </head>
 <body>
@@ -120,43 +270,65 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
   </div>
   <div class="hdiv"></div>
   <nav class="h-nav">
-    <a href="/">← Дашборд</a>
-    <a href="/relations.html" class="active">Связи сделок</a>
+    <a href="/">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      Дашборд
+    </a>
+    <a href="/relations.html" class="active">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M12 8.5v3M9.8 14l-1.6 1.5M14.2 14l1.6 1.5"/></svg>
+      Связи сделок
+    </a>
   </nav>
   <div class="h-right">
-    <span id="currentUser" style="font-size:12px;color:var(--text-3)"></span>
+    <span class="user-chip"><span class="user-dot"></span><span id="currentUser">—</span></span>
   </div>
 </header>
 
 <div class="page">
-  <div class="ph">
-    <h1>Дерево связей сделок и процессов</h1>
-    <p>Поиск сделки и визуализация всех дочерних смарт-процессов</p>
-  </div>
-
-  <div class="search-card">
-    <div class="search-wrap">
-      <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input class="search-input" type="text" id="searchInput" placeholder="Введите название компании или ID сделки…" oninput="debSearch()">
-      <div class="search-results" id="searchResults"></div>
+  <div class="page-head">
+    <div>
+      <div class="page-head-eyebrow">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        Relationship Explorer
+      </div>
+      <h1>Дерево связей сделок</h1>
+      <p>Найдите сделку и посмотрите все связанные смарт-процессы — от установки до закупок</p>
     </div>
   </div>
 
-  <div class="search-card">
-    <div class="picker-row">
-      <select class="fsel" id="managerSelect" onchange="onManagerChange()">
-        <option value="">— Выбрать менеджера —</option>
-      </select>
-      <span style="font-size:12px;color:var(--text-4)" id="dealsCount"></span>
+  <div class="command-bar">
+    <div class="command-row">
+      <div class="field-group" style="flex:0 0 260px">
+        <span class="field-label">Менеджер</span>
+        <div class="select-wrap">
+          <select class="fsel" id="managerSelect" onchange="onManagerChange()">
+            <option value="">Выбрать менеджера…</option>
+          </select>
+        </div>
+      </div>
+      <div class="search-wrap" style="align-self:flex-end">
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input class="search-input" type="text" id="searchInput" placeholder="Поиск по названию компании или ID сделки…" oninput="debSearch()">
+        <div class="search-results" id="searchResults"></div>
+      </div>
     </div>
-    <div class="deals-list" id="managerDeals"></div>
+
+    <div class="deals-section" id="dealsSection" style="display:none">
+      <div class="deals-section-head">
+        <span class="deals-section-title">Сделки на стадии реализации</span>
+        <span class="deals-count-pill" id="dealsCount">0</span>
+      </div>
+      <div class="deals-list" id="managerDeals"></div>
+    </div>
   </div>
 
   <div class="graph-card" id="graphCard">
-    <div class="empty">
-      <div class="empty-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><path d="M12 9v3M9.5 15l-1.8 1.5M14.5 15l1.8 1.5"/></svg></div>
-      <h3>Найдите сделку</h3>
-      <p>Введите название компании или ID, чтобы увидеть дерево связанных процессов</p>
+    <div class="empty-state">
+      <div class="empty-icon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><path d="M12 9v3M9.5 15l-1.8 1.5M14.5 15l1.8 1.5"/></svg>
+      </div>
+      <h3>Выберите сделку</h3>
+      <p>Найдите её по названию компании, ID, или выберите менеджера и одну из его сделок в реализации</p>
     </div>
   </div>
 </div>
@@ -165,9 +337,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
 let debT = null;
 let selectedManagerId = null;
 let selectedDealId = null;
-const STAGE_COLORS = {
-  'P': 'stage-process', 'S': 'stage-success', 'F': 'stage-fail',
-};
+
+const CAT_COLORS = { 0:'#0f6cbd', 1:'#8764b8', 2:'#0e7c3f', 3:'#C53B2F' };
 
 async function loadManagers() {
   try {
@@ -182,27 +353,33 @@ async function loadManagers() {
 async function onManagerChange() {
   const sel = document.getElementById('managerSelect');
   const managerId = sel.value;
+  const section = document.getElementById('dealsSection');
   const wrap = document.getElementById('managerDeals');
   const countEl = document.getElementById('dealsCount');
-  if (!managerId) { wrap.innerHTML = ''; countEl.textContent = ''; return; }
 
-  wrap.innerHTML = '<div class="deals-empty"><div class="loading-spin"></div> Загрузка сделок…</div>';
+  if (!managerId) { section.style.display = 'none'; return; }
+
+  section.style.display = '';
+  wrap.innerHTML = '<div class="deals-empty"><div class="spinner" style="width:22px;height:22px"></div> Загружаем сделки…</div>';
   selectedManagerId = managerId;
 
   try {
     const r = await fetch('/relations/manager-deals/' + managerId);
     const d = await r.json();
-    if (!d.ok) { wrap.innerHTML = `<div class="deals-empty">${esc(d.error)}</div>`; return; }
+    if (!d.ok) { wrap.innerHTML = `<div class="deals-empty">${esc(d.error)}</div>`; countEl.textContent = '0'; return; }
+
+    countEl.textContent = d.deals.length;
 
     if (!d.deals.length) {
-      wrap.innerHTML = '<div class="deals-empty">Нет сделок на стадии реализации (Contract → Money/Document)</div>';
-      countEl.textContent = '';
+      wrap.innerHTML = `<div class="deals-empty">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6v6H9z"/></svg>
+        Нет сделок на стадии реализации (Contract → Money/Document)
+      </div>`;
       return;
     }
 
-    countEl.textContent = `${d.deals.length} сделок в реализации`;
     wrap.innerHTML = d.deals.map(deal => `
-      <div class="deal-card" id="deal-${deal.id}" onclick="selectDealCard(${deal.id})">
+      <div class="deal-card" id="deal-${deal.id}" style="--cat-color:${CAT_COLORS[deal.categoryId]||'#0f6cbd'}" onclick="selectDealCard(${deal.id})">
         <div class="deal-card-cat">${esc(deal.categoryName)}</div>
         <div class="deal-card-title">#${deal.id} — ${esc(deal.title || 'Без названия')}</div>
         <div class="deal-card-footer">
@@ -222,25 +399,6 @@ function selectDealCard(dealId) {
   loadTree(dealId);
 }
 
-async function init() {
-  try {
-    const r = await fetch('/auth/me');
-    if (!r.ok) { window.location.href = '/login.html'; return; }
-    const d = await r.json();
-    document.getElementById('currentUser').textContent = d.user.displayName;
-  } catch(e) { window.location.href = '/login.html'; }
-
-  loadManagers();
-
-  // Check URL params for direct link
-  const params = new URLSearchParams(window.location.search);
-  const dealId = params.get('dealId');
-  const entityTypeId = params.get('entityTypeId');
-  const itemId = params.get('itemId');
-  if (dealId) loadTree(dealId);
-  else if (entityTypeId && itemId) loadTreeFromItem(entityTypeId, itemId);
-}
-
 function debSearch() { clearTimeout(debT); debT = setTimeout(doSearch, 350); }
 
 async function doSearch() {
@@ -252,7 +410,7 @@ async function doSearch() {
     const r = await fetch('/relations/search?q=' + encodeURIComponent(q));
     const d = await r.json();
     if (!d.ok || !d.deals.length) {
-      results.innerHTML = '<div class="search-item" style="color:var(--text-4)">Ничего не найдено</div>';
+      results.innerHTML = '<div class="search-item" style="color:var(--text-3)">Ничего не найдено</div>';
       results.classList.add('show');
       return;
     }
@@ -273,68 +431,117 @@ function selectDeal(id) {
 
 async function loadTree(dealId) {
   const card = document.getElementById('graphCard');
-  card.innerHTML = '<div class="empty"><div class="loading-spin"></div><p style="margin-top:12px">Строим дерево связей…</p></div>';
+  card.innerHTML = `<div class="loading-state"><div class="spinner"></div><span>Строим дерево связей…</span></div>`;
   try {
     const r = await fetch('/relations/tree/' + dealId);
     const d = await r.json();
-    if (!d.ok) { card.innerHTML = `<div class="empty"><h3>Ошибка</h3><p>${esc(d.error)}</p></div>`; return; }
+    if (!d.ok) {
+      card.innerHTML = `<div class="empty-state"><div class="empty-icon" style="color:var(--danger)"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><h3>Не удалось построить дерево</h3><p>${esc(d.error)}</p></div>`;
+      return;
+    }
     renderTree(d.tree);
   } catch(e) {
-    card.innerHTML = `<div class="empty"><h3>Ошибка загрузки</h3><p>${esc(e.message)}</p></div>`;
+    card.innerHTML = `<div class="empty-state"><h3>Ошибка загрузки</h3><p>${esc(e.message)}</p></div>`;
   }
 }
 
 async function loadTreeFromItem(entityTypeId, itemId) {
   const card = document.getElementById('graphCard');
-  card.innerHTML = '<div class="empty"><div class="loading-spin"></div><p style="margin-top:12px">Ищем родительскую сделку…</p></div>';
+  card.innerHTML = `<div class="loading-state"><div class="spinner"></div><span>Ищем родительскую сделку…</span></div>`;
   try {
     const r = await fetch(`/relations/tree-from-item/${entityTypeId}/${itemId}`);
     const d = await r.json();
-    if (!d.ok) { card.innerHTML = `<div class="empty"><h3>Ошибка</h3><p>${esc(d.error)}</p></div>`; return; }
+    if (!d.ok) { card.innerHTML = `<div class="empty-state"><h3>Ошибка</h3><p>${esc(d.error)}</p></div>`; return; }
     renderTree(d.tree, { entityTypeId: d.focusEntityTypeId, itemId: d.focusItemId });
   } catch(e) {
-    card.innerHTML = `<div class="empty"><h3>Ошибка загрузки</h3><p>${esc(e.message)}</p></div>`;
+    card.innerHTML = `<div class="empty-state"><h3>Ошибка загрузки</h3><p>${esc(e.message)}</p></div>`;
   }
+}
+
+// ── Tree layout engine: compute positions then render as SVG with curved edges ──
+
+function layoutTree(node, depth = 0, xCounter = { val: 0 }) {
+  const children = (node.children || []).map(c => layoutTree(c, depth + 1, xCounter));
+  let x;
+  if (children.length === 0) {
+    x = xCounter.val;
+    xCounter.val += 1;
+  } else {
+    const first = children[0].x, last = children[children.length - 1].x;
+    x = (first + last) / 2;
+  }
+  return { ...node, depth, x, children };
+}
+
+function flattenNodes(node, out = []) {
+  out.push(node);
+  (node.children || []).forEach(c => flattenNodes(c, out));
+  return out;
 }
 
 function renderTree(tree, focus) {
   const card = document.getElementById('graphCard');
-  card.innerHTML = `<div class="tree-wrap">${renderNode(tree, focus)}</div>
-    <div class="legend">
-      <div class="legend-item"><div class="legend-dot" style="background:#2563eb"></div>В работе</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#059669"></div>Завершено успешно</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#dc2626"></div>Провалено/отменено</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#C53B2F"></div>Сделка (корень)</div>
-    </div>`;
-}
+  const laidOut = layoutTree(tree);
+  const allNodes = flattenNodes(laidOut);
 
-function renderNode(node, focus) {
-  const isDeal = node.type === 'deal';
-  const isFocus = focus && !isDeal && node.entityTypeId === focus.entityTypeId && node.id === focus.itemId;
-  const typeLabel = isDeal ? 'Сделка' : node.entityName;
+  const NODE_W = 220, NODE_H = 92, COL_GAP = 50, ROW_GAP = 90;
+  const maxX = Math.max(...allNodes.map(n => n.x));
+  const maxDepth = Math.max(...allNodes.map(n => n.depth));
+  const svgW = (maxX + 1) * (NODE_W + COL_GAP) + COL_GAP;
+  const svgH = (maxDepth + 1) * (NODE_H + ROW_GAP) + ROW_GAP;
 
-  // Stage badge (best-effort coloring based on stageId keywords)
-  let stageClass = 'stage-process';
-  const sidLower = (node.stageId || '').toLowerCase();
-  if (sidLower.includes('success') || sidLower.includes('won')) stageClass = 'stage-success';
-  if (sidLower.includes('fail') || sidLower.includes('lose')) stageClass = 'stage-fail';
+  function px(n) { return n.x * (NODE_W + COL_GAP) + COL_GAP + NODE_W / 2; }
+  function py(n) { return n.depth * (NODE_H + ROW_GAP) + ROW_GAP / 2; }
 
-  const title = (node.title || '').replace(/^[-\\s–—]+/, '').replace(/[-\\s–—]+$/, '').trim() || `#${node.id}`;
+  // Edges (smooth bezier)
+  let edgesSvg = '';
+  function walkEdges(node) {
+    for (const child of (node.children || [])) {
+      const x1 = px(node), y1 = py(node) + NODE_H;
+      const x2 = px(child), y2 = py(child);
+      const midY = (y1 + y2) / 2;
+      edgesSvg += `<path d="M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}"
+        fill="none" stroke="#d2d0ce" stroke-width="2"/>`;
+      walkEdges(child);
+    }
+  }
+  walkEdges(laidOut);
 
-  const childrenHtml = node.children && node.children.length
-    ? `<div class="tree-connector" style="margin:0 auto"></div>
-       <div class="tree-children">${node.children.map(c => renderNode(c, focus)).join('')}</div>`
-    : '';
+  // Nodes (as foreignObject for rich HTML)
+  let nodesHtml = '';
+  for (const n of allNodes) {
+    const isDeal = n.type === 'deal';
+    const isFocus = focus && !isDeal && n.entityTypeId === focus.entityTypeId && n.id === focus.itemId;
+    const typeLabel = isDeal ? 'Сделка' : n.entityName;
+    let stageClass = 'stage-process';
+    const sidLower = (n.stageId || '').toLowerCase();
+    if (sidLower.includes('success') || sidLower.includes('won')) stageClass = 'stage-success';
+    if (sidLower.includes('fail') || sidLower.includes('lose')) stageClass = 'stage-fail';
+    const title = (n.title || '').replace(/^[-\s–—]+/, '').replace(/[-\s–—]+$/, '').trim() || `#${n.id}`;
 
-  return `<div class="tree-node-group">
-    <div class="tree-node ${isDeal ? 'deal' : ''} ${isFocus ? 'focus' : ''}" onclick="window.open('${esc(node.url)}','_blank')">
-      <span class="tree-node-id">#${node.id}</span>
-      <div class="tree-node-type">${esc(typeLabel)}</div>
-      <div class="tree-node-title">${esc(title)}</div>
-      <span class="tree-node-stage ${stageClass}">${esc(node.stageId || '—')}</span>
+    nodesHtml += `<foreignObject class="tree-node-fo" x="${px(n) - NODE_W/2}" y="${py(n)}" width="${NODE_W}" height="${NODE_H}">
+      <div xmlns="http://www.w3.org/1999/xhtml" class="node-card ${isDeal?'is-deal':''} ${isFocus?'is-focus':''}" onclick="window.open('${esc(n.url)}','_blank')">
+        <span class="node-badge-id">#${n.id}</span>
+        <div class="node-type">${esc(typeLabel)}</div>
+        <div class="node-title">${esc(title)}</div>
+        <span class="node-stage ${stageClass}"><span class="node-dot"></span>${esc(n.stageId || '—')}</span>
+      </div>
+    </foreignObject>`;
+  }
+
+  card.innerHTML = `
+    <div class="tree-svg-wrap">
+      <svg width="${svgW}" height="${svgH}" style="display:block">
+        <g>${edgesSvg}</g>
+        <g>${nodesHtml}</g>
+      </svg>
     </div>
-    ${childrenHtml}
-  </div>`;
+    <div class="legend-bar" style="position:sticky;bottom:0;left:0">
+      <div class="legend-item"><div class="legend-dot" style="background:#0f6cbd"></div>В работе</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#0e7c3f"></div>Завершено успешно</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#c4314b"></div>Провалено / отменено</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#C53B2F"></div>Корневая сделка</div>
+    </div>`;
 }
 
 document.addEventListener('click', e => {
@@ -342,6 +549,24 @@ document.addEventListener('click', e => {
 });
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+async function init() {
+  try {
+    const r = await fetch('/auth/me');
+    if (!r.ok) { window.location.href = '/login.html'; return; }
+    const d = await r.json();
+    document.getElementById('currentUser').textContent = d.user.displayName;
+  } catch(e) { window.location.href = '/login.html'; return; }
+
+  loadManagers();
+
+  const params = new URLSearchParams(window.location.search);
+  const dealId = params.get('dealId');
+  const entityTypeId = params.get('entityTypeId');
+  const itemId = params.get('itemId');
+  if (dealId) loadTree(dealId);
+  else if (entityTypeId && itemId) loadTreeFromItem(entityTypeId, itemId);
+}
 
 init();
 </script>
