@@ -290,7 +290,7 @@ body{
 .node-type{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:5px;}
 .node-card.is-deal .node-type{color:var(--accent);}
 .node-title{font-size:12.5px;font-weight:600;color:var(--text);line-height:1.35;margin-bottom:9px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:34px;}
-.node-stage{display:inline-flex;align-items:center;gap:5px;border-radius:6px;padding:3px 9px;font-size:10.5px;font-weight:700;font-family:var(--mono);}
+.node-stage{display:inline-flex;align-items:center;gap:5px;border-radius:6px;padding:3px 9px;font-size:10px;font-weight:600;font-family:var(--font);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .stage-process{background:var(--brand-tint);color:var(--brand);}
 .stage-success{background:var(--success-tint);color:var(--success);}
 .stage-fail{background:var(--danger-tint);color:var(--danger);}
@@ -639,7 +639,7 @@ function renderTree(tree, focus) {
   const laidOut = layoutTree(tree);
   const allNodes = flattenNodes(laidOut);
 
-  const NODE_W = 220, NODE_H = 92, COL_GAP = 50, ROW_GAP = 90;
+  const NODE_W = 230, NODE_H = 98, COL_GAP = 50, ROW_GAP = 90;
   const maxX = Math.max(...allNodes.map(n => n.x));
   const maxDepth = Math.max(...allNodes.map(n => n.depth));
   const svgW = (maxX + 1) * (NODE_W + COL_GAP) + COL_GAP;
@@ -669,17 +669,17 @@ function renderTree(tree, focus) {
     const isFocus = focus && !isDeal && n.entityTypeId === focus.entityTypeId && n.id === focus.itemId;
     const typeLabel = isDeal ? 'Сделка' : n.entityName;
     let stageClass = 'stage-process';
-    const sidLower = (n.stageId || '').toLowerCase();
-    if (sidLower.includes('success') || sidLower.includes('won')) stageClass = 'stage-success';
-    if (sidLower.includes('fail') || sidLower.includes('lose')) stageClass = 'stage-fail';
+    if (n.stageSemantics === 'S') stageClass = 'stage-success';
+    if (n.stageSemantics === 'F') stageClass = 'stage-fail';
     const title = (n.title || '').replace(/^[-\s–—]+/, '').replace(/[-\s–—]+$/, '').trim() || `#${n.id}`;
+    const stageLabel = n.stageName || n.stageId || '—';
 
     nodesHtml += `<foreignObject class="tree-node-fo" x="${px(n) - NODE_W/2}" y="${py(n)}" width="${NODE_W}" height="${NODE_H}">
-      <div xmlns="http://www.w3.org/1999/xhtml" class="node-card ${isDeal?'is-deal':''} ${isFocus?'is-focus':''}" onclick="window.open('${esc(n.url)}','_blank')">
+      <div xmlns="http://www.w3.org/1999/xhtml" class="node-card ${isDeal?'is-deal':''} ${isFocus?'is-focus':''}" onclick="window.open('${esc(n.url)}','_blank')" title="${esc(stageLabel)}">
         <span class="node-badge-id">#${n.id}</span>
         <div class="node-type">${esc(typeLabel)}</div>
         <div class="node-title">${esc(title)}</div>
-        <span class="node-stage ${stageClass}"><span class="node-dot"></span>${esc(n.stageId || '—')}</span>
+        <span class="node-stage ${stageClass}"><span class="node-dot"></span>${esc(stageLabel)}</span>
       </div>
     </foreignObject>`;
   }

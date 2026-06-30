@@ -89,22 +89,39 @@ async function findChildrenOfDeal(dealId) {
   return children;
 }
 
-// ── Find children of a smart process item (parentId{type} = itemId) ──────────
+// ── Explicit, confirmed parent-child relations between smart process types ────
+// Format: parentEntityTypeId -> [{ childEntityTypeId, filterField }]
+// Only these specific links represent real business automation chains.
+const EXPLICIT_RELATIONS = {
+  1066: [{ childType: 1070, filterField: 'parentId1066' }],  // Закупки -> Логистика
+  1058: [{ childType: 1074, filterField: 'parentId1058' }],  // Заявка на сервис -> Командировка
+  1050: [{ childType: 1058, filterField: 'parentId1050' }],  // Запланированные работы -> Заявка на сервис
+};
+
+// Types confirmed to be LEAVES (never have smart-process children) —
+// Bitrix24 sometimes auto-populates cross-type parentId{X} fields even without
+// real business automation, so we hard-block lookups for these types.
+const LEAF_TYPES = new Set([1036, 1042, 1046, 1062, 1074]);
+
+// ── Find children of a smart process item (only via EXPLICIT_RELATIONS) ───────
 
 async function findChildrenOfItem(parentEntityTypeId, parentItemId) {
+  if (LEAF_TYPES.has(parentEntityTypeId)) return [];
   const children = [];
-  for (const [entityTypeId, info] of Object.entries(SMART_TYPES)) {
-    if (Number(entityTypeId) === parentEntityTypeId) continue; // skip self-type
-    const filterField = `parentId${parentEntityTypeId}`;
+  const rels = EXPLICIT_RELATIONS[parentEntityTypeId];
+  if (!rels) return children;
+
+  for (const rel of rels) {
+    const info = SMART_TYPES[rel.childType];
     try {
       const data = await b24call('crm.item.list', {
-        entityTypeId: Number(entityTypeId),
-        filter: { [filterField]: parentItemId },
+        entityTypeId: rel.childType,
+        filter: { [rel.filterField]: parentItemId },
         select: ['id', 'title', 'stageId', 'createdTime', 'assignedById'],
       });
       const items = data.result?.items || [];
       for (const item of items) {
-        children.push({ entityTypeId: Number(entityTypeId), entityName: info.name, ...item });
+        children.push({ entityTypeId: rel.childType, entityName: info?.name || `Тип ${rel.childType}`, ...item });
       }
     } catch(e) {
       // skip
@@ -113,7 +130,38 @@ async function findChildrenOfItem(parentEntityTypeId, parentItemId) {
   return children;
 }
 
-// ── Build full tree recursively ───────────────────────────────────────────────
+// ── Stage name resolver (human-readable names instead of raw STATUS_ID) ───────
+
+const stageNameCache = new Map();
+
+async function getStageNames(entityTypeOrDeal, categoryId) {
+  const cacheKey = entityTypeOrDeal === 'deal' ? `deal_${categoryId}` : `${entityTypeOrDeal}_${categoryId}`;
+  if (!stageNameCache.has(cacheKey)) {
+    try {
+      const entityId = entityTypeOrDeal === 'deal'
+        ? (Number(categoryId) === 0 ? 'DEAL_STAGE' : `DEAL_STAGE_${categoryId}`)
+        : `DYNAMIC_${entityTypeOrDeal}_STAGE_${categoryId}`;
+      const data = await b24call('crm.status.list', {
+        filter: { ENTITY_ID: entityId },
+        select: ['STATUS_ID', 'NAME', 'COLOR', 'SEMANTICS'],
+      });
+      const map = {};
+      for (const s of (data.result || [])) {
+        map[s.STATUS_ID] = { name: s.NAME, color: s.COLOR, semantics: s.SEMANTICS };
+      }
+      stageNameCache.set(cacheKey, map);
+    } catch(e) {
+      console.error('getStageNames error:', e.message);
+      stageNameCache.set(cacheKey, {});
+    }
+  }
+  return stageNameCache.get(cacheKey);
+}
+
+async function resolveStageName(entityTypeOrDeal, categoryId, stageId) {
+  const map = await getStageNames(entityTypeOrDeal, categoryId);
+  return map[stageId] || { name: stageId, color: '#8a8886', semantics: null };
+}
 
 async function buildTree(rootType, rootId, depth = 0, maxDepth = 6, visited = new Set()) {
   const key = `${rootType}:${rootId}`;
@@ -124,12 +172,16 @@ async function buildTree(rootType, rootId, depth = 0, maxDepth = 6, visited = ne
   if (rootType === 'deal') {
     const deal = await getDeal(rootId);
     if (!deal) return null;
+    const stageInfo = await resolveStageName('deal', deal.CATEGORY_ID, deal.STAGE_ID);
     node = {
       type: 'deal',
       entityTypeId: 'deal',
       id: rootId,
       title: deal.TITLE || `Сделка #${rootId}`,
       stageId: deal.STAGE_ID,
+      stageName: stageInfo.name,
+      stageColor: stageInfo.color,
+      stageSemantics: stageInfo.semantics,
       categoryId: deal.CATEGORY_ID,
       opportunity: deal.OPPORTUNITY,
       url: `https://crm.prolabsupport.kz/crm/deal/details/${rootId}/`,
@@ -144,6 +196,7 @@ async function buildTree(rootType, rootId, depth = 0, maxDepth = 6, visited = ne
     const item = await getItem(rootType, rootId);
     if (!item) return null;
     const info = SMART_TYPES[rootType];
+    const stageInfo = await resolveStageName(rootType, item.categoryId, item.stageId);
     node = {
       type: 'smart',
       entityTypeId: rootType,
@@ -151,6 +204,9 @@ async function buildTree(rootType, rootId, depth = 0, maxDepth = 6, visited = ne
       id: rootId,
       title: item.title || `#${rootId}`,
       stageId: item.stageId,
+      stageName: stageInfo.name,
+      stageColor: stageInfo.color,
+      stageSemantics: stageInfo.semantics,
       categoryId: item.categoryId,
       url: `https://crm.prolabsupport.kz/crm/type/${rootType}/details/${rootId}/`,
       children: [],
@@ -182,19 +238,24 @@ async function searchDeals(query, limit = 20) {
   }
 }
 
-// ── Find parent of a smart process item (walk up) ─────────────────────────────
+// ── Reverse map: for a given child type, which type+field is its REAL explicit parent ──
+const EXPLICIT_PARENT_OF = {
+  1070: { parentType: 1066, field: 'parentId1066' }, // Логистика <- Закупки
+  1074: { parentType: 1058, field: 'parentId1058' }, // Командировка <- Заявка на сервис
+  1058: { parentType: 1050, field: 'parentId1050' }, // Заявка на сервис <- Запланированные работы (if present)
+};
+
+// ── Find parent of a smart process item (only via confirmed explicit relations or deal) ──
 
 async function findParent(entityTypeId, item) {
-  // Check parentId2 (deal parent)
+  // Check explicit smart-process parent first (more specific than deal)
+  const rel = EXPLICIT_PARENT_OF[entityTypeId];
+  if (rel && item[rel.field]) {
+    return { type: rel.parentType, id: item[rel.field] };
+  }
+  // Fall back to deal parent
   if (item.parentId2) {
     return { type: 'deal', id: item.parentId2 };
-  }
-  // Check parentId{type} for other smart process types
-  for (const otherType of Object.keys(SMART_TYPES)) {
-    const field = `parentId${otherType}`;
-    if (item[field]) {
-      return { type: Number(otherType), id: item[field] };
-    }
   }
   return null;
 }
