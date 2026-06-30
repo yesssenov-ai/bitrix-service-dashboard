@@ -23,6 +23,11 @@ app.use('/auth', require('./routes/auth-routes'));
 // ── Admin routes (admin only) ─────────────────────────────────────────────────
 app.use('/admin', require('./routes/admin-routes'));
 
+// ── Relations module (graph viewer) ───────────────────────────────────────────
+const { router: relationsRouter, handleBitrixWebhook } = require('./routes/relations-routes');
+app.use('/relations', relationsRouter);
+app.post('/webhook/bitrix-update', express.urlencoded({ extended: true }), handleBitrixWebhook);
+
 // ── Login redirect ────────────────────────────────────────────────────────────
 app.get('/login', (_, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 app.get('/admin-panel', requireAuth(['admin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));

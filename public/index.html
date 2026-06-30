@@ -181,6 +181,7 @@ tr.tr:hover td { background:#fafbfd; }
   <span class="h-sub">Сервисные заявки</span>
   <div class="h-right">
     <span class="h-time" id="htime">—</span>
+    <a href="/relations.html" class="btn" style="font-size:12px">🔗 Связи сделок</a>
     <button class="btn" onclick="logout()" style="font-size:12px">Выйти</button>
     <button class="btn" id="btnRef" onclick="load()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
@@ -557,6 +558,9 @@ function renderTable(items){
         </button>
         <a href="${esc(t.bitrixUrl)}" target="_blank" class="act-btn link" title="Открыть в Б24">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+        <a href="/relations.html?entityTypeId=1058&itemId=${t.id}" target="_blank" class="act-btn" title="Дерево связей">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M12 8.5v3M9.8 14l-1.6 1.5M14.2 14l1.6 1.5"/></svg>
         </a>
       </div></td>
     </tr>`;
