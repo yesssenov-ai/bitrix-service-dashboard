@@ -181,6 +181,62 @@ body{
 .deal-card-stage{font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:5px;background:var(--canvas);color:var(--text-2);font-family:var(--mono);}
 .deal-card-sum{font-size:12px;font-weight:700;color:var(--success);font-variant-numeric:tabular-nums;white-space:nowrap;}
 
+.deals-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
+.deals-filter-chip{
+  display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;
+  border:1.5px solid var(--stroke);background:var(--card);font-size:12px;font-weight:600;
+  color:var(--text-2);cursor:pointer;transition:all .15s var(--ease);white-space:nowrap;
+}
+.deals-filter-chip:hover{border-color:var(--stroke-strong);}
+.deals-filter-chip.active{border-color:var(--chip-color,var(--brand));background:var(--chip-bg,var(--brand-tint));color:var(--chip-color,var(--brand));}
+.chip-dot{width:7px;height:7px;border-radius:50%;background:currentColor;}
+
+.deals-mini-search{position:relative;flex:1;min-width:180px;max-width:280px;}
+.deals-mini-search input{
+  width:100%;background:var(--canvas);border:1px solid var(--stroke);border-radius:7px;
+  padding:7px 11px 7px 30px;font-size:12.5px;color:var(--text);font-family:var(--font);outline:none;
+}
+.deals-mini-search input:focus{border-color:var(--brand);background:#fff;}
+.deals-mini-search svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text-3);}
+
+.view-toggle{display:flex;gap:2px;background:var(--canvas);border:1px solid var(--stroke);border-radius:7px;padding:2px;margin-left:auto;}
+.view-toggle button{
+  border:none;background:transparent;padding:5px 9px;border-radius:5px;cursor:pointer;
+  color:var(--text-3);display:flex;align-items:center;transition:all .15s;
+}
+.view-toggle button.active{background:#fff;color:var(--brand);box-shadow:var(--shadow-1);}
+
+.sort-select{
+  background:var(--canvas);border:1px solid var(--stroke);border-radius:7px;
+  padding:6px 28px 6px 10px;font-size:12px;color:var(--text-2);font-family:var(--font);
+  outline:none;cursor:pointer;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23605e5c' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 8px center;
+}
+
+/* Compact list view */
+.deals-list.compact{display:flex;flex-direction:column;gap:0;border:1px solid var(--stroke);border-radius:var(--radius);overflow:hidden;}
+.deals-list.compact .deal-card{
+  border-radius:0;border-left:none;border-right:none;border-top:none;
+  display:flex;align-items:center;gap:14px;padding:10px 14px;
+}
+.deals-list.compact .deal-card:first-child{border-top:1px solid var(--stroke);}
+.deals-list.compact .deal-card:hover{transform:none;}
+.deals-list.compact .deal-card-cat{
+  margin-bottom:0;width:130px;flex-shrink:0;font-size:9.5px;
+  background:var(--cat-color,var(--brand));color:#fff;padding:3px 8px;border-radius:5px;
+  text-align:center;
+}
+.deals-list.compact .deal-card-title{margin-bottom:0;flex:1;min-height:0;-webkit-line-clamp:1;font-size:12.5px;}
+.deals-list.compact .deal-card-footer{flex-shrink:0;gap:10px;}
+.deals-list.compact .deal-card-stage{white-space:nowrap;}
+
+.deals-scroll{max-height:480px;overflow-y:auto;padding-right:4px;}
+.deals-scroll::-webkit-scrollbar{width:8px;}
+.deals-scroll::-webkit-scrollbar-track{background:transparent;}
+.deals-scroll::-webkit-scrollbar-thumb{background:var(--stroke-strong);border-radius:4px;}
+.deals-scroll::-webkit-scrollbar-thumb:hover{background:var(--text-3);}
+
 .deals-empty{
   grid-column:1/-1;text-align:center;padding:40px 24px;color:var(--text-3);
   display:flex;flex-direction:column;align-items:center;gap:10px;font-size:13px;
@@ -318,7 +374,49 @@ body{
         <span class="deals-section-title">Сделки на стадии реализации</span>
         <span class="deals-count-pill" id="dealsCount">0</span>
       </div>
-      <div class="deals-list" id="managerDeals"></div>
+
+      <div class="deals-toolbar">
+        <div class="deals-filter-chip active" data-cat="all" onclick="filterByCategory('all',this)">
+          <span class="chip-dot"></span>Все воронки
+        </div>
+        <div class="deals-filter-chip" data-cat="0" style="--chip-color:#0f6cbd;--chip-bg:#eff6fc" onclick="filterByCategory('0',this)">
+          <span class="chip-dot"></span>Инструменты
+        </div>
+        <div class="deals-filter-chip" data-cat="1" style="--chip-color:#8764b8;--chip-bg:#f3f0fa" onclick="filterByCategory('1',this)">
+          <span class="chip-dot"></span>Расходники
+        </div>
+        <div class="deals-filter-chip" data-cat="2" style="--chip-color:#0e7c3f;--chip-bg:#dff6dd" onclick="filterByCategory('2',this)">
+          <span class="chip-dot"></span>Тренинг
+        </div>
+        <div class="deals-filter-chip" data-cat="3" style="--chip-color:#C53B2F;--chip-bg:#fdf1ef" onclick="filterByCategory('3',this)">
+          <span class="chip-dot"></span>Сервис
+        </div>
+
+        <div class="deals-mini-search">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="dealsMiniSearch" placeholder="Фильтр по названию или ID…" oninput="renderDeals()">
+        </div>
+
+        <select class="sort-select" id="dealsSortSelect" onchange="renderDeals()">
+          <option value="date_desc">Сначала новые</option>
+          <option value="date_asc">Сначала старые</option>
+          <option value="sum_desc">По сумме ↓</option>
+          <option value="sum_asc">По сумме ↑</option>
+        </select>
+
+        <div class="view-toggle">
+          <button class="active" id="viewGrid" onclick="setView('grid')" title="Карточки">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          </button>
+          <button id="viewList" onclick="setView('list')" title="Список">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="deals-scroll">
+        <div class="deals-list" id="managerDeals"></div>
+      </div>
     </div>
   </div>
 
@@ -337,8 +435,69 @@ body{
 let debT = null;
 let selectedManagerId = null;
 let selectedDealId = null;
+let allManagerDeals = [];
+let currentCatFilter = 'all';
+let currentView = 'grid';
 
 const CAT_COLORS = { 0:'#0f6cbd', 1:'#8764b8', 2:'#0e7c3f', 3:'#C53B2F' };
+
+function filterByCategory(cat, el) {
+  currentCatFilter = cat;
+  document.querySelectorAll('.deals-filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderDeals();
+}
+
+function setView(view) {
+  currentView = view;
+  document.getElementById('viewGrid').classList.toggle('active', view === 'grid');
+  document.getElementById('viewList').classList.toggle('active', view === 'list');
+  renderDeals();
+}
+
+function renderDeals() {
+  const wrap = document.getElementById('managerDeals');
+  const search = document.getElementById('dealsMiniSearch').value.trim().toLowerCase();
+  const sortVal = document.getElementById('dealsSortSelect').value;
+
+  let filtered = allManagerDeals.filter(d => {
+    if (currentCatFilter !== 'all' && String(d.categoryId) !== currentCatFilter) return false;
+    if (search) {
+      const hay = (d.title || '').toLowerCase() + ' #' + d.id;
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+
+  filtered.sort((a, b) => {
+    if (sortVal === 'date_desc') return new Date(b.dateCreate) - new Date(a.dateCreate);
+    if (sortVal === 'date_asc') return new Date(a.dateCreate) - new Date(b.dateCreate);
+    if (sortVal === 'sum_desc') return (b.opportunity||0) - (a.opportunity||0);
+    if (sortVal === 'sum_asc') return (a.opportunity||0) - (b.opportunity||0);
+    return 0;
+  });
+
+  wrap.className = 'deals-list' + (currentView === 'list' ? ' compact' : '');
+  document.getElementById('dealsCount').textContent = filtered.length;
+
+  if (!filtered.length) {
+    wrap.innerHTML = `<div class="deals-empty">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      Ничего не найдено по этому фильтру
+    </div>`;
+    return;
+  }
+
+  wrap.innerHTML = filtered.map(deal => `
+    <div class="deal-card ${selectedDealId==deal.id?'active':''}" id="deal-${deal.id}" style="--cat-color:${CAT_COLORS[deal.categoryId]||'#0f6cbd'}" onclick="selectDealCard(${deal.id})">
+      <div class="deal-card-cat">${esc(deal.categoryName)}</div>
+      <div class="deal-card-title">#${deal.id} — ${esc(deal.title || 'Без названия')}</div>
+      <div class="deal-card-footer">
+        <span class="deal-card-stage">${esc(deal.stageId)}</span>
+        <span class="deal-card-sum">${deal.opportunity ? Number(deal.opportunity).toLocaleString('ru') + ' ₸' : ''}</span>
+      </div>
+    </div>`).join('');
+}
 
 async function loadManagers() {
   try {
@@ -355,22 +514,26 @@ async function onManagerChange() {
   const managerId = sel.value;
   const section = document.getElementById('dealsSection');
   const wrap = document.getElementById('managerDeals');
-  const countEl = document.getElementById('dealsCount');
 
   if (!managerId) { section.style.display = 'none'; return; }
 
   section.style.display = '';
   wrap.innerHTML = '<div class="deals-empty"><div class="spinner" style="width:22px;height:22px"></div> Загружаем сделки…</div>';
   selectedManagerId = managerId;
+  currentCatFilter = 'all';
+  document.querySelectorAll('.deals-filter-chip').forEach(c => c.classList.remove('active'));
+  document.querySelector('[data-cat="all"]').classList.add('active');
+  document.getElementById('dealsMiniSearch').value = '';
 
   try {
     const r = await fetch('/relations/manager-deals/' + managerId);
     const d = await r.json();
-    if (!d.ok) { wrap.innerHTML = `<div class="deals-empty">${esc(d.error)}</div>`; countEl.textContent = '0'; return; }
+    if (!d.ok) { wrap.innerHTML = `<div class="deals-empty">${esc(d.error)}</div>`; return; }
 
-    countEl.textContent = d.deals.length;
+    allManagerDeals = d.deals;
 
     if (!d.deals.length) {
+      document.getElementById('dealsCount').textContent = '0';
       wrap.innerHTML = `<div class="deals-empty">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6v6H9z"/></svg>
         Нет сделок на стадии реализации (Contract → Money/Document)
@@ -378,15 +541,7 @@ async function onManagerChange() {
       return;
     }
 
-    wrap.innerHTML = d.deals.map(deal => `
-      <div class="deal-card" id="deal-${deal.id}" style="--cat-color:${CAT_COLORS[deal.categoryId]||'#0f6cbd'}" onclick="selectDealCard(${deal.id})">
-        <div class="deal-card-cat">${esc(deal.categoryName)}</div>
-        <div class="deal-card-title">#${deal.id} — ${esc(deal.title || 'Без названия')}</div>
-        <div class="deal-card-footer">
-          <span class="deal-card-stage">${esc(deal.stageId)}</span>
-          <span class="deal-card-sum">${deal.opportunity ? Number(deal.opportunity).toLocaleString('ru') + ' ₸' : ''}</span>
-        </div>
-      </div>`).join('');
+    renderDeals();
   } catch(e) {
     wrap.innerHTML = `<div class="deals-empty">Ошибка: ${esc(e.message)}</div>`;
   }
