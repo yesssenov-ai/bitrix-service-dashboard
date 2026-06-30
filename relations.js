@@ -323,8 +323,12 @@ async function getDealsByManager(assignedById) {
         select: ['ID', 'TITLE', 'STAGE_ID', 'CATEGORY_ID', 'OPPORTUNITY', 'DATE_CREATE', 'COMPANY_ID'],
         order: { DATE_CREATE: 'DESC' },
       });
+      // Resolve stage names once per category (cached)
+      const stageMap = await getStageNames('deal', categoryId);
       const deals = (data.result || []).map(d => ({
         id: d.ID, title: d.TITLE, stageId: d.STAGE_ID,
+        stageName: stageMap[d.STAGE_ID]?.name || d.STAGE_ID,
+        stageColor: stageMap[d.STAGE_ID]?.color || '#8a8886',
         categoryId: Number(categoryId), categoryName: cfg.name,
         opportunity: d.OPPORTUNITY, dateCreate: d.DATE_CREATE, companyId: d.COMPANY_ID,
       }));
