@@ -87,6 +87,24 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
 .legend{display:flex;gap:16px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);font-size:12px;color:var(--text-3);flex-wrap:wrap;}
 .legend-item{display:flex;align-items:center;gap:6px;}
 .legend-dot{width:10px;height:10px;border-radius:3px;}
+
+/* Manager picker */
+.picker-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.fsel{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;color:var(--text);font-family:var(--font);outline:none;cursor:pointer;min-width:220px;}
+.fsel:focus{border-color:var(--accent);}
+.divider-or{color:var(--text-4);font-size:12px;font-weight:600;text-transform:uppercase;padding:0 4px;}
+
+/* Manager deals list */
+.deals-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-top:16px;}
+.deal-card{background:var(--white);border:1.5px solid var(--border);border-radius:9px;padding:14px;cursor:pointer;transition:all .15s;}
+.deal-card:hover{border-color:var(--accent);box-shadow:var(--shadow-sm);transform:translateY(-1px);}
+.deal-card.active{border-color:var(--accent);background:var(--accent-light);}
+.deal-card-cat{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-4);margin-bottom:5px;}
+.deal-card-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.deal-card-footer{display:flex;align-items:center;justify-content:space-between;}
+.deal-card-stage{font-size:11px;font-weight:600;padding:2px 8px;border-radius:5px;background:var(--bg);color:var(--text-3);}
+.deal-card-sum{font-size:12px;font-weight:700;color:var(--green);}
+.deals-empty{text-align:center;padding:32px;color:var(--text-4);font-size:13px;}
 </style>
 </head>
 <body>
@@ -124,6 +142,16 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
     </div>
   </div>
 
+  <div class="search-card">
+    <div class="picker-row">
+      <select class="fsel" id="managerSelect" onchange="onManagerChange()">
+        <option value="">— Выбрать менеджера —</option>
+      </select>
+      <span style="font-size:12px;color:var(--text-4)" id="dealsCount"></span>
+    </div>
+    <div class="deals-list" id="managerDeals"></div>
+  </div>
+
   <div class="graph-card" id="graphCard">
     <div class="empty">
       <div class="empty-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><path d="M12 9v3M9.5 15l-1.8 1.5M14.5 15l1.8 1.5"/></svg></div>
@@ -135,9 +163,64 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
 
 <script>
 let debT = null;
+let selectedManagerId = null;
+let selectedDealId = null;
 const STAGE_COLORS = {
   'P': 'stage-process', 'S': 'stage-success', 'F': 'stage-fail',
 };
+
+async function loadManagers() {
+  try {
+    const r = await fetch('/relations/managers');
+    const d = await r.json();
+    if (!d.ok) return;
+    const sel = document.getElementById('managerSelect');
+    d.managers.forEach(m => sel.add(new Option(m.name, m.id)));
+  } catch(e) { console.error(e); }
+}
+
+async function onManagerChange() {
+  const sel = document.getElementById('managerSelect');
+  const managerId = sel.value;
+  const wrap = document.getElementById('managerDeals');
+  const countEl = document.getElementById('dealsCount');
+  if (!managerId) { wrap.innerHTML = ''; countEl.textContent = ''; return; }
+
+  wrap.innerHTML = '<div class="deals-empty"><div class="loading-spin"></div> Загрузка сделок…</div>';
+  selectedManagerId = managerId;
+
+  try {
+    const r = await fetch('/relations/manager-deals/' + managerId);
+    const d = await r.json();
+    if (!d.ok) { wrap.innerHTML = `<div class="deals-empty">${esc(d.error)}</div>`; return; }
+
+    if (!d.deals.length) {
+      wrap.innerHTML = '<div class="deals-empty">Нет сделок на стадии реализации (Contract → Money/Document)</div>';
+      countEl.textContent = '';
+      return;
+    }
+
+    countEl.textContent = `${d.deals.length} сделок в реализации`;
+    wrap.innerHTML = d.deals.map(deal => `
+      <div class="deal-card" id="deal-${deal.id}" onclick="selectDealCard(${deal.id})">
+        <div class="deal-card-cat">${esc(deal.categoryName)}</div>
+        <div class="deal-card-title">#${deal.id} — ${esc(deal.title || 'Без названия')}</div>
+        <div class="deal-card-footer">
+          <span class="deal-card-stage">${esc(deal.stageId)}</span>
+          <span class="deal-card-sum">${deal.opportunity ? Number(deal.opportunity).toLocaleString('ru') + ' ₸' : ''}</span>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    wrap.innerHTML = `<div class="deals-empty">Ошибка: ${esc(e.message)}</div>`;
+  }
+}
+
+function selectDealCard(dealId) {
+  document.querySelectorAll('.deal-card').forEach(c => c.classList.remove('active'));
+  document.getElementById('deal-' + dealId)?.classList.add('active');
+  selectedDealId = dealId;
+  loadTree(dealId);
+}
 
 async function init() {
   try {
@@ -146,6 +229,8 @@ async function init() {
     const d = await r.json();
     document.getElementById('currentUser').textContent = d.user.displayName;
   } catch(e) { window.location.href = '/login.html'; }
+
+  loadManagers();
 
   // Check URL params for direct link
   const params = new URLSearchParams(window.location.search);

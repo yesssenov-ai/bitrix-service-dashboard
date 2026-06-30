@@ -239,3 +239,41 @@ async function isFinalStage(entityTypeId, categoryId, stageId) {
 
 module.exports.getStageSemantics = getStageSemantics;
 module.exports.isFinalStage = isFinalStage;
+
+// ── Sales pipeline filter (deals in "realization" stages) ─────────────────────
+
+const SALES_CATEGORIES = {
+  0: { name: 'Продажа инструментов', stages: ['FINAL_INVOICE','1','UC_Q9J6VV','UC_9MBFR2','2','3'] },
+  1: { name: 'Продажа расходных материалов', stages: ['C1:FINAL_INVOICE','C1:1','C1:UC_3MVK90','C1:UC_3SCB5K','C1:2','C1:3'] },
+  2: { name: 'Продажа услуг тренинг-центра', stages: ['C2:FINAL_INVOICE','C2:1','C2:2'] },
+  3: { name: 'Продажа сервиса', stages: ['C3:FINAL_INVOICE','C3:UC_YYTFYG','C3:2'] },
+};
+
+async function getDealsByManager(assignedById) {
+  const allDeals = [];
+  for (const [categoryId, cfg] of Object.entries(SALES_CATEGORIES)) {
+    try {
+      const data = await b24call('crm.deal.list', {
+        filter: {
+          ASSIGNED_BY_ID: assignedById,
+          CATEGORY_ID: categoryId,
+          '@STAGE_ID': cfg.stages,
+        },
+        select: ['ID', 'TITLE', 'STAGE_ID', 'CATEGORY_ID', 'OPPORTUNITY', 'DATE_CREATE', 'COMPANY_ID'],
+        order: { DATE_CREATE: 'DESC' },
+      });
+      const deals = (data.result || []).map(d => ({
+        id: d.ID, title: d.TITLE, stageId: d.STAGE_ID,
+        categoryId: Number(categoryId), categoryName: cfg.name,
+        opportunity: d.OPPORTUNITY, dateCreate: d.DATE_CREATE, companyId: d.COMPANY_ID,
+      }));
+      allDeals.push(...deals);
+    } catch(e) {
+      console.error(`getDealsByManager error (category=${categoryId}):`, e.message);
+    }
+  }
+  return allDeals.sort((a, b) => new Date(b.dateCreate) - new Date(a.dateCreate));
+}
+
+module.exports.SALES_CATEGORIES = SALES_CATEGORIES;
+module.exports.getDealsByManager = getDealsByManager;

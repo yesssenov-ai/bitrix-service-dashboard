@@ -3,6 +3,7 @@ const router = express.Router();
 const { requireAuth } = require('../auth');
 const {
   SMART_TYPES, getItem, buildTree, searchDeals, findParent, isFinalStage, WEBHOOK_TOKEN,
+  getDealsByManager, SALES_CATEGORIES,
 } = require('../relations');
 const { tgMgt } = require('../notifications');
 
@@ -18,6 +19,44 @@ router.get('/search', requireAuth(), async (req, res) => {
       opportunity: d.OPPORTUNITY, dateCreate: d.DATE_CREATE,
     })),
   });
+});
+
+// ── GET /relations/managers ───────────────────────────────────────────────────
+router.get('/managers', requireAuth(), (req, res) => {
+  // Reuse USERS dict via require from server context - import directly
+  const USERS = {
+    1:'Администратор',4:'Куаныш Есенов',7:'Мирас Актайлаков',8:'Рустам Абылкасимов',
+    9:'Мурат Булегенов',10:'Асылбек Ожикен',11:'Гаухар Ахметжан',12:'Айжан Байжигитова',
+    13:'Назерке Марат',14:'Канат Жунусов',15:'Семен Жаров',16:'Дамели Садырова',
+    18:'Александр Якунин',19:'Ерлан Адильбеков',20:'Айнур Разакова',21:'Жадыра Сагитова',
+    22:'Данияр Орахбаев',23:'Бахытгуль Даут',24:'Шокан Рымбек',25:'Рауан Жаксылык',
+    26:'Азамат Аннабаев',27:'Маржан Доскенова',28:'Айнур Карпсеитова',29:'Борис Егоров',
+    31:'Куаныш Нурмаганбетов',32:'Акерке Шотанова',33:'Аннель Лекер',34:'Гульнур Касымханова',
+    36:'Аруна Болатова',37:'Акгулим Самиголлаева',38:'Талант Амангелді',39:'Мансұр Сейтжанұлы',
+    40:'Каха Чоговадзе',41:'Наталья Зенченко',44:'Бақытжан Шаймұрат',45:'Азат Манат',
+    46:'Жандос Кунаев',47:'Дмитрий Сорокин',48:'Дарын Негметжанов',50:'Нурбек Ибраемов',
+    55:'Нурхат Оразгалиев',67:'Айнель Сеитова',68:'Игорь Бодров',71:'Азамат Алиев',
+    73:'Ерасыл Махаш',76:'Аскат Көбей',77:'Адиль Тасмагамбетов',78:'Дмитрий Волков',
+    79:'Арман Манаспаев',85:'Максим Мазняк',86:'Аманжол Сыздыков',88:'Асем Жарылгап',90:'Ерқанат Сырғабек',
+  };
+  const managers = Object.entries(USERS)
+    .filter(([id]) => Number(id) > 10)
+    .map(([id, name]) => ({ id: Number(id), name }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  res.json({ ok: true, managers });
+});
+
+// ── GET /relations/manager-deals/:managerId ───────────────────────────────────
+router.get('/manager-deals/:managerId', requireAuth(), async (req, res) => {
+  try {
+    const managerId = parseInt(req.params.managerId);
+    if (!managerId) return res.status(400).json({ ok: false, error: 'Invalid manager ID' });
+    const deals = await getDealsByManager(managerId);
+    res.json({ ok: true, deals, categories: SALES_CATEGORIES });
+  } catch(err) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 // ── GET /relations/tree/:dealId ───────────────────────────────────────────────
