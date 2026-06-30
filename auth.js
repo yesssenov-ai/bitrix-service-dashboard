@@ -50,6 +50,11 @@ async function initDB() {
       telegram_username VARCHAR(200),
       linked_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS ticketsmodule_notified_overdue (
+      ticket_id INTEGER PRIMARY KEY,
+      notified_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
 
   // Create default admin if no users exist

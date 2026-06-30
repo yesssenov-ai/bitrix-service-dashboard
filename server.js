@@ -357,14 +357,38 @@ async function checkNewAndOverdue() {
     }
     lastKnownTicketIds = currentIds;
 
-    // Overdue NEW: movedTime > 8 hours ago
+    // Clean up DB: remove tickets that left the NEW stage (no longer overdue-relevant)
+    if (currentIds.size > 0) {
+      const idsArray = [...currentIds];
+      await pool.query(
+        `DELETE FROM ticketsmodule_notified_overdue WHERE ticket_id NOT IN (${idsArray.map((_,i)=>'$'+(i+1)).join(',')})`,
+        idsArray
+      ).catch(()=>{});
+    } else {
+      await pool.query('DELETE FROM ticketsmodule_notified_overdue').catch(()=>{});
+    }
+
+    // Overdue NEW: movedTime > 8 hours ago, notify only ONCE per ticket (persisted in DB)
     const EIGHT_HOURS = 8 * 60 * 60 * 1000;
-    const overdueNew = enriched.filter(t => {
+    const candidateOverdue = enriched.filter(t => {
       if (!t.movedTime) return false;
       return (Date.now() - new Date(t.movedTime)) > EIGHT_HOURS;
     });
-    if (overdueNew.length > 0) {
-      await notifyOverdueNew(overdueNew);
+
+    const newlyOverdue = [];
+    for (const t of candidateOverdue) {
+      const exists = await pool.query('SELECT 1 FROM ticketsmodule_notified_overdue WHERE ticket_id=$1', [t.id]);
+      if (exists.rows.length === 0) newlyOverdue.push(t);
+    }
+
+    if (newlyOverdue.length > 0) {
+      for (const t of newlyOverdue) {
+        await pool.query(
+          'INSERT INTO ticketsmodule_notified_overdue (ticket_id) VALUES ($1) ON CONFLICT (ticket_id) DO NOTHING',
+          [t.id]
+        );
+      }
+      await notifyOverdueNew(newlyOverdue);
     }
   } catch(e) {
     console.error('checkNewAndOverdue error:', e.message);
