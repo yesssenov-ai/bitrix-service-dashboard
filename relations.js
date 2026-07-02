@@ -46,8 +46,13 @@ function flattenInto(parts, obj, prefix) {
 async function b24call(method, params = {}) {
   const parts = [];
   flattenInto(parts, params, '');
-  const url = `${BITRIX_WEBHOOK}${method}.json?${parts.join('&')}`;
-  const res = await fetch(url);
+  const body = parts.join('&');
+  const url = `${BITRIX_WEBHOOK}${method}.json`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
   if (!res.ok) throw new Error(`Bitrix API error: ${res.status}`);
   return res.json();
 }

@@ -59,8 +59,13 @@ function flattenInto(parts, obj, prefix) {
 async function b24(method, params = {}) {
   const parts = [];
   flattenInto(parts, params, '');
-  const url = `${BITRIX_WEBHOOK}${method}.json?${parts.join('&')}`;
-  const res = await fetch(url);
+  const body = parts.join('&');
+  const url = `${BITRIX_WEBHOOK}${method}.json`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
   if (!res.ok) throw new Error(`Bitrix API error: ${res.status}`);
   return res.json();
 }
@@ -339,8 +344,12 @@ async function checkNewAndOverdue() {
       order: { createdTime: 'DESC' },
       start: 0,
     }, '');
-    const url = `${BITRIX_WEBHOOK}crm.item.list.json?${parts.join('&')}`;
-    const res = await fetch(url);
+    const url = `${BITRIX_WEBHOOK}crm.item.list.json`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: parts.join('&'),
+    });
     const data = await res.json();
     const items = data.result?.items || [];
     const enriched = items.map(t => enrichItem(t));
@@ -426,8 +435,12 @@ initDB().then(()=>{
           order: { createdTime: 'DESC' },
           start: 0,
         }, '');
-        const url = `${BITRIX_WEBHOOK}crm.item.list.json?${parts.join('&')}`;
-        const res = await fetch(url);
+        const url = `${BITRIX_WEBHOOK}crm.item.list.json`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: parts.join('&'),
+        });
         const data = await res.json();
         const items = (data.result?.items || []).map(t => enrichItem(t));
         const currentIds = new Set(items.map(t => t.id));
