@@ -20,23 +20,48 @@ router.get('/map-data', requireAuth(), async (req, res) => {
       console.log('🔄 Loading equipment from Б24 1042...');
 
       // 1. Fetch all equipment from 1042
-      const rawItems = await fetchAllEquipment(b24callFn);
+      let rawItems = [];
+      try {
+        rawItems = await fetchAllEquipment(b24callFn);
+        console.log(`✅ Loaded ${rawItems.length} equipment items`);
+      } catch(e) {
+        console.error('fetchAllEquipment error:', e.message);
+        return res.status(500).json({ ok: false, error: 'Ошибка загрузки оборудования из Б24: ' + e.message });
+      }
+
       const equipmentMap = {};
       for (const item of rawItems) equipmentMap[item.id] = item;
 
-      // 2. Link active service tickets to equipment via ufCrm8_1732855747
-      await fetchAndLinkTickets(equipmentMap, b24callFn);
-
-      // 3. Fetch company names
-      const companyIds = [...new Set(rawItems.map(e => e.companyId).filter(Boolean))];
-      const companyNames = await fetchCompanyNames(companyIds, b24callFn);
-      for (const item of rawItems) {
-        if (item.companyId) item.companyName = companyNames[item.companyId] || null;
+      // 2. Link active service tickets
+      try {
+        await fetchAndLinkTickets(equipmentMap, b24callFn);
+        console.log('✅ Tickets linked');
+      } catch(e) {
+        console.error('fetchAndLinkTickets error:', e.message);
+        // Non-fatal — continue without tickets
       }
 
-      // 4. Geocode addresses (cached in DB)
-      const withCoords = await geocodeEquipment(rawItems, pool);
-      equipmentCache = withCoords;
+      // 3. Fetch company names
+      try {
+        const companyIds = [...new Set(rawItems.map(e => e.companyId).filter(Boolean))];
+        const companyNames = await fetchCompanyNames(companyIds, b24callFn);
+        for (const item of rawItems) {
+          if (item.companyId) item.companyName = companyNames[item.companyId] || null;
+        }
+        console.log('✅ Company names loaded');
+      } catch(e) {
+        console.error('fetchCompanyNames error:', e.message);
+        // Non-fatal
+      }
+
+      // 4. Geocode addresses
+      try {
+        const withCoords = await geocodeEquipment(rawItems, pool);
+        equipmentCache = withCoords;
+      } catch(e) {
+        console.error('geocodeEquipment error:', e.message);
+        equipmentCache = rawItems.map(i => ({ ...i, lat: null, lng: null }));
+      }
       cacheTimestamp = now;
     }
 
