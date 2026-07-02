@@ -117,3 +117,19 @@ function canEdit(user, ticket) {
 }
 
 module.exports = { pool, initDB, auditLog, requireAuth, canEdit, bcrypt, jwt, speakeasy, JWT_SECRET, SESSION_HOURS };
+
+// Equipment map cache table - added to initDB separately
+async function initEquipmentMapDB(pool) {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ticketsmodule_equipment_geo (
+      item_id INTEGER PRIMARY KEY,
+      address TEXT,
+      lat DOUBLE PRECISION,
+      lng DOUBLE PRECISION,
+      geocoded_at TIMESTAMPTZ DEFAULT NOW(),
+      geocode_failed BOOLEAN DEFAULT false
+    );
+  `);
+}
+
+module.exports.initEquipmentMapDB = initEquipmentMapDB;

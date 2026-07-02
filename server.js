@@ -6,6 +6,7 @@ const cookieParser = require('cookie-parser');
 const { initDB, requireAuth, auditLog, canEdit, pool } = require('./auth');
 const { tgMgt, tgOps, tgBoth, notifyNewTicket, notifyOverdueNew } = require('./notifications');
 const telegramLinkBot = require('./telegram-link-bot');
+const equipmentRoutes = require('./routes/equipment-routes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -23,6 +24,10 @@ app.use('/auth', require('./routes/auth-routes'));
 
 // ── Admin routes (admin only) ─────────────────────────────────────────────────
 app.use('/admin', require('./routes/admin-routes'));
+
+// ── Equipment map module ──────────────────────────────────────────────────────
+equipmentRoutes.setB24(b24);
+app.use('/equipment', equipmentRoutes.router);
 
 // ── Relations module (graph viewer) ───────────────────────────────────────────
 const { router: relationsRouter, handleBitrixWebhook } = require('./routes/relations-routes');
@@ -394,6 +399,13 @@ async function checkNewAndOverdue() {
     console.error('checkNewAndOverdue error:', e.message);
   }
 }
+
+const { initEquipmentMapDB } = require('./auth');
+
+initDB().then(async ()=>{
+  const { pool: dbPool } = require('./auth');
+  await initEquipmentMapDB(dbPool).catch(e => console.error('equipmentMapDB init error:', e.message));
+}).then(()=>{}).catch(()=>{});
 
 initDB().then(()=>{
   app.listen(PORT, ()=>{
