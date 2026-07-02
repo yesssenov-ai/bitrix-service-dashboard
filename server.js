@@ -56,18 +56,33 @@ function flattenInto(parts, obj, prefix) {
   }
 }
 
-async function b24(method, params = {}) {
+async function b24(method, params = {}, retries = 3) {
   const parts = [];
   flattenInto(parts, params, '');
   const body = parts.join('&');
   const url = `${BITRIX_WEBHOOK}${method}.json`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  });
-  if (!res.ok) throw new Error(`Bitrix API error: ${res.status}`);
-  return res.json();
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept-Encoding': 'identity',
+        },
+        body,
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (!res.ok) throw new Error(`Bitrix API error: ${res.status}`);
+      return res.json();
+    } catch(e) {
+      if (attempt === retries) throw e;
+      console.warn(`b24 ${method} attempt ${attempt} failed: ${e.message}, retrying...`);
+      await new Promise(r => setTimeout(r, 1000 * attempt));
+    }
+  }
 }
 
 // tg functions from notifications module
