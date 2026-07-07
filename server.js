@@ -284,8 +284,9 @@ app.post('/api/remind', requireAuth(['admin','coordinator']), async (req, res) =
 
     const sendReminder=async()=>{
       const tgText=`🔔 <b>Напоминание по заявке #${ticketId}</b>\n📋 ${cleanTitle}\n${message?`📝 ${message}\n`:''}👤 От: ${authorName}\n🔗 <a href="${t.bitrixUrl}">Открыть в Битрикс24</a>`;
-      const chat=targetChat==='mgt'?TG_MGT:targetChat==='both'?null:TG_OPS;
-      if(chat===null) await tgBoth(tgText); else await tgSend(chat,tgText);
+      if(targetChat==='mgt') await tgMgt(tgText);
+      else if(targetChat==='both') await tgBoth(tgText);
+      else await tgOps(tgText);
     };
 
     const delay=Math.max(0,Math.min(parseInt(delayMinutes)||0,1440))*60*1000;
