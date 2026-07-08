@@ -89,6 +89,7 @@ async function b24(method, params = {}, retries = 3) {
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const STAGES = {
+  'DT1058_11:UC_N8RQ0V': { name:'Заявки клиентов',      color:'#468ee5', order:0, active:true },
   'DT1058_11:NEW':         { name:'Необработанные',      color:'#22B9FF', order:1, active:true },
   'DT1058_11:PREPARATION': { name:'Досбор / Назначение', color:'#88B9FF', order:2, active:true },
   'DT1058_11:CLIENT':      { name:'Заявка в работе',     color:'#10e5fc', order:3, active:true },
@@ -160,9 +161,10 @@ function enrichItem(t) {
 // ── GET /api/tickets — requires auth ─────────────────────────────────────────
 app.get('/api/tickets', requireAuth(), async (req, res) => {
   try {
-    const { urgent, overdue, search, engineer, coordinator, serviceType, presetSvcTypes } = req.query;
+    const { urgent, overdue, search, engineer, coordinator, serviceType, presetSvcTypes, stageFilter } = req.query;
     const filter = { categoryId: CATEGORY_ID };
     filter.stageId = Object.entries(STAGES).filter(([,v])=>v.active).map(([k])=>k);
+    if (stageFilter && stageFilter !== 'all') filter.stageId = [stageFilter];
     if (urgent && urgent!=='all') filter['ufCrm8_1732856252874']=urgent;
     if (overdue==='yes') filter['ufCrm8_1732856215147']='1807';
     if (serviceType && serviceType!=='all') filter['ufCrm8_1744300223']=serviceType;
@@ -205,7 +207,7 @@ app.get('/api/tickets', requireAuth(), async (req, res) => {
     // Preset counts
     const allEnriched=items.map(t=>enrichItem(t));
     const PRESET_SVC={
-      tickets:new Set(['619','114','4']),
+      tickets:new Set(['619']),
       docs:new Set(['402','111']),
       obligations:new Set(['103','104','105','106','108','109','110']),
     };
@@ -347,28 +349,32 @@ const notifiedNewTickets = new Set();
 let lastKnownTicketIds = new Set();
 let isFirstLoad = true;
 
+const NEW_ENTRY_STAGES = ['DT1058_11:UC_N8RQ0V', 'DT1058_11:NEW'];
+
 async function checkNewAndOverdue() {
   try {
-    // Fetch all NEW stage tickets
-    const parts = [];
-    flattenInto(parts, {
-      entityTypeId: ENTITY_TYPE_ID,
-      filter: { categoryId: CATEGORY_ID, stageId: 'DT1058_11:NEW' },
-      select: ['id','title','stageId','createdTime','movedTime','assignedById',
-        'ufCrm8_1744300223','ufCrm8_1732856252874','ufCrm8_1732856215147',
-        'ufCrm8_1760688207256'],
-      order: { createdTime: 'DESC' },
-      start: 0,
-    }, '');
-    const url = `${BITRIX_WEBHOOK}crm.item.list.json`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: parts.join('&'),
-    });
-    const data = await res.json();
-    const items = data.result?.items || [];
-    const enriched = items.map(t => enrichItem(t));
+    // Fetch tickets from BOTH entry stages
+    const enriched = [];
+    for (const stageId of NEW_ENTRY_STAGES) {
+      const parts = [];
+      flattenInto(parts, {
+        entityTypeId: ENTITY_TYPE_ID,
+        filter: { categoryId: CATEGORY_ID, stageId },
+        select: ['id','title','stageId','createdTime','movedTime','assignedById',
+          'ufCrm8_1744300223','ufCrm8_1732856252874','ufCrm8_1732856215147',
+          'ufCrm8_1760688207256'],
+        order: { createdTime: 'DESC' },
+        start: 0,
+      }, '');
+      const url = `${BITRIX_WEBHOOK}crm.item.list.json`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept-Encoding': 'identity' },
+        body: parts.join('&'),
+      });
+      const data = await res.json();
+      enriched.push(...(data.result?.items || []).map(t => enrichItem(t)));
+    }
 
     const currentIds = new Set(enriched.map(t => t.id));
 
@@ -438,27 +444,30 @@ initDB().then(()=>{
     // Check immediately then every hour
     checkNewAndOverdue();
     setInterval(checkNewAndOverdue, 60 * 60 * 1000);
-    // Also check for new tickets every 2 minutes
+    // Also check for new tickets every 30 minutes
     setInterval(async () => {
       try {
-        const parts = [];
-        flattenInto(parts, {
-          entityTypeId: ENTITY_TYPE_ID,
-          filter: { categoryId: CATEGORY_ID, stageId: 'DT1058_11:NEW' },
-          select: ['id','title','stageId','createdTime','movedTime','assignedById',
-            'ufCrm8_1744300223','ufCrm8_1732856252874','ufCrm8_1732856215147',
-            'ufCrm8_1760688207256'],
-          order: { createdTime: 'DESC' },
-          start: 0,
-        }, '');
-        const url = `${BITRIX_WEBHOOK}crm.item.list.json`;
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: parts.join('&'),
-        });
-        const data = await res.json();
-        const items = (data.result?.items || []).map(t => enrichItem(t));
+        const items = [];
+        for (const stageId of NEW_ENTRY_STAGES) {
+          const parts = [];
+          flattenInto(parts, {
+            entityTypeId: ENTITY_TYPE_ID,
+            filter: { categoryId: CATEGORY_ID, stageId },
+            select: ['id','title','stageId','createdTime','movedTime','assignedById',
+              'ufCrm8_1744300223','ufCrm8_1732856252874','ufCrm8_1732856215147',
+              'ufCrm8_1760688207256'],
+            order: { createdTime: 'DESC' },
+            start: 0,
+          }, '');
+          const url = `${BITRIX_WEBHOOK}crm.item.list.json`;
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept-Encoding': 'identity' },
+            body: parts.join('&'),
+          });
+          const data = await res.json();
+          items.push(...(data.result?.items || []).map(t => enrichItem(t)));
+        }
         const currentIds = new Set(items.map(t => t.id));
         if (!isFirstLoad) {
           for (const t of items) {

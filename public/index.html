@@ -272,7 +272,7 @@ tr.tr:hover td { background:#fafbfd; }
       <option value="all">Все заявки</option>
       <option value="yes">⚠ Только просроченные</option>
     </select>
-    <select class="fsel" id="fstage" onchange="load()">
+    <select class="fsel" id="fstage" onchange="onStageChange()">
       <option value="all">Все стадии</option>
       <option value="DT1058_11:UC_N8RQ0V">🔵 Заявки клиентов</option>
       <option value="DT1058_11:NEW">🔵 Необработанные</option>
@@ -404,6 +404,14 @@ const PRESETS = {
 let curPreset='tickets', dbt=null, allStages={}, allUsers=[], curTicketId=null, curTab='remind', curChat='ops';
 
 // ── Preset ────────────────────────────────────────────────────────────────────
+
+function onStageChange() {
+  // Reset to "all" preset when filtering by stage
+  curPreset = 'all';
+  document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('active'));
+  document.querySelector('[data-preset="all"]')?.classList.add('active');
+  load();
+}
 
 function selectPreset(preset, el) {
   if(preset==='reset'){resetFilters();return;}
