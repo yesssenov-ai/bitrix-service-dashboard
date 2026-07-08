@@ -62,12 +62,6 @@ app.post('/webhook/bitrix-update', express.urlencoded({ extended: true }), handl
 app.get('/login', (_, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 app.get('/api/health', (_, res) => res.json({ ok: true, ts: new Date().toISOString() }));
 app.get('/', requireAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-app.get('*', (req, res) => {
-  if (req.path === '/login' || req.path === '/login.html') {
-    return res.sendFile(path.join(__dirname, 'public', 'login.html'));
-  }
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const STAGES = {
@@ -317,6 +311,14 @@ app.get('/api/users', requireAuth(), (_, res) => {
     .map(([id, name]) => ({ id: Number(id), name }))
     .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
   res.json({ ok: true, users: engineers, coordinators: [...COORDINATORS].map(id => ({ id, name: USERS[id] })) });
+});
+
+// ── SPA fallback — must be LAST ───────────────────────────────────────────────
+app.get('*', (req, res) => {
+  if (req.path === '/login' || req.path === '/login.html') {
+    return res.sendFile(path.join(__dirname, 'public', 'login.html'));
+  }
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // ── Background: check new & overdue tickets (single interval) ─────────────────
