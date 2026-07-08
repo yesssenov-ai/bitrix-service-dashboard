@@ -2,6 +2,8 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ProLabSupport — Сервисные заявки</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -270,6 +272,17 @@ tr.tr:hover td { background:#fafbfd; }
       <option value="all">Все заявки</option>
       <option value="yes">⚠ Только просроченные</option>
     </select>
+    <select class="fsel" id="fstage" onchange="load()">
+      <option value="all">Все стадии</option>
+      <option value="DT1058_11:UC_N8RQ0V">🔵 Заявки клиентов</option>
+      <option value="DT1058_11:NEW">🔵 Необработанные</option>
+      <option value="DT1058_11:PREPARATION">🔵 Досбор / Назначение</option>
+      <option value="DT1058_11:CLIENT">🔵 Заявка в работе</option>
+      <option value="DT1058_11:1">🟠 Срочная в работе</option>
+      <option value="DT1058_11:2">🟣 Заявка на обучение</option>
+      <option value="DT1058_11:3">🔵 Заявка исполнена</option>
+      <option value="DT1058_11:4">🔴 Претензия</option>
+    </select>
   </div>
 
   <!-- TABLE -->
@@ -403,6 +416,7 @@ function selectPreset(preset, el) {
   document.getElementById('furg').value='all';
   document.getElementById('feng').value='all';
   document.getElementById('fcoord').value='all';
+  document.getElementById('fstage').value='all';
   document.getElementById('fsearch').value='';
   load();
 }
@@ -422,6 +436,7 @@ function resetFilters() {
   document.getElementById('furg').value='all';
   document.getElementById('feng').value='all';
   document.getElementById('fcoord').value='all';
+  document.getElementById('fstage').value='all';
   document.getElementById('fsearch').value='';
   load();
 }
@@ -444,6 +459,7 @@ async function load() {
     engineer: document.getElementById('feng').value,
     coordinator: document.getElementById('fcoord').value,
     serviceType: document.getElementById('fsvc').value,
+    stageFilter: document.getElementById('fstage')?.value || 'all',
     // Pass preset svcTypes as comma-separated for server
     presetSvcTypes: def.svcTypes ? [...def.svcTypes].join(',') : '',
   });
