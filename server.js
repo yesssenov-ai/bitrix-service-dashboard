@@ -24,15 +24,26 @@ const ENTITY_TYPE_ID = 1058;
 const CATEGORY_ID = 11;
 
 // ── Security middleware ────────────────────────────────────────────────────────
-app.use(helmet({
-  contentSecurityPolicy: false, // disabled to allow CDN fonts/leaflet
-  crossOriginEmbedderPolicy: false,
-}));
 app.set('trust proxy', 1);
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: false,
+}));
 
-// General API rate limit
-app.use('/api/', rateLimit({ windowMs: 60000, max: 120, standardHeaders: true, legacyHeaders: false }));
-app.use('/auth/', rateLimit({ windowMs: 60000, max: 30, standardHeaders: true, legacyHeaders: false }));
+// Rate limiting
+const apiLimiter = rateLimit({
+  windowMs: 60000, max: 120,
+  standardHeaders: true, legacyHeaders: false,
+  skip: (req) => req.path === '/api/health',
+});
+const authLimiter = rateLimit({
+  windowMs: 60000, max: 30,
+  standardHeaders: true, legacyHeaders: false,
+});
+app.use('/api/', apiLimiter);
+app.use('/auth/login', authLimiter);
+app.use('/auth/totp', authLimiter);
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
