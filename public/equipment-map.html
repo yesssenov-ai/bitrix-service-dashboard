@@ -341,23 +341,63 @@ function makeIcon(item) {
 // ── Data loading ──────────────────────────────────────────────────────────────
 async function loadData(force = false) {
   document.getElementById('mapOverlay').style.display = 'flex';
+  document.getElementById('loadMsg').textContent = 'Запрашиваем данные из Б24…';
+
   try {
     const r = await fetch('/equipment/map-data' + (force ? '?refresh=1' : ''));
     const d = await r.json();
-    if (!d.ok) { document.getElementById('loadMsg').textContent = 'Ошибка: ' + d.error; return; }
-    allItems = d.items;
-    manufacturers = d.manufacturers || [];
-    deviceNames = d.deviceNames || [];
-    cities = d.cities || [];
-    companies = d.companies || [];
-    updateStats(d.stats);
-    buildMfrChips();
-    buildModelSelect();
-    applyFilters();
+
+    if (!d.ok) {
+      document.getElementById('loadMsg').textContent = 'Ошибка: ' + d.error; return;
+    }
+
+    if (d.loading) {
+      // Data is being loaded in background — poll every 3 seconds
+      document.getElementById('loadMsg').textContent = 'Загружаем данные из Б24… (это займёт ~2-3 минуты при первом запуске)';
+      setTimeout(() => pollStatus(), 3000);
+      return;
+    }
+
+    applyData(d);
     document.getElementById('mapOverlay').style.display = 'none';
   } catch(e) {
     document.getElementById('loadMsg').textContent = 'Ошибка загрузки: ' + e.message;
   }
+}
+
+async function pollStatus() {
+  try {
+    const r = await fetch('/equipment/status');
+    const d = await r.json();
+    if (d.isReady) {
+      document.getElementById('loadMsg').textContent = 'Готово! Загружаем данные…';
+      const r2 = await fetch('/equipment/map-data');
+      const d2 = await r2.json();
+      if (d2.ok && !d2.loading) {
+        applyData(d2);
+        document.getElementById('mapOverlay').style.display = 'none';
+        return;
+      }
+    }
+    if (d.error) { document.getElementById('loadMsg').textContent = 'Ошибка: ' + d.error; return; }
+    const count = d.count || 0;
+    document.getElementById('loadMsg').textContent = `Загружаем… ${count > 0 ? count + ' приборов' : ''}`;
+    setTimeout(pollStatus, 3000);
+  } catch(e) {
+    setTimeout(pollStatus, 5000);
+  }
+}
+
+function applyData(d) {
+  allItems = d.items;
+  manufacturers = d.manufacturers || [];
+  deviceNames = d.deviceNames || [];
+  cities = d.cities || [];
+  companies = d.companies || [];
+  updateStats(d.stats);
+  buildMfrChips();
+  buildModelSelect();
+  applyFilters();
 }
 
 async function refreshData() { await loadData(true); }

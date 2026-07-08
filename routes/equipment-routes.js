@@ -11,56 +11,95 @@ function setB24(fn) { b24callFn = fn; }
 
 let cache = null;
 let cacheTs = 0;
+let isLoading = false;
+let loadError = null;
 let deviceNamesCache = {};
 const CACHE_TTL = 15 * 60 * 1000;
 
 async function buildCache(force = false) {
+  if (isLoading) return; // already in progress
   const now = Date.now();
-  if (cache && !force && (now - cacheTs) < CACHE_TTL) return cache;
+  if (cache && !force && (now - cacheTs) < CACHE_TTL) return;
 
+  isLoading = true;
+  loadError = null;
   console.log('🔄 Loading equipment from Б24...');
-  let rawItems = [];
-  try { rawItems = await fetchAllEquipment(b24callFn); }
-  catch(e) { throw new Error('Ошибка загрузки оборудования: ' + e.message); }
-
-  const equipmentMap = {};
-  for (const item of rawItems) equipmentMap[item.id] = item;
-
-  try { await fetchAndLinkTickets(equipmentMap, b24callFn); } catch(e) { console.error('tickets link error:', e.message); }
 
   try {
-    const ids = [...new Set(rawItems.map(e => e.companyId).filter(Boolean))];
-    const names = await fetchCompanyNames(ids, b24callFn);
-    for (const item of rawItems) {
-      if (item.companyId) item.companyName = names[item.companyId] || null;
+    let rawItems = [];
+    try { rawItems = await fetchAllEquipment(b24callFn); }
+    catch(e) { throw new Error('Ошибка загрузки оборудования: ' + e.message); }
+
+    const equipmentMap = {};
+    for (const item of rawItems) equipmentMap[item.id] = item;
+
+    try { await fetchAndLinkTickets(equipmentMap, b24callFn); } catch(e) { console.error('tickets:', e.message); }
+
+    try {
+      const ids = [...new Set(rawItems.map(e => e.companyId).filter(Boolean))];
+      const names = await fetchCompanyNames(ids, b24callFn);
+      for (const item of rawItems) {
+        if (item.companyId) item.companyName = names[item.companyId] || null;
+      }
+    } catch(e) { console.error('companies:', e.message); }
+
+    try { deviceNamesCache = await fetchDeviceNames(b24callFn); } catch(e) {}
+
+    try {
+      const withCoords = await geocodeEquipment(rawItems, pool);
+      cache = withCoords;
+    } catch(e) {
+      console.error('geocode:', e.message);
+      cache = rawItems;
     }
-  } catch(e) { console.error('company names error:', e.message); }
 
-  // Geocode by city (much faster and more reliable)
-  try {
-    const withCoords = await geocodeEquipment(rawItems, pool);
-    cache = withCoords;
+    cacheTs = Date.now();
+    console.log(`✅ Equipment loaded: ${cache.length} items`);
   } catch(e) {
-    console.error('geocode error:', e.message);
-    cache = rawItems;
+    loadError = e.message;
+    console.error('buildCache error:', e.message);
+  } finally {
+    isLoading = false;
   }
-
-  // Fetch device names enum
-  try { deviceNamesCache = await fetchDeviceNames(b24callFn); } catch(e) {}
-
-  cacheTs = now;
-  console.log(`✅ Equipment loaded: ${cache.length} items`);
-  return cache;
 }
+
+// GET /equipment/status — lightweight polling endpoint
+router.get('/status', requireAuth(), (req, res) => {
+  res.json({
+    ok: true,
+    isLoading,
+    isReady: !!cache,
+    error: loadError,
+    count: cache?.length || 0,
+    cachedAt: cacheTs ? new Date(cacheTs).toISOString() : null,
+  });
+});
 
 // GET /equipment/map-data
 router.get('/map-data', requireAuth(), async (req, res) => {
   try {
     const force = req.query.refresh === '1';
-    const items = await buildCache(force);
-    const { status, manufacturer, deviceName, city, company } = req.query;
 
-    let filtered = items;
+    // Trigger background load if needed (non-blocking)
+    if (!cache || force) {
+      if (force) { cache = null; cacheTs = 0; }
+      buildCache(force).catch(e => console.error('background buildCache error:', e.message));
+    }
+
+    // If still loading, return loading status immediately (client will poll)
+    if (!cache && isLoading) {
+      return res.json({ ok: true, loading: true, items: [], stats: { total:0, mapped:0, warranty:0, problems:0 }, manufacturers:[], deviceNames:[], cities:[], companies:[] });
+    }
+
+    if (!cache && loadError) {
+      return res.status(500).json({ ok: false, error: loadError });
+    }
+
+    if (!cache) {
+      return res.json({ ok: true, loading: true, items: [], stats: { total:0, mapped:0, warranty:0, problems:0 }, manufacturers:[], deviceNames:[], cities:[], companies:[] });
+    }
+    const { status, manufacturer, deviceName, city, company } = req.query;
+    let filtered = cache;
     if (status === 'prolab')   filtered = filtered.filter(e => e.seller === 'ProLabSupport');
     if (status === 'third')    filtered = filtered.filter(e => e.seller === 'Сторонний продавец');
     if (status === 'warranty') filtered = filtered.filter(e => e.hasWarranty === 'Есть' && e.warrantyEnd && new Date(e.warrantyEnd) > new Date());
@@ -70,7 +109,7 @@ router.get('/map-data', requireAuth(), async (req, res) => {
     if (city)                  filtered = filtered.filter(e => e.city?.toLowerCase().includes(city.toLowerCase()));
     if (company)               filtered = filtered.filter(e => String(e.companyId) === company || e.companyName?.toLowerCase().includes(company.toLowerCase()));
 
-    const all = items;
+    const all = cache;
     const stats = {
       total: all.length,
       mapped: all.filter(e => e.lat && e.lng).length,
