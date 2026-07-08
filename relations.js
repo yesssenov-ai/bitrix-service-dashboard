@@ -1,76 +1,23 @@
-const fetch = require('node-fetch');
+const { b24: b24call } = require('./bitrix');
+const { SERVICE_TYPES } = require('./constants');
 
-const BITRIX_WEBHOOK = process.env.BITRIX_WEBHOOK;
-const WEBHOOK_TOKEN = process.env.BITRIX_OUTBOUND_TOKEN || '2uvfi1mfqmtwvxl6lrbovsixcikvnaqc';
+const WEBHOOK_TOKEN = process.env.BITRIX_OUTBOUND_TOKEN;
+if (!WEBHOOK_TOKEN) { console.error('❌ Missing BITRIX_OUTBOUND_TOKEN'); }
 
 // ── Known smart process types ─────────────────────────────────────────────────
 const SMART_TYPES = {
-  1036: { name: 'Регистрация контрактов', categoryField: null },
-  1042: { name: 'Учет оборудования клиентов', categoryField: null },
-  1046: { name: 'Отчет о проделанной работе', categoryField: null },
-  1050: { name: 'Запланированные работы', categoryField: null },
-  1058: { name: 'Заявка на сервис', categoryField: null },
-  1062: { name: 'Акт выполненных работ', categoryField: null },
-  1066: { name: 'Закупки', categoryField: null },
-  1070: { name: 'Логистика', categoryField: null },
-  1074: { name: 'Заявка на командировку', categoryField: null },
+  1036: { name: 'Регистрация контрактов' },
+  1042: { name: 'Учет оборудования клиентов' },
+  1046: { name: 'Отчет о проделанной работе' },
+  1050: { name: 'Запланированные работы' },
+  1058: { name: 'Заявка на сервис' },
+  1062: { name: 'Акт выполненных работ' },
+  1066: { name: 'Закупки' },
+  1070: { name: 'Логистика' },
+  1074: { name: 'Заявка на командировку' },
 };
 
-// Тип оказываемых услуг (УС) — для подсветки заявок созданных напрямую от сделки
-const SERVICE_TYPES = {
-  '103':'Установка','104':'Техническое обслуживание','105':'Диагностика',
-  '106':'Ремонт','108':'Обучение','109':'Обучение ТЦ','110':'Квалификация (IQ/OQ/PQ)',
-  '111':'Подбор доп. оборудования','114':'Другое','402':'Подготовка документов','619':'Заявка клиента',
-};
-
-// Final/success stages per entity type (stageId suffix patterns to check)
-const FINAL_STAGE_PATTERNS = ['SUCCESS', 'WON', 'CLOSED', '3']; // adjust per actual stage IDs found
-
-function flattenInto(parts, obj, prefix) {
-  for (const [k, v] of Object.entries(obj)) {
-    const key = prefix ? `${prefix}[${k}]` : k;
-    if (v === null || v === undefined) continue;
-    if (Array.isArray(v)) {
-      v.forEach((item, i) => {
-        if (item !== null && typeof item === 'object') flattenInto(parts, item, `${key}[${i}]`);
-        else parts.push(`${encodeURIComponent(`${key}[${i}]`)}=${encodeURIComponent(item)}`);
-      });
-    } else if (typeof v === 'object') {
-      flattenInto(parts, v, key);
-    } else {
-      parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(v)}`);
-    }
-  }
-}
-
-async function b24call(method, params = {}, retries = 3) {
-  const parts = [];
-  flattenInto(parts, params, '');
-  const body = parts.join('&');
-  const url = `${BITRIX_WEBHOOK}${method}.json`;
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30000);
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Accept-Encoding': 'identity',
-        },
-        body,
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-      if (!res.ok) throw new Error(`Bitrix API error: ${res.status}`);
-      return res.json();
-    } catch(e) {
-      if (attempt === retries) throw e;
-      console.warn(`b24call ${method} attempt ${attempt} failed: ${e.message}, retrying...`);
-      await new Promise(r => setTimeout(r, 1000 * attempt));
-    }
-  }
-}
+// SERVICE_TYPES imported from constants.js
 
 // ── Fetch single item with all fields ─────────────────────────────────────────
 

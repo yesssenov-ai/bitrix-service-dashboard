@@ -1,5 +1,5 @@
 const fetch = require('node-fetch');
-const { USER_EMAILS } = require('./user-emails');
+const { USER_EMAILS } = require('./constants');
 
 const RESEND_KEY = process.env.RESEND_API_KEY;
 const TG_TOKEN = process.env.TG_TOKEN;

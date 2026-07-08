@@ -7,7 +7,7 @@ const {
 } = require('../relations');
 const { tgMgt } = require('../notifications');
 const { notifyProcessCompleted, notifyEngineerAssigned, setPool: setMgrNotifyPool } = require('../manager-notifications');
-const { USERS } = require('../user-names');
+const { USERS } = require('../constants');
 
 setMgrNotifyPool(pool);
 
