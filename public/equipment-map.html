@@ -514,6 +514,9 @@ function selectCompany(id, name) {
 
 // ── Main filter ───────────────────────────────────────────────────────────────
 function applyFilters() {
+  // Read current model from select
+  curModel = document.getElementById('modelSel')?.value || '';
+
   filteredItems = allItems.filter(item => {
     if (curMfr && !item.manufacturerIds.includes(curMfr)) return false;
     if (curModel && !item.deviceNameIds.includes(curModel)) return false;
@@ -583,41 +586,65 @@ function toggleTicketsLayer() {
   const btn = document.getElementById('btnTickets');
   btn.classList.toggle('on', showTickets);
   if (showTickets) {
+    // Hide equipment markers, show only tickets
+    map.removeLayer(clusterGroup);
     renderTicketsLayer();
     map.addLayer(ticketLayer);
   } else {
+    ticketLayer.clearLayers();
     map.removeLayer(ticketLayer);
+    map.addLayer(clusterGroup);
   }
 }
 
 function renderTicketsLayer() {
   ticketLayer.clearLayers();
-  const ticketsByLocation = {};
+
+  // Group tickets by city (combine items at same city coords)
+  const ticketsByCity = {};
   for (const item of allItems) {
-    if (!item.activeTickets?.length || !item.lat || !item.lng) continue;
-    const key = `${item.lat.toFixed(3)},${item.lng.toFixed(3)}`;
-    if (!ticketsByLocation[key]) ticketsByLocation[key] = { lat: item.lat, lng: item.lng, tickets: [], city: item.city };
-    ticketsByLocation[key].tickets.push(...item.activeTickets);
+    if (!item.activeTickets?.length) continue;
+    // Use item coords if available, otherwise skip
+    if (!item.lat || !item.lng) continue;
+    const key = item.city || `${item.lat.toFixed(2)},${item.lng.toFixed(2)}`;
+    if (!ticketsByCity[key]) ticketsByCity[key] = { lat: item.lat, lng: item.lng, tickets: [], city: item.city };
+    ticketsByCity[key].tickets.push(...item.activeTickets);
   }
-  for (const loc of Object.values(ticketsByLocation)) {
+
+  let totalShown = 0;
+  for (const loc of Object.values(ticketsByCity)) {
     const hasOv = loc.tickets.some(t => t.isOverdue);
     const color = hasOv ? '#c4314b' : '#FF6B35';
     const cnt = loc.tickets.length;
+    totalShown += cnt;
+
     const icon = L.divIcon({
-      html: `<div style="background:${color};color:#fff;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.3);border:1.5px solid #fff;white-space:nowrap">🔔 ${cnt}</div>`,
-      className:'', iconAnchor:[20,12],
+      html: `<div style="background:${color};color:#fff;border-radius:10px;padding:5px 11px;font-size:12px;font-weight:700;box-shadow:0 3px 10px rgba(0,0,0,.3);border:2px solid #fff;white-space:nowrap;display:flex;align-items:center;gap:4px"><span>🔔</span><span>${cnt}</span></div>`,
+      className: '', iconAnchor: [24, 16],
     });
+
     const byStage = {};
     for (const t of loc.tickets) byStage[t.stageId] = (byStage[t.stageId]||0)+1;
-    const popup = L.popup({ maxWidth: 260 }).setContent(
-      `<div style="font-family:Inter,sans-serif;font-size:12px">
-        <strong>${loc.city||'Неизвестный город'}</strong> — ${cnt} заявок<br><br>
-        ${Object.entries(byStage).map(([s,c]) =>
-          `<span style="display:inline-block;background:#f3f2f1;border-radius:5px;padding:2px 8px;margin:2px;font-size:11px">${esc(STAGE_NAMES[s]||s)}: ${c}</span>`
-        ).join('')}
+    const stageRows = Object.entries(byStage).map(([s,c]) => {
+      const clr = s.includes(':1') ? '#FF6B35' : s.includes('NEW') || s.includes('UC_N8') ? '#22B9FF' : '#605e5c';
+      return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #f0f0f0"><span style="color:${clr};font-weight:600">${esc(STAGE_NAMES[s]||s)}</span><span style="font-weight:700">${c}</span></div>`;
+    }).join('');
+
+    const popup = L.popup({ maxWidth: 280, className: 'ticket-popup' }).setContent(
+      `<div style="font-family:Inter,sans-serif;font-size:12px;min-width:200px">
+        <div style="font-weight:700;font-size:13px;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid #f0f0f0">
+          📍 ${esc(loc.city||'Локация')}
+        </div>
+        <div style="margin-bottom:8px;color:#605e5c">Активных заявок: <strong style="color:#201f1e">${cnt}</strong>${hasOv ? ' <span style="color:#c4314b">⚠ есть просроченные</span>' : ''}</div>
+        <div>${stageRows}</div>
       </div>`
     );
     L.marker([loc.lat, loc.lng], { icon }).bindPopup(popup).addTo(ticketLayer);
+  }
+
+  if (totalShown === 0) {
+    // Show message if no tickets with coords
+    document.getElementById('loadMsg') && (document.getElementById('loadMsg').textContent = 'Нет активных заявок с координатами');
   }
 }
 
