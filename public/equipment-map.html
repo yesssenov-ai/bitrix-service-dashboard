@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ProLabSupport — Карта оборудования</title>
+<title>ProLabSupport - Карта оборудования</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
@@ -352,7 +352,7 @@ async function loadData(force = false) {
     }
 
     if (d.loading) {
-      // Data is being loaded in background — poll every 3 seconds
+      // Data is being loaded in background - poll every 3 seconds
       document.getElementById('loadMsg').textContent = 'Загружаем данные из Б24… (это займёт ~2-3 минуты при первом запуске)';
       setTimeout(() => pollStatus(), 3000);
       return;
@@ -688,7 +688,7 @@ function showDetail(item) {
     ${item.serialNums?.length?`<div class="dp-row"><div class="dp-lbl">Серийный №</div><div class="dp-val">${item.serialNums.map(esc).join(', ')}</div></div>`:''}
     <div class="dp-row"><div class="dp-lbl">Гарантия</div><div class="dp-val" style="color:${wColor};font-weight:600">${wText}</div></div>
     <div class="dp-row"><div class="dp-lbl">Продавец</div><div class="dp-val">${esc(item.seller||'—')}</div></div>
-    ${item.serviceStart?`<div class="dp-row"><div class="dp-lbl">Обслуживание</div><div class="dp-val">${fmtDate(item.serviceStart)} — ${item.serviceEnd?fmtDate(item.serviceEnd):'∞'}</div></div>`:''}
+    ${item.serviceStart?`<div class="dp-row"><div class="dp-lbl">Обслуживание</div><div class="dp-val">${fmtDate(item.serviceStart)} - ${item.serviceEnd?fmtDate(item.serviceEnd):'∞'}</div></div>`:''}
     ${tickets}
     <a href="${item.url}" target="_blank" class="dp-btn">Открыть в Б24 →</a>`;
   document.getElementById('dp').classList.add('show');

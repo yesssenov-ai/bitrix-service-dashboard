@@ -5,7 +5,7 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ProLabSupport — Связи сделок</title>
+<title>ProLabSupport - Связи сделок</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
@@ -352,7 +352,7 @@ body{
         Relationship Explorer
       </div>
       <h1>Дерево связей сделок</h1>
-      <p>Найдите сделку и посмотрите все связанные смарт-процессы — от установки до закупок</p>
+      <p>Найдите сделку и посмотрите все связанные смарт-процессы - от установки до закупок</p>
     </div>
   </div>
 
@@ -495,7 +495,7 @@ function renderDeals() {
   wrap.innerHTML = filtered.map(deal => `
     <div class="deal-card ${selectedDealId==deal.id?'active':''}" id="deal-${deal.id}" style="--cat-color:${CAT_COLORS[deal.categoryId]||'#0f6cbd'}" onclick="selectDealCard(${deal.id})">
       <div class="deal-card-cat">${esc(deal.categoryName)}</div>
-      <div class="deal-card-title">#${deal.id} — ${esc(deal.title || 'Без названия')}</div>
+      <div class="deal-card-title">#${deal.id} - ${esc(deal.title || 'Без названия')}</div>
       <div class="deal-card-footer">
         <span class="deal-card-stage" title="${esc(deal.stageName||deal.stageId)}">${esc(deal.stageName || deal.stageId)}</span>
         <span class="deal-card-sum">${deal.opportunity ? Number(deal.opportunity).toLocaleString('ru') + ' ₸' : ''}</span>
@@ -575,7 +575,7 @@ async function doSearch() {
     }
     results.innerHTML = d.deals.map(deal => `
       <div class="search-item" onclick="selectDeal(${deal.id})">
-        <div class="search-item-title">#${deal.id} — ${esc(deal.title || 'Без названия')}</div>
+        <div class="search-item-title">#${deal.id} - ${esc(deal.title || 'Без названия')}</div>
         <div class="search-item-meta">${deal.opportunity ? Number(deal.opportunity).toLocaleString('ru') + ' ₸' : ''} ${deal.dateCreate ? '· ' + new Date(deal.dateCreate).toLocaleDateString('ru') : ''}</div>
       </div>`).join('');
     results.classList.add('show');

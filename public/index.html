@@ -5,7 +5,7 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ProLabSupport — Сервисные заявки</title>
+<title>ProLabSupport - Сервисные заявки</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -488,7 +488,7 @@ async function load() {
     }
 
     // Update table title
-    document.getElementById('ttitle').textContent=(def.label||'Список заявок')+' — заявки';
+    document.getElementById('ttitle').textContent=(def.label||'Список заявок')+' - заявки';
 
     populateSvc(d.serviceTypes);
     populateEng(d.engineers);
@@ -610,7 +610,7 @@ function populateEditStages(stages){
 
 function openEdit(id,title){
   curTicketId=id;
-  document.getElementById('editTicketTitle').textContent=`#${id} — ${title}`;
+  document.getElementById('editTicketTitle').textContent=`#${id} - ${title}`;
   document.getElementById('editComment').value='';
   document.getElementById('editStage').value='';
   document.getElementById('editEngineer').value='';
@@ -642,7 +642,7 @@ async function submitEdit(sendTg=true){
 
 function openBell(id,title){
   curTicketId=id;
-  document.getElementById('bellTicketTitle').textContent=`#${id} — ${title}`;
+  document.getElementById('bellTicketTitle').textContent=`#${id} - ${title}`;
   document.getElementById('remindMsg').value='';
   document.getElementById('remindDelay').value='0';
   document.getElementById('bellOverlay').classList.add('show');
