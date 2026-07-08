@@ -3,11 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ProLabSupport — Карта оборудования</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
@@ -16,177 +14,254 @@
 :root{
   --surface:#faf9f8;--card:#fff;--stroke:#e1dfdd;--stroke-2:#d2d0ce;
   --text:#201f1e;--text-2:#605e5c;--text-3:#8a8886;--text-4:#a19f9d;
-  --brand:#0f6cbd;--brand-tint:#eff6fc;
+  --brand:#0f6cbd;--brand-tint:#eff6fc;--brand-2:#2899f5;
   --accent:#C53B2F;--accent-tint:#fdf1ef;
   --success:#0e7c3f;--success-tint:#dff6dd;
   --warn:#bc4b09;--warn-tint:#fff4e5;
   --danger:#c4314b;--danger-tint:#fde7eb;
+  --purple:#7c3aed;--purple-tint:#f5f3ff;
   --shadow-1:0 1px 3px rgba(0,0,0,.07);
   --shadow-2:0 4px 16px rgba(0,0,0,.08);
-  --shadow-3:0 16px 48px rgba(0,0,0,.12);
-  --radius:10px;--font:'Inter',system-ui,sans-serif;
+  --shadow-3:0 16px 48px rgba(0,0,0,.13);
+  --r:10px;--font:'Inter',system-ui,sans-serif;
 }
 html,body{height:100%;font-family:var(--font);background:var(--surface);color:var(--text);-webkit-font-smoothing:antialiased;}
 
-/* ── HEADER ── */
-.header{background:rgba(255,255,255,.9);backdrop-filter:blur(16px);border-bottom:1px solid var(--stroke);height:56px;display:flex;align-items:center;padding:0 20px;position:fixed;top:0;left:0;right:0;z-index:1000;box-shadow:var(--shadow-1);}
+/* HEADER */
+.hdr{background:rgba(255,255,255,.92);backdrop-filter:blur(18px);border-bottom:1px solid var(--stroke);height:56px;display:flex;align-items:center;padding:0 20px;position:fixed;top:0;left:0;right:0;z-index:1000;box-shadow:var(--shadow-1);}
 .logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14px;flex-shrink:0;}
-.logo-mark{width:28px;height:28px;background:linear-gradient(135deg,var(--accent),#9c2f25);border-radius:7px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 5px rgba(197,59,47,.3);}
+.logo-mark{width:28px;height:28px;background:linear-gradient(135deg,var(--accent),#9c2f25);border-radius:7px;display:flex;align-items:center;justify-content:center;}
 .logo-mark svg{width:14px;height:14px;}
 .hdiv{width:1px;height:20px;background:var(--stroke-2);margin:0 14px;}
-.h-nav a{padding:6px 12px;border-radius:7px;font-size:13px;font-weight:500;color:var(--text-2);text-decoration:none;transition:all .15s;}
-.h-nav a:hover{background:rgba(0,0,0,.04);}
-.h-nav a.active{background:var(--brand-tint);color:var(--brand);}
-.h-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
-.user-chip{font-size:12px;color:var(--text-2);background:var(--surface);border:1px solid var(--stroke);border-radius:20px;padding:4px 11px 4px 7px;display:flex;align-items:center;gap:5px;}
-.user-dot{width:6px;height:6px;border-radius:50%;background:var(--success);box-shadow:0 0 0 2px var(--success-tint);}
+.hnav a{padding:6px 12px;border-radius:7px;font-size:13px;font-weight:500;color:var(--text-2);text-decoration:none;transition:all .15s;}
+.hnav a:hover{background:rgba(0,0,0,.04);}
+.hnav a.act{background:var(--brand-tint);color:var(--brand);}
+.hright{margin-left:auto;display:flex;align-items:center;gap:8px;}
+.uchip{font-size:12px;color:var(--text-2);background:var(--surface);border:1px solid var(--stroke);border-radius:20px;padding:4px 11px 4px 7px;display:flex;align-items:center;gap:5px;}
+.udot{width:6px;height:6px;border-radius:50%;background:var(--success);}
 
-/* ── LAYOUT ── */
+/* LAYOUT */
 .app{display:flex;height:100vh;padding-top:56px;}
 
-/* ── SIDEBAR ── */
-.sidebar{width:380px;flex-shrink:0;background:var(--card);border-right:1px solid var(--stroke);display:flex;flex-direction:column;overflow:hidden;z-index:100;}
+/* SIDEBAR */
+.sb{width:360px;flex-shrink:0;background:var(--card);border-right:1px solid var(--stroke);display:flex;flex-direction:column;overflow:hidden;z-index:100;}
+.sb-head{padding:14px 16px 10px;border-bottom:1px solid var(--stroke);flex-shrink:0;}
+.sb-title{font-size:14px;font-weight:700;letter-spacing:-.2px;margin-bottom:10px;}
 
-.sidebar-head{padding:16px 16px 12px;border-bottom:1px solid var(--stroke);}
-.sidebar-title{font-size:15px;font-weight:700;margin-bottom:10px;letter-spacing:-.2px;}
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:10px;}
+.stat{background:var(--surface);border:1px solid var(--stroke);border-radius:8px;padding:7px;text-align:center;}
+.stat-n{font-size:17px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;}
+.stat-l{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);margin-top:2px;}
+.blue{color:var(--brand);} .green{color:var(--success);} .red{color:var(--danger);} .orange{color:var(--warn);}
 
-.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;}
-.stat-chip{background:var(--surface);border:1px solid var(--stroke);border-radius:8px;padding:8px;text-align:center;}
-.stat-num{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1;}
-.stat-num.blue{color:var(--brand);}
-.stat-num.green{color:var(--success);}
-.stat-num.red{color:var(--danger);}
-.stat-num.orange{color:var(--warn);}
-.stat-label{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);margin-top:2px;}
+/* Tabs */
+.tabs{display:flex;background:var(--surface);border:1px solid var(--stroke);border-radius:8px;padding:3px;gap:2px;}
+.tab{flex:1;text-align:center;padding:6px;border-radius:6px;font-size:11.5px;font-weight:600;cursor:pointer;color:var(--text-3);transition:all .15s;border:none;background:none;font-family:var(--font);}
+.tab:hover{color:var(--text-2);}
+.tab.on{background:var(--card);color:var(--brand);box-shadow:var(--shadow-1);}
 
-.filter-chips{display:flex;flex-wrap:wrap;gap:5px;}
-.chip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;border:1.5px solid var(--stroke);background:var(--card);font-size:11.5px;font-weight:600;color:var(--text-2);cursor:pointer;transition:all .15s;white-space:nowrap;}
-.chip:hover{border-color:var(--stroke-2);}
-.chip.active{border-color:var(--chip-c,var(--brand));background:var(--chip-bg,var(--brand-tint));color:var(--chip-c,var(--brand));}
-.chip-dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+/* Filter panels */
+.fp{padding:12px 16px;border-bottom:1px solid var(--stroke);flex-shrink:0;}
+.fp-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:6px;}
 
-/* Search */
-.search-box{position:relative;padding:10px 16px;border-bottom:1px solid var(--stroke);}
-.search-box input{width:100%;background:var(--surface);border:1px solid var(--stroke);border-radius:8px;padding:8px 12px 8px 34px;font-size:13px;color:var(--text);font-family:var(--font);outline:none;}
-.search-box input:focus{border-color:var(--brand);background:#fff;}
-.search-box svg{position:absolute;left:27px;top:50%;transform:translateY(-50%);color:var(--text-3);}
+/* Manufacturer chips */
+.mfr-chips{display:flex;flex-wrap:wrap;gap:4px;}
+.mchip{padding:4px 10px;border-radius:20px;border:1.5px solid var(--stroke);background:var(--card);font-size:11px;font-weight:600;color:var(--text-2);cursor:pointer;transition:all .15s;white-space:nowrap;display:inline-flex;align-items:center;gap:4px;}
+.mchip:hover{border-color:var(--stroke-2);}
+.mchip.on{border-color:var(--chip-c,var(--brand));background:var(--chip-bg,var(--brand-tint));color:var(--chip-c,var(--brand));}
+.chip-cnt{font-size:10px;opacity:.7;}
+
+/* Device model selector */
+.model-wrap{position:relative;}
+.fsel{width:100%;background:var(--surface);border:1px solid var(--stroke);border-radius:8px;padding:8px 12px;font-size:12.5px;color:var(--text);font-family:var(--font);outline:none;appearance:none;cursor:pointer;}
+.fsel:focus{border-color:var(--brand);}
+
+/* Search inputs */
+.sinput{position:relative;}
+.sinput svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none;}
+.sinput input{width:100%;background:var(--surface);border:1px solid var(--stroke);border-radius:8px;padding:8px 12px 8px 32px;font-size:12.5px;color:var(--text);font-family:var(--font);outline:none;}
+.sinput input:focus{border-color:var(--brand);background:#fff;}
+.sinput input::placeholder{color:var(--text-4);}
+.autocomplete{position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--stroke);border-radius:8px;box-shadow:var(--shadow-3);max-height:220px;overflow-y:auto;z-index:200;margin-top:4px;display:none;}
+.autocomplete.show{display:block;}
+.ac-item{padding:8px 12px;cursor:pointer;font-size:12.5px;display:flex;justify-content:space-between;}
+.ac-item:hover{background:var(--brand-tint);}
+.ac-cnt{font-size:11px;color:var(--text-3);}
+
+/* Toggle row */
+.toggle-row{display:flex;gap:6px;flex-wrap:wrap;}
+.tgl{padding:5px 10px;border-radius:7px;border:1.5px solid var(--stroke);background:var(--card);font-size:11.5px;font-weight:600;color:var(--text-2);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:4px;}
+.tgl:hover{border-color:var(--stroke-2);}
+.tgl.on{border-color:var(--tgl-c,var(--brand));background:var(--tgl-bg,var(--brand-tint));color:var(--tgl-c,var(--brand));}
 
 /* Equipment list */
-.eq-list{flex:1;overflow-y:auto;padding:8px 0;}
-.eq-list::-webkit-scrollbar{width:6px;}
+.eq-list{flex:1;overflow-y:auto;padding:4px 0;}
+.eq-list::-webkit-scrollbar{width:5px;}
 .eq-list::-webkit-scrollbar-thumb{background:var(--stroke-2);border-radius:3px;}
-
-.eq-item{padding:12px 16px;cursor:pointer;border-bottom:1px solid rgba(225,223,221,.5);transition:background .1s;position:relative;}
+.eq-item{padding:10px 16px;cursor:pointer;border-bottom:1px solid rgba(225,223,221,.5);transition:background .1s;position:relative;}
 .eq-item:hover{background:var(--surface);}
-.eq-item.active{background:var(--brand-tint);}
-.eq-item.has-problems::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--danger);}
-.eq-item-header{display:flex;align-items:flex-start;gap:8px;margin-bottom:5px;}
-.eq-item-icon{width:32px;height:32px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;}
-.eq-item-icon.prolab{background:var(--brand-tint);color:var(--brand);}
-.eq-item-icon.third{background:var(--surface);color:var(--text-3);border:1px solid var(--stroke);}
-.eq-item-name{font-size:12.5px;font-weight:600;color:var(--text);line-height:1.35;flex:1;}
-.eq-item-meta{font-size:11px;color:var(--text-3);display:flex;flex-wrap:wrap;gap:4px;}
-.eq-meta-tag{background:var(--surface);border:1px solid var(--stroke);border-radius:5px;padding:1px 6px;font-size:10.5px;font-weight:500;}
-.eq-meta-tag.warn{background:var(--warn-tint);border-color:rgba(188,75,9,.2);color:var(--warn);}
-.eq-meta-tag.danger{background:var(--danger-tint);border-color:rgba(196,49,75,.2);color:var(--danger);}
-.eq-meta-tag.success{background:var(--success-tint);border-color:rgba(14,124,63,.2);color:var(--success);}
-.eq-meta-tag.gray{color:var(--text-3);}
+.eq-item.on{background:var(--brand-tint);}
+.eq-item.prob::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--danger);}
+.eq-row{display:flex;align-items:flex-start;gap:8px;margin-bottom:4px;}
+.eq-icon{width:30px;height:30px;border-radius:7px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;}
+.eq-icon.pl{background:var(--brand-tint);color:var(--brand);}
+.eq-icon.th{background:var(--surface);color:var(--text-3);border:1px solid var(--stroke);}
+.eq-name{font-size:12.5px;font-weight:600;color:var(--text);line-height:1.3;flex:1;}
+.eq-meta{font-size:11px;color:var(--text-3);display:flex;flex-wrap:wrap;gap:3px;}
+.tag{background:var(--surface);border:1px solid var(--stroke);border-radius:5px;padding:1px 6px;font-size:10.5px;font-weight:500;}
+.tag.danger{background:var(--danger-tint);border-color:rgba(196,49,75,.2);color:var(--danger);}
+.tag.success{background:var(--success-tint);border-color:rgba(14,124,63,.2);color:var(--success);}
+.tag.warn{background:var(--warn-tint);border-color:rgba(188,75,9,.2);color:var(--warn);}
+.eq-empty{text-align:center;padding:36px 20px;color:var(--text-3);font-size:13px;}
 
-.no-coords{opacity:.5;cursor:default;}
-.empty-list{text-align:center;padding:40px 20px;color:var(--text-3);font-size:13px;}
-
-/* ── MAP ── */
+/* MAP */
 .map-wrap{flex:1;position:relative;}
 #map{width:100%;height:100%;}
-.map-loading{position:absolute;inset:0;background:rgba(250,249,248,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:500;font-size:13px;color:var(--text-2);}
-.spinner{width:36px;height:36px;border:3px solid var(--stroke);border-top-color:var(--brand);border-radius:50%;animation:spin .8s linear infinite;}
+.map-overlay{position:absolute;inset:0;background:rgba(250,249,248,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:500;font-size:13px;color:var(--text-2);}
+.spinner{width:32px;height:32px;border:3px solid var(--stroke);border-top-color:var(--brand);border-radius:50%;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 
-/* ── DETAIL PANEL ── */
-.detail-panel{
-  position:absolute;bottom:20px;right:20px;width:340px;max-height:70vh;overflow-y:auto;
-  background:var(--card);border:1px solid var(--stroke);border-radius:var(--radius);
-  box-shadow:var(--shadow-3);z-index:500;display:none;animation:slideUp .2s ease;
-}
-@keyframes slideUp{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
-.detail-panel.show{display:block;}
-.dp-head{padding:14px 16px 12px;border-bottom:1px solid var(--stroke);display:flex;align-items:flex-start;justify-content:space-between;gap:8px;position:sticky;top:0;background:var(--card);}
-.dp-title{font-size:13.5px;font-weight:700;color:var(--text);line-height:1.3;flex:1;}
-.dp-close{width:26px;height:26px;border-radius:6px;border:1px solid var(--stroke);background:none;cursor:pointer;color:var(--text-3);font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.dp-close:hover{background:var(--surface);}
+/* Service tickets layer toggle */
+.map-controls{position:absolute;top:12px;right:12px;z-index:400;display:flex;flex-direction:column;gap:6px;}
+.map-btn{background:var(--card);border:1px solid var(--stroke);border-radius:8px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:var(--shadow-1);color:var(--text-2);font-family:var(--font);transition:all .15s;white-space:nowrap;}
+.map-btn:hover{box-shadow:var(--shadow-2);}
+.map-btn.on{background:var(--brand);color:#fff;border-color:var(--brand);}
+.map-btn.refresh{color:var(--brand);}
+
+/* Detail panel */
+.dp{position:absolute;bottom:16px;right:16px;width:340px;max-height:72vh;overflow-y:auto;background:var(--card);border:1px solid var(--stroke);border-radius:var(--r);box-shadow:var(--shadow-3);z-index:400;display:none;}
+.dp.show{display:block;animation:su .2s ease;}
+@keyframes su{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+.dp-head{padding:13px 16px 11px;border-bottom:1px solid var(--stroke);display:flex;align-items:flex-start;justify-content:space-between;gap:8px;position:sticky;top:0;background:var(--card);}
+.dp-title{font-size:13px;font-weight:700;color:var(--text);line-height:1.3;flex:1;}
+.dp-x{width:24px;height:24px;border-radius:6px;border:1px solid var(--stroke);background:none;cursor:pointer;color:var(--text-3);font-size:13px;}
+.dp-x:hover{background:var(--surface);}
 .dp-body{padding:14px 16px;}
-.dp-row{display:flex;margin-bottom:9px;gap:8px;}
-.dp-lbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);width:110px;flex-shrink:0;padding-top:1px;}
+.dp-row{display:flex;margin-bottom:8px;gap:8px;}
+.dp-lbl{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);width:105px;flex-shrink:0;padding-top:1px;}
 .dp-val{font-size:12.5px;color:var(--text);flex:1;line-height:1.4;}
-.dp-section{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--brand);margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--stroke);}
-.dp-ticket{background:var(--surface);border:1px solid var(--stroke);border-radius:7px;padding:8px 10px;margin-bottom:6px;}
-.dp-ticket.overdue{border-color:rgba(196,49,75,.3);background:var(--danger-tint);}
-.dp-ticket-title{font-size:12px;font-weight:600;margin-bottom:3px;}
-.dp-ticket-stage{font-size:11px;color:var(--text-3);}
-.dp-btn{display:inline-flex;align-items:center;gap:5px;background:var(--brand);color:#fff;padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;text-decoration:none;margin-top:12px;}
+.dp-sec{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--brand);margin:12px 0 7px;padding-bottom:4px;border-bottom:1px solid var(--stroke);}
+.dp-ticket{background:var(--surface);border:1px solid var(--stroke);border-radius:7px;padding:8px 10px;margin-bottom:5px;}
+.dp-ticket.ov{border-color:rgba(196,49,75,.3);background:var(--danger-tint);}
+.dp-ticket-t{font-size:12px;font-weight:600;margin-bottom:2px;}
+.dp-ticket-s{font-size:11px;color:var(--text-3);}
+.dp-btn{display:inline-flex;align-items:center;gap:5px;background:var(--brand);color:#fff;padding:8px 14px;border-radius:7px;font-size:12.5px;font-weight:600;text-decoration:none;margin-top:12px;}
 </style>
 </head>
 <body>
-
-<header class="header">
+<header class="hdr">
   <div class="logo">
     <div class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg></div>
     ProLabSupport
   </div>
   <div class="hdiv"></div>
-  <nav class="h-nav" style="display:flex;gap:2px;">
+  <nav class="hnav" style="display:flex;gap:2px;">
     <a href="/">← Дашборд</a>
     <a href="/relations.html">Связи сделок</a>
-    <a href="/equipment-map.html" class="active">🗺 Карта оборудования</a>
+    <a href="/equipment-map.html" class="act">🗺 Карта оборудования</a>
   </nav>
-  <div class="h-right">
-    <span class="user-chip"><span class="user-dot"></span><span id="currentUser">—</span></span>
+  <div class="hright">
+    <span class="uchip"><span class="udot"></span><span id="uname">—</span></span>
   </div>
 </header>
 
 <div class="app">
   <!-- SIDEBAR -->
-  <aside class="sidebar">
-    <div class="sidebar-head">
-      <div class="sidebar-title">Парк оборудования</div>
-      <div class="stats-row" id="statsRow">
-        <div class="stat-chip"><div class="stat-num blue" id="statTotal">—</div><div class="stat-label">Всего</div></div>
-        <div class="stat-chip"><div class="stat-num green" id="statMapped">—</div><div class="stat-label">На карте</div></div>
-        <div class="stat-chip"><div class="stat-num orange" id="statWarranty">—</div><div class="stat-label">Гарантия</div></div>
-        <div class="stat-chip"><div class="stat-num red" id="statProblems">—</div><div class="stat-label">Проблемы</div></div>
+  <aside class="sb">
+    <div class="sb-head">
+      <div class="sb-title">Парк оборудования</div>
+      <div class="stats">
+        <div class="stat"><div class="stat-n blue" id="sTotal">—</div><div class="stat-l">Всего</div></div>
+        <div class="stat"><div class="stat-n green" id="sMapped">—</div><div class="stat-l">На карте</div></div>
+        <div class="stat"><div class="stat-n orange" id="sWarr">—</div><div class="stat-l">Гарантия</div></div>
+        <div class="stat"><div class="stat-n red" id="sProb">—</div><div class="stat-l">Проблемы</div></div>
       </div>
-      <div class="filter-chips" id="filterChips">
-        <div class="chip active" data-filter="all" onclick="setFilter('all',this)"><span class="chip-dot"></span>Все</div>
-        <div class="chip" data-filter="prolab" style="--chip-c:#0f6cbd;--chip-bg:#eff6fc" onclick="setFilter('prolab',this)"><span class="chip-dot"></span>ProLabSupport</div>
-        <div class="chip" data-filter="third" style="--chip-c:#8764b8;--chip-bg:#f3f0fa" onclick="setFilter('third',this)"><span class="chip-dot"></span>Сторонние</div>
-        <div class="chip" data-filter="warranty" style="--chip-c:#0e7c3f;--chip-bg:#dff6dd" onclick="setFilter('warranty',this)"><span class="chip-dot"></span>На гарантии</div>
-        <div class="chip" data-filter="problems" style="--chip-c:#c4314b;--chip-bg:#fde7eb" onclick="setFilter('problems',this)"><span class="chip-dot"></span>⚠ Проблемы</div>
+      <div class="tabs">
+        <button class="tab on" onclick="setMode('equipment',this)">⚙️ Оборудование</button>
+        <button class="tab" onclick="setMode('city',this)">🏙 По городу</button>
+        <button class="tab" onclick="setMode('company',this)">🏢 По клиенту</button>
       </div>
     </div>
 
-    <div class="search-box">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input type="text" id="searchInput" placeholder="Поиск по названию, адресу, серийному номеру…" oninput="debSearch()">
+    <!-- EQUIPMENT MODE -->
+    <div id="modeEquipment">
+      <!-- Manufacturer filter -->
+      <div class="fp">
+        <div class="fp-label">Производитель</div>
+        <div class="mfr-chips" id="mfrChips">
+          <span class="mchip on" data-id="" onclick="setMfr('',this)">Все</span>
+        </div>
+      </div>
+      <!-- Device model -->
+      <div class="fp">
+        <div class="fp-label">Модель прибора</div>
+        <select class="fsel" id="modelSel" onchange="applyFilters()">
+          <option value="">Все модели</option>
+        </select>
+      </div>
+      <!-- Status toggles -->
+      <div class="fp">
+        <div class="fp-label">Статус</div>
+        <div class="toggle-row">
+          <button class="tgl on" data-v="" onclick="setStat('',this)">Все</button>
+          <button class="tgl" data-v="prolab" style="--tgl-c:#0f6cbd;--tgl-bg:#eff6fc" onclick="setStat('prolab',this)">🔵 ProLabSupport</button>
+          <button class="tgl" data-v="third" style="--tgl-c:#8764b8;--tgl-bg:#f3f0fa" onclick="setStat('third',this)">⚪ Сторонние</button>
+          <button class="tgl" data-v="warranty" style="--tgl-c:#0e7c3f;--tgl-bg:#dff6dd" onclick="setStat('warranty',this)">✅ Гарантия</button>
+          <button class="tgl" data-v="problems" style="--tgl-c:#c4314b;--tgl-bg:#fde7eb" onclick="setStat('problems',this)">⚠ Проблемы</button>
+        </div>
+      </div>
     </div>
 
-    <div class="eq-list" id="eqList">
-      <div class="empty-list">Загрузка данных…</div>
+    <!-- CITY MODE -->
+    <div id="modeCity" style="display:none">
+      <div class="fp">
+        <div class="fp-label">Поиск по городу</div>
+        <div class="sinput" style="position:relative">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="cityInput" placeholder="Введите город или регион…" oninput="onCityInput()" autocomplete="off">
+          <div class="autocomplete" id="cityAC"></div>
+        </div>
+      </div>
     </div>
+
+    <!-- COMPANY MODE -->
+    <div id="modeCompany" style="display:none">
+      <div class="fp">
+        <div class="fp-label">Поиск по клиенту</div>
+        <div class="sinput" style="position:relative">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="companyInput" placeholder="Название компании…" oninput="onCompanyInput()" autocomplete="off">
+          <div class="autocomplete" id="companyAC"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LIST -->
+    <div class="eq-list" id="eqList"><div class="eq-empty">Загрузка…</div></div>
   </aside>
 
   <!-- MAP -->
   <div class="map-wrap">
-    <div class="map-loading" id="mapLoading">
+    <div class="map-overlay" id="mapOverlay">
       <div class="spinner"></div>
-      <span id="loadingMsg">Загружаем оборудование из Б24…</span>
+      <span id="loadMsg">Загружаем оборудование из Б24…</span>
     </div>
     <div id="map"></div>
 
-    <!-- Detail panel -->
-    <div class="detail-panel" id="detailPanel">
+    <div class="map-controls">
+      <button class="map-btn" id="btnTickets" onclick="toggleTicketsLayer()">
+        🔔 Заявки на сервис
+      </button>
+      <button class="map-btn refresh" onclick="refreshData()">
+        ↻ Обновить
+      </button>
+    </div>
+
+    <div class="dp" id="dp">
       <div class="dp-head">
         <div class="dp-title" id="dpTitle">—</div>
-        <button class="dp-close" onclick="closeDetail()">✕</button>
+        <button class="dp-x" onclick="closeDP()">✕</button>
       </div>
       <div class="dp-body" id="dpBody"></div>
     </div>
@@ -196,13 +271,28 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
-let allItems = [];
-let filteredItems = [];
-let currentFilter = 'all';
-let debT = null;
-let map, clusterGroup;
-let markers = {}; // itemId -> marker
+// ── State ─────────────────────────────────────────────────────────────────────
+let allItems = [], filteredItems = [];
+let manufacturers = [], deviceNames = [], cities = [], companies = [];
+let mode = 'equipment';
+let curMfr = '', curModel = '', curStatus = '', curCity = '', curCompany = '';
+let showTickets = false;
 let selectedId = null;
+let map, clusterGroup, ticketLayer;
+let markers = {};
+let debT = null;
+
+const STAGE_NAMES = {
+  'DT1058_11:UC_N8RQ0V':'Заявки клиентов','DT1058_11:NEW':'Необработанные',
+  'DT1058_11:PREPARATION':'Назначение инженера','DT1058_11:CLIENT':'Заявка в работе',
+  'DT1058_11:1':'Срочная в работе','DT1058_11:2':'Заявка на обучение',
+  'DT1058_11:3':'Заявка исполнена',
+};
+const STAGE_COLORS = {
+  'DT1058_11:UC_N8RQ0V':'#468ee5','DT1058_11:NEW':'#22B9FF',
+  'DT1058_11:PREPARATION':'#88B9FF','DT1058_11:CLIENT':'#10e5fc',
+  'DT1058_11:1':'#FF6B35','DT1058_11:2':'#9B59B6','DT1058_11:3':'#55D0E0',
+};
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
@@ -210,243 +300,348 @@ async function init() {
     const r = await fetch('/auth/me');
     if (!r.ok) { window.location.href = '/login.html'; return; }
     const d = await r.json();
-    document.getElementById('currentUser').textContent = d.user.displayName;
+    document.getElementById('uname').textContent = d.user.displayName;
   } catch(e) { window.location.href = '/login.html'; return; }
-
   initMap();
   loadData();
 }
 
 function initMap() {
-  map = L.map('map', { center: [48.0196, 66.9237], zoom: 5 });
+  map = L.map('map', { center: [48.5, 66.9], zoom: 5 });
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors',
-    maxZoom: 19,
+    attribution: '© OpenStreetMap', maxZoom: 19,
   }).addTo(map);
-
   clusterGroup = L.markerClusterGroup({
     showCoverageOnHover: false,
     maxClusterRadius: 60,
-    iconCreateFunction: createClusterIcon,
+    iconCreateFunction: createCluster,
   });
   map.addLayer(clusterGroup);
+  ticketLayer = L.layerGroup();
 }
 
-function createClusterIcon(cluster) {
-  const markers = cluster.getAllChildMarkers();
-  const hasProblems = markers.some(m => m.options.hasProblems);
-  const count = cluster.getChildCount();
-  const color = hasProblems ? '#c4314b' : '#0f6cbd';
+function createCluster(cluster) {
+  const ms = cluster.getAllChildMarkers();
+  const hasProb = ms.some(m => m.options.hasProblems);
+  const c = hasProb ? '#c4314b' : '#0f6cbd';
   return L.divIcon({
-    html: `<div style="background:${color};color:#fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.25);border:2px solid #fff;">${count}</div>`,
-    className: '',
-    iconSize: [36, 36],
-    iconAnchor: [18, 18],
+    html: `<div style="background:${c};color:#fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.25);border:2px solid #fff">${cluster.getChildCount()}</div>`,
+    className:'',iconSize:[36,36],iconAnchor:[18,18],
   });
 }
 
-function makeMarkerIcon(item) {
-  const color = item.hasProblems ? '#c4314b' : item.seller === 'ProLabSupport' ? '#0f6cbd' : '#8764b8';
+function makeIcon(item) {
+  const c = item.hasProblems ? '#c4314b' : item.seller === 'ProLabSupport' ? '#0f6cbd' : '#8764b8';
   return L.divIcon({
-    html: `<div style="background:${color};border:2px solid #fff;border-radius:50%;width:14px;height:14px;box-shadow:0 1px 4px rgba(0,0,0,.3);"></div>`,
-    className: '',
-    iconSize: [14, 14],
-    iconAnchor: [7, 7],
+    html: `<div style="background:${c};border:2px solid #fff;border-radius:50%;width:14px;height:14px;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>`,
+    className:'',iconSize:[14,14],iconAnchor:[7,7],
   });
 }
 
-async function loadData() {
+// ── Data loading ──────────────────────────────────────────────────────────────
+async function loadData(force = false) {
+  document.getElementById('mapOverlay').style.display = 'flex';
   try {
-    document.getElementById('loadingMsg').textContent = 'Загружаем оборудование из Б24…';
-    const r = await fetch('/equipment/map-data');
+    const r = await fetch('/equipment/map-data' + (force ? '?refresh=1' : ''));
     const d = await r.json();
-    if (!d.ok) { document.getElementById('loadingMsg').textContent = 'Ошибка: ' + d.error; return; }
-
+    if (!d.ok) { document.getElementById('loadMsg').textContent = 'Ошибка: ' + d.error; return; }
     allItems = d.items;
+    manufacturers = d.manufacturers || [];
+    deviceNames = d.deviceNames || [];
+    cities = d.cities || [];
+    companies = d.companies || [];
     updateStats(d.stats);
-    applyFilter();
-    document.getElementById('mapLoading').style.display = 'none';
-
-    const unmapped = allItems.filter(e => !e.lat || !e.lng).length;
-    if (unmapped > 0) console.log(`ℹ️ ${unmapped} приборов без координат (адрес не геокодирован)`);
+    buildMfrChips();
+    buildModelSelect();
+    applyFilters();
+    document.getElementById('mapOverlay').style.display = 'none';
   } catch(e) {
-    document.getElementById('loadingMsg').textContent = 'Ошибка загрузки: ' + e.message;
+    document.getElementById('loadMsg').textContent = 'Ошибка загрузки: ' + e.message;
   }
 }
 
-function updateStats(stats) {
-  document.getElementById('statTotal').textContent = stats.total;
-  document.getElementById('statMapped').textContent = stats.mapped;
-  document.getElementById('statWarranty').textContent = stats.warranty;
-  document.getElementById('statProblems').textContent = stats.problems;
+async function refreshData() { await loadData(true); }
+
+function updateStats(s) {
+  document.getElementById('sTotal').textContent = s.total;
+  document.getElementById('sMapped').textContent = s.mapped;
+  document.getElementById('sWarr').textContent = s.warranty;
+  document.getElementById('sProb').textContent = s.problems;
 }
 
-// ── Filter & render ───────────────────────────────────────────────────────────
-function setFilter(filter, el) {
-  currentFilter = filter;
-  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-  el.classList.add('active');
-  applyFilter();
+// ── Filter builders ───────────────────────────────────────────────────────────
+function buildMfrChips() {
+  const MFR_COLORS = {
+    '2112':['#0f6cbd','#eff6fc'],'2113':['#0e7c3f','#dff6dd'],
+    '2114':['#8764b8','#f3f0fa'],'5799':['#bc4b09','#fff4e5'],
+    '2115':['#c4314b','#fde7eb'],'2118':['#605e5c','#f3f2f1'],
+  };
+  const wrap = document.getElementById('mfrChips');
+  wrap.innerHTML = `<span class="mchip ${!curMfr?'on':''}" data-id="" onclick="setMfr('',this)">Все</span>`;
+  for (const m of manufacturers) {
+    const [c,bg] = MFR_COLORS[m.id] || ['#605e5c','#f3f2f1'];
+    wrap.innerHTML += `<span class="mchip ${curMfr===m.id?'on':''}" data-id="${m.id}" style="--chip-c:${c};--chip-bg:${bg}" onclick="setMfr('${m.id}',this)">${esc(m.name)} <span class="chip-cnt">${m.count}</span></span>`;
+  }
 }
 
-function debSearch() { clearTimeout(debT); debT = setTimeout(applyFilter, 300); }
+function buildModelSelect() {
+  const sel = document.getElementById('modelSel');
+  // Filter to current manufacturer
+  const filtered = curMfr
+    ? deviceNames.filter(d => {
+        const items = allItems.filter(i => i.manufacturerIds.includes(curMfr));
+        return items.some(i => i.deviceNameIds.includes(d.id));
+      })
+    : deviceNames;
+  sel.innerHTML = '<option value="">Все модели</option>';
+  for (const d of filtered) {
+    sel.innerHTML += `<option value="${d.id}" ${curModel===d.id?'selected':''}>${esc(d.name)} (${d.count})</option>`;
+  }
+}
 
-function applyFilter() {
-  const search = document.getElementById('searchInput').value.toLowerCase().trim();
+// ── Filter state setters ──────────────────────────────────────────────────────
+function setMfr(id, el) {
+  curMfr = id; curModel = '';
+  document.querySelectorAll('.mchip').forEach(c => c.classList.remove('on'));
+  el.classList.add('on');
+  buildModelSelect();
+  applyFilters();
+}
 
+function setStat(v, el) {
+  curStatus = v;
+  document.querySelectorAll('.tgl').forEach(t => t.classList.remove('on'));
+  el.classList.add('on');
+  applyFilters();
+}
+
+function setMode(m, el) {
+  mode = m;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+  el.classList.add('on');
+  document.getElementById('modeEquipment').style.display = m==='equipment'?'':'none';
+  document.getElementById('modeCity').style.display = m==='city'?'':'none';
+  document.getElementById('modeCompany').style.display = m==='company'?'':'none';
+  curCity = ''; curCompany = '';
+  document.getElementById('cityInput').value = '';
+  document.getElementById('companyInput').value = '';
+  applyFilters();
+}
+
+// ── Autocomplete ──────────────────────────────────────────────────────────────
+function onCityInput() {
+  clearTimeout(debT);
+  debT = setTimeout(() => {
+    const q = document.getElementById('cityInput').value.trim().toLowerCase();
+    const ac = document.getElementById('cityAC');
+    if (q.length < 1) { ac.classList.remove('show'); curCity=''; applyFilters(); return; }
+    const matches = cities.filter(c => c.name.toLowerCase().includes(q)).slice(0, 12);
+    ac.innerHTML = matches.map(c => `<div class="ac-item" onclick="selectCity('${esc(c.name)}')">${esc(c.name)}<span class="ac-cnt">${c.count} шт.</span></div>`).join('');
+    ac.classList.toggle('show', matches.length > 0);
+  }, 200);
+}
+
+function selectCity(name) {
+  document.getElementById('cityInput').value = name;
+  document.getElementById('cityAC').classList.remove('show');
+  curCity = name;
+  applyFilters();
+  // Fly to first item with coords in this city
+  const item = filteredItems.find(i => i.lat && i.lng);
+  if (item) map.flyTo([item.lat, item.lng], 10, { duration: 1 });
+}
+
+function onCompanyInput() {
+  clearTimeout(debT);
+  debT = setTimeout(() => {
+    const q = document.getElementById('companyInput').value.trim().toLowerCase();
+    const ac = document.getElementById('companyAC');
+    if (q.length < 2) { ac.classList.remove('show'); curCompany=''; applyFilters(); return; }
+    const matches = companies.filter(c => c.name.toLowerCase().includes(q)).slice(0, 12);
+    ac.innerHTML = matches.map(c => `<div class="ac-item" onclick="selectCompany('${c.id}','${esc(c.name)}')">${esc(c.name)}</div>`).join('');
+    ac.classList.toggle('show', matches.length > 0);
+  }, 200);
+}
+
+function selectCompany(id, name) {
+  document.getElementById('companyInput').value = name;
+  document.getElementById('companyAC').classList.remove('show');
+  curCompany = id;
+  applyFilters();
+  const item = filteredItems.find(i => i.lat && i.lng);
+  if (item) map.flyTo([item.lat, item.lng], 11, { duration: 1 });
+}
+
+// ── Main filter ───────────────────────────────────────────────────────────────
+function applyFilters() {
   filteredItems = allItems.filter(item => {
-    // Status filter
-    if (currentFilter === 'prolab' && item.seller !== 'ProLabSupport') return false;
-    if (currentFilter === 'third' && item.seller !== 'Сторонний продавец') return false;
-    if (currentFilter === 'warranty') {
+    if (curMfr && !item.manufacturerIds.includes(curMfr)) return false;
+    if (curModel && !item.deviceNameIds.includes(curModel)) return false;
+    if (curStatus === 'prolab' && item.seller !== 'ProLabSupport') return false;
+    if (curStatus === 'third' && item.seller !== 'Сторонний продавец') return false;
+    if (curStatus === 'warranty') {
       if (item.hasWarranty !== 'Есть') return false;
-      if (item.warrantyEnd && new Date(item.warrantyEnd) < new Date()) return false;
+      if (!item.warrantyEnd || new Date(item.warrantyEnd) < new Date()) return false;
     }
-    if (currentFilter === 'problems' && !item.hasProblems) return false;
-
-    // Search
-    if (search) {
-      const hay = [item.title, item.address, ...(item.serialNums||[]), ...(item.catalogNums||[]), item.manufacturer].join(' ').toLowerCase();
-      if (!hay.includes(search)) return false;
-    }
+    if (curStatus === 'problems' && !item.hasProblems) return false;
+    if (curCity && item.city?.toLowerCase() !== curCity.toLowerCase()) return false;
+    if (curCompany && String(item.companyId) !== curCompany) return false;
     return true;
   });
 
-  renderList();
-  renderMarkers();
+  if (mode === 'equipment' || mode === 'city' || mode === 'company') {
+    document.getElementById('modelSel').value = curModel;
+    renderList();
+    renderMarkers();
+  }
 }
 
+// ── Render list ───────────────────────────────────────────────────────────────
 function renderList() {
   const wrap = document.getElementById('eqList');
   if (!filteredItems.length) {
-    wrap.innerHTML = '<div class="empty-list">Ничего не найдено</div>';
-    return;
+    wrap.innerHTML = `<div class="eq-empty">Ничего не найдено</div>`; return;
   }
-
   wrap.innerHTML = filteredItems.map(item => {
-    const hasCoords = item.lat && item.lng;
-    const warrantyOk = item.hasWarranty === 'Есть' && item.warrantyEnd && new Date(item.warrantyEnd) > new Date();
-    const warrantyExpiring = warrantyOk && (new Date(item.warrantyEnd) - new Date()) < 90*24*60*60*1000;
-    const sellerIcon = item.seller === 'ProLabSupport' ? '🔵' : '⚪';
-
+    const wOk = item.hasWarranty === 'Есть' && item.warrantyEnd && new Date(item.warrantyEnd) > new Date();
+    const wExp = wOk && (new Date(item.warrantyEnd) - new Date()) < 90*24*60*60*1000;
     let tags = '';
-    if (item.hasProblems) tags += `<span class="eq-meta-tag danger">⚠ Активные заявки</span>`;
-    if (warrantyOk) tags += `<span class="eq-meta-tag ${warrantyExpiring?'warn':'success'}">Гарантия до ${fmtDate(item.warrantyEnd)}</span>`;
-    if (item.manufacturer) tags += `<span class="eq-meta-tag gray">${esc(item.manufacturer)}</span>`;
-    if (!hasCoords) tags += `<span class="eq-meta-tag gray">Без адреса</span>`;
-
-    return `<div class="eq-item ${item.hasProblems?'has-problems':''} ${!hasCoords?'no-coords':''} ${selectedId===item.id?'active':''}" id="eq-${item.id}" onclick="selectItem(${item.id})">
-      <div class="eq-item-header">
-        <div class="eq-item-icon ${item.seller==='ProLabSupport'?'prolab':'third'}">${sellerIcon}</div>
-        <div class="eq-item-name">${esc(item.title)}</div>
+    if (item.hasProblems) tags += `<span class="tag danger">⚠ Активные заявки</span>`;
+    if (wOk) tags += `<span class="tag ${wExp?'warn':'success'}">Гарантия до ${fmtDate(item.warrantyEnd)}</span>`;
+    if (!item.lat && !item.lng) tags += `<span class="tag">📍 Без координат</span>`;
+    return `<div class="eq-item ${item.hasProblems?'prob':''} ${selectedId===item.id?'on':''}" id="eq-${item.id}" onclick="selectItem(${item.id})">
+      <div class="eq-row">
+        <div class="eq-icon ${item.seller==='ProLabSupport'?'pl':'th'}">${item.seller==='ProLabSupport'?'🔵':'⚪'}</div>
+        <div class="eq-name">${esc(item.title)}</div>
       </div>
-      <div class="eq-item-meta">
-        ${item.companyName ? `<span style="font-weight:600;color:var(--text-2)">${esc(item.companyName)}</span>` : ''}
-        ${item.address ? `<span>${esc(item.address.slice(0,45))}</span>` : ''}
+      <div class="eq-meta">
+        ${item.companyName?`<span style="font-weight:600;color:var(--text-2)">${esc(item.companyName)}</span>`:''}
+        ${item.city?`<span>${esc(item.city)}</span>`:''}
         ${tags}
       </div>
     </div>`;
   }).join('');
 }
 
+// ── Render map markers ────────────────────────────────────────────────────────
 function renderMarkers() {
   clusterGroup.clearLayers();
   markers = {};
-
   for (const item of filteredItems) {
     if (!item.lat || !item.lng) continue;
-    const m = L.marker([item.lat, item.lng], {
-      icon: makeMarkerIcon(item),
-      hasProblems: item.hasProblems,
-    });
+    const m = L.marker([item.lat, item.lng], { icon: makeIcon(item), hasProblems: item.hasProblems });
     m.on('click', () => selectItem(item.id));
-    m.bindTooltip(`<strong>${esc(item.title)}</strong><br>${esc(item.address||'')}`, { direction: 'top', offset: [0,-6] });
+    m.bindTooltip(`<strong>${esc(item.title)}</strong><br>${esc(item.companyName||'')}${item.city?'<br>'+esc(item.city):''}`, { direction:'top', offset:[0,-6] });
     clusterGroup.addLayer(m);
     markers[item.id] = m;
   }
 }
 
+// ── Tickets layer ─────────────────────────────────────────────────────────────
+function toggleTicketsLayer() {
+  showTickets = !showTickets;
+  const btn = document.getElementById('btnTickets');
+  btn.classList.toggle('on', showTickets);
+  if (showTickets) {
+    renderTicketsLayer();
+    map.addLayer(ticketLayer);
+  } else {
+    map.removeLayer(ticketLayer);
+  }
+}
+
+function renderTicketsLayer() {
+  ticketLayer.clearLayers();
+  const ticketsByLocation = {};
+  for (const item of allItems) {
+    if (!item.activeTickets?.length || !item.lat || !item.lng) continue;
+    const key = `${item.lat.toFixed(3)},${item.lng.toFixed(3)}`;
+    if (!ticketsByLocation[key]) ticketsByLocation[key] = { lat: item.lat, lng: item.lng, tickets: [], city: item.city };
+    ticketsByLocation[key].tickets.push(...item.activeTickets);
+  }
+  for (const loc of Object.values(ticketsByLocation)) {
+    const hasOv = loc.tickets.some(t => t.isOverdue);
+    const color = hasOv ? '#c4314b' : '#FF6B35';
+    const cnt = loc.tickets.length;
+    const icon = L.divIcon({
+      html: `<div style="background:${color};color:#fff;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.3);border:1.5px solid #fff;white-space:nowrap">🔔 ${cnt}</div>`,
+      className:'', iconAnchor:[20,12],
+    });
+    const byStage = {};
+    for (const t of loc.tickets) byStage[t.stageId] = (byStage[t.stageId]||0)+1;
+    const popup = L.popup({ maxWidth: 260 }).setContent(
+      `<div style="font-family:Inter,sans-serif;font-size:12px">
+        <strong>${loc.city||'Неизвестный город'}</strong> — ${cnt} заявок<br><br>
+        ${Object.entries(byStage).map(([s,c]) =>
+          `<span style="display:inline-block;background:#f3f2f1;border-radius:5px;padding:2px 8px;margin:2px;font-size:11px">${esc(STAGE_NAMES[s]||s)}: ${c}</span>`
+        ).join('')}
+      </div>`
+    );
+    L.marker([loc.lat, loc.lng], { icon }).bindPopup(popup).addTo(ticketLayer);
+  }
+}
+
+// ── Select item ────────────────────────────────────────────────────────────────
 function selectItem(id) {
   selectedId = id;
   const item = allItems.find(e => e.id === id);
   if (!item) return;
-
-  // Highlight in list
-  document.querySelectorAll('.eq-item').forEach(el => el.classList.remove('active'));
-  document.getElementById('eq-' + id)?.classList.add('active');
-  document.getElementById('eq-' + id)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-
-  // Fly to on map
+  document.querySelectorAll('.eq-item').forEach(el => el.classList.remove('on'));
+  document.getElementById('eq-' + id)?.classList.add('on');
+  document.getElementById('eq-' + id)?.scrollIntoView({ block:'nearest', behavior:'smooth' });
   if (item.lat && item.lng) {
-    map.flyTo([item.lat, item.lng], 15, { duration: 0.8 });
+    map.flyTo([item.lat, item.lng], 14, { duration: 0.8 });
     markers[id]?.openTooltip();
   }
-
-  // Show detail panel
   showDetail(item);
 }
 
 function showDetail(item) {
-  document.getElementById('dpTitle').textContent = item.title;
-
-  const warrantyOk = item.hasWarranty === 'Есть' && item.warrantyEnd && new Date(item.warrantyEnd) > new Date();
-  const warrantyColor = warrantyOk ? '#0e7c3f' : '#c4314b';
-  const warrantyText = item.hasWarranty === 'Есть'
-    ? `Есть (до ${fmtDate(item.warrantyEnd)})`
-    : (item.hasWarranty === 'Нет' ? 'Нет' : '—');
-
-  let ticketsHtml = '';
-  if (item.activeTickets && item.activeTickets.length) {
-    ticketsHtml = `<div class="dp-section">Активные заявки (${item.activeTickets.length})</div>`;
+  const wOk = item.hasWarranty === 'Есть' && item.warrantyEnd && new Date(item.warrantyEnd) > new Date();
+  const wColor = wOk ? 'var(--success)' : 'var(--danger)';
+  const wText = item.hasWarranty === 'Есть' ? `Есть (до ${fmtDate(item.warrantyEnd)})` : item.hasWarranty === 'Нет' ? 'Нет' : '—';
+  let tickets = '';
+  if (item.activeTickets?.length) {
+    tickets = `<div class="dp-sec">Активные заявки (${item.activeTickets.length})</div>`;
     for (const t of item.activeTickets) {
-      ticketsHtml += `<div class="dp-ticket ${t.isOverdue?'overdue':''}">
-        <div class="dp-ticket-title">#${t.id} ${esc(t.title||'').slice(0,60)}</div>
-        <div class="dp-ticket-stage">${esc(t.stageId)} ${t.isOverdue?'⚠ Просрочена':''}</div>
+      tickets += `<div class="dp-ticket ${t.isOverdue?'ov':''}">
+        <div class="dp-ticket-t">#${t.id} ${esc((t.title||'').replace(/^[-\s–—]+/,'').slice(0,55))}</div>
+        <div class="dp-ticket-s">${esc(STAGE_NAMES[t.stageId]||t.stageId)}${t.isOverdue?' ⚠ Просрочена':''}</div>
         <a href="${t.url}" target="_blank" style="font-size:11px;color:var(--brand)">Открыть →</a>
       </div>`;
     }
   }
-
-  const stageNames = {
-    'DT1058_11:NEW':'Необработанные','DT1058_11:PREPARATION':'Назначение инженера',
-    'DT1058_11:CLIENT':'Заявка в работе','DT1058_11:1':'Срочная в работе',
-    'DT1058_11:2':'Заявка на обучение','DT1058_11:3':'Заявка исполнена',
-    'DT1058_11:4':'Претензия',
-  };
-
+  document.getElementById('dpTitle').textContent = item.title;
   document.getElementById('dpBody').innerHTML = `
-    ${item.companyName ? `<div class="dp-row"><div class="dp-lbl">Клиент</div><div class="dp-val" style="font-weight:600">${esc(item.companyName)}</div></div>` : ''}
+    ${item.companyName?`<div class="dp-row"><div class="dp-lbl">Клиент</div><div class="dp-val" style="font-weight:600">${esc(item.companyName)}</div></div>`:''}
     <div class="dp-row"><div class="dp-lbl">Адрес</div><div class="dp-val">${esc(item.address||'—')}</div></div>
     <div class="dp-row"><div class="dp-lbl">Производитель</div><div class="dp-val">${esc(item.manufacturer||'—')}</div></div>
     <div class="dp-row"><div class="dp-lbl">Вид</div><div class="dp-val">${esc(item.deviceType||'—')}</div></div>
-    ${item.catalogNums?.length ? `<div class="dp-row"><div class="dp-lbl">Каталог №</div><div class="dp-val">${item.catalogNums.map(esc).join(', ')}</div></div>` : ''}
-    ${item.serialNums?.length ? `<div class="dp-row"><div class="dp-lbl">Серийный №</div><div class="dp-val">${item.serialNums.map(esc).join(', ')}</div></div>` : ''}
-    <div class="dp-row"><div class="dp-lbl">Гарантия</div><div class="dp-val" style="color:${warrantyColor};font-weight:600">${warrantyText}</div></div>
+    ${item.catalogNums?.length?`<div class="dp-row"><div class="dp-lbl">Каталог №</div><div class="dp-val">${item.catalogNums.map(esc).join(', ')}</div></div>`:''}
+    ${item.serialNums?.length?`<div class="dp-row"><div class="dp-lbl">Серийный №</div><div class="dp-val">${item.serialNums.map(esc).join(', ')}</div></div>`:''}
+    <div class="dp-row"><div class="dp-lbl">Гарантия</div><div class="dp-val" style="color:${wColor};font-weight:600">${wText}</div></div>
     <div class="dp-row"><div class="dp-lbl">Продавец</div><div class="dp-val">${esc(item.seller||'—')}</div></div>
-    ${item.serviceStart ? `<div class="dp-row"><div class="dp-lbl">Обслуживание</div><div class="dp-val">${fmtDate(item.serviceStart)} — ${item.serviceEnd?fmtDate(item.serviceEnd):'∞'}</div></div>` : ''}
-    ${item.activeTickets?.length ? `
-      <div class="dp-section">Активные заявки на сервис (${item.activeTickets.length})</div>
-      ${item.activeTickets.map(t => `<div class="dp-ticket ${t.isOverdue?'overdue':''}">
-        <div class="dp-ticket-title">#${t.id} ${esc((t.title||'').replace(/^[-\s–—]+/,'').slice(0,55))}</div>
-        <div class="dp-ticket-stage">${esc(stageNames[t.stageId]||t.stageId)}${t.isOverdue?' ⚠ Просрочена':''}</div>
-        <a href="${t.url}" target="_blank" style="font-size:11px;color:var(--brand)">Открыть в Б24 →</a>
-      </div>`).join('')}` : ''}
-    <a href="${item.url}" target="_blank" class="dp-btn">Открыть оборудование в Б24 →</a>`;
-
-  document.getElementById('detailPanel').classList.add('show');
+    ${item.serviceStart?`<div class="dp-row"><div class="dp-lbl">Обслуживание</div><div class="dp-val">${fmtDate(item.serviceStart)} — ${item.serviceEnd?fmtDate(item.serviceEnd):'∞'}</div></div>`:''}
+    ${tickets}
+    <a href="${item.url}" target="_blank" class="dp-btn">Открыть в Б24 →</a>`;
+  document.getElementById('dp').classList.add('show');
 }
 
-function closeDetail() {
-  document.getElementById('detailPanel').classList.remove('show');
+function closeDP() {
+  document.getElementById('dp').classList.remove('show');
   selectedId = null;
-  document.querySelectorAll('.eq-item').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.eq-item').forEach(el => el.classList.remove('on'));
 }
 
-function fmtDate(d) {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString('ru', { day:'2-digit', month:'2-digit', year:'numeric' });
-}
-function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+document.addEventListener('click', e => {
+  if (!e.target.closest('.sinput')) {
+    document.getElementById('cityAC')?.classList.remove('show');
+    document.getElementById('companyAC')?.classList.remove('show');
+  }
+});
+
+function fmtDate(d) { return d ? new Date(d).toLocaleDateString('ru', { day:'2-digit', month:'2-digit', year:'numeric' }) : '—'; }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 init();
 </script>
