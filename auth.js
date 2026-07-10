@@ -75,6 +75,13 @@ async function initDB() {
       geocode_failed BOOLEAN DEFAULT false
     );
 
+    CREATE TABLE IF NOT EXISTS ticketsmodule_equipment_cache (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      data JSONB NOT NULL,
+      device_names JSONB DEFAULT '{}',
+      built_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS ticketsmodule_login_attempts (
       ip VARCHAR(100) NOT NULL,
       attempted_at TIMESTAMPTZ DEFAULT NOW()
