@@ -67,9 +67,6 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
 
 /* Manufacturer chips */
 .mfr-chips{display:flex;flex-wrap:wrap;gap:4px;}
-.mchip{padding:4px 10px;border-radius:20px;border:1.5px solid var(--stroke);background:var(--card);font-size:11px;font-weight:600;color:var(--text-2);cursor:pointer;transition:all .15s;white-space:nowrap;display:inline-flex;align-items:center;gap:4px;}
-.mchip:hover{border-color:var(--stroke-2);}
-.mchip.on{border-color:var(--chip-c,var(--brand));background:var(--chip-bg,var(--brand-tint));color:var(--chip-c,var(--brand));}
 .chip-cnt{font-size:10px;opacity:.7;}
 
 /* Device model selector */
@@ -189,9 +186,9 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
       <!-- Manufacturer filter -->
       <div class="fp">
         <div class="fp-label">Производитель</div>
-        <div class="mfr-chips" id="mfrChips">
-          <span class="mchip on" data-id="" onclick="setMfr('',this)">Все</span>
-        </div>
+        <select class="fsel" id="mfrSel" onchange="setMfrFromSel()">
+          <option value="">Все производители</option>
+        </select>
       </div>
       <!-- Device model -->
       <div class="fp">
@@ -200,16 +197,16 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
           <option value="">Все модели</option>
         </select>
       </div>
-      <!-- Status toggles -->
+      <!-- Status -->
       <div class="fp">
         <div class="fp-label">Статус</div>
-        <div class="toggle-row">
-          <button class="tgl on" data-v="" onclick="setStat('',this)">Все</button>
-          <button class="tgl" data-v="prolab" style="--tgl-c:#0f6cbd;--tgl-bg:#eff6fc" onclick="setStat('prolab',this)">🔵 ProLabSupport</button>
-          <button class="tgl" data-v="third" style="--tgl-c:#8764b8;--tgl-bg:#f3f0fa" onclick="setStat('third',this)">⚪ Сторонние</button>
-          <button class="tgl" data-v="warranty" style="--tgl-c:#0e7c3f;--tgl-bg:#dff6dd" onclick="setStat('warranty',this)">✅ Гарантия</button>
-          <button class="tgl" data-v="problems" style="--tgl-c:#c4314b;--tgl-bg:#fde7eb" onclick="setStat('problems',this)">⚠ Проблемы</button>
-        </div>
+        <select class="fsel" id="statusSel" onchange="setStatFromSel()">
+          <option value="">Все</option>
+          <option value="prolab">🔵 ProLabSupport</option>
+          <option value="third">⚪ Сторонние продавцы</option>
+          <option value="warranty">✅ На гарантии</option>
+          <option value="problems">⚠ Есть проблемы</option>
+        </select>
       </div>
     </div>
 
@@ -411,16 +408,11 @@ function updateStats(s) {
 
 // ── Filter builders ───────────────────────────────────────────────────────────
 function buildMfrChips() {
-  const MFR_COLORS = {
-    '2112':['#0f6cbd','#eff6fc'],'2113':['#0e7c3f','#dff6dd'],
-    '2114':['#8764b8','#f3f0fa'],'5799':['#bc4b09','#fff4e5'],
-    '2115':['#c4314b','#fde7eb'],'2118':['#605e5c','#f3f2f1'],
-  };
-  const wrap = document.getElementById('mfrChips');
-  wrap.innerHTML = `<span class="mchip ${!curMfr?'on':''}" data-id="" onclick="setMfr('',this)">Все</span>`;
+  const sel = document.getElementById('mfrSel');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Все производители</option>';
   for (const m of manufacturers) {
-    const [c,bg] = MFR_COLORS[m.id] || ['#605e5c','#f3f2f1'];
-    wrap.innerHTML += `<span class="mchip ${curMfr===m.id?'on':''}" data-id="${m.id}" style="--chip-c:${c};--chip-bg:${bg}" onclick="setMfr('${m.id}',this)">${esc(m.name)} <span class="chip-cnt">${m.count}</span></span>`;
+    sel.innerHTML += `<option value="${m.id}" ${curMfr===m.id?'selected':''}>${esc(m.name)} (${m.count})</option>`;
   }
 }
 
@@ -440,19 +432,24 @@ function buildModelSelect() {
 }
 
 // ── Filter state setters ──────────────────────────────────────────────────────
-function setMfr(id, el) {
+function setMfr(id) {
   curMfr = id; curModel = '';
-  document.querySelectorAll('.mchip').forEach(c => c.classList.remove('on'));
-  el.classList.add('on');
+  document.getElementById('modelSel').value = '';
   buildModelSelect();
   applyFilters();
 }
 
-function setStat(v, el) {
+function setMfrFromSel() {
+  setMfr(document.getElementById('mfrSel').value);
+}
+
+function setStat(v) {
   curStatus = v;
-  document.querySelectorAll('.tgl').forEach(t => t.classList.remove('on'));
-  el.classList.add('on');
   applyFilters();
+}
+
+function setStatFromSel() {
+  setStat(document.getElementById('statusSel').value);
 }
 
 function setMode(m, el) {
@@ -586,7 +583,6 @@ function toggleTicketsLayer() {
   const btn = document.getElementById('btnTickets');
   btn.classList.toggle('on', showTickets);
   if (showTickets) {
-    // Hide equipment markers, show only tickets
     map.removeLayer(clusterGroup);
     renderTicketsLayer();
     map.addLayer(ticketLayer);
@@ -600,51 +596,87 @@ function toggleTicketsLayer() {
 function renderTicketsLayer() {
   ticketLayer.clearLayers();
 
-  // Group tickets by city (combine items at same city coords)
+  // Check data is loaded
+  if (!allItems.length) {
+    alert('Данные ещё загружаются, подождите немного и попробуйте снова');
+    showTickets = false;
+    document.getElementById('btnTickets').classList.remove('on');
+    map.addLayer(clusterGroup);
+    return;
+  }
+
   const ticketsByCity = {};
+
   for (const item of allItems) {
     if (!item.activeTickets?.length) continue;
-    // Use item coords if available, otherwise skip
-    if (!item.lat || !item.lng) continue;
-    const key = item.city || `${item.lat.toFixed(2)},${item.lng.toFixed(2)}`;
-    if (!ticketsByCity[key]) ticketsByCity[key] = { lat: item.lat, lng: item.lng, tickets: [], city: item.city };
+
+    // Need coordinates — from item directly
+    const lat = item.lat;
+    const lng = item.lng;
+    if (!lat || !lng) continue;
+
+    const key = item.city || `${lat.toFixed(3)},${lng.toFixed(3)}`;
+    if (!ticketsByCity[key]) {
+      ticketsByCity[key] = { lat, lng, tickets: [], city: item.city };
+    }
     ticketsByCity[key].tickets.push(...item.activeTickets);
   }
 
-  let totalShown = 0;
-  for (const loc of Object.values(ticketsByCity)) {
+  const locs = Object.values(ticketsByCity);
+
+  if (!locs.length) {
+    // No tickets with coordinates found — show info
+    const totalTickets = allItems.reduce((s, i) => s + (i.activeTickets?.length||0), 0);
+    const msg = totalTickets > 0
+      ? `Найдено ${totalTickets} активных заявок, но у связанного оборудования нет координат на карте. Сначала дождитесь завершения геокодирования.`
+      : 'Активных заявок не найдено';
+    alert(msg);
+    showTickets = false;
+    document.getElementById('btnTickets').classList.remove('on');
+    map.addLayer(clusterGroup);
+    return;
+  }
+
+  for (const loc of locs) {
     const hasOv = loc.tickets.some(t => t.isOverdue);
     const color = hasOv ? '#c4314b' : '#FF6B35';
     const cnt = loc.tickets.length;
-    totalShown += cnt;
 
     const icon = L.divIcon({
-      html: `<div style="background:${color};color:#fff;border-radius:10px;padding:5px 11px;font-size:12px;font-weight:700;box-shadow:0 3px 10px rgba(0,0,0,.3);border:2px solid #fff;white-space:nowrap;display:flex;align-items:center;gap:4px"><span>🔔</span><span>${cnt}</span></div>`,
-      className: '', iconAnchor: [24, 16],
+      html: `<div style="background:${color};color:#fff;border-radius:10px;padding:5px 11px;font-size:12px;font-weight:700;box-shadow:0 3px 10px rgba(0,0,0,.3);border:2px solid #fff;white-space:nowrap">🔔 ${cnt}</div>`,
+      className: '', iconAnchor: [30, 16],
     });
 
     const byStage = {};
     for (const t of loc.tickets) byStage[t.stageId] = (byStage[t.stageId]||0)+1;
-    const stageRows = Object.entries(byStage).map(([s,c]) => {
-      const clr = s.includes(':1') ? '#FF6B35' : s.includes('NEW') || s.includes('UC_N8') ? '#22B9FF' : '#605e5c';
-      return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #f0f0f0"><span style="color:${clr};font-weight:600">${esc(STAGE_NAMES[s]||s)}</span><span style="font-weight:700">${c}</span></div>`;
+
+    const stageRows = Object.entries(byStage).map(([s, c]) => {
+      const clr = s.includes(':1') ? '#FF6B35' : (s.includes('NEW') || s.includes('UC_N8')) ? '#22B9FF' : '#605e5c';
+      return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #f0f0f0">
+        <span style="color:${clr};font-weight:600;font-size:11px">${esc(STAGE_NAMES[s]||s)}</span>
+        <span style="font-weight:700">${c}</span>
+      </div>`;
     }).join('');
 
-    const popup = L.popup({ maxWidth: 280, className: 'ticket-popup' }).setContent(
+    const popup = L.popup({ maxWidth: 280 }).setContent(
       `<div style="font-family:Inter,sans-serif;font-size:12px;min-width:200px">
         <div style="font-weight:700;font-size:13px;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid #f0f0f0">
           📍 ${esc(loc.city||'Локация')}
         </div>
-        <div style="margin-bottom:8px;color:#605e5c">Активных заявок: <strong style="color:#201f1e">${cnt}</strong>${hasOv ? ' <span style="color:#c4314b">⚠ есть просроченные</span>' : ''}</div>
+        <div style="margin-bottom:8px;color:#605e5c">
+          Активных заявок: <strong style="color:#201f1e">${cnt}</strong>
+          ${hasOv ? ' <span style="color:#c4314b">⚠ есть просроченные</span>' : ''}
+        </div>
         <div>${stageRows}</div>
       </div>`
     );
     L.marker([loc.lat, loc.lng], { icon }).bindPopup(popup).addTo(ticketLayer);
   }
 
-  if (totalShown === 0) {
-    // Show message if no tickets with coords
-    document.getElementById('loadMsg') && (document.getElementById('loadMsg').textContent = 'Нет активных заявок с координатами');
+  // Fit map to ticket markers
+  if (locs.length > 0) {
+    const bounds = L.latLngBounds(locs.map(l => [l.lat, l.lng]));
+    map.fitBounds(bounds, { padding: [40, 40] });
   }
 }
 
