@@ -208,6 +208,12 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
           <option value="problems">⚠ Есть проблемы</option>
         </select>
       </div>
+      <!-- Reset -->
+      <div class="fp">
+        <button onclick="resetFilters()" style="width:100%;background:var(--surface);border:1.5px solid var(--stroke-2);border-radius:8px;padding:9px;font-size:12.5px;font-weight:600;color:var(--text-2);cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--stroke-2)';this.style.color='var(--text-2)'">
+          ↺ Сбросить все фильтры
+        </button>
+      </div>
     </div>
 
     <!-- CITY MODE -->
@@ -450,6 +456,17 @@ function setStat(v) {
 
 function setStatFromSel() {
   setStat(document.getElementById('statusSel').value);
+}
+
+function resetFilters() {
+  curMfr = ''; curModel = ''; curStatus = ''; curCity = ''; curCompany = '';
+  document.getElementById('mfrSel').value = '';
+  document.getElementById('modelSel').value = '';
+  document.getElementById('statusSel').value = '';
+  document.getElementById('cityInput').value = '';
+  document.getElementById('companyInput').value = '';
+  buildModelSelect();
+  applyFilters();
 }
 
 function setMode(m, el) {
