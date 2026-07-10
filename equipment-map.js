@@ -149,9 +149,18 @@ async function fetchDeviceNames(b24call) {
   }
 }
 
-// ── Link tickets to equipment via ufCrm8_1732855747 ──────────────────────────
+// ── Link tickets to equipment via ufCrm8_1732855747 (or fallback by companyId) ──
 async function fetchAndLinkTickets(equipmentMap, b24call) {
   const FINAL = new Set(['DT1058_11:SUCCESS','DT1058_11:FAIL','DT1058_11:4']);
+
+  // Build company → equipment index for fallback
+  const companyToEquipment = {};
+  for (const item of Object.values(equipmentMap)) {
+    if (!item.companyId) continue;
+    if (!companyToEquipment[item.companyId]) companyToEquipment[item.companyId] = [];
+    companyToEquipment[item.companyId].push(item.id);
+  }
+
   let start = 0;
   while (true) {
     const data = await b24call('crm.item.list', {
@@ -163,19 +172,36 @@ async function fetchAndLinkTickets(equipmentMap, b24call) {
     });
     const batch = data.result?.items || [];
     if (!batch.length) break;
+
     for (const t of batch) {
       if (FINAL.has(t.stageId)) continue;
-      for (const eqId of toArray(t[F58_EQUIPMENT_LINK]).map(Number)) {
-        if (!equipmentMap[eqId]) continue;
-        const ticket = {
-          id: t.id, title: t.title, stageId: t.stageId,
-          isOverdue: t.ufCrm8_1732856215147 === '1807',
-          url: `https://crm.prolabsupport.kz/crm/type/1058/details/${t.id}/`,
-        };
-        equipmentMap[eqId].activeTickets.push(ticket);
-        if (ticket.isOverdue) equipmentMap[eqId].hasProblems = true;
+      const ticket = {
+        id: t.id, title: t.title, stageId: t.stageId,
+        isOverdue: t.ufCrm8_1732856215147 === '1807',
+        url: `https://crm.prolabsupport.kz/crm/type/1058/details/${t.id}/`,
+      };
+
+      // Primary: link via equipment field
+      const linkedIds = toArray(t[F58_EQUIPMENT_LINK]).map(Number).filter(Boolean);
+      if (linkedIds.length) {
+        for (const eqId of linkedIds) {
+          if (!equipmentMap[eqId]) continue;
+          equipmentMap[eqId].activeTickets.push(ticket);
+          if (ticket.isOverdue) equipmentMap[eqId].hasProblems = true;
+        }
+        continue;
+      }
+
+      // Fallback: link via companyId — attach to first equipment of that company
+      if (t.companyId && companyToEquipment[t.companyId]) {
+        const eqId = companyToEquipment[t.companyId][0]; // first equipment of company
+        if (equipmentMap[eqId]) {
+          equipmentMap[eqId].activeTickets.push(ticket);
+          if (ticket.isOverdue) equipmentMap[eqId].hasProblems = true;
+        }
       }
     }
+
     const total = data.total ?? (start + batch.length);
     start += batch.length;
     if (!data.next || start >= total) break;
@@ -201,7 +227,23 @@ async function fetchCompanyNames(companyIds, b24call) {
 // ── Geocode city via Nominatim ────────────────────────────────────────────────
 const cityCoordCache = {};
 
-async function geocodeCity(city, country = 'Казахстан') {
+const COUNTRY_MAP = {
+  'узбекистан': 'Uzbekistan',
+  'кыргызстан': 'Kyrgyzstan',
+  'таджикистан': 'Tajikistan',
+  'россия': 'Russia',
+};
+
+function detectCountry(address) {
+  if (!address) return 'Kazakhstan';
+  const lower = address.toLowerCase();
+  for (const [word, country] of Object.entries(COUNTRY_MAP)) {
+    if (lower.includes(word)) return country;
+  }
+  return 'Kazakhstan';
+}
+
+async function geocodeCity(city, country = 'Kazakhstan') {
   if (!city) return null;
   const key = `${city}|${country}`;
   if (cityCoordCache[key] !== undefined) return cityCoordCache[key];
@@ -237,9 +279,10 @@ async function geocodeEquipment(items, pool) {
       continue;
     }
 
-    // Geocode by city (much more reliable than full address)
+    // Detect country from original address, geocode by city
+    const country = detectCountry(item.address);
     await new Promise(r => setTimeout(r, 1100));
-    const coords = await geocodeCity(item.city);
+    const coords = await geocodeCity(item.city, country);
 
     await pool.query(
       `INSERT INTO ticketsmodule_equipment_geo (item_id, address, lat, lng, geocode_failed)
