@@ -615,7 +615,7 @@ function renderTicketsLayer() {
 
   // Check data is loaded
   if (!allItems.length) {
-    alert('Данные ещё загружаются, подождите немного и попробуйте снова');
+    showToast('Данные ещё загружаются, подождите немного');
     showTickets = false;
     document.getElementById('btnTickets').classList.remove('on');
     map.addLayer(clusterGroup);
@@ -757,6 +757,20 @@ document.addEventListener('click', e => {
 });
 
 function fmtDate(d) { return d ? new Date(d).toLocaleDateString('ru', { day:'2-digit', month:'2-digit', year:'numeric' }) : '—'; }
+function showToast(msg, duration=4000) {
+  let t = document.getElementById('mapToast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'mapToast';
+    t.style.cssText = 'position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:#201f1e;color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:500;z-index:1000;box-shadow:0 4px 16px rgba(0,0,0,.25);white-space:nowrap;pointer-events:none;transition:opacity .3s;';
+    document.querySelector('.map-wrap').appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; }, duration);
+}
+
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 init();
