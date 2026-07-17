@@ -199,29 +199,34 @@ router.get('/map-search', requireAuth(), async (req, res) => {
     }
 
     // Response has: group, title, status, type, id (e.g. "С_ТпиЛицензияНаРазведку_10001999")
-    // Need to get bbox via the view endpoint
+    // Try to get feature bbox via extent endpoint
     const item = data[0];
-    const featureId = item.id; // e.g. "С_ТпиЛицензияНаРазведку_10001999"
+    const featureId = item.id;
     const layer = item.type || item.group;
 
-    // Try to get feature extent/center
     let center = null;
-    try {
-      const extentResp = await fetch(
-        `https://minerals.e-qazyna.kz/ru/contracts-map-extent?id=${encodeURIComponent(featureId)}&layer=${encodeURIComponent(layer)}`,
-        { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } }
-      );
-      if (extentResp.ok) {
-        const extentData = await extentResp.json();
-        console.log(`minerals extent [${featureId}]:`, JSON.stringify(extentData).slice(0, 200));
-        if (extentData.center) center = extentData.center;
-        else if (extentData.bbox) center = [(extentData.bbox[0]+extentData.bbox[2])/2, (extentData.bbox[1]+extentData.bbox[3])/2];
-        else if (extentData.x && extentData.y) center = [extentData.x, extentData.y];
-      }
-    } catch(e) {
-      console.error('extent error:', e.message);
+    // Try extent endpoint
+    const extentUrls = [
+      `https://minerals.e-qazyna.kz/ru/contracts-map-extent?id=${encodeURIComponent(featureId)}&layer=${encodeURIComponent(layer)}`,
+      `https://minerals.e-qazyna.kz/ru/contracts-map-extent?featureId=${encodeURIComponent(featureId)}`,
+      `https://minerals.e-qazyna.kz/ru/contracts-map-feature?id=${encodeURIComponent(featureId)}&layer=${encodeURIComponent(layer)}`,
+    ];
+    for (const url of extentUrls) {
+      try {
+        const r = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } });
+        const txt = await r.text();
+        console.log(`extent attempt [${url.split('?')[0].split('/').pop()}]: status=${r.status} body=${txt.slice(0,300)}`);
+        if (r.ok && txt.startsWith('{') || txt.startsWith('[')) {
+          const d = JSON.parse(txt);
+          if (d.center) { center = d.center; break; }
+          if (d.bbox) { center = [(d.bbox[0]+d.bbox[2])/2, (d.bbox[1]+d.bbox[3])/2]; break; }
+          if (d.x && d.y) { center = [d.x, d.y]; break; }
+          if (Array.isArray(d) && d[0]?.bbox) { center = [(d[0].bbox[0]+d[0].bbox[2])/2,(d[0].bbox[1]+d[0].bbox[3])/2]; break; }
+        }
+      } catch(e) { console.error('extent url error:', e.message); }
     }
 
+    console.log(`map-search result: id=${featureId} layer=${layer} center=${JSON.stringify(center)}`);
     res.json({ ok: true, data, center, item });
   } catch(e) {
     console.error('map-search proxy error:', e.message);
