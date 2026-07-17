@@ -146,4 +146,57 @@ router.get('/status', requireAuth(), (req, res) => {
   res.json({ ok: true, total, done, percent: Math.round(done / total * 100) });
 });
 
+
+// ── GET /licenses/resolve/:bin — fetch direct license links from minerals.e-qazyna.kz ──
+router.get('/resolve/:bin', requireAuth(), async (req, res) => {
+  const { bin } = req.params;
+  if (!bin || !/^\d{12}$/.test(bin)) return res.status(400).json({ ok: false, error: 'Неверный БИН' });
+
+  try {
+    // Fetch the license list page filtered by BIN
+    const url = `https://minerals.e-qazyna.kz/ru/guest/reestr/license/list?bin=${bin}`;
+    const resp = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'ru-RU,ru;q=0.9',
+      },
+      timeout: 10000,
+    });
+    const html = await resp.text();
+
+    // Extract license links: /ru/guest/reestr/contract/list/{ID}/View
+    const matches = [...html.matchAll(/\/ru\/guest\/reestr\/contract\/list\/(\d+)\/View/g)];
+    const ids = [...new Set(matches.map(m => m[1]))];
+
+    if (!ids.length) {
+      return res.json({ ok: true, licenses: [], message: 'Лицензии не найдены или БИН не совпадает' });
+    }
+
+    // Extract license numbers and types from table rows
+    const licenseData = [];
+    const rowRegex = /contract\/list\/(\d+)\/View[^<]*<\/a>\s*<\/td>\s*<td[^>]*>([^<]+)<\/td>\s*<td[^>]*>([^<]+)<\/td>\s*<td[^>]*>[^<]*<\/td>\s*<td[^>]*>(\d+)/g;
+    let match;
+    while ((match = rowRegex.exec(html)) !== null) {
+      licenseData.push({
+        id: match[1],
+        number: match[2].trim(),
+        date: match[3].trim(),
+        url: `https://minerals.e-qazyna.kz/ru/guest/reestr/contract/list/${match[1]}/View`,
+      });
+    }
+
+    // Fallback: just return IDs if regex didn't work
+    const result = licenseData.length > 0 ? licenseData : ids.map(id => ({
+      id,
+      url: `https://minerals.e-qazyna.kz/ru/guest/reestr/contract/list/${id}/View`,
+    }));
+
+    res.json({ ok: true, licenses: result, bin });
+  } catch(e) {
+    console.error('resolve error:', e.message);
+    res.status(500).json({ ok: false, error: 'Ошибка получения данных' });
+  }
+});
+
 module.exports = router;

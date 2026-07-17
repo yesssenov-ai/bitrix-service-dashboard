@@ -80,10 +80,10 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
 .reset-btn:hover{border-color:var(--accent);color:var(--accent);}
 
 /* Product chips */
-.product-chips{display:flex;flex-wrap:wrap;gap:4px;}
-.pchip{padding:3px 9px;border-radius:20px;border:1.5px solid var(--stroke);background:var(--card);font-size:11px;font-weight:600;color:var(--text-2);cursor:pointer;transition:all .15s;white-space:nowrap;}
-.pchip:hover{border-color:var(--stroke-2);}
-.pchip.on{color:#fff;border-color:transparent;}
+
+
+
+
 
 /* List */
 .co-list{flex:1;overflow-y:auto;padding:4px 0;}
@@ -226,11 +226,7 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
       </button>
     </div>
 
-    <!-- Legend -->
-    <div class="legend" id="legend" style="display:none">
-      <div class="legend-title">Продукты</div>
-      <div id="legendItems"></div>
-    </div>
+
 
     <!-- Detail panel -->
     <div class="dp" id="dp">
@@ -501,22 +497,15 @@ function showDetail(c) {
       ${elLinks ? `<div style="margin-top:8px">${elLinks}</div>` : ''}
     ` : ''}
 
-    <div class="dp-links">
-      <a class="dp-link primary" href="https://minerals.e-qazyna.kz/ru/guest/reestr/license/list" target="_blank"
-         onclick="sessionStorage.setItem('minerals_bin','${c.bin}');sessionStorage.setItem('minerals_name','${esc(c.name)}')">
-        📋 Лицензии компании на Minerals.gov.kz
-        <span style="font-size:10px;opacity:.8;display:block;font-weight:400">БИН: ${c.bin}</span>
-      </a>
-      <a class="dp-link secondary" href="https://minerals.e-qazyna.kz/ru/guest/reestr/applicant/list" target="_blank">
-        🏢 Реестр недропользователей
-      </a>
+    <div class="dp-links" id="dpLinks-${c.bin}">
+      <button class="dp-link primary" onclick="openLicenses('${c.bin}')" id="btnLic-${c.bin}">
+        📋 Открыть лицензии компании
+      </button>
       <a class="dp-link secondary" href="https://minerals.e-qazyna.kz/ru/contracts-map" target="_blank">
         🗺 Интерактивная карта недропользования
       </a>
     </div>
-    <div style="background:var(--surface);border:1px solid var(--stroke);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:11.5px;color:var(--text-3);line-height:1.5">
-      💡 На сайте Minerals.gov.kz введите БИН <strong style="color:var(--text-2);font-variant-numeric:tabular-nums">${c.bin}</strong> в поле поиска чтобы найти лицензии компании
-    </div>`;
+    <div id="dpLicLinks-${c.bin}" style="margin-top:6px"></div>`;
 
   document.getElementById('dp').classList.add('show');
 }
