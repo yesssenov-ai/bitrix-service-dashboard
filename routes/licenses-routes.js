@@ -2,7 +2,22 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth, pool } = require('../auth');
 const fetch = require('node-fetch');
-const companies = require('../gmk_companies.json');
+let companies = [];
+let companiesLoaded = false;
+
+// Load async to avoid blocking server startup
+(async () => {
+  try {
+    const fs = require('fs').promises;
+    const path = require('path');
+    const data = await fs.readFile(path.join(__dirname, '../gmk_companies.json'), 'utf8');
+    companies = JSON.parse(data);
+    companiesLoaded = true;
+    console.log(`✅ GMK companies loaded: ${companies.length}`);
+  } catch(e) {
+    console.error('Failed to load gmk_companies.json:', e.message);
+  }
+})();
 
 // ── Geocode city cache in DB ──────────────────────────────────────────────────
 const cityCache = {};
@@ -78,6 +93,15 @@ const PRODUCT_COLORS = {
 
 // ── GET /licenses/data ───────────────────────────────────────────────────────
 router.get('/data', requireAuth(), async (req, res) => {
+  if (!companiesLoaded) {
+    // Wait up to 5s for companies to load
+    let waited = 0;
+    while (!companiesLoaded && waited < 5000) {
+      await new Promise(r => setTimeout(r, 200));
+      waited += 200;
+    }
+    if (!companiesLoaded) return res.status(503).json({ ok: false, error: 'Данные ещё загружаются, попробуйте через секунду' });
+  }
   try {
     const { area, product, search, bin } = req.query;
 
@@ -197,6 +221,89 @@ router.get('/resolve/:bin', requireAuth(), async (req, res) => {
     console.error('resolve error:', e.message);
     res.status(500).json({ ok: false, error: 'Ошибка получения данных' });
   }
+});
+
+
+// ── GET /licenses/open — opens minerals.e-qazyna.kz with pre-filled search ──
+router.get('/open', requireAuth(), (req, res) => {
+  const { bin, num, type } = req.query;
+  const searchValue = num || bin || '';
+  const fieldType = num ? 'licenseNum' : 'bin';
+
+  // Return an HTML page that opens minerals and auto-fills + submits the form
+  res.send(`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Открываем лицензию…</title>
+<style>
+  body{font-family:Inter,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f3f2f1;flex-direction:column;gap:14px;}
+  .card{background:#fff;border-radius:12px;padding:28px 36px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.1);max-width:420px;}
+  h3{font-size:16px;color:#201f1e;margin-bottom:8px;}
+  p{font-size:13px;color:#605e5c;margin-bottom:18px;}
+  .num{font-family:monospace;background:#f3f2f1;padding:4px 12px;border-radius:6px;font-size:14px;font-weight:700;color:#0f6cbd;}
+  .spinner{width:28px;height:28px;border:3px solid #e1dfdd;border-top-color:#0f6cbd;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  a{color:#0f6cbd;font-size:13px;}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="spinner"></div>
+  <h3 style="margin-top:14px">Открываем на Minerals.gov.kz</h3>
+  <p>Лицензия <span class="num">${searchValue}</span></p>
+  <p style="font-size:12px;color:#8a8886">Если страница не открылась автоматически —<br>
+  <a href="https://minerals.e-qazyna.kz/ru/guest/reestr/license/list" target="_blank">нажмите здесь</a></p>
+</div>
+<script>
+  // Open minerals in new tab and auto-fill the search form
+  const win = window.open('https://minerals.e-qazyna.kz/ru/guest/reestr/license/list', '_blank');
+  
+  // Store search params for the opened page to pick up
+  // Since we can't control cross-origin window, use a fallback approach:
+  // After 500ms try to interact with the opened window
+  const searchVal = ${JSON.stringify(searchValue)};
+  const fieldId = ${JSON.stringify(fieldType)};
+  
+  let attempts = 0;
+  const tryFill = setInterval(() => {
+    attempts++;
+    try {
+      if (win && win.document && win.document.readyState === 'complete') {
+        // Try to find and fill the search field
+        const inputs = win.document.querySelectorAll('input');
+        let filled = false;
+        inputs.forEach(inp => {
+          const ph = inp.placeholder || '';
+          if ((fieldId === 'licenseNum' && ph.includes('омер')) ||
+              (fieldId === 'bin' && ph.includes('ИН'))) {
+            inp.value = searchVal;
+            inp.dispatchEvent(new Event('input', {bubbles:true}));
+            inp.dispatchEvent(new Event('change', {bubbles:true}));
+            filled = true;
+          }
+        });
+        if (filled) {
+          // Click search button
+          setTimeout(() => {
+            const btns = win.document.querySelectorAll('button');
+            btns.forEach(b => { if (b.textContent.includes('оиск')) b.click(); });
+          }, 300);
+          clearInterval(tryFill);
+        }
+      }
+    } catch(e) {
+      // Cross-origin block — just close this page
+      clearInterval(tryFill);
+    }
+    if (attempts > 20) clearInterval(tryFill);
+  }, 200);
+  
+  // Close this helper page after 3 seconds
+  setTimeout(() => window.close(), 3000);
+</script>
+</body>
+</html>`);
 });
 
 module.exports = router;
