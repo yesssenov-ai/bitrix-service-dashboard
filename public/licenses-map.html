@@ -492,8 +492,11 @@ function showDetail(c) {
     ` : ''}
 
     <div class="dp-links" id="dpLinks-${c.bin}">
-      <button class="dp-link primary" onclick="openLicenses('${c.bin}')" id="btnLic-${c.bin}">
-        📋 Открыть лицензии компании
+      <a class="dp-link primary" href="https://minerals.e-qazyna.kz/ru/guest/reestr/license/list?oq=flLocNumber=%26flNameRu=%26flOwnerXin=${c.bin}" target="_blank">
+        📋 Все лицензии компании на Minerals.gov.kz
+      </a>
+      <button class="dp-link secondary" onclick="openLicenses('${c.bin}')" id="btnLic-${c.bin}">
+        🔍 Загрузить прямые ссылки на лицензии
       </button>
       <a class="dp-link secondary" href="https://minerals.e-qazyna.kz/ru/contracts-map" target="_blank">
         🗺 Интерактивная карта недропользования
