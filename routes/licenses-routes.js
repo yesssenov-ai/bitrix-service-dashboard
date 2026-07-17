@@ -229,28 +229,51 @@ router.get('/map-search', requireAuth(), async (req, res) => {
     let center = null;
     let contractUrl = null;
 
+    // Try multiple endpoints for each result
+    const endpointTemplates = [
+      d => `https://minerals.e-qazyna.kz/ru/contracts-map-zoom?id=${encodeURIComponent(d.id)}&layer=${encodeURIComponent(d.type||'')}`,
+      d => `https://minerals.e-qazyna.kz/ru/contracts-map-bbox?id=${encodeURIComponent(d.id)}`,
+      d => `https://minerals.e-qazyna.kz/ru/contracts-map-select?id=${encodeURIComponent(d.id)}&layer=${encodeURIComponent(d.type||'')}`,
+      d => `https://minerals.e-qazyna.kz/ru/contracts-map-info?id=${encodeURIComponent(d.id)}`,
+    ];
+
+    outer:
     for (const d of data) {
-      try {
-        const zUrl = `https://minerals.e-qazyna.kz/ru/contracts-map-zoom?id=${encodeURIComponent(d.id)}&layer=${encodeURIComponent(d.type||'')}`;
-        const r = await fetch(zUrl, { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } });
-        const txt = await r.text();
-        console.log(`zoom [${d.id.slice(-30)}]: status=${r.status} body=${txt.slice(0,300)}`);
-        if (r.ok && txt.length > 2) {
-          const zd = JSON.parse(txt);
-          if (Array.isArray(zd) && zd.length >= 4 && typeof zd[0]==='number') {
-            center = [(zd[0]+zd[2])/2, (zd[1]+zd[3])/2]; break;
+      for (const tmpl of endpointTemplates) {
+        try {
+          const url = tmpl(d);
+          const r = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } });
+          const txt = await r.text();
+          const ep = url.split('?')[0].split('/').pop();
+          if (r.status !== 404) console.log(`${ep} [${d.id.slice(-25)}]: status=${r.status} body=${txt.slice(0,200)}`);
+          if (r.ok && txt.length > 4 && (txt.startsWith('{') || txt.startsWith('['))) {
+            const zd = JSON.parse(txt);
+            if (Array.isArray(zd) && zd.length >= 4 && typeof zd[0]==='number') { center = [(zd[0]+zd[2])/2,(zd[1]+zd[3])/2]; break outer; }
+            if (zd.bbox) { center = [(zd.bbox[0]+zd.bbox[2])/2,(zd.bbox[1]+zd.bbox[3])/2]; break outer; }
+            if (zd.center) { center = zd.center; break outer; }
+            if (zd.xmin!==undefined) { center = [(zd.xmin+zd.xmax)/2,(zd.ymin+zd.ymax)/2]; break outer; }
           }
-          if (zd.bbox) { center = [(zd.bbox[0]+zd.bbox[2])/2,(zd.bbox[1]+zd.bbox[3])/2]; break; }
-          if (zd.center) { center = zd.center; break; }
-          if (zd.xmin!==undefined) { center = [(zd.xmin+zd.xmax)/2,(zd.ymin+zd.ymax)/2]; break; }
-        }
-      } catch(e) {}
-      if (center) break;
+        } catch(e) {}
+      }
     }
 
-    // Build contract page URL from long numeric ID
-    const longId = featureId.match(/_(\d{15,})$/)?.[1];
-    if (longId) contractUrl = `https://minerals.e-qazyna.kz/ru/guest/reestr/contract/list/${longId}/View`;
+    // Build contract URL - prefer short IDs (direct contract page)
+    // Short ID (< 10 digits) = contract page, Long ID = system reference
+    for (const d of data) {
+      const m = d.id.match(/_(\d+)$/);
+      if (m) {
+        const id = m[1];
+        if (id.length <= 10) {
+          // Short ID = direct contract view page
+          contractUrl = `https://minerals.e-qazyna.kz/ru/guest/reestr/contract/list/${id}/View`;
+          break;
+        }
+      }
+    }
+    if (!contractUrl) {
+      const longId = featureId.match(/_(\d{15,})$/)?.[1];
+      if (longId) contractUrl = `https://minerals.e-qazyna.kz/ru/guest/reestr/contract/list/${longId}/View`;
+    }
 
     console.log(`map-search [${search}]: found=${data.length} center=${JSON.stringify(center)}`);
     res.json({ ok: true, data, center, item, contractUrl });

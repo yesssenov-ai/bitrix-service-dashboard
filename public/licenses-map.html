@@ -643,10 +643,14 @@ async function showLicenseOnMap(licenseNum, companyName) {
       window._licenseMarker.bindPopup(`<strong>№${licenseNum}</strong><br>${esc(companyName)}`).openPopup();
       showToast('✅ Лицензионный участок №' + licenseNum + ' показан на карте');
       if (btn) { btn.textContent = '✅'; btn.disabled = false; }
+    } else if (result.contractUrl) {
+      window.open(result.contractUrl, '_blank');
+      showToast('Открываем карточку лицензии №' + licenseNum + ' на Minerals.gov.kz');
+      if (btn) { btn.textContent = '🔗'; btn.disabled = false; }
     } else {
       // Fallback: open minerals map with search
       window.open(`https://minerals.e-qazyna.kz/ru/contracts-map`, '_blank');
-      showToast('Геоданные недоступны — открываем карту minerals для поиска №' + licenseNum);
+      showToast('Координаты не найдены — открываем карту minerals');
       if (btn) { btn.textContent = '🗺'; btn.disabled = false; }
     }
   } catch(e) {
