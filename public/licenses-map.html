@@ -470,9 +470,13 @@ function showDetail(c) {
   document.getElementById('dpTitle').textContent = c.name;
   const color = c.product ? (productColors[c.product] || DEFAULT_COLOR) : DEFAULT_COLOR;
 
-  const elLinks = (c.elNums||[]).map(num =>
-    `<a class="dp-el" href="https://minerals.e-qazyna.kz/ru/guest/reestr/license/list?licenseNum=${encodeURIComponent(num)}" target="_blank">📋 №${num}</a>`
-  ).join('');
+  const elLinks = (c.elNums||[]).map(num => {
+    const safeId = num.replace(/[^a-zA-Z0-9]/g,'');
+    return `<span style="display:inline-flex;align-items:center;gap:3px;margin:3px 2px">
+      <a class="dp-el" href="https://minerals.e-qazyna.kz/ru/guest/reestr/license/list?oq=flLocNumber=${encodeURIComponent(num)}%26flNameRu=%26flOwnerXin=" target="_blank">📋 №${num}</a>
+      <button id="btnShowMap-${safeId}" onclick="showLicenseOnMap('${num}','${esc(c.name)}')" title="Показать участок на карте" style="background:var(--gold-tint);border:1px solid rgba(184,134,11,.3);color:var(--gold);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;font-weight:700;font-family:var(--font)">🗺</button>
+    </span>`;
+  }).join('');  ).join('');
 
   document.getElementById('dpBody').innerHTML = `
     ${c.product ? `<div style="background:${color}22;border:1px solid ${color}44;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-weight:700;color:${color};font-size:13px">⛏ ${esc(c.product)}</div>` : ''}
@@ -572,6 +576,85 @@ async function startGeocoding() {
 document.addEventListener('click', e => {
   if (!e.target.closest('.sinput')) document.getElementById('searchAC').classList.remove('show');
 });
+
+// ── Minerals.e-qazyna.kz map API ─────────────────────────────────────────────
+const MINERALS_LAYERS = [
+  'ТПИ_Лицензия_Добыча','ТПИ_Лицензия_Разведка','ТПИ_Лицензия_Разведка_Отозван',
+  'ТПИ_Контракт','ТПИ_Контракт_Горный','ТПИ_Контракт_Геологический',
+  'ТПИ_Контракт_ГорныйГеологический','С_ТпиКонтрактНаРазведку',
+  'С_ТпиКонтрактНаДобычу','С_ТпиКонтрактНаРазведкуИДобычу',
+  'С_ТпиЛицензияНаДобычу','С_ТпиЛицензияНаРазведкуИДобычу','С_ТпиЛицензияНаРазведку'
+];
+
+function showToast(msg, duration=4000) {
+  let t = document.getElementById('mapToast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'mapToast';
+    t.style.cssText = 'position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:#201f1e;color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:500;z-index:1000;box-shadow:0 4px 16px rgba(0,0,0,.25);white-space:nowrap;pointer-events:none;transition:opacity .3s;';
+    document.querySelector('.map-wrap').appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; }, duration);
+}
+
+async function showLicenseOnMap(licenseNum, companyName) {
+  const safeId = licenseNum.replace(/[^a-zA-Z0-9]/g,'');
+  const btn = document.getElementById('btnShowMap-' + safeId);
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+  showToast('Запрашиваем координаты лицензии ' + licenseNum + '…');
+
+  try {
+    const params = new URLSearchParams();
+    params.append('search', licenseNum);
+    for (const l of MINERALS_LAYERS) params.append('layers', l + ',');
+
+    const resp = await fetch(
+      `https://minerals.e-qazyna.kz/ru/contracts-map-search?${params.toString()}`,
+      { headers: { 'Accept': 'application/json' } }
+    );
+    const data = await resp.json();
+
+    if (!data || !data.length) {
+      showToast('Координаты лицензии ' + licenseNum + ' не найдены');
+      if (btn) { btn.textContent = '🗺'; btn.disabled = false; }
+      return;
+    }
+
+    // Find center coordinates from response
+    let lat, lng;
+    const f = data[0];
+    if (f.center) { lng = f.center[0]; lat = f.center[1]; }
+    else if (f.bbox) { lng = (f.bbox[0]+f.bbox[2])/2; lat = (f.bbox[1]+f.bbox[3])/2; }
+    else if (f.geometry?.coordinates) {
+      const coords = f.geometry.coordinates.flat(5);
+      lng = coords.filter((_,i)=>i%2===0).reduce((a,b)=>a+b,0)/(coords.length/2);
+      lat = coords.filter((_,i)=>i%2===1).reduce((a,b)=>a+b,0)/(coords.length/2);
+    }
+
+    if (lat && lng) {
+      map.flyTo([lat, lng], 10, { duration: 1 });
+      if (window._licenseMarker) map.removeLayer(window._licenseMarker);
+      window._licenseMarker = L.marker([lat, lng], {
+        icon: L.divIcon({
+          html: `<div style="background:#b8860b;color:#fff;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.3);border:2px solid #fff">⛏ №${licenseNum}</div>`,
+          className: '', iconAnchor: [40, 14],
+        })
+      }).addTo(map);
+      window._licenseMarker.bindPopup(`<b>№${licenseNum}</b><br>${esc(companyName)}`).openPopup();
+      showToast('✅ Лицензия №' + licenseNum + ' показана на карте');
+      if (btn) { btn.textContent = '✅'; btn.disabled = false; }
+    } else {
+      showToast('Не удалось получить координаты');
+      if (btn) { btn.textContent = '🗺'; btn.disabled = false; }
+    }
+  } catch(e) {
+    showToast('Ошибка: ' + e.message);
+    if (btn) { btn.textContent = '🗺'; btn.disabled = false; }
+  }
+}
 
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
