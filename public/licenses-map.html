@@ -476,7 +476,7 @@ function showDetail(c) {
       <a class="dp-el" href="https://minerals.e-qazyna.kz/ru/guest/reestr/license/list?oq=flLocNumber=${encodeURIComponent(num)}%26flNameRu=%26flOwnerXin=" target="_blank">📋 №${num}</a>
       <button id="btnShowMap-${safeId}" onclick="showLicenseOnMap('${num}','${esc(c.name)}')" title="Показать участок на карте" style="background:var(--gold-tint);border:1px solid rgba(184,134,11,.3);color:var(--gold);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;font-weight:700;font-family:var(--font)">🗺</button>
     </span>`;
-  }).join('');  ).join('');
+  }).join('');
 
   document.getElementById('dpBody').innerHTML = `
     ${c.product ? `<div style="background:${color}22;border:1px solid ${color}44;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-weight:700;color:${color};font-size:13px">⛏ ${esc(c.product)}</div>` : ''}
