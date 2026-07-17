@@ -171,6 +171,31 @@ router.get('/status', requireAuth(), (req, res) => {
 });
 
 
+// ── GET /licenses/map-click — proxy contracts-map-click to get feature coords ──
+router.get('/map-click', requireAuth(), async (req, res) => {
+  try {
+    const { x, y } = req.query;
+    if (!x || !y) return res.status(400).json({ ok: false, error: 'x,y required' });
+    const layers = [
+      'ТПИ_Лицензия_Добыча','ТПИ_Лицензия_Разведка','ТПИ_Лицензия_Разведка_Отозван',
+      'ТПИ_Контракт','С_ТпиКонтрактНаРазведку','С_ТпиКонтрактНаДобычу',
+      'С_ТпиКонтрактНаРазведкуИДобычу','С_ТпиЛицензияНаРазведку',
+      'С_ТпиЛицензияНаДобычу','С_ТпиЛицензияНаРазведкуИДобычу',
+    ];
+    const params = new URLSearchParams({ x4284: x, y4284: y, search: '' });
+    for (const l of layers) params.append('layers', l + ',');
+    const resp = await fetch(
+      `https://minerals.e-qazyna.kz/ru/contracts-map-click?${params}`,
+      { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } }
+    );
+    const text = await resp.text();
+    console.log(`map-click [${x},${y}]: status=${resp.status} body=${text.slice(0,300)}`);
+    res.json({ ok: true, data: JSON.parse(text), status: resp.status });
+  } catch(e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // ── GET /licenses/map-search — proxy to minerals.e-qazyna.kz contracts-map-search ──
 router.get('/map-search', requireAuth(), async (req, res) => {
   try {
@@ -198,36 +223,55 @@ router.get('/map-search', requireAuth(), async (req, res) => {
       return res.json({ ok: true, data: [] });
     }
 
-    // Response has: group, title, status, type, id (e.g. "С_ТпиЛицензияНаРазведку_10001999")
-    // Try to get feature bbox via extent endpoint
+    // id format: "С_ТпиЛицензияНаРазведку_322124338376000000"
+    // Extract the numeric contract ID from the end
     const item = data[0];
-    const featureId = item.id;
-    const layer = item.type || item.group;
+    const featureId = item.id || '';
+    const numericId = featureId.match(/_(\d{15,})$/)?.[1];
 
     let center = null;
-    // Try extent endpoint
-    const extentUrls = [
-      `https://minerals.e-qazyna.kz/ru/contracts-map-extent?id=${encodeURIComponent(featureId)}&layer=${encodeURIComponent(layer)}`,
-      `https://minerals.e-qazyna.kz/ru/contracts-map-extent?featureId=${encodeURIComponent(featureId)}`,
-      `https://minerals.e-qazyna.kz/ru/contracts-map-feature?id=${encodeURIComponent(featureId)}&layer=${encodeURIComponent(layer)}`,
-    ];
-    for (const url of extentUrls) {
+    let contractUrl = null;
+
+    if (numericId) {
+      // This numeric ID is the contract ID on minerals.e-qazyna.kz
+      contractUrl = `https://minerals.e-qazyna.kz/ru/guest/reestr/contract/list/${numericId}/View`;
+
+      // Try to get map extent for this contract
       try {
-        const r = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } });
+        const extUrl = `https://minerals.e-qazyna.kz/ru/contracts-map-extent?contractId=${numericId}`;
+        const r = await fetch(extUrl, { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } });
         const txt = await r.text();
-        console.log(`extent attempt [${url.split('?')[0].split('/').pop()}]: status=${r.status} body=${txt.slice(0,300)}`);
-        if (r.ok && txt.startsWith('{') || txt.startsWith('[')) {
+        console.log(`extent contractId [${numericId}]: status=${r.status} body=${txt.slice(0,300)}`);
+        if (r.ok && (txt.startsWith('{') || txt.startsWith('['))) {
           const d = JSON.parse(txt);
-          if (d.center) { center = d.center; break; }
-          if (d.bbox) { center = [(d.bbox[0]+d.bbox[2])/2, (d.bbox[1]+d.bbox[3])/2]; break; }
-          if (d.x && d.y) { center = [d.x, d.y]; break; }
-          if (Array.isArray(d) && d[0]?.bbox) { center = [(d[0].bbox[0]+d[0].bbox[2])/2,(d[0].bbox[1]+d[0].bbox[3])/2]; break; }
+          if (d.center) center = d.center;
+          else if (d.bbox) center = [(d.bbox[0]+d.bbox[2])/2,(d.bbox[1]+d.bbox[3])/2];
+          else if (d.x && d.y) center = [d.x, d.y];
         }
-      } catch(e) { console.error('extent url error:', e.message); }
+      } catch(e) { console.error('extent error:', e.message); }
+
+      // Try alternative: contracts-map-object
+      if (!center) {
+        try {
+          const objUrl = `https://minerals.e-qazyna.kz/ru/contracts-map-object?id=${encodeURIComponent(featureId)}`;
+          const r = await fetch(objUrl, { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } });
+          const txt = await r.text();
+          console.log(`map-object [${featureId.slice(-20)}]: status=${r.status} body=${txt.slice(0,300)}`);
+          if (r.ok && (txt.startsWith('{') || txt.startsWith('['))) {
+            const d = JSON.parse(txt);
+            if (d.center) center = d.center;
+            else if (d.bbox) center = [(d.bbox[0]+d.bbox[2])/2,(d.bbox[1]+d.bbox[3])/2];
+            else if (d.geometry?.coordinates) {
+              const flat = d.geometry.coordinates.flat(Infinity);
+              center = [flat.filter((_,i)=>i%2===0).reduce((a,b)=>a+b)/( flat.length/2), flat.filter((_,i)=>i%2===1).reduce((a,b)=>a+b)/(flat.length/2)];
+            }
+          }
+        } catch(e) {}
+      }
     }
 
-    console.log(`map-search result: id=${featureId} layer=${layer} center=${JSON.stringify(center)}`);
-    res.json({ ok: true, data, center, item });
+    console.log(`map-search result: numericId=${numericId} center=${JSON.stringify(center)} contractUrl=${contractUrl}`);
+    res.json({ ok: true, data, center, item, contractUrl });
   } catch(e) {
     console.error('map-search proxy error:', e.message);
     res.status(500).json({ ok: false, error: e.message });
