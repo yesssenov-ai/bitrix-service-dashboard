@@ -223,54 +223,36 @@ router.get('/map-search', requireAuth(), async (req, res) => {
       return res.json({ ok: true, data: [] });
     }
 
-    // id format: "С_ТпиЛицензияНаРазведку_322124338376000000"
-    // Extract the numeric contract ID from the end
     const item = data[0];
     const featureId = item.id || '';
-    const numericId = featureId.match(/_(\d{15,})$/)?.[1];
-
+    // Try contracts-map-zoom for each result to find bbox
     let center = null;
     let contractUrl = null;
 
-    if (numericId) {
-      // This numeric ID is the contract ID on minerals.e-qazyna.kz
-      contractUrl = `https://minerals.e-qazyna.kz/ru/guest/reestr/contract/list/${numericId}/View`;
-
-      // Try to get map extent for this contract
+    for (const d of data) {
       try {
-        const extUrl = `https://minerals.e-qazyna.kz/ru/contracts-map-extent?contractId=${numericId}`;
-        const r = await fetch(extUrl, { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } });
+        const zUrl = `https://minerals.e-qazyna.kz/ru/contracts-map-zoom?id=${encodeURIComponent(d.id)}&layer=${encodeURIComponent(d.type||'')}`;
+        const r = await fetch(zUrl, { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } });
         const txt = await r.text();
-        console.log(`extent contractId [${numericId}]: status=${r.status} body=${txt.slice(0,300)}`);
-        if (r.ok && (txt.startsWith('{') || txt.startsWith('['))) {
-          const d = JSON.parse(txt);
-          if (d.center) center = d.center;
-          else if (d.bbox) center = [(d.bbox[0]+d.bbox[2])/2,(d.bbox[1]+d.bbox[3])/2];
-          else if (d.x && d.y) center = [d.x, d.y];
-        }
-      } catch(e) { console.error('extent error:', e.message); }
-
-      // Try alternative: contracts-map-object
-      if (!center) {
-        try {
-          const objUrl = `https://minerals.e-qazyna.kz/ru/contracts-map-object?id=${encodeURIComponent(featureId)}`;
-          const r = await fetch(objUrl, { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } });
-          const txt = await r.text();
-          console.log(`map-object [${featureId.slice(-20)}]: status=${r.status} body=${txt.slice(0,300)}`);
-          if (r.ok && (txt.startsWith('{') || txt.startsWith('['))) {
-            const d = JSON.parse(txt);
-            if (d.center) center = d.center;
-            else if (d.bbox) center = [(d.bbox[0]+d.bbox[2])/2,(d.bbox[1]+d.bbox[3])/2];
-            else if (d.geometry?.coordinates) {
-              const flat = d.geometry.coordinates.flat(Infinity);
-              center = [flat.filter((_,i)=>i%2===0).reduce((a,b)=>a+b)/( flat.length/2), flat.filter((_,i)=>i%2===1).reduce((a,b)=>a+b)/(flat.length/2)];
-            }
+        console.log(`zoom [${d.id.slice(-30)}]: status=${r.status} body=${txt.slice(0,300)}`);
+        if (r.ok && txt.length > 2) {
+          const zd = JSON.parse(txt);
+          if (Array.isArray(zd) && zd.length >= 4 && typeof zd[0]==='number') {
+            center = [(zd[0]+zd[2])/2, (zd[1]+zd[3])/2]; break;
           }
-        } catch(e) {}
-      }
+          if (zd.bbox) { center = [(zd.bbox[0]+zd.bbox[2])/2,(zd.bbox[1]+zd.bbox[3])/2]; break; }
+          if (zd.center) { center = zd.center; break; }
+          if (zd.xmin!==undefined) { center = [(zd.xmin+zd.xmax)/2,(zd.ymin+zd.ymax)/2]; break; }
+        }
+      } catch(e) {}
+      if (center) break;
     }
 
-    console.log(`map-search result: numericId=${numericId} center=${JSON.stringify(center)} contractUrl=${contractUrl}`);
+    // Build contract page URL from long numeric ID
+    const longId = featureId.match(/_(\d{15,})$/)?.[1];
+    if (longId) contractUrl = `https://minerals.e-qazyna.kz/ru/guest/reestr/contract/list/${longId}/View`;
+
+    console.log(`map-search [${search}]: found=${data.length} center=${JSON.stringify(center)}`);
     res.json({ ok: true, data, center, item, contractUrl });
   } catch(e) {
     console.error('map-search proxy error:', e.message);
