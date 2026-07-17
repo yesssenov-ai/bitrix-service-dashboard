@@ -42,7 +42,7 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
 .app{display:flex;height:100vh;padding-top:56px;}
 
 /* SIDEBAR */
-.sb{width:360px;flex-shrink:0;background:var(--card);border-right:1px solid var(--stroke);display:flex;flex-direction:column;overflow:hidden;z-index:100;}
+.sb{width:360px;flex-shrink:0;background:var(--card);border-right:1px solid var(--stroke);display:flex;flex-direction:column;overflow:hidden;z-index:100;min-height:0;}
 .sb-head{padding:14px 16px 12px;border-bottom:1px solid var(--stroke);flex-shrink:0;}
 .sb-title{font-size:14px;font-weight:700;letter-spacing:-.2px;margin-bottom:10px;display:flex;align-items:center;gap:7px;}
 .sb-badge{background:var(--gold-tint);color:var(--gold);font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid rgba(184,134,11,.2);}
@@ -62,7 +62,7 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
 .geo-progress-fill{height:100%;background:linear-gradient(90deg,var(--brand),var(--brand-tint));border-radius:3px;transition:width .5s;}
 
 /* Filters */
-.fp{padding:10px 16px;border-bottom:1px solid var(--stroke);flex-shrink:0;}
+.fp{padding:10px 16px;border-bottom:1px solid var(--stroke);flex-shrink:0;} .sb-filters{overflow-y:auto;flex-shrink:0;max-height:45vh;}
 .fp-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:5px;}
 .fsel{width:100%;background:var(--surface);border:1px solid var(--stroke);border-radius:8px;padding:8px 12px;font-size:12.5px;color:var(--text);font-family:var(--font);outline:none;appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238a8886' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;}
 .fsel:focus{border-color:var(--brand);}
@@ -181,7 +181,7 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
     </div>
 
     <!-- Filters -->
-    <div class="fp">
+    <div class="sb-filters"><div class="fp">
       <div class="fp-label">Поиск по компании или БИН</div>
       <div class="sinput" style="position:relative">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -199,14 +199,15 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
 
     <div class="fp">
       <div class="fp-label">Продукт (полезное ископаемое)</div>
-      <div class="product-chips" id="productChips">
-        <span class="pchip on" data-p="" onclick="setProduct('',this)" style="background:var(--surface);color:var(--text-2);border-color:var(--stroke);">Все</span>
-      </div>
+      <select class="fsel" id="productSel" onchange="setProductFromSel()">
+        <option value="">Все продукты</option>
+      </select>
     </div>
 
     <div class="fp">
       <button class="reset-btn" onclick="resetFilters()">↺ Сбросить фильтры</button>
     </div>
+    </div><!-- end sb-filters -->
 
     <div class="co-list" id="coList"><div class="co-empty">Загрузка…</div></div>
   </aside>
@@ -328,45 +329,32 @@ function buildAreaSelect() {
 }
 
 function buildProductChips() {
-  const wrap = document.getElementById('productChips');
+  const sel = document.getElementById('productSel');
   const legendWrap = document.getElementById('legendItems');
-  wrap.innerHTML = `<span class="pchip on" data-p="" onclick="setProduct('',this)" style="background:var(--surface);color:var(--text-2);border-color:var(--stroke);">Все</span>`;
+  sel.innerHTML = '<option value="">Все продукты</option>';
   legendWrap.innerHTML = '';
-
   for (const p of products) {
     const color = productColors[p] || DEFAULT_COLOR;
-    wrap.innerHTML += `<span class="pchip" data-p="${esc(p)}" onclick="setProduct('${esc(p)}',this)" style="--pc:${color}" data-color="${color}">${esc(p)}</span>`;
+    sel.innerHTML += `<option value="${esc(p)}" ${curProduct===p?'selected':''}>${esc(p)}</option>`;
     legendWrap.innerHTML += `<div class="legend-item"><div class="legend-dot" style="background:${color}"></div><span>${esc(p)}</span></div>`;
   }
-
-  // Show legend if any product selected
   updateLegend();
 }
 
 function updateLegend() {
-  const legend = document.getElementById('legend');
-  legend.style.display = curProduct ? 'block' : 'none';
+  document.getElementById('legend').style.display = curProduct ? 'block' : 'none';
 }
 
-function setProduct(p, el) {
+function setProductFromSel() {
+  curProduct = document.getElementById('productSel').value;
+  updateLegend();
+  applyFilters();
+}
+
+function setProduct(p) {
   curProduct = p;
-  document.querySelectorAll('.pchip').forEach(c => {
-    c.classList.remove('on');
-    c.style.background = '';
-    c.style.color = '';
-    c.style.borderColor = '';
-  });
-  el.classList.add('on');
-  if (p) {
-    const color = productColors[p] || DEFAULT_COLOR;
-    el.style.background = color;
-    el.style.color = '#fff';
-    el.style.borderColor = color;
-  } else {
-    el.style.background = 'var(--surface)';
-    el.style.color = 'var(--text-2)';
-    el.style.borderColor = 'var(--stroke)';
-  }
+  const sel = document.getElementById('productSel');
+  if (sel) sel.value = p;
   updateLegend();
   applyFilters();
 }
@@ -514,15 +502,20 @@ function showDetail(c) {
     ` : ''}
 
     <div class="dp-links">
-      <a class="dp-link primary" href="https://minerals.e-qazyna.kz/ru/guest/reestr/license/list?bin=${c.bin}" target="_blank">
-        🗺 Лицензии на Minerals.gov.kz
+      <a class="dp-link primary" href="https://minerals.e-qazyna.kz/ru/guest/reestr/license/list" target="_blank"
+         onclick="sessionStorage.setItem('minerals_bin','${c.bin}');sessionStorage.setItem('minerals_name','${esc(c.name)}')">
+        📋 Лицензии компании на Minerals.gov.kz
+        <span style="font-size:10px;opacity:.8;display:block;font-weight:400">БИН: ${c.bin}</span>
       </a>
-      <a class="dp-link secondary" href="https://minerals.e-qazyna.kz/ru/guest/reestr/applicant/list?bin=${c.bin}" target="_blank">
-        🏢 Карточка недропользователя
+      <a class="dp-link secondary" href="https://minerals.e-qazyna.kz/ru/guest/reestr/applicant/list" target="_blank">
+        🏢 Реестр недропользователей
       </a>
       <a class="dp-link secondary" href="https://minerals.e-qazyna.kz/ru/contracts-map" target="_blank">
         🗺 Интерактивная карта недропользования
       </a>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--stroke);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:11.5px;color:var(--text-3);line-height:1.5">
+      💡 На сайте Minerals.gov.kz введите БИН <strong style="color:var(--text-2);font-variant-numeric:tabular-nums">${c.bin}</strong> в поле поиска чтобы найти лицензии компании
     </div>`;
 
   document.getElementById('dp').classList.add('show');
@@ -536,9 +529,10 @@ function closeDP() {
 function resetFilters() {
   curArea = ''; curProduct = ''; curSearch = '';
   document.getElementById('areaSel').value = '';
+  document.getElementById('productSel').value = '';
   document.getElementById('searchInput').value = '';
   document.getElementById('searchAC').classList.remove('show');
-  buildProductChips();
+  updateLegend();
   applyFilters();
 }
 
