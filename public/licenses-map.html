@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProLabSupport - Карта лицензий ГМК</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --surface:#faf9f8;--card:#fff;--stroke:#e1dfdd;--stroke-2:#d2d0ce;
+  --text:#201f1e;--text-2:#605e5c;--text-3:#8a8886;--text-4:#a19f9d;
+  --brand:#0f6cbd;--brand-tint:#eff6fc;
+  --accent:#C53B2F;--accent-tint:#fdf1ef;
+  --success:#0e7c3f;--success-tint:#dff6dd;
+  --gold:#b8860b;--gold-tint:#fffbeb;
+  --shadow-1:0 1px 3px rgba(0,0,0,.07);
+  --shadow-2:0 4px 16px rgba(0,0,0,.08);
+  --shadow-3:0 16px 48px rgba(0,0,0,.13);
+  --r:10px;--font:'Inter',system-ui,sans-serif;
+}
+html,body{height:100%;font-family:var(--font);background:var(--surface);color:var(--text);-webkit-font-smoothing:antialiased;}
+
+/* HEADER */
+.hdr{background:rgba(255,255,255,.92);backdrop-filter:blur(18px);border-bottom:1px solid var(--stroke);height:56px;display:flex;align-items:center;padding:0 20px;position:fixed;top:0;left:0;right:0;z-index:1000;box-shadow:var(--shadow-1);}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14px;flex-shrink:0;}
+.logo-mark{width:28px;height:28px;background:linear-gradient(135deg,var(--accent),#9c2f25);border-radius:7px;display:flex;align-items:center;justify-content:center;}
+.logo-mark svg{width:14px;height:14px;}
+.hdiv{width:1px;height:20px;background:var(--stroke-2);margin:0 14px;}
+.hnav a{padding:6px 12px;border-radius:7px;font-size:13px;font-weight:500;color:var(--text-2);text-decoration:none;transition:all .15s;}
+.hnav a:hover{background:rgba(0,0,0,.04);}
+.hnav a.act{background:var(--gold-tint);color:var(--gold);font-weight:600;}
+.hright{margin-left:auto;display:flex;align-items:center;gap:8px;}
+.uchip{font-size:12px;color:var(--text-2);background:var(--surface);border:1px solid var(--stroke);border-radius:20px;padding:4px 11px 4px 7px;display:flex;align-items:center;gap:5px;}
+.udot{width:6px;height:6px;border-radius:50%;background:var(--success);}
+
+/* LAYOUT */
+.app{display:flex;height:100vh;padding-top:56px;}
+
+/* SIDEBAR */
+.sb{width:360px;flex-shrink:0;background:var(--card);border-right:1px solid var(--stroke);display:flex;flex-direction:column;overflow:hidden;z-index:100;}
+.sb-head{padding:14px 16px 12px;border-bottom:1px solid var(--stroke);flex-shrink:0;}
+.sb-title{font-size:14px;font-weight:700;letter-spacing:-.2px;margin-bottom:10px;display:flex;align-items:center;gap:7px;}
+.sb-badge{background:var(--gold-tint);color:var(--gold);font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid rgba(184,134,11,.2);}
+
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:10px;}
+.stat{background:var(--surface);border:1px solid var(--stroke);border-radius:8px;padding:7px;text-align:center;}
+.stat-n{font-size:16px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;}
+.stat-l{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);margin-top:2px;}
+.blue{color:var(--brand);} .green{color:var(--success);} .gold{color:var(--gold);} .orange{color:#bc4b09;}
+
+/* Geocode progress */
+.geo-bar{background:var(--surface);border:1px solid var(--stroke);border-radius:8px;padding:10px 12px;margin-bottom:10px;display:none;}
+.geo-bar.show{display:block;}
+.geo-bar-label{font-size:11.5px;color:var(--text-2);margin-bottom:6px;display:flex;justify-content:space-between;}
+.geo-progress{height:5px;background:var(--stroke);border-radius:3px;overflow:hidden;}
+.geo-progress-fill{height:100%;background:linear-gradient(90deg,var(--brand),var(--brand-tint));border-radius:3px;transition:width .5s;}
+
+/* Filters */
+.fp{padding:10px 16px;border-bottom:1px solid var(--stroke);flex-shrink:0;}
+.fp-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:5px;}
+.fsel{width:100%;background:var(--surface);border:1px solid var(--stroke);border-radius:8px;padding:8px 12px;font-size:12.5px;color:var(--text);font-family:var(--font);outline:none;appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238a8886' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;}
+.fsel:focus{border-color:var(--brand);}
+.sinput{position:relative;}
+.sinput svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none;}
+.sinput input{width:100%;background:var(--surface);border:1px solid var(--stroke);border-radius:8px;padding:8px 12px 8px 32px;font-size:12.5px;color:var(--text);font-family:var(--font);outline:none;}
+.sinput input:focus{border-color:var(--brand);background:#fff;}
+.sinput input::placeholder{color:var(--text-4);}
+.autocomplete{position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--stroke);border-radius:8px;box-shadow:var(--shadow-3);max-height:240px;overflow-y:auto;z-index:300;margin-top:4px;display:none;}
+.autocomplete.show{display:block;}
+.ac-item{padding:9px 12px;cursor:pointer;font-size:12.5px;border-bottom:1px solid rgba(225,223,221,.5);}
+.ac-item:hover{background:var(--brand-tint);}
+.ac-bin{font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
+.reset-btn{width:100%;background:var(--surface);border:1.5px solid var(--stroke-2);border-radius:8px;padding:8px;font-size:12.5px;font-weight:600;color:var(--text-2);cursor:pointer;font-family:var(--font);transition:all .15s;}
+.reset-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+/* Product chips */
+.product-chips{display:flex;flex-wrap:wrap;gap:4px;}
+.pchip{padding:3px 9px;border-radius:20px;border:1.5px solid var(--stroke);background:var(--card);font-size:11px;font-weight:600;color:var(--text-2);cursor:pointer;transition:all .15s;white-space:nowrap;}
+.pchip:hover{border-color:var(--stroke-2);}
+.pchip.on{color:#fff;border-color:transparent;}
+
+/* List */
+.co-list{flex:1;overflow-y:auto;padding:4px 0;}
+.co-list::-webkit-scrollbar{width:5px;}
+.co-list::-webkit-scrollbar-thumb{background:var(--stroke-2);border-radius:3px;}
+.co-item{padding:11px 16px;cursor:pointer;border-bottom:1px solid rgba(225,223,221,.5);transition:background .1s;position:relative;}
+.co-item:hover{background:var(--surface);}
+.co-item.on{background:var(--gold-tint);}
+.co-item.on::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--gold);}
+.co-name{font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:3px;line-height:1.3;}
+.co-meta{font-size:11px;color:var(--text-3);display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
+.co-tag{background:var(--surface);border:1px solid var(--stroke);border-radius:5px;padding:1px 6px;font-size:10.5px;font-weight:500;}
+.co-tag.gold{background:var(--gold-tint);border-color:rgba(184,134,11,.2);color:var(--gold);}
+.co-tag.blue{background:var(--brand-tint);border-color:rgba(15,108,189,.2);color:var(--brand);}
+.co-empty{text-align:center;padding:36px 20px;color:var(--text-3);font-size:13px;}
+
+/* MAP */
+.map-wrap{flex:1;position:relative;}
+#map{width:100%;height:100%;}
+.map-overlay{position:absolute;inset:0;background:rgba(250,249,248,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:500;font-size:13px;color:var(--text-2);}
+.spinner{width:32px;height:32px;border:3px solid var(--stroke);border-top-color:var(--brand);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.map-overlay.hidden{display:none;}
+
+/* Map controls */
+.map-controls{position:absolute;top:12px;right:12px;z-index:400;display:flex;flex-direction:column;gap:6px;}
+.map-btn{background:var(--card);border:1px solid var(--stroke);border-radius:8px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:var(--shadow-1);color:var(--text-2);font-family:var(--font);transition:all .15s;white-space:nowrap;}
+.map-btn:hover{box-shadow:var(--shadow-2);}
+.map-btn.geocoding{color:var(--brand);animation:pulse 1.5s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.6;}}
+
+/* Detail panel */
+.dp{position:absolute;bottom:16px;right:16px;width:360px;max-height:75vh;overflow-y:auto;background:var(--card);border:1px solid var(--stroke);border-radius:var(--r);box-shadow:var(--shadow-3);z-index:400;display:none;}
+.dp.show{display:block;animation:su .2s ease;}
+@keyframes su{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+.dp-head{padding:13px 16px;border-bottom:1px solid var(--stroke);display:flex;align-items:flex-start;justify-content:space-between;gap:8px;position:sticky;top:0;background:var(--card);z-index:1;}
+.dp-title{font-size:13px;font-weight:700;color:var(--text);line-height:1.3;flex:1;}
+.dp-x{width:24px;height:24px;border-radius:6px;border:1px solid var(--stroke);background:none;cursor:pointer;color:var(--text-3);font-size:13px;}
+.dp-body{padding:14px 16px;}
+.dp-row{display:flex;margin-bottom:8px;gap:8px;}
+.dp-lbl{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);width:100px;flex-shrink:0;padding-top:1px;}
+.dp-val{font-size:12.5px;color:var(--text);flex:1;line-height:1.4;}
+.dp-sec{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gold);margin:12px 0 7px;padding-bottom:4px;border-bottom:1px solid var(--stroke);}
+.dp-license{background:var(--gold-tint);border:1px solid rgba(184,134,11,.2);border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.5;color:var(--text);}
+.dp-el{display:inline-flex;align-items:center;gap:4px;background:var(--brand-tint);color:var(--brand);border:1px solid rgba(15,108,189,.2);border-radius:6px;padding:3px 9px;font-size:11.5px;font-weight:700;margin:3px 2px;text-decoration:none;transition:all .15s;}
+.dp-el:hover{background:var(--brand);color:#fff;}
+.dp-links{display:flex;flex-direction:column;gap:6px;margin-top:12px;}
+.dp-link{display:flex;align-items:center;gap:6px;padding:9px 14px;border-radius:8px;font-size:12.5px;font-weight:600;text-decoration:none;transition:all .15s;}
+.dp-link.primary{background:var(--brand);color:#fff;}
+.dp-link.secondary{background:var(--surface);border:1px solid var(--stroke);color:var(--text-2);}
+.dp-link:hover{opacity:.85;}
+
+/* Legend */
+.legend{position:absolute;bottom:16px;left:16px;z-index:400;background:var(--card);border:1px solid var(--stroke);border-radius:8px;padding:10px 12px;font-size:11.5px;box-shadow:var(--shadow-1);}
+.legend-title{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);margin-bottom:7px;}
+.legend-item{display:flex;align-items:center;gap:6px;margin-bottom:4px;}
+.legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+</style>
+</head>
+<body>
+<header class="hdr">
+  <div class="logo">
+    <div class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg></div>
+    ProLabSupport
+  </div>
+  <div class="hdiv"></div>
+  <nav class="hnav" style="display:flex;gap:2px;">
+    <a href="/">← Дашборд</a>
+    <a href="/equipment-map.html">Карта оборудования</a>
+    <a href="/licenses-map.html" class="act">⛏ Карта лицензий ГМК</a>
+  </nav>
+  <div class="hright">
+    <span class="uchip"><span class="udot"></span><span id="uname">—</span></span>
+  </div>
+</header>
+
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="sb">
+    <div class="sb-head">
+      <div class="sb-title">
+        ⛏ Реестр недропользователей
+        <span class="sb-badge">ГМК</span>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="stat-n blue" id="sTotal">—</div><div class="stat-l">Компаний</div></div>
+        <div class="stat"><div class="stat-n gold" id="sLic">—</div><div class="stat-l">Лицензий</div></div>
+        <div class="stat"><div class="stat-n green" id="sMapped">—</div><div class="stat-l">На карте</div></div>
+        <div class="stat"><div class="stat-n orange" id="sProducts">—</div><div class="stat-l">Продуктов</div></div>
+      </div>
+      <div class="geo-bar" id="geoBar">
+        <div class="geo-bar-label"><span>Геокодирование городов…</span><span id="geoPercent">0%</span></div>
+        <div class="geo-progress"><div class="geo-progress-fill" id="geoFill" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="fp">
+      <div class="fp-label">Поиск по компании или БИН</div>
+      <div class="sinput" style="position:relative">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="searchInput" placeholder="Название, БИН, руководитель…" oninput="debSearch()" autocomplete="off">
+        <div class="autocomplete" id="searchAC"></div>
+      </div>
+    </div>
+
+    <div class="fp">
+      <div class="fp-label">Область</div>
+      <select class="fsel" id="areaSel" onchange="applyFilters()">
+        <option value="">Все области</option>
+      </select>
+    </div>
+
+    <div class="fp">
+      <div class="fp-label">Продукт (полезное ископаемое)</div>
+      <div class="product-chips" id="productChips">
+        <span class="pchip on" data-p="" onclick="setProduct('',this)" style="background:var(--surface);color:var(--text-2);border-color:var(--stroke);">Все</span>
+      </div>
+    </div>
+
+    <div class="fp">
+      <button class="reset-btn" onclick="resetFilters()">↺ Сбросить фильтры</button>
+    </div>
+
+    <div class="co-list" id="coList"><div class="co-empty">Загрузка…</div></div>
+  </aside>
+
+  <!-- MAP -->
+  <div class="map-wrap">
+    <div class="map-overlay" id="mapOverlay">
+      <div class="spinner"></div>
+      <span id="loadMsg">Загружаем данные…</span>
+    </div>
+    <div id="map"></div>
+
+    <div class="map-controls">
+      <button class="map-btn" id="geoBtn" onclick="startGeocoding()" title="Геокодировать все города">
+        📍 Геокодировать
+      </button>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend" id="legend" style="display:none">
+      <div class="legend-title">Продукты</div>
+      <div id="legendItems"></div>
+    </div>
+
+    <!-- Detail panel -->
+    <div class="dp" id="dp">
+      <div class="dp-head">
+        <div class="dp-title" id="dpTitle">—</div>
+        <button class="dp-x" onclick="closeDP()">✕</button>
+      </div>
+      <div class="dp-body" id="dpBody"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script>
+let allItems = [], filteredItems = [];
+let areas = [], products = [], productColors = {};
+let curProduct = '', curArea = '', curSearch = '';
+let map, clusterGroup, markers = {};
+let selectedBin = null;
+let debT = null;
+let isGeocoding = false;
+
+const DEFAULT_COLOR = '#8a8886';
+
+async function init() {
+  try {
+    const r = await fetch('/auth/me');
+    if (!r.ok) { window.location.href = '/login.html'; return; }
+    const d = await r.json();
+    document.getElementById('uname').textContent = d.user.displayName;
+  } catch(e) { window.location.href = '/login.html'; return; }
+  initMap();
+  loadData();
+}
+
+function initMap() {
+  map = L.map('map', { center: [48.5, 66.9], zoom: 5 });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap', maxZoom: 19,
+  }).addTo(map);
+  clusterGroup = L.markerClusterGroup({
+    showCoverageOnHover: false,
+    maxClusterRadius: 55,
+    iconCreateFunction: cluster => {
+      const ms = cluster.getAllChildMarkers();
+      const colors = [...new Set(ms.map(m => m.options.color).filter(Boolean))];
+      const c = colors.length === 1 ? colors[0] : '#0f6cbd';
+      return L.divIcon({
+        html: `<div style="background:${c};color:#fff;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.25);border:2px solid #fff">${cluster.getChildCount()}</div>`,
+        className:'',iconSize:[34,34],iconAnchor:[17,17],
+      });
+    },
+  });
+  map.addLayer(clusterGroup);
+}
+
+async function loadData() {
+  document.getElementById('mapOverlay').classList.remove('hidden');
+  try {
+    const r = await fetch('/licenses/data');
+    const d = await r.json();
+    if (!d.ok) { document.getElementById('loadMsg').textContent = 'Ошибка: ' + d.error; return; }
+
+    allItems = d.items;
+    areas = d.areas;
+    products = d.products;
+    productColors = d.productColors;
+
+    updateStats(d.stats);
+    buildAreaSelect();
+    buildProductChips();
+    applyFilters();
+    document.getElementById('mapOverlay').classList.add('hidden');
+
+    // Check if geocoding needed
+    checkGeoStatus();
+  } catch(e) {
+    document.getElementById('loadMsg').textContent = 'Ошибка: ' + e.message;
+  }
+}
+
+function updateStats(s) {
+  document.getElementById('sTotal').textContent = s.total.toLocaleString('ru');
+  document.getElementById('sLic').textContent = s.withLicense.toLocaleString('ru');
+  document.getElementById('sMapped').textContent = s.withCoords.toLocaleString('ru');
+  document.getElementById('sProducts').textContent = s.products;
+}
+
+function buildAreaSelect() {
+  const sel = document.getElementById('areaSel');
+  sel.innerHTML = '<option value="">Все области</option>';
+  for (const a of areas) {
+    sel.innerHTML += `<option value="${esc(a)}">${esc(a)}</option>`;
+  }
+}
+
+function buildProductChips() {
+  const wrap = document.getElementById('productChips');
+  const legendWrap = document.getElementById('legendItems');
+  wrap.innerHTML = `<span class="pchip on" data-p="" onclick="setProduct('',this)" style="background:var(--surface);color:var(--text-2);border-color:var(--stroke);">Все</span>`;
+  legendWrap.innerHTML = '';
+
+  for (const p of products) {
+    const color = productColors[p] || DEFAULT_COLOR;
+    wrap.innerHTML += `<span class="pchip" data-p="${esc(p)}" onclick="setProduct('${esc(p)}',this)" style="--pc:${color}" data-color="${color}">${esc(p)}</span>`;
+    legendWrap.innerHTML += `<div class="legend-item"><div class="legend-dot" style="background:${color}"></div><span>${esc(p)}</span></div>`;
+  }
+
+  // Show legend if any product selected
+  updateLegend();
+}
+
+function updateLegend() {
+  const legend = document.getElementById('legend');
+  legend.style.display = curProduct ? 'block' : 'none';
+}
+
+function setProduct(p, el) {
+  curProduct = p;
+  document.querySelectorAll('.pchip').forEach(c => {
+    c.classList.remove('on');
+    c.style.background = '';
+    c.style.color = '';
+    c.style.borderColor = '';
+  });
+  el.classList.add('on');
+  if (p) {
+    const color = productColors[p] || DEFAULT_COLOR;
+    el.style.background = color;
+    el.style.color = '#fff';
+    el.style.borderColor = color;
+  } else {
+    el.style.background = 'var(--surface)';
+    el.style.color = 'var(--text-2)';
+    el.style.borderColor = 'var(--stroke)';
+  }
+  updateLegend();
+  applyFilters();
+}
+
+function debSearch() {
+  clearTimeout(debT);
+  debT = setTimeout(() => {
+    const q = document.getElementById('searchInput').value.trim();
+    const ac = document.getElementById('searchAC');
+    if (q.length < 2) { ac.classList.remove('show'); curSearch = ''; applyFilters(); return; }
+
+    const matches = allItems.filter(c =>
+      c.name?.toLowerCase().includes(q.toLowerCase()) ||
+      c.bin?.includes(q) ||
+      c.ceo?.toLowerCase().includes(q.toLowerCase())
+    ).slice(0, 10);
+
+    ac.innerHTML = matches.map(c =>
+      `<div class="ac-item" onclick="selectFromAC('${esc(c.bin)}','${esc(c.name)}')">
+        <div style="font-weight:600">${esc(c.name)}</div>
+        <div class="ac-bin">${c.bin} · ${esc(c.area||'')}</div>
+      </div>`
+    ).join('') || '<div class="ac-item" style="color:var(--text-3)">Ничего не найдено</div>';
+    ac.classList.add('show');
+
+    curSearch = q;
+    applyFilters();
+  }, 250);
+}
+
+function selectFromAC(bin, name) {
+  document.getElementById('searchInput').value = name;
+  document.getElementById('searchAC').classList.remove('show');
+  curSearch = '';
+  // Find and select item
+  const item = allItems.find(c => c.bin === bin);
+  if (item) {
+    applyFilters();
+    selectCompany(bin);
+    if (item.lat && item.lng) map.flyTo([item.lat, item.lng], 12, { duration: 1 });
+  }
+}
+
+function applyFilters() {
+  filteredItems = allItems.filter(c => {
+    if (curArea && c.area?.trim() !== curArea.trim()) return false;
+    if (curProduct && c.product !== curProduct) return false;
+    if (curSearch) {
+      const q = curSearch.toLowerCase();
+      if (!c.name?.toLowerCase().includes(q) &&
+          !c.bin?.includes(q) &&
+          !c.ceo?.toLowerCase().includes(q) &&
+          !c.city?.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+  renderList();
+  renderMarkers();
+}
+
+function renderList() {
+  const wrap = document.getElementById('coList');
+  if (!filteredItems.length) {
+    wrap.innerHTML = '<div class="co-empty">Ничего не найдено</div>'; return;
+  }
+  const shown = filteredItems.slice(0, 200);
+  wrap.innerHTML = shown.map(c => {
+    const color = c.product ? (productColors[c.product] || DEFAULT_COLOR) : DEFAULT_COLOR;
+    const hasCoords = c.lat && c.lng;
+    return `<div class="co-item ${selectedBin===c.bin?'on':''}" onclick="selectCompany('${c.bin}')">
+      <div class="co-name">${esc(c.name)}</div>
+      <div class="co-meta">
+        ${c.area ? `<span>${esc(c.area)}</span>` : ''}
+        ${c.city ? `<span>· ${esc(c.city)}</span>` : ''}
+        ${c.product ? `<span class="co-tag" style="background:${color}22;border-color:${color}44;color:${color}">⛏ ${esc(c.product)}</span>` : ''}
+        ${c.elNums?.length ? `<span class="co-tag blue">${c.elNums.length} EL</span>` : ''}
+        ${!hasCoords ? '<span class="co-tag">📍 Нет координат</span>' : ''}
+      </div>
+    </div>`;
+  }).join('');
+  if (filteredItems.length > 200) {
+    wrap.innerHTML += `<div class="co-empty" style="padding:10px">…и ещё ${filteredItems.length - 200}. Уточните фильтр.</div>`;
+  }
+}
+
+function renderMarkers() {
+  clusterGroup.clearLayers();
+  markers = {};
+  for (const c of filteredItems) {
+    if (!c.lat || !c.lng) continue;
+    const color = c.product ? (productColors[c.product] || DEFAULT_COLOR) : DEFAULT_COLOR;
+    const icon = L.divIcon({
+      html: `<div style="background:${color};border:2px solid #fff;border-radius:50%;width:13px;height:13px;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>`,
+      className:'', iconSize:[13,13], iconAnchor:[6,6],
+    });
+    const m = L.marker([c.lat, c.lng], { icon, color });
+    m.on('click', () => selectCompany(c.bin));
+    m.bindTooltip(`<strong>${esc(c.name)}</strong><br>${esc(c.city||'')} · ${esc(c.area||'')}`, { direction:'top', offset:[0,-6] });
+    clusterGroup.addLayer(m);
+    markers[c.bin] = m;
+  }
+}
+
+function selectCompany(bin) {
+  selectedBin = bin;
+  const c = allItems.find(x => x.bin === bin);
+  if (!c) return;
+
+  // Highlight in list
+  document.querySelectorAll('.co-item').forEach(el => el.classList.remove('on'));
+  const listEl = [...document.querySelectorAll('.co-item')].find(el => el.onclick?.toString().includes(bin));
+  listEl?.classList.add('on');
+  listEl?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+
+  if (c.lat && c.lng) {
+    map.flyTo([c.lat, c.lng], 12, { duration: 0.8 });
+    markers[bin]?.openTooltip();
+  }
+  showDetail(c);
+}
+
+function showDetail(c) {
+  document.getElementById('dpTitle').textContent = c.name;
+  const color = c.product ? (productColors[c.product] || DEFAULT_COLOR) : DEFAULT_COLOR;
+
+  const elLinks = (c.elNums||[]).map(num =>
+    `<a class="dp-el" href="https://minerals.e-qazyna.kz/ru/guest/reestr/license/list?licenseNum=${encodeURIComponent(num)}" target="_blank">📋 №${num}</a>`
+  ).join('');
+
+  document.getElementById('dpBody').innerHTML = `
+    ${c.product ? `<div style="background:${color}22;border:1px solid ${color}44;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-weight:700;color:${color};font-size:13px">⛏ ${esc(c.product)}</div>` : ''}
+
+    <div class="dp-row"><div class="dp-lbl">БИН</div><div class="dp-val" style="font-family:monospace;font-weight:600">${esc(c.bin)}</div></div>
+    <div class="dp-row"><div class="dp-lbl">Область</div><div class="dp-val">${esc(c.area||'—')}</div></div>
+    <div class="dp-row"><div class="dp-lbl">Юр. адрес</div><div class="dp-val">${esc(c.address||'—')}</div></div>
+    <div class="dp-row"><div class="dp-lbl">Руководитель</div><div class="dp-val">${esc(c.ceo||'—')}</div></div>
+    <div class="dp-row"><div class="dp-lbl">Регистрация</div><div class="dp-val">${esc(c.regDate||'—')} ${c.age ? `(${esc(c.age)})` : ''}</div></div>
+    <div class="dp-row"><div class="dp-lbl">ОКЭД</div><div class="dp-val" style="font-size:11.5px">${esc(c.okad||'—')}</div></div>
+    ${c.site ? `<div class="dp-row"><div class="dp-lbl">Сайт</div><div class="dp-val"><a href="${esc(c.site)}" target="_blank" style="color:var(--brand)">${esc(c.site)}</a></div></div>` : ''}
+
+    ${c.license ? `
+      <div class="dp-sec">Лицензия</div>
+      <div class="dp-license">${esc(c.license)}</div>
+      ${elLinks ? `<div style="margin-top:8px">${elLinks}</div>` : ''}
+    ` : ''}
+
+    <div class="dp-links">
+      <a class="dp-link primary" href="https://minerals.e-qazyna.kz/ru/guest/reestr/license/list?bin=${c.bin}" target="_blank">
+        🗺 Лицензии на Minerals.gov.kz
+      </a>
+      <a class="dp-link secondary" href="https://minerals.e-qazyna.kz/ru/guest/reestr/applicant/list?bin=${c.bin}" target="_blank">
+        🏢 Карточка недропользователя
+      </a>
+      <a class="dp-link secondary" href="https://minerals.e-qazyna.kz/ru/contracts-map" target="_blank">
+        🗺 Интерактивная карта недропользования
+      </a>
+    </div>`;
+
+  document.getElementById('dp').classList.add('show');
+}
+
+function closeDP() {
+  document.getElementById('dp').classList.remove('show');
+  selectedBin = null;
+}
+
+function resetFilters() {
+  curArea = ''; curProduct = ''; curSearch = '';
+  document.getElementById('areaSel').value = '';
+  document.getElementById('searchInput').value = '';
+  document.getElementById('searchAC').classList.remove('show');
+  buildProductChips();
+  applyFilters();
+}
+
+// ── Geocoding ─────────────────────────────────────────────────────────────────
+async function checkGeoStatus() {
+  try {
+    const r = await fetch('/licenses/status');
+    const d = await r.json();
+    if (d.done < d.total) {
+      document.getElementById('geoBar').classList.add('show');
+      document.getElementById('geoPercent').textContent = d.percent + '%';
+      document.getElementById('geoFill').style.width = d.percent + '%';
+      document.getElementById('sMapped').textContent = d.done;
+    }
+  } catch(e) {}
+}
+
+async function startGeocoding() {
+  if (isGeocoding) return;
+  isGeocoding = true;
+  const btn = document.getElementById('geoBtn');
+  btn.classList.add('geocoding');
+  btn.textContent = '⏳ Геокодирование…';
+  document.getElementById('geoBar').classList.add('show');
+
+  try {
+    await fetch('/licenses/geocode', { method: 'POST' });
+    // Poll progress
+    const poll = setInterval(async () => {
+      const r = await fetch('/licenses/status');
+      const d = await r.json();
+      document.getElementById('geoPercent').textContent = d.percent + '%';
+      document.getElementById('geoFill').style.width = d.percent + '%';
+      document.getElementById('sMapped').textContent = d.done;
+      if (d.done >= d.total) {
+        clearInterval(poll);
+        isGeocoding = false;
+        btn.classList.remove('geocoding');
+        btn.textContent = '✅ Геокодирование завершено';
+        // Reload data with new coords
+        await loadData();
+      }
+    }, 3000);
+  } catch(e) {
+    isGeocoding = false;
+    btn.classList.remove('geocoding');
+    btn.textContent = '📍 Геокодировать';
+  }
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.sinput')) document.getElementById('searchAC').classList.remove('show');
+});
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+init();
+</script>
+</body>
+</html>
