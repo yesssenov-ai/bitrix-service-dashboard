@@ -192,11 +192,37 @@ router.get('/map-search', requireAuth(), async (req, res) => {
       `https://minerals.e-qazyna.kz/ru/contracts-map-search?${params.toString()}`,
       { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } }
     );
-    const text = await resp.text();
-    console.log(`minerals map-search [${search}] status=${resp.status} body=${text.slice(0,200)}`);
-    let data;
-    try { data = JSON.parse(text); } catch(e) { data = text; }
-    res.json({ ok: true, data, status: resp.status });
+    const data = await resp.json();
+
+    if (!data || !data.length) {
+      return res.json({ ok: true, data: [] });
+    }
+
+    // Response has: group, title, status, type, id (e.g. "С_ТпиЛицензияНаРазведку_10001999")
+    // Need to get bbox via the view endpoint
+    const item = data[0];
+    const featureId = item.id; // e.g. "С_ТпиЛицензияНаРазведку_10001999"
+    const layer = item.type || item.group;
+
+    // Try to get feature extent/center
+    let center = null;
+    try {
+      const extentResp = await fetch(
+        `https://minerals.e-qazyna.kz/ru/contracts-map-extent?id=${encodeURIComponent(featureId)}&layer=${encodeURIComponent(layer)}`,
+        { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } }
+      );
+      if (extentResp.ok) {
+        const extentData = await extentResp.json();
+        console.log(`minerals extent [${featureId}]:`, JSON.stringify(extentData).slice(0, 200));
+        if (extentData.center) center = extentData.center;
+        else if (extentData.bbox) center = [(extentData.bbox[0]+extentData.bbox[2])/2, (extentData.bbox[1]+extentData.bbox[3])/2];
+        else if (extentData.x && extentData.y) center = [extentData.x, extentData.y];
+      }
+    } catch(e) {
+      console.error('extent error:', e.message);
+    }
+
+    res.json({ ok: true, data, center, item });
   } catch(e) {
     console.error('map-search proxy error:', e.message);
     res.status(500).json({ ok: false, error: e.message });
