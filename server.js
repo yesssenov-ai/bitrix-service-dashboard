@@ -55,6 +55,7 @@ app.use('/auth', require('./routes/auth-routes'));
 app.use('/admin', require('./routes/admin-routes'));
 equipmentRoutes.setB24(b24);
 app.use('/equipment', equipmentRoutes.router);
+app.use('/licenses', require('./routes/licenses-routes'));
 const { router: relationsRouter, handleBitrixWebhook } = require('./routes/relations-routes');
 app.use('/relations', relationsRouter);
 app.post('/webhook/bitrix-update', express.urlencoded({ extended: true }), handleBitrixWebhook);
