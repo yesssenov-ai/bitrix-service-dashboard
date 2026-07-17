@@ -192,8 +192,11 @@ router.get('/map-search', requireAuth(), async (req, res) => {
       `https://minerals.e-qazyna.kz/ru/contracts-map-search?${params.toString()}`,
       { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } }
     );
-    const data = await resp.json();
-    res.json({ ok: true, data });
+    const text = await resp.text();
+    console.log(`minerals map-search [${search}] status=${resp.status} body=${text.slice(0,200)}`);
+    let data;
+    try { data = JSON.parse(text); } catch(e) { data = text; }
+    res.json({ ok: true, data, status: resp.status });
   } catch(e) {
     console.error('map-search proxy error:', e.message);
     res.status(500).json({ ok: false, error: e.message });
