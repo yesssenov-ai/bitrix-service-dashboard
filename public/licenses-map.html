@@ -326,20 +326,14 @@ function buildAreaSelect() {
 
 function buildProductChips() {
   const sel = document.getElementById('productSel');
-  const legendWrap = document.getElementById('legendItems');
+  if (!sel) return;
   sel.innerHTML = '<option value="">Все продукты</option>';
-  legendWrap.innerHTML = '';
   for (const p of products) {
-    const color = productColors[p] || DEFAULT_COLOR;
     sel.innerHTML += `<option value="${esc(p)}" ${curProduct===p?'selected':''}>${esc(p)}</option>`;
-    legendWrap.innerHTML += `<div class="legend-item"><div class="legend-dot" style="background:${color}"></div><span>${esc(p)}</span></div>`;
   }
-  updateLegend();
 }
 
-function updateLegend() {
-  document.getElementById('legend').style.display = curProduct ? 'block' : 'none';
-}
+function updateLegend() {} // no-op, legend removed
 
 function setProductFromSel() {
   curProduct = document.getElementById('productSel').value;
