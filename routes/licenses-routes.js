@@ -171,7 +171,36 @@ router.get('/status', requireAuth(), (req, res) => {
 });
 
 
-// ── GET /licenses/resolve/:bin — fetch direct license links from minerals.e-qazyna.kz ──
+// ── GET /licenses/map-search — proxy to minerals.e-qazyna.kz contracts-map-search ──
+router.get('/map-search', requireAuth(), async (req, res) => {
+  try {
+    const { search } = req.query;
+    if (!search) return res.status(400).json({ ok: false, error: 'search param required' });
+
+    const layers = [
+      'ТПИ_Лицензия_Добыча','ТПИ_Лицензия_Разведка','ТПИ_Лицензия_Разведка_Отозван',
+      'ТПИ_Контракт','ТПИ_Контракт_Горный','ТПИ_Контракт_Геологический',
+      'ТПИ_Контракт_ГорныйГеологический','С_ТпиКонтрактНаРазведку',
+      'С_ТпиКонтрактНаДобычу','С_ТпиКонтрактНаРазведкуИДобычу',
+      'С_ТпиЛицензияНаДобычу','С_ТпиЛицензияНаРазведкуИДобычу','С_ТпиЛицензияНаРазведку',
+    ];
+    const params = new URLSearchParams();
+    params.append('search', search);
+    for (const l of layers) params.append('layers', l + ',');
+
+    const resp = await fetch(
+      `https://minerals.e-qazyna.kz/ru/contracts-map-search?${params.toString()}`,
+      { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } }
+    );
+    const data = await resp.json();
+    res.json({ ok: true, data });
+  } catch(e) {
+    console.error('map-search proxy error:', e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+
 router.get('/resolve/:bin', requireAuth(), async (req, res) => {
   const { bin } = req.params;
   if (!bin || !/^\d{12}$/.test(bin)) return res.status(400).json({ ok: false, error: 'Неверный БИН' });
