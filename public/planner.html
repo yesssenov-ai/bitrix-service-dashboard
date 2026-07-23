@@ -491,7 +491,7 @@ let editId=null, curType='trip';
 
 // Draw/drag/resize state
 let drawing=false, drawRi=0, drawX0=0, drawX1=0, ghostEl=null;
-let dragging=false, dragId=null, dragDx=0, dragRi=null;
+let dragging=false, dragId=null, dragDx=0, dragRi=null, dragMoved=false, dragStartX=0, dragStartY=0;
 let resizing=false, resizeId=null;
 
 // ── View params ────────────────────────────────────────────────
@@ -1106,17 +1106,22 @@ function startDrag(e,id){
   const ev=events.find(x=>x.id===id); if(!ev) return;
   const vp=getViewParams();
   const {x,y}=gridClientToLocal(e);
-  dragging=true; dragId=id;
+  dragging=true; dragId=id; dragMoved=false;
+  dragStartX=e.clientX; dragStartY=e.clientY;
   dragDx=x-dtToX(parseDT(ev.start),vp);
   dragRi=rowList.findIndex(r=>r.kind==='emp'&&r.res.name===ev.resource);
-  document.body.style.cursor='grabbing';
-  document.querySelector(`.ev[data-id="${id}"]`)?.classList.add('drag');
   document.addEventListener('mousemove',onDragMV);
   document.addEventListener('mouseup',onDragUP);
   e.preventDefault();
 }
 function onDragMV(e){
   if(!dragging) return;
+  if(!dragMoved){
+    if(Math.abs(e.clientX-dragStartX)<4 && Math.abs(e.clientY-dragStartY)<4) return; // still just a click
+    dragMoved=true;
+    document.body.style.cursor='grabbing';
+    document.querySelector(`.ev[data-id="${dragId}"]`)?.classList.add('drag');
+  }
   const ev=events.find(x=>x.id===dragId); if(!ev) return;
   const block=document.querySelector(`.ev[data-id="${dragId}"]`); if(!block) return;
   const vp=getViewParams();
@@ -1142,6 +1147,12 @@ function onDragUP(){
   if(!dragging) return; dragging=false; document.body.style.cursor='';
   // Clear row highlights
   document.querySelectorAll('.res-row').forEach(r=>r.style.background='');
+  if(!dragMoved){
+    // No real drag happened — this was a plain click. Leave the DOM node
+    // alone so the browser's own 'click' event still fires and opens edit.
+    document.querySelector(`.ev[data-id="${dragId}"]`)?.classList.remove('drag');
+    return;
+  }
   const ev=events.find(x=>x.id===dragId);
   const block=document.querySelector(`.ev[data-id="${dragId}"]`);
   if(ev&&block){
@@ -1176,7 +1187,8 @@ function onResizeUP(){
   if(!resizing) return; resizing=false; document.body.style.cursor='';
   const ev=events.find(x=>x.id===resizeId);
   const block=document.querySelector(`.ev[data-id="${resizeId}"]`);
-  if(ev&&block&&block._re) ev.end=block._re;
+  if(!ev||!block||!block._re) return; // no actual resize — leave DOM alone so click can still fire
+  ev.end=block._re;
   saveStorage(); renderEvents();
 }
 
@@ -1286,6 +1298,14 @@ function openEdit(id){
 }
 function closePanel(){ document.getElementById('overlay').style.display='none'; editId=null; }
 
+function isTechnicalRes(name){
+  return ALL_RES.find(r=>r.name===name)?.dept === 'Технический';
+}
+function toggleSvcInstr(){
+  const name = document.getElementById('fRes')?.value;
+  const block = document.getElementById('svcInstrBlock');
+  if (block) block.style.display = isTechnicalRes(name) ? '' : 'none';
+}
 function renderForm(ev){
   const f=ev.fields||{};
   const resOpts=ALL_RES.map(r=>`<option value="${esc(r.name)}" ${ev.resource===r.name?'selected':''}>${esc(r.name)}</option>`).join('');
@@ -1329,7 +1349,7 @@ function renderForm(ev){
       <div class="tab" onclick="stab('extra',this)">Доп. поля</div>
     </div>
     <div id="tb-main">
-      <div class="frow"><label class="flbl">Сотрудник</label><select class="fi" id="fRes">${resOpts}</select></div>
+      <div class="frow"><label class="flbl">Сотрудник</label><select class="fi" id="fRes" onchange="toggleSvcInstr()">${resOpts}</select></div>
       <div class="frow" id="coAssignBlock">
         <label class="flbl">Соисполнители <span style="font-weight:400;color:var(--text-3);text-transform:none;letter-spacing:0">(создаст то же событие каждому)</span></label>
         <div id="coAssignList">${coAssignHTML}</div>
@@ -1347,8 +1367,10 @@ function renderForm(ev){
       <div class="fsec">Место и тип работы</div>
       <div class="frow"><label class="flbl">Область (Каз)/Страна <span class="req">*</span></label><select class="fi" id="f_df1">${areaOpts}</select></div>
       <div class="frow"><label class="flbl">Локация/Город <span class="req">*</span></label><input class="fi" id="f_df2" value="${esc(f.df2||'')}" placeholder="Город…"></div>
-      <div class="frow"><label class="flbl">Type of service</label><select class="fi" id="f_df3">${svcOpts}</select></div>
-      <div class="frow"><label class="flbl">Instrument</label><select class="fi" id="f_df4">${instrOpts}</select></div>
+      <div id="svcInstrBlock" style="display:${isTechnicalRes(ev.resource||ALL_RES[0]?.name)?'':'none'}">
+        <div class="frow"><label class="flbl">Type of service</label><select class="fi" id="f_df3">${svcOpts}</select></div>
+        <div class="frow"><label class="flbl">Instrument</label><select class="fi" id="f_df4">${instrOpts}</select></div>
+      </div>
       <div class="frow"><label class="flbl">Примечание</label><textarea class="fi" id="fNote" rows="2" style="resize:vertical">${esc(ev.note||'')}</textarea></div>
     </div>
     <div id="tb-clients" style="display:none">
@@ -1404,7 +1426,11 @@ function saveEv(){
   const confirmed=document.getElementById('fConfirm')?.checked||false;
   const note=document.getElementById('fNote')?.value||'';
   const fields={};
-  dataFields.forEach(df=>{ const el=document.getElementById('f_'+df.id); if(el) fields[df.id]=df.type==='check'?el.checked:el.value; });
+  const svcInstrVisible = document.getElementById('svcInstrBlock')?.style.display !== 'none';
+  dataFields.forEach(df=>{
+    if((df.id==='df3'||df.id==='df4') && !svcInstrVisible) return; // not applicable for this employee's department
+    const el=document.getElementById('f_'+df.id); if(el) fields[df.id]=df.type==='check'?el.checked:el.value;
+  });
   const clients=[]; let i=0;
   while(document.getElementById('cl_n_'+i)){
     clients.push({name:document.getElementById('cl_n_'+i).value,type:document.getElementById('cl_t_'+i)?.value||''}); i++;
