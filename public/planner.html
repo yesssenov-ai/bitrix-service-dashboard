@@ -61,7 +61,7 @@ html,body{height:100%;font-family:var(--font);background:#e8e6e3;color:var(--tex
 .leg-d{width:10px;height:10px;border-radius:2px;}
 
 /* ── LAYOUT ─────────────────────────────────────────────────── */
-.app{height:100vh;padding-top:calc(var(--head-h) + 46px);display:flex;flex-direction:column;overflow:hidden;background:#ffffff;}
+.app{height:100vh;padding-top:calc(var(--head-h) + 52px);display:flex;flex-direction:column;overflow:hidden;background:#ffffff;}
 
 /* ── MAIN SCROLL AREA ───────────────────────────────────────── */
 /* KEY FIX: sidebar and grid in ONE scrollable container */
@@ -286,7 +286,7 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 .hnav-link.active{color:var(--text);background:var(--bg);font-weight:600;}
 
 /* View bar — big buttons below header */
-.view-bar{position:fixed;top:var(--head-h);left:0;right:0;height:46px;display:flex;background:#ffffff;border-bottom:1px solid var(--stroke);padding:0 12px;gap:4px;flex-shrink:0;z-index:399;}
+.view-bar{position:fixed;top:var(--head-h);left:0;right:0;height:52px;display:flex;align-items:center;background:#ffffff;border-bottom:1px solid var(--stroke);padding:0 12px;gap:4px;flex-shrink:0;z-index:399;}
 .vbig{padding:10px 26px;border:none;background:none;color:var(--text-3);font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font);border-bottom:3px solid transparent;margin-bottom:-1px;transition:all .15s;}
 .vbig:hover{color:var(--text);}
 .vbig.on{color:var(--text);border-bottom-color:var(--brand);}
@@ -304,6 +304,25 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
     <span class="hnav-link active">📅 Планировщик</span>
   </nav>
   <div class="hdiv"></div>
+  <div class="hdr-r">
+    <div class="leg">
+      <div class="leg-i"><div class="leg-d" style="background:#f5c842"></div>Командировка</div>
+      <div class="leg-i"><div class="leg-d" style="background:#4caf7d"></div>Подтв.</div>
+      <div class="leg-i"><div class="leg-d" style="background:#64b5e8"></div>Отпуск</div>
+      <div class="leg-i"><div class="leg-d" style="background:#8B6547"></div>Обучение</div>
+    </div>
+    <button class="hbtn" onclick="openReports()">📊 Отчёты</button>
+    <button class="hbtn" onclick="openAdmin()">👤 Управление</button>
+    <button class="hbtn" onclick="openDF()">⚙ Data Fields</button>
+    <button class="hbtn p" onclick="openNew()">+ Событие</button>
+    <span id="uChip" style="font-size:12px;color:var(--text-2);background:var(--bg);border:1px solid var(--stroke-2);border-radius:20px;padding:4px 11px 4px 8px;display:flex;align-items:center;gap:5px;"><span style="width:6px;height:6px;border-radius:50%;background:#4caf7d;display:inline-block"></span><span id="uName">—</span></span>
+  </div>
+</header>
+<!-- View switcher bar — separate row below header -->
+<div class="view-bar" id="viewBar">
+  <button class="vbig" onclick="setV('week',this)">Неделя</button>
+  <button class="vbig on" onclick="setV('1m',this)">Месяц</button>
+  <div class="hdiv" style="margin:0 10px"></div>
   <!-- Date nav with period arrows -->
   <div class="dnav">
     <button class="nb nb-big" onclick="shift(-1)" title="Назад">‹</button>
@@ -322,26 +341,6 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
     <button class="nb nb-big" onclick="shift(1)" title="Вперёд">›</button>
     <button class="tbtn" onclick="goToday()">Сегодня</button>
   </div>
-  <div class="hdr-r">
-    <div class="leg">
-      <div class="leg-i"><div class="leg-d" style="background:#f5c842"></div>Командировка</div>
-      <div class="leg-i"><div class="leg-d" style="background:#4caf7d"></div>Подтв.</div>
-      <div class="leg-i"><div class="leg-d" style="background:#64b5e8"></div>Отпуск</div>
-      <div class="leg-i"><div class="leg-d" style="background:#8B6547"></div>Обучение</div>
-    </div>
-    <button class="hbtn" onclick="openReports()">📊 Отчёты</button>
-    <button class="hbtn" onclick="openAdmin()">👤 Управление</button>
-    <button class="hbtn" onclick="openDF()">⚙ Data Fields</button>
-    <button class="hbtn p" onclick="openNew()">+ Событие</button>
-    <span id="uChip" style="font-size:12px;color:var(--text-2);background:var(--bg);border:1px solid var(--stroke-2);border-radius:20px;padding:4px 11px 4px 8px;display:flex;align-items:center;gap:5px;"><span style="width:6px;height:6px;border-radius:50%;background:#4caf7d;display:inline-block"></span><span id="uName">—</span></span>
-  </div>
-</header>
-<!-- View switcher bar — separate row below header -->
-<div class="view-bar" id="viewBar">
-  <button class="vbig" onclick="setV('day',this)">День</button>
-  <button class="vbig" onclick="setV('week',this)">Неделя</button>
-  <button class="vbig on" onclick="setV('1m',this)">Месяц</button>
-  <button class="vbig" onclick="setV('year',this)">Год</button>
 </div>
 
 <div class="app">
@@ -1180,13 +1179,10 @@ function setV(v,btn){
   requestAnimationFrame(()=>render());
 }
 function shift(d){
-  if (viewMode==='day')   viewStart.setDate(viewStart.getDate()+d*3);
-  else if (viewMode==='week') viewStart.setDate(viewStart.getDate()+d*7);
+  if (viewMode==='week') viewStart.setDate(viewStart.getDate()+d*7);
   else if (viewMode==='1m') viewStart.setMonth(viewStart.getMonth()+d);
-  else if (viewMode==='year') viewStart.setFullYear(viewStart.getFullYear()+d);
   // Normalize to start of period
-  if (viewMode==='1m') { viewStart=new Date(t); viewStart.setDate(1); }
-  if (viewMode==='year') { viewStart.setMonth(0); viewStart.setDate(1); }
+  if (viewMode==='1m') { viewStart.setDate(1); }
   if (viewMode==='week') {
     const day = viewStart.getDay();
     viewStart.setDate(viewStart.getDate() - (day===0?6:day-1)); // Mon
@@ -1197,7 +1193,6 @@ function goToday(){
   const t=new Date(); t.setHours(0,0,0,0);
   viewStart=new Date(t);
   if (viewMode==='1m') { viewStart=new Date(t); viewStart.setDate(1); }
-  if (viewMode==='year') { viewStart.setMonth(0); viewStart.setDate(1); }
   if (viewMode==='week') {
     const day=t.getDay(); viewStart.setDate(t.getDate()-(day===0?6:day-1));
   }
