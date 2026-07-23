@@ -534,11 +534,14 @@ function xToDt(x, vp) {
     if (dt.getHours() >= 18) dt.setHours(17,30,0,0);
     return dt;
   } else {
-    // Non-hourly: whole days only, default 9:00 start
+    // Non-hourly: map fractional click position within the day column
+    // onto the 09:00–18:00 working-hours span, instead of always 09:00
     const dayIdx = Math.floor(x / vp.colW);
+    const frac = Math.max(0, Math.min(1, (x - dayIdx*vp.colW) / vp.colW));
     const dt = new Date(viewStart);
     dt.setDate(dt.getDate() + Math.max(0, dayIdx));
-    dt.setHours(9, 0, 0, 0);
+    const totalMin = Math.round((9 + frac*9) * 60); // 9 working hours: 09:00–18:00
+    dt.setHours(Math.floor(totalMin/60), totalMin%60, 0, 0);
     return dt;
   }
 }
@@ -855,19 +858,13 @@ function onDrawMV(e) {
   const L=Math.min(drawX0,drawX1), W=Math.abs(drawX1-drawX0);
   ghostEl.style.left=L+'px'; ghostEl.style.width=W+'px';
   const vp=getViewParams();
-  // Always show time range
-  const startDay = Math.floor(L / vp.colW);
-  const endDay = Math.floor((L+W-1) / vp.colW);
-  const sDate = new Date(viewStart); sDate.setDate(sDate.getDate()+startDay); sDate.setHours(9,0,0,0);
-  const eDate = new Date(viewStart); eDate.setDate(eDate.getDate()+endDay); eDate.setHours(18,0,0,0);
-  if (vp.isHourly) {
-    const s=snap(xToDt(L,vp)), en=snap(xToDt(L+W,vp));
+  // Show the actual time range implied by the drag position (respects where
+  // inside the day column the drag started/ended, not a fixed 09:00-18:00)
+  const s=snap(xToDt(L,vp)), en=snap(xToDt(L+W,vp));
+  if (vp.isHourly || s.toDateString()===en.toDateString()) {
     ghostEl.querySelector('span').textContent=`${fmtT(s)} – ${fmtT(en)}`;
-  } else if (startDay === endDay) {
-    ghostEl.querySelector('span').textContent = `09:00 – 18:00`;
   } else {
-    const days = endDay - startDay + 1;
-    ghostEl.querySelector('span').textContent = `${sDate.getDate()}.${String(sDate.getMonth()+1).padStart(2,'0')} 09:00 – ${eDate.getDate()}.${String(eDate.getMonth()+1).padStart(2,'0')} 18:00`;
+    ghostEl.querySelector('span').textContent = `${s.getDate()}.${String(s.getMonth()+1).padStart(2,'0')} ${fmtT(s)} – ${en.getDate()}.${String(en.getMonth()+1).padStart(2,'0')} ${fmtT(en)}`;
   }
 }
 function onDrawUP() {
@@ -1101,18 +1098,15 @@ function openNew(pre={}){
     pre.start=fmtDTL(d);
   }
   if (!pre.end) {
-    // If start provided, set end to 18:00 on end day
+    // If start provided but no end (e.g. + Событие with a resource preset),
+    // default end to 18:00 on the same day
     const s=new Date(pre.start);
-    // Check if end was passed (from draw) - use its date but set 18:00
     const eDay = pre._endDate ? new Date(pre._endDate) : new Date(s);
     eDay.setHours(18,0,0,0);
     pre.end=fmtDTL(eDay);
-  } else {
-    // Fix time to 18:00 on the end date
-    const e=new Date(pre.end); e.setHours(18,0,0,0); pre.end=fmtDTL(e);
   }
-  // Fix start time to 09:00
-  const s=new Date(pre.start); s.setHours(9,0,0,0); pre.start=fmtDTL(s);
+  // Note: when start/end come from a drag-to-create, they already carry the
+  // exact time the user dragged to — do NOT force them to 09:00/18:00 here.
   document.getElementById('pTitle').textContent='Новое событие';
   document.getElementById('pActs').innerHTML=`<button class="pb pb-save" onclick="saveEv()">Сохранить</button>`;
   renderForm(pre);
