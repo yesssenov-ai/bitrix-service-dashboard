@@ -1080,8 +1080,11 @@ function showTip(e,ev){
   const t=ET[ev.type]||ET.trip;
   const f=ev.fields||{};
   const tip=document.getElementById('tip');
+  const groupId=ev.groupId??ev.id;
+  const others=events.filter(x=>x.groupId===groupId && x.id!==ev.id).map(x=>x.resource);
   tip.innerHTML=`<div class="tip-title">${t.icon} ${esc(ev.title||t.label)}</div>
     <div class="tip-row"><span class="tip-lbl">Кто:</span>${esc(ev.resource)}</div>
+    ${others.length?`<div class="tip-row"><span class="tip-lbl">Также:</span>${esc(others.join(', '))}</div>`:''}
     <div class="tip-row"><span class="tip-lbl">Период:</span>${fmtDT(parseDT(ev.start))} — ${fmtT(parseDT(ev.end))}</div>
     ${f.df1?`<div class="tip-row"><span class="tip-lbl">Область:</span>${esc(f.df1)}</div>`:''}
     ${f.df2?`<div class="tip-row"><span class="tip-lbl">Город:</span>${esc(f.df2)}</div>`:''}
@@ -1306,6 +1309,16 @@ function renderForm(ev){
     <div class="frow2"><div><label class="flbl">Название</label><input class="fi" id="cl_n_${i}" value="${esc(c.name)}" placeholder="ТОО…"></div>
     <div><label class="flbl">Тип / С кем / О чем</label><input class="fi" id="cl_t_${i}" value="${esc(c.type)}" placeholder="Контакт…"></div></div></div>`).join('');
 
+  // Co-assignees: other events in the same group (same job, different resource)
+  const groupId = editId!=null ? (ev.groupId ?? ev.id) : null;
+  const siblings = groupId!=null ? events.filter(e=>e.groupId===groupId && e.id!==editId) : [];
+  const resOptFor = sel => ['<option value="">Выберите…</option>',...ALL_RES.map(r=>`<option ${sel===r.name?'selected':''}>${esc(r.name)}</option>`)].join('');
+  const coAssignHTML = siblings.map(s=>`
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <select class="fi co-assign-sel" style="flex:1">${resOptFor(s.resource)}</select>
+      <button type="button" class="df-btn" onclick="this.parentElement.remove()" title="Убрать">🗑</button>
+    </div>`).join('');
+
   document.getElementById('pBody').innerHTML=`
     <div class="tabs">
       <div class="tab on" onclick="stab('main',this)">Основное</div>
@@ -1314,6 +1327,11 @@ function renderForm(ev){
     </div>
     <div id="tb-main">
       <div class="frow"><label class="flbl">Сотрудник</label><select class="fi" id="fRes">${resOpts}</select></div>
+      <div class="frow" id="coAssignBlock">
+        <label class="flbl">Соисполнители <span style="font-weight:400;color:var(--text-3);text-transform:none;letter-spacing:0">(создаст то же событие каждому)</span></label>
+        <div id="coAssignList">${coAssignHTML}</div>
+        <button type="button" class="hbtn" style="width:100%;margin-top:4px;background:#faf9f7;font-size:12px;padding:6px;border-radius:5px;border:1px dashed var(--stroke-2);cursor:pointer;color:var(--text-2);font-family:var(--font)" onclick="addCoAssign()">+ Добавить исполнителя</button>
+      </div>
       <div class="frow"><label class="flbl">Тип</label><div class="tgrid">${chips}</div></div>
       <div class="frow"><label class="flbl">Название</label><input class="fi" id="fTitle" value="${esc(ev.title||'')}" placeholder="Описание…"></div>
       <div class="frow2">
@@ -1350,6 +1368,14 @@ function selType(t,el){
   const cr=document.getElementById('fConfirmRow');
   if(cr) cr.style.display=t==='trip'?'':'none';
 }
+function addCoAssign(){
+  const list=document.getElementById('coAssignList');
+  const opts=['<option value="">Выберите…</option>',...ALL_RES.map(r=>`<option>${esc(r.name)}</option>`)].join('');
+  const d=document.createElement('div');
+  d.style.cssText='display:flex;gap:8px;align-items:center;margin-bottom:8px';
+  d.innerHTML=`<select class="fi co-assign-sel" style="flex:1">${opts}</select><button type="button" class="df-btn" onclick="this.parentElement.remove()" title="Убрать">🗑</button>`;
+  list.appendChild(d);
+}
 function addCl(){
   const list=document.getElementById('clList'), i=list.children.length;
   const d=document.createElement('div'); d.className='cl-block';
@@ -1380,8 +1406,32 @@ function saveEv(){
   while(document.getElementById('cl_n_'+i)){
     clients.push({name:document.getElementById('cl_n_'+i).value,type:document.getElementById('cl_t_'+i)?.value||''}); i++;
   }
-  if(editId){ const ev=events.find(e=>e.id===editId); if(ev) Object.assign(ev,{resource,title,type:curType,start,end,allDay,confirmed,note,fields,clients}); }
-  else events.push({id:nextId++,resource,title,type:curType,start,end,allDay,confirmed,note,fields,clients});
+  // Co-assignees: other engineers to receive the exact same job
+  const extraRes=[...new Set(
+    Array.from(document.querySelectorAll('#coAssignList .co-assign-sel'))
+      .map(s=>s.value).filter(v=>v && v!==resource)
+  )];
+  const common={title,type:curType,start,end,allDay,confirmed,note,fields,clients};
+  const cloneCommon=()=>({...common, fields:{...fields}, clients:clients.map(c=>({...c}))});
+
+  if(editId){
+    const ev=events.find(e=>e.id===editId); if(!ev) return;
+    const groupId = ev.groupId ?? ev.id;
+    ev.groupId=groupId;
+    Object.assign(ev,{resource},cloneCommon());
+    // Sync sibling copies (same job, other engineers)
+    const siblings=events.filter(e=>e.groupId===groupId && e.id!==editId);
+    const keep=new Set(extraRes);
+    siblings.forEach(s=>{
+      if(keep.has(s.resource)){ Object.assign(s,cloneCommon()); keep.delete(s.resource); }
+      else { events=events.filter(e=>e!==s); } // unchecked → remove that engineer's copy
+    });
+    keep.forEach(name=>{ events.push({id:nextId++,groupId,resource:name,...cloneCommon()}); });
+  } else {
+    const groupId=nextId;
+    events.push({id:nextId++,groupId,resource,...cloneCommon()});
+    extraRes.forEach(name=>{ events.push({id:nextId++,groupId,resource:name,...cloneCommon()}); });
+  }
   saveStorage(); closePanel(); buildStickyRows(); renderEvents();
 }
 function deleteEv(){
