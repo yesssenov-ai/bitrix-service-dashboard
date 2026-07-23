@@ -63,6 +63,7 @@ app.post('/webhook/bitrix-update', express.urlencoded({ extended: true }), handl
 app.get('/login', (_, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 app.get('/api/health', (_, res) => res.json({ ok: true, ts: new Date().toISOString() }));
 app.get('/', requireAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/planner.html', requireAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'planner.html')));
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const STAGES = {
