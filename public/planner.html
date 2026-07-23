@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<!-- v2.1_20260723_064059 -->
+<!-- v2.0 -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ProLabSupport — Планировщик</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -110,7 +110,7 @@ html,body{height:100%;font-family:var(--font);background:#e8e6e3;color:var(--tex
 
 /* grid lines */
 .vline{position:absolute;top:0;bottom:0;pointer-events:none;}
-.vline.d{border-left:1px solid #d0d5e0;z-index:3;}
+.vline.d{border-left:1px solid #d0d5e0;z-index:4;}
 .vline.w{border-left:1px solid #dedad6;}
 .vline.h{border-left:1px dashed #eceae8;}
 .vline.now{border-left:2px solid rgba(59,125,216,.5);z-index:5;}
@@ -566,6 +566,9 @@ function init() {
 
 // ── Full render ────────────────────────────────────────────────
 function render() {
+  // Force fresh layout
+  const grid = document.getElementById('grid');
+  if (grid) grid.innerHTML = '';
   buildStickyRows();
   buildHead();
   buildGrid();
@@ -729,22 +732,24 @@ function buildGrid() {
 
   // Vertical lines
   if (vp.isHourly) {
+    // Draw vertical lines for all working hours across all days
     for (let d=0; d<vp.cols; d++) {
       for (let h=0; h<=9; h++) {
         const x=(d*9+h)*vp.colW;
-        const ln=document.createElement('div'); ln.className='vline '+(h===0?'w':'d');
-        ln.style.cssText=`left:${x}px;top:0;bottom:0;position:absolute;`;
+        const ln=document.createElement('div');
+        ln.className='vline '+(h===0?'w':'d');
+        ln.style.cssText=`left:${x}px;top:0;bottom:0;position:absolute;z-index:4;`;
         grid.appendChild(ln);
       }
     }
-    // Now line (only if current hour is working)
+    // Current time line
     const now=new Date();
     const dayOff=Math.floor((today-viewStart)/86400000);
     if (dayOff>=0 && dayOff<vp.cols && now.getHours()>=9 && now.getHours()<18) {
       const hOff = now.getHours() + now.getMinutes()/60 - 9;
       const nx=(dayOff*9+hOff)*vp.colW;
       const nl=document.createElement('div'); nl.className='vline now';
-      nl.style.cssText=`left:${nx}px;top:0;bottom:0;position:absolute;`;
+      nl.style.cssText=`left:${nx}px;top:0;bottom:0;position:absolute;z-index:6;`;
       grid.appendChild(nl);
     }
   } else if (vp.isWeekly) {
@@ -767,7 +772,7 @@ function buildGrid() {
       const isT=+dt===+today;
       const ln=document.createElement('div');
       ln.className='vline '+(isT?'now':'d');
-      ln.style.cssText=`left:${i*vp.colW}px;top:0;bottom:0;position:absolute;`;
+      ln.style.cssText=`left:${i*vp.colW}px;top:0;bottom:0;position:absolute;z-index:4;`;
       grid.appendChild(ln);
     }
   }
@@ -820,12 +825,19 @@ function onDrawMV(e) {
   const L=Math.min(drawX0,drawX1), W=Math.abs(drawX1-drawX0);
   ghostEl.style.left=L+'px'; ghostEl.style.width=W+'px';
   const vp=getViewParams();
+  // Always show time range
+  const startDay = Math.floor(L / vp.colW);
+  const endDay = Math.floor((L+W-1) / vp.colW);
+  const sDate = new Date(viewStart); sDate.setDate(sDate.getDate()+startDay); sDate.setHours(9,0,0,0);
+  const eDate = new Date(viewStart); eDate.setDate(eDate.getDate()+endDay); eDate.setHours(18,0,0,0);
   if (vp.isHourly) {
     const s=snap(xToDt(L,vp)), en=snap(xToDt(L+W,vp));
     ghostEl.querySelector('span').textContent=`${fmtT(s)} – ${fmtT(en)}`;
+  } else if (startDay === endDay) {
+    ghostEl.querySelector('span').textContent = `09:00 – 18:00`;
   } else {
-    const days = Math.max(1, Math.round(W / vp.colW));
-    ghostEl.querySelector('span').textContent = days === 1 ? '1 день' : `${days} дн.`;
+    const days = endDay - startDay + 1;
+    ghostEl.querySelector('span').textContent = `${sDate.getDate()}.${String(sDate.getMonth()+1).padStart(2,'0')} 09:00 – ${eDate.getDate()}.${String(eDate.getMonth()+1).padStart(2,'0')} 18:00`;
   }
 }
 function onDrawUP() {
@@ -979,7 +991,8 @@ function onResizeUP(){
 // ── View controls ──────────────────────────────────────────────
 function setV(v,btn){
   document.querySelectorAll('.vb').forEach(b=>b.classList.remove('on')); btn.classList.add('on');
-  viewMode=v; render();
+  viewMode=v;
+  requestAnimationFrame(()=>render());
 }
 function shift(d){
   if (viewMode==='day')   viewStart.setDate(viewStart.getDate()+d*3);
