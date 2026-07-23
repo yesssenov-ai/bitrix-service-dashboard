@@ -2,6 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
+<!-- v2.1_20260723_064059 -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ProLabSupport — Планировщик</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -66,7 +67,7 @@ html,body{height:100%;font-family:var(--font);background:#e8e6e3;color:var(--tex
 .m-cell{border-right:1px solid var(--stroke);display:flex;align-items:center;padding:0 12px;font-size:14px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;flex-shrink:0;letter-spacing:-.3px;background:#ffffff;}
 .col-row{display:flex;height:34px;}
 .c-cell{border-right:1px solid #e0e4ee;display:flex;align-items:center;justify-content:center;flex-direction:column;flex-shrink:0;background:#ffffff;}
-.c-cell.wknd{background:#f4f4f4;color:#aaa;}
+.c-cell.wknd{background:#f4f4f4;}
 .c-cell.tdy{background:#ffebee;border-right:2px solid #e53935 !important;}
 .c-num{font-size:12px;font-weight:600;color:#555;}
 .c-sub{font-size:9px;color:#999;margin-top:1px;}
@@ -77,18 +78,18 @@ html,body{height:100%;font-family:var(--font);background:#e8e6e3;color:var(--tex
 .c-cell.past .c-sub{color:#d0d0d0;}
 
 /* The ONE scrollable body */
-.scroll-body{flex:1;overflow:auto;position:relative;display:flex;background:#ffffff;}
+.scroll-body{flex:1;overflow:auto;position:relative;display:flex;background:#fffffffff;}
 .scroll-body::-webkit-scrollbar{height:6px;width:6px;}
 .scroll-body::-webkit-scrollbar-thumb{background:var(--stroke-2);border-radius:3px;}
 .scroll-body::-webkit-scrollbar-track{background:transparent;}
 
 /* Sidebar sticky rows inside scroll-body */
-.sb-sticky{width:var(--sb-w);flex-shrink:0;position:sticky;left:0;z-index:50;background:#fff;border-right:1px solid #dde1ec;display:flex;flex-direction:column;}
+.sb-sticky{width:var(--sb-w);flex-shrink:0;position:sticky;left:0;z-index:50;background:#ffffff;border-right:1px solid #dde1ec;display:flex;flex-direction:column;}
 .sb-search-wrap{padding:6px 8px;border-bottom:1px solid var(--stroke);background:#f0f4fa;flex-shrink:0;}
 .sb-search{width:100%;border:1px solid var(--stroke);border-radius:5px;padding:5px 8px;font-size:11.5px;font-family:var(--font);outline:none;background:#fff;color:var(--text);}
 .sb-search:focus{border-color:var(--blue);}
 .sb-rows-list{flex:1;}
-.res-row{height:var(--row-h);display:flex;align-items:center;padding:0 8px 0 9px;gap:6px;border-bottom:1px solid #ebebeb;background:#ffffff;flex-shrink:0;transition:background .12s;}
+.res-row{height:var(--row-h);display:flex;align-items:center;padding:0 8px 0 9px;gap:6px;border-bottom:1px solid #ebebeb;background:#ffffff;flex-shrink:0;transition:background .12s;} .res-row.dept-top{border-top:2px solid #dde1ec;}
 .res-row:hover{background:#f0f7ff;}
 .res-row.dept-top{border-top:1px solid var(--stroke-2);}
 .dept-lbl{font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text-4);line-height:1;margin-bottom:1px;}
@@ -101,20 +102,20 @@ html,body{height:100%;font-family:var(--font);background:#e8e6e3;color:var(--tex
 .ll-f{background:#f0eeed;color:var(--text-4);}
 
 /* Grid area */
-.grid-wrap{flex:1;position:relative;min-width:0;background:#ffffff;}
+.grid-wrap{flex:1;position:relative;min-width:0;background:#ffffff;} .grid{background:#ffffff;}
 .grid{position:relative;cursor:crosshair;}
 /* white cells */
-.grid-row{position:absolute;left:0;right:0;height:var(--row-h);border-bottom:1px solid #e8ecf2;background:#ffffff;}
+.grid-row{position:absolute;left:0;right:0;height:var(--row-h);border-bottom:1px solid #e0e4ee;background:transparent;z-index:1;pointer-events:none;}
 .grid-row.today-bg{background:#f5f9ff !important;}
 
 /* grid lines */
 .vline{position:absolute;top:0;bottom:0;pointer-events:none;}
-.vline.d{border-left:1px solid #dde1ec;z-index:2;}
+.vline.d{border-left:1px solid #d0d5e0;z-index:3;}
 .vline.w{border-left:1px solid #dedad6;}
 .vline.h{border-left:1px dashed #eceae8;}
 .vline.now{border-left:2px solid rgba(59,125,216,.5);z-index:5;}
-.col-wknd-future{position:absolute;top:0;bottom:0;background:#f4f4f4;pointer-events:none;z-index:0;}
-.col-holiday{position:absolute;top:0;bottom:0;background:#fef0f0;pointer-events:none;z-index:0;border-left:1px solid #f8d0d0;}
+.col-wknd-future{position:absolute;top:0;bottom:0;background:#f4f4f4;pointer-events:none;z-index:1;}
+.col-holiday{position:absolute;top:0;bottom:0;background:#fef0f0;pointer-events:none;z-index:1;}
 .col-holiday::after{content:'🎉';position:absolute;top:2px;left:50%;transform:translateX(-50%);font-size:8px;opacity:.5;}
 
 /* ── EVENTS ─────────────────────────────────────────────────── */
@@ -270,7 +271,14 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 <header class="hdr">
   <div class="logo"><div class="logo-mk">PLS</div>ProLabSupport</div>
   <div class="hdiv"></div>
-  <span class="hdr-lbl">Планировщик ресурсов</span>
+  <nav style="display:flex;gap:2px;">
+    <a href="/" style="padding:4px 10px;border-radius:5px;font-size:12px;font-weight:500;color:#8a8784;text-decoration:none;" onmouseover="this.style.background='#3d3a37'" onmouseout="this.style.background='none'">← Дашборд</a>
+    <a href="/equipment-map.html" style="padding:4px 10px;border-radius:5px;font-size:12px;font-weight:500;color:#8a8784;text-decoration:none;" onmouseover="this.style.background='#3d3a37'" onmouseout="this.style.background='none'">🗺 Карта</a>
+    <a href="/licenses-map.html" style="padding:4px 10px;border-radius:5px;font-size:12px;font-weight:500;color:#8a8784;text-decoration:none;" onmouseover="this.style.background='#3d3a37'" onmouseout="this.style.background='none'">⛏ Лицензии</a>
+    <span style="padding:4px 10px;border-radius:5px;font-size:12px;font-weight:600;color:#fff;background:#3d3a37;">📅 Планировщик</span>
+  </nav>
+  <div class="hdiv"></div>
+  <span class="hdr-lbl">Ресурсы</span>
   <div class="dnav">
     <button class="nb" onclick="shift(-1)">‹</button>
     <span class="drng" id="drng">—</span>
@@ -284,6 +292,7 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
     <button class="vb" onclick="setV('year',this)">Год</button>
   </div>
   <div class="hdr-r">
+    <span id="uChip" style="font-size:11px;color:#8a8784;background:#3d3a37;border-radius:20px;padding:3px 10px 3px 7px;display:flex;align-items:center;gap:5px;"><span style="width:6px;height:6px;border-radius:50%;background:#4caf7d;display:inline-block"></span><span id="uName">—</span></span>
     <div class="leg">
       <div class="leg-i"><div class="leg-d" style="background:#f5c842"></div>Командировка</div>
       <div class="leg-i"><div class="leg-d" style="background:#4caf7d"></div>Командировка (подтв.)</div>
@@ -692,20 +701,7 @@ function buildGrid() {
   grid.style.width = totalW + 'px';
   grid.style.height = totalH + 'px';
 
-  // Row backgrounds
-  filteredRes.forEach((res,ri) => {
-    const row = document.createElement('div');
-    row.className = 'grid-row';
-    row.style.top = (ri*ROW_H)+'px';
-    // today highlight
-    if (!vp.isHourly) {
-      const todayOff = Math.floor((today-viewStart)/86400000);
-      if (todayOff>=0 && todayOff<vp.cols) row.classList.add('today-bg');
-    }
-    grid.appendChild(row);
-  });
-
-  // Non-working days shading (weekends + holidays)
+  // Non-working days shading (weekends + holidays) — bottom layer
   if (!vp.isHourly && !vp.isWeekly) {
     for (let i=0; i<vp.cols; i++) {
       const d = new Date(viewStart); d.setDate(d.getDate()+i);
@@ -718,6 +714,16 @@ function buildGrid() {
         if (holiday) sh.title = holiday;
         grid.appendChild(sh);
       }
+    }
+  }
+
+  // Today column highlight
+  if (!vp.isHourly && !vp.isWeekly) {
+    const off = Math.floor((today-viewStart)/86400000);
+    if (off>=0 && off<vp.cols) {
+      const td=document.createElement('div');
+      td.style.cssText=`position:absolute;top:0;bottom:0;left:${off*vp.colW}px;width:${vp.colW}px;background:rgba(229,57,53,.04);pointer-events:none;z-index:2;`;
+      grid.appendChild(td);
     }
   }
 
@@ -765,6 +771,14 @@ function buildGrid() {
       grid.appendChild(ln);
     }
   }
+
+  // Row separators (on top of col shading, below events)
+  filteredRes.forEach((res,ri) => {
+    const row = document.createElement('div');
+    row.className = 'grid-row';
+    row.style.top = (ri*ROW_H)+'px';
+    grid.appendChild(row);
+  });
 
   // Mouse events on grid
   grid.addEventListener('mousedown', onGridMD);
@@ -823,7 +837,7 @@ function onDrawUP() {
   if (W<6) return;
   const vp=getViewParams();
   const s=snap(xToDt(L,vp)), en=snap(xToDt(L+W,vp));
-  openNew({resource:filteredRes[drawRi]?.name, start:fmtDTL(s), end:fmtDTL(en)});
+  openNew({resource:filteredRes[drawRi]?.name, start:fmtDTL(s), end:fmtDTL(en), _endDate:fmtDTL(en)});
 }
 
 // ── Events render ──────────────────────────────────────────────
@@ -847,7 +861,15 @@ function renderEvents() {
     const block=document.createElement('div');
     block.className='ev'; block.dataset.id=ev.id;
     block.style.cssText=`left:${visL+1}px;width:${visR-visL-2}px;top:${ri*ROW_H+4}px;background:${t.bg};color:${t.fg};`;
-    block.innerHTML=`<span class="ev-ic">${t.icon}</span><span class="ev-lbl">${esc(ev.title||t.label)}</span><span class="ev-t">${fmtT(s)}-${fmtT(en)}</span><div class="ev-rsz"></div>`;
+    // Build label: client > service type > instrument > title
+    const f=ev.fields||{};
+    const clients=ev.clients||[];
+    const cl1=clients[0]?.name||'';
+    const svc=f.df3||'';
+    const instr=f.df4||'';
+    const parts=[cl1,svc,instr].filter(Boolean);
+    const mainLbl = parts.length ? parts.join(' · ') : (ev.title||t.label);
+    block.innerHTML=`<span class="ev-ic">${t.icon}</span><span class="ev-lbl">${esc(mainLbl)}</span><span class="ev-t">${fmtT(s)}-${fmtT(en)}</span><div class="ev-rsz"></div>`;
 
     block.addEventListener('mouseenter', e2=>showTip(e2,ev));
     block.addEventListener('mouseleave', hideTip);
@@ -1022,6 +1044,24 @@ function filterRes(q){
 // ── Panel ──────────────────────────────────────────────────────
 function openNew(pre={}){
   editId=null; curType=pre.type||'trip';
+  // Default start=09:00, end=18:00 on same day
+  if (!pre.start) {
+    const d=new Date(); d.setHours(9,0,0,0);
+    pre.start=fmtDTL(d);
+  }
+  if (!pre.end) {
+    // If start provided, set end to 18:00 on end day
+    const s=new Date(pre.start);
+    // Check if end was passed (from draw) - use its date but set 18:00
+    const eDay = pre._endDate ? new Date(pre._endDate) : new Date(s);
+    eDay.setHours(18,0,0,0);
+    pre.end=fmtDTL(eDay);
+  } else {
+    // Fix time to 18:00 on the end date
+    const e=new Date(pre.end); e.setHours(18,0,0,0); pre.end=fmtDTL(e);
+  }
+  // Fix start time to 09:00
+  const s=new Date(pre.start); s.setHours(9,0,0,0); pre.start=fmtDTL(s);
   document.getElementById('pTitle').textContent='Новое событие';
   document.getElementById('pActs').innerHTML=`<button class="pb pb-save" onclick="saveEv()">Сохранить</button>`;
   renderForm(pre);
