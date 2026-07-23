@@ -41,6 +41,12 @@ html,body{height:100%;font-family:var(--font);background:#e8e6e3;color:var(--tex
 .nb-big{width:32px;height:32px;font-size:17px;border-radius:6px;}
 .nb:hover{background:var(--bg);color:var(--text);}
 .drng-pill{display:flex;align-items:center;gap:10px;background:var(--bg);border:1px solid var(--stroke-2);border-radius:10px;padding:5px 16px;}
+.drng-wrap{position:relative;display:flex;align-items:center;}
+.drng-arrow-btn{position:absolute;top:50%;transform:translateY(-50%);width:26px;height:26px;border-radius:6px;border:1px solid var(--stroke-2);background:#fff;color:var(--text-2);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,background .15s,color .15s;z-index:5;box-shadow:0 1px 4px rgba(0,0,0,.1);}
+.drng-arrow-btn:hover{background:var(--bg);color:var(--text);}
+.drng-arrow-l{left:-13px;}
+.drng-arrow-r{right:-13px;}
+.drng-wrap:hover .drng-arrow-btn{opacity:1;}
 .drng-d{display:flex;flex-direction:column;align-items:center;line-height:1;}
 .drng-num{font-size:22px;font-weight:800;color:var(--text);letter-spacing:-.5px;}
 .drng-mon{font-size:9.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin-top:2px;}
@@ -323,22 +329,24 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
   <button class="vbig" onclick="setV('week',this)">Неделя</button>
   <button class="vbig on" onclick="setV('1m',this)">Месяц</button>
   <div class="hdiv" style="margin:0 10px"></div>
-  <!-- Date nav with period arrows -->
+  <!-- Date nav with period arrows (arrows reveal on hover, like Ganttic) -->
   <div class="dnav">
-    <button class="nb nb-big" onclick="shift(-1)" title="Назад">‹</button>
-    <div class="drng-pill" id="drngPill">
-      <div class="drng-d">
-        <span class="drng-num" id="drngNum1">–</span>
-        <span class="drng-mon" id="drngMon1">–</span>
+    <div class="drng-wrap">
+      <button class="drng-arrow-btn drng-arrow-l" onclick="shift(-1)" title="Назад">‹</button>
+      <div class="drng-pill" id="drngPill">
+        <div class="drng-d">
+          <span class="drng-num" id="drngNum1">–</span>
+          <span class="drng-mon" id="drngMon1">–</span>
+        </div>
+        <span class="drng-arrow" id="drngArrow">→</span>
+        <div class="drng-d" id="drngD2">
+          <span class="drng-num" id="drngNum2">–</span>
+          <span class="drng-mon" id="drngMon2">–</span>
+        </div>
+        <div class="drng-dow" id="drngDow">–</div>
       </div>
-      <span class="drng-arrow" id="drngArrow">→</span>
-      <div class="drng-d" id="drngD2">
-        <span class="drng-num" id="drngNum2">–</span>
-        <span class="drng-mon" id="drngMon2">–</span>
-      </div>
-      <div class="drng-dow" id="drngDow">–</div>
+      <button class="drng-arrow-btn drng-arrow-r" onclick="shift(1)" title="Вперёд">›</button>
     </div>
-    <button class="nb nb-big" onclick="shift(1)" title="Вперёд">›</button>
     <button class="tbtn" onclick="goToday()">Сегодня</button>
   </div>
 </div>
