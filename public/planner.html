@@ -324,6 +324,7 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
       <div class="leg-i"><div class="leg-d" style="background:#64b5e8"></div>Отпуск</div>
       <div class="leg-i"><div class="leg-d" style="background:#8B6547"></div>Обучение</div>
     </div>
+    <button class="hbtn" onclick="openReports()">📊 Отчёты</button>
     <button class="hbtn" onclick="openAdmin()">👤 Управление</button>
     <button class="hbtn" onclick="openDF()">⚙ Data Fields</button>
     <button class="hbtn p" onclick="openNew()">+ Событие</button>
@@ -379,6 +380,11 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
   </div>
 </div>
 
+<!-- Report export libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
 <script>
 // ── Constants ──────────────────────────────────────────────────
 const ROW_H = 52; // single source of truth for row height (sidebar rows + grid rows)
@@ -397,6 +403,18 @@ const AREAS = ['Алматы','Астана','Шымкент','Абайская'
 
 const SVC = ['Installation','Warranty (Installation)','Diagnostics',
   'Preventive Maintenance','Qualification','Remote support','Training','Other'];
+
+const INSTRUMENTS = [
+  'MP-AES','HPLC','HPLC-MS','AA Spectroscopy','ICP-OES','ICP-MS',
+  'Near-infrared Spectroscopy','General Lab Equipment','Sample Preparation','Autosamplers',
+  'Titrator','Generators','Non - Destructive Analyzer','Petroleum Analyzers','Material Testing',
+  'Particle Size Analyzers','Thermal Analyzers','Total Organic Carbon','PCR','Life Science',
+  'XRD Spectroscopy','WDXRF Spectroscopy','EDXRF Spectroscopy','NMR (Nuclear Magnit)',
+  'IR-Fourier Spectroscopy','UV-VIS Spectroscopy','CE Capillary Electrophoresis','LC-MS-TOF (QTOF)',
+  'LC-TOF','LC-MS/MS (Triple Quad)','LC-MS (Single Quad)','LC','GC-MS-TOF (QTOF)',
+  'GC-MS/MS (Triple Quad)','GC-MS (Single Quad)','GC','IC Metrohm','Peak','LNI','ph-метр',
+  'Mira DS Metrohm','Elga','AutoLab','BioTek','Waters','Struers',
+];
 
 const DEPTS = {
   'Руководство':  ['Куаныш Есенов'],
@@ -422,12 +440,13 @@ for (const [dept,names] of Object.entries(DEPTS)) {
 let viewMode = '1m';
 let viewStart = (() => { const d=new Date(); d.setHours(0,0,0,0); return d; })();
 let events = [];
-let dataFields = [
+const BUILTIN_DFS = [
   {id:'df1',name:'Область (Каз)/Страна',type:'select',options:AREAS,required:true},
   {id:'df2',name:'Локация/Город',type:'text',required:true},
   {id:'df3',name:'Type of service',type:'select',options:SVC},
-  {id:'df4',name:'Instrument',type:'text'},
+  {id:'df4',name:'Instrument',type:'select',options:INSTRUMENTS},
 ];
+let dataFields = [...BUILTIN_DFS];
 let nextId=1, nextDfId=10;
 let filteredRes = [...ALL_RES];
 let editId=null, curType='trip';
@@ -609,7 +628,18 @@ function initials(n){ return n.split(' ').slice(0,2).map(w=>w[0]).join(''); }
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // ── Init ───────────────────────────────────────────────────────
-function init() {
+let myRole = 'viewer';
+async function initAuth() {
+  try {
+    const r = await fetch('/auth/me');
+    if (!r.ok) { window.location.href='/login.html'; return; }
+    const d = await r.json();
+    myRole = d.user.role;
+    document.getElementById('uName').textContent = d.user.displayName + (myRole==='admin' ? ' · админ' : '');
+  } catch(e) { window.location.href='/login.html'; }
+}
+async function init() {
+  await initAuth();
   loadStorage();
   render();
   // sync header scroll with body scroll
@@ -643,18 +673,20 @@ function buildStickyRows() {
     const row = document.createElement('div');
     row.className = 'res-row' + (isDeptTop ? ' dept-top' : '');
     row.style.cssText = `height:${ROW_H}px;flex-shrink:0;`;
-    row.draggable = true;
+    row.draggable = (myRole === 'admin');
     row.dataset.name = res.name;
     row.dataset.dept = res.dept;
-    row.addEventListener('dragstart', onResDragStart);
-    row.addEventListener('dragover', onResDragOver);
-    row.addEventListener('dragleave', onResDragLeave);
-    row.addEventListener('drop', onResDrop);
-    row.addEventListener('dragend', onResDragEnd);
+    if (myRole === 'admin') {
+      row.addEventListener('dragstart', onResDragStart);
+      row.addEventListener('dragover', onResDragOver);
+      row.addEventListener('dragleave', onResDragLeave);
+      row.addEventListener('drop', onResDrop);
+      row.addEventListener('dragend', onResDragEnd);
+    }
     const load = calcLoad(res.name);
     const lc = load>=80?'ll-h':load>=40?'ll-m':load>0?'ll-o':'ll-f';
     row.innerHTML =
-      `<span class="rdrag" title="Перетащить, чтобы изменить порядок">⠿</span>` +
+      (myRole==='admin' ? `<span class="rdrag" title="Перетащить, чтобы изменить порядок">⠿</span>` : '') +
       `<div class="av" style="background:${nameColor(res.name)}">${initials(res.name)}</div>` +
       `<div style="flex:1;min-width:0">` +
         (isDeptTop ? `<div class="dept-lbl">${esc(res.dept)}</div>` : '') +
@@ -1211,6 +1243,7 @@ function renderForm(ev){
   const resOpts=ALL_RES.map(r=>`<option value="${esc(r.name)}" ${ev.resource===r.name?'selected':''}>${esc(r.name)}</option>`).join('');
   const areaOpts=['<option value="">Выберите…</option>',...AREAS.map(a=>`<option ${f.df1===a?'selected':''}>${esc(a)}</option>`)].join('');
   const svcOpts=['<option value="">Выберите…</option>',...SVC.map(s=>`<option ${f.df3===s?'selected':''}>${esc(s)}</option>`)].join('');
+  const instrOpts=['<option value="">Выберите…</option>',...INSTRUMENTS.map(x=>`<option ${f.df4===x?'selected':''}>${esc(x)}</option>`)].join('');
   const chips=['trip','leave','train'].map(k=>{const v=ET[k];
     return `<button class="tc tc-${k}${curType===k?' on':''}" onclick="selType('${k}',this)">${v.icon} ${v.label}</button>`;
   }).join('');
@@ -1252,7 +1285,7 @@ function renderForm(ev){
       <div class="frow"><label class="flbl">Область (Каз)/Страна <span class="req">*</span></label><select class="fi" id="f_df1">${areaOpts}</select></div>
       <div class="frow"><label class="flbl">Локация/Город <span class="req">*</span></label><input class="fi" id="f_df2" value="${esc(f.df2||'')}" placeholder="Город…"></div>
       <div class="frow"><label class="flbl">Type of service</label><select class="fi" id="f_df3">${svcOpts}</select></div>
-      <div class="frow"><label class="flbl">Instrument</label><input class="fi" id="f_df4" value="${esc(f.df4||'')}" placeholder="Прибор…"></div>
+      <div class="frow"><label class="flbl">Instrument</label><select class="fi" id="f_df4">${instrOpts}</select></div>
       <div class="frow"><label class="flbl">Примечание</label><textarea class="fi" id="fNote" rows="2" style="resize:vertical">${esc(ev.note||'')}</textarea></div>
     </div>
     <div id="tb-clients" style="display:none">
@@ -1362,7 +1395,14 @@ function saveStorage(){
 }
 function loadStorage(){
   try{const r=localStorage.getItem('pls3_ev');if(r){events=JSON.parse(r);nextId=Math.max(...events.map(e=>e.id),0)+1;}}catch(e){}
-  try{const r=localStorage.getItem('pls3_df');if(r)dataFields=JSON.parse(r);}catch(e){}
+  try{
+    const r=localStorage.getItem('pls3_df');
+    if(r){
+      const stored=JSON.parse(r);
+      const extra=stored.filter(df=>!['df1','df2','df3','df4'].includes(df.id));
+      dataFields=[...BUILTIN_DFS, ...extra];
+    }
+  }catch(e){}
 }
 
 
@@ -1757,6 +1797,243 @@ function syncAdminToRes(){
   }
   filteredRes=[...ALL_RES];
 }
+// ═══════════════════════════════════════════════════════════════
+// ── REPORTS MODULE ────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+let repSelected = new Set();
+let repFrom = '', repTo = '';
+let repType = 'summary';
+let repFields = {type:true, confirmed:true, dateStart:true, dateEnd:true, days:true,
+                  area:false, city:true, svc:true, instrument:false, clients:true, note:false};
+let _ptSansRegB64 = null, _ptSansBoldB64 = null;
+
+function fmtDate(d){
+  return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+}
+function todayISO(d){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function openReports(){
+  if (repFrom==='' || repTo==='') {
+    const now=new Date();
+    repFrom = todayISO(new Date(now.getFullYear(), now.getMonth(), 1));
+    repTo   = todayISO(new Date(now.getFullYear(), now.getMonth()+1, 0));
+  }
+  if (repSelected.size===0) ALL_RES.forEach(r=>repSelected.add(r.name));
+  renderReportsBody();
+  document.getElementById('repOverlay').style.display='flex';
+}
+function closeReports(){ document.getElementById('repOverlay').style.display='none'; }
+
+function renderReportsBody(){
+  const byDept={};
+  ALL_RES.forEach(r=>{ (byDept[r.dept]=byDept[r.dept]||[]).push(r); });
+  const empHTML = Object.entries(byDept).map(([dept,members])=>`
+    <div style="margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">${esc(dept)}</div>
+      ${members.map(m=>`
+        <label style="display:flex;align-items:center;gap:7px;padding:3px 0;font-size:12.5px;cursor:pointer">
+          <input type="checkbox" ${repSelected.has(m.name)?'checked':''} onchange="repToggleEmp('${esc(m.name).replace(/'/g,"\\'")}')">
+          ${esc(m.name)}
+        </label>`).join('')}
+    </div>`).join('');
+
+  const fieldDefs = [
+    ['type','Тип события'], ['confirmed','Подтверждено'], ['dateStart','Дата начала'],
+    ['dateEnd','Дата окончания'], ['days','Кол-во дней'], ['area','Область/Страна'],
+    ['city','Город'], ['svc','Вид работ'], ['instrument','Оборудование'],
+    ['clients','Клиенты'], ['note','Примечание'],
+  ];
+  const fieldsHTML = fieldDefs.map(([id,lbl])=>`
+    <label style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12.5px;cursor:pointer">
+      <input type="checkbox" ${repFields[id]?'checked':''} onchange="repFields.${id}=this.checked">
+      ${lbl}
+    </label>`).join('');
+
+  document.getElementById('repBody').innerHTML = `
+    <div style="display:flex;gap:22px">
+      <div style="width:230px;flex-shrink:0;border-right:1px solid var(--stroke);padding-right:16px;max-height:420px;overflow-y:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <b style="font-size:12.5px">Сотрудники</b>
+          <div style="display:flex;gap:6px">
+            <button class="tbtn" style="font-size:10.5px;padding:2px 7px" onclick="repToggleAllEmp(true)">Все</button>
+            <button class="tbtn" style="font-size:10.5px;padding:2px 7px" onclick="repToggleAllEmp(false)">Нет</button>
+          </div>
+        </div>
+        ${empHTML}
+      </div>
+      <div style="flex:1;min-width:0">
+        <b style="font-size:12.5px">Период</b>
+        <div style="display:flex;gap:6px;margin:8px 0 6px">
+          <button class="tbtn" onclick="repPreset('thisMonth')">Этот месяц</button>
+          <button class="tbtn" onclick="repPreset('lastMonth')">Прошлый месяц</button>
+          <button class="tbtn" onclick="repPreset('thisYear')">Этот год</button>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px">
+          <input type="date" class="fi" id="repFromInp" value="${repFrom}" onchange="repFrom=this.value" style="width:150px">
+          <span style="color:var(--text-3)">—</span>
+          <input type="date" class="fi" id="repToInp" value="${repTo}" onchange="repTo=this.value" style="width:150px">
+        </div>
+
+        <b style="font-size:12.5px">Тип отчёта</b>
+        <div style="display:flex;gap:16px;margin:8px 0 16px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer">
+            <input type="radio" name="repType" ${repType==='summary'?'checked':''} onchange="repSetType('summary')"> Сводка по дням
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer">
+            <input type="radio" name="repType" ${repType==='detail'?'checked':''} onchange="repSetType('detail')"> Детальный список событий
+          </label>
+        </div>
+
+        <div id="repFieldsBlock" style="display:${repType==='detail'?'':'none'}">
+          <b style="font-size:12.5px">Поля в отчёте</b>
+          <div style="columns:2;margin-top:8px;margin-bottom:6px">${fieldsHTML}</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function repToggleEmp(name){
+  if (repSelected.has(name)) repSelected.delete(name); else repSelected.add(name);
+}
+function repToggleAllEmp(all){
+  repSelected = all ? new Set(ALL_RES.map(r=>r.name)) : new Set();
+  renderReportsBody();
+}
+function repPreset(p){
+  const now=new Date();
+  if (p==='thisMonth') { repFrom=todayISO(new Date(now.getFullYear(),now.getMonth(),1)); repTo=todayISO(new Date(now.getFullYear(),now.getMonth()+1,0)); }
+  if (p==='lastMonth') { repFrom=todayISO(new Date(now.getFullYear(),now.getMonth()-1,1)); repTo=todayISO(new Date(now.getFullYear(),now.getMonth(),0)); }
+  if (p==='thisYear')  { repFrom=todayISO(new Date(now.getFullYear(),0,1)); repTo=todayISO(new Date(now.getFullYear(),11,31)); }
+  document.getElementById('repFromInp').value=repFrom;
+  document.getElementById('repToInp').value=repTo;
+}
+function repSetType(t){ repType=t; renderReportsBody(); }
+
+// Build the {headers, rows} data for the currently selected report options
+function repComputeData(){
+  const from = new Date(repFrom+'T00:00:00');
+  const to   = new Date(repTo+'T23:59:59');
+  const dayMs = 86400000;
+  const selRes = ALL_RES.filter(r=>repSelected.has(r.name));
+
+  if (repType==='summary') {
+    const headers = ['Сотрудник','Отдел','Командировка, дн.','Командировка подтв., дн.','Отпуск, дн.','Обучение, дн.','Итого дней','Загрузка, %'];
+    const totalPeriodDays = Math.max(1, Math.round((to-from)/dayMs)+1);
+    const rows = selRes.map(r=>{
+      let trip=0, tripC=0, leave=0, train=0;
+      events.forEach(ev=>{
+        if (ev.resource!==r.name) return;
+        const s=parseDT(ev.start), e=parseDT(ev.end);
+        if (e<from || s>to) return;
+        const days = Math.max(0, Math.round((Math.min(+e,+to)-Math.max(+s,+from))/dayMs))+1;
+        if (ev.type==='trip') { if (ev.confirmed) tripC+=days; else trip+=days; }
+        else if (ev.type==='leave') leave+=days;
+        else if (ev.type==='train') train+=days;
+      });
+      const total = trip+tripC+leave+train;
+      const load = Math.min(100, Math.round(total/totalPeriodDays*100));
+      return [r.name, r.dept, trip, tripC, leave, train, total, load];
+    });
+    return {
+      headers, rows,
+      title:`Сводка по сотрудникам · ${fmtDate(from)} — ${fmtDate(to)}`,
+      filenameBase:`svodka_${repFrom}_${repTo}`
+    };
+  }
+
+  // Detailed event list
+  const colDefs = [
+    ['type','Тип'], ['confirmed','Подтв.'], ['dateStart','Начало'], ['dateEnd','Окончание'],
+    ['days','Дней'], ['area','Область/Страна'], ['city','Город'], ['svc','Вид работ'],
+    ['instrument','Оборудование'], ['clients','Клиенты'], ['note','Примечание'],
+  ].filter(([id])=>repFields[id]);
+  const headers = ['Сотрудник','Отдел', ...colDefs.map(c=>c[1])];
+  const rows = [];
+  selRes.forEach(r=>{
+    events.filter(ev=>ev.resource===r.name).forEach(ev=>{
+      const s=parseDT(ev.start), e=parseDT(ev.end);
+      if (e<from || s>to) return;
+      const days = Math.max(0, Math.round((Math.min(+e,+to)-Math.max(+s,+from))/dayMs))+1;
+      const f = ev.fields||{};
+      const cellFor = id => {
+        if (id==='type') return ET[ev.type==='trip'&&ev.confirmed?'trip_confirm':ev.type]?.label || ev.type;
+        if (id==='confirmed') return ev.type==='trip' ? (ev.confirmed?'Да':'Нет') : '';
+        if (id==='dateStart') return fmtDate(s);
+        if (id==='dateEnd') return fmtDate(e);
+        if (id==='days') return days;
+        if (id==='area') return f.df1||'';
+        if (id==='city') return f.df2||'';
+        if (id==='svc') return f.df3||'';
+        if (id==='instrument') return f.df4||'';
+        if (id==='clients') return (ev.clients||[]).map(c=>c.name).filter(Boolean).join(', ');
+        if (id==='note') return ev.note||'';
+        return '';
+      };
+      rows.push([r.name, r.dept, ...colDefs.map(c=>cellFor(c[0]))]);
+    });
+  });
+  return {
+    headers, rows,
+    title:`Детальный отчёт по событиям · ${fmtDate(from)} — ${fmtDate(to)}`,
+    filenameBase:`detal_${repFrom}_${repTo}`
+  };
+}
+
+function repExportExcel(){
+  if (!repFrom || !repTo) return;
+  const {headers, rows, filenameBase} = repComputeData();
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  ws['!cols'] = headers.map((h,i)=>({wch: Math.max(10, h.length+2, ...rows.map(r=>String(r[i]??'').length))}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, repType==='summary'?'Сводка':'Детально');
+  XLSX.writeFile(wb, filenameBase+'.xlsx');
+}
+
+async function loadPdfFonts(){
+  if (_ptSansRegB64) return;
+  const toB64 = buf => { let s=''; const by=new Uint8Array(buf); for (let i=0;i<by.length;i++) s+=String.fromCharCode(by[i]); return btoa(s); };
+  const [rb, bb] = await Promise.all([
+    fetch('/assets/fonts/PTSans-Regular.ttf').then(r=>r.arrayBuffer()),
+    fetch('/assets/fonts/PTSans-Bold.ttf').then(r=>r.arrayBuffer()),
+  ]);
+  _ptSansRegB64 = toB64(rb);
+  _ptSansBoldB64 = toB64(bb);
+}
+function registerPdfFonts(doc){
+  doc.addFileToVFS('PTSans-Regular.ttf', _ptSansRegB64);
+  doc.addFont('PTSans-Regular.ttf', 'PTSans', 'normal');
+  doc.addFileToVFS('PTSans-Bold.ttf', _ptSansBoldB64);
+  doc.addFont('PTSans-Bold.ttf', 'PTSans', 'bold');
+}
+async function repExportPDF(e){
+  if (!repFrom || !repTo) return;
+  const btn = e?.target;
+  if (btn) { btn.disabled=true; btn.textContent='Готовим PDF…'; }
+  try {
+    await loadPdfFonts();
+    const {headers, rows, title, filenameBase} = repComputeData();
+    const { jsPDF } = window.jspdf;
+    const landscape = headers.length > 6;
+    const doc = new jsPDF({ orientation: landscape?'landscape':'portrait', unit:'pt', format:'a4' });
+    registerPdfFonts(doc);
+    doc.setFont('PTSans','bold'); doc.setFontSize(13);
+    doc.text(title, 32, 32);
+    doc.autoTable({
+      head:[headers], body: rows, startY: 46,
+      styles:{font:'PTSans', fontSize:8, cellPadding:4},
+      headStyles:{font:'PTSans', fontStyle:'bold', fillColor:[197,59,47], textColor:255},
+      alternateRowStyles:{fillColor:[248,247,246]},
+      margin:{left:32,right:32},
+    });
+    doc.save(filenameBase+'.pdf');
+  } finally {
+    if (btn) { btn.disabled=false; btn.textContent='📄 Скачать PDF'; }
+  }
+}
+
+
 window.addEventListener('load', ()=>{syncAdminToRes();init();});
 window.addEventListener('resize', ()=>{ clearTimeout(window._resizeT); window._resizeT=setTimeout(render,150); });
 </script>
@@ -1774,6 +2051,21 @@ window.addEventListener('resize', ()=>{ clearTimeout(window._resizeT); window._r
       <div class="adm-tab" onclick="admTab('colors',this)">Цветовая палитра</div>
     </div>
     <div class="adm-body" id="admBody"></div>
+  </div>
+</div>
+
+<!-- REPORTS MODAL -->
+<div class="adm-overlay" id="repOverlay" style="display:none" onclick="if(event.target===this)closeReports()">
+  <div class="adm-modal" style="width:760px" onclick="event.stopPropagation()">
+    <div class="adm-head">
+      <span class="adm-title">📊 Отчёты по сотрудникам</span>
+      <button class="adm-x" onclick="closeReports()">✕</button>
+    </div>
+    <div class="adm-body" id="repBody"></div>
+    <div style="padding:12px 18px;border-top:1px solid var(--stroke);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0">
+      <button class="hbtn" onclick="repExportExcel()">📥 Скачать Excel</button>
+      <button class="hbtn p" onclick="repExportPDF(event)">📄 Скачать PDF</button>
+    </div>
   </div>
 </div>
 </body>
