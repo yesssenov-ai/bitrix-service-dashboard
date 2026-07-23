@@ -52,7 +52,7 @@ html,body{height:100%;font-family:var(--font);background:#e8e6e3;color:var(--tex
 .leg-d{width:10px;height:10px;border-radius:2px;}
 
 /* ── LAYOUT ─────────────────────────────────────────────────── */
-.app{height:100vh;padding-top:var(--head-h);display:flex;flex-direction:column;overflow:hidden;background:#ffffff;}
+.app{height:100vh;padding-top:calc(var(--head-h) + 40px);display:flex;flex-direction:column;overflow:hidden;background:#ffffff;}
 
 /* ── MAIN SCROLL AREA ───────────────────────────────────────── */
 /* KEY FIX: sidebar and grid in ONE scrollable container */
@@ -264,6 +264,17 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 .drag-handle{color:var(--text-3);font-size:16px;cursor:grab;padding:0 5px;flex-shrink:0;user-select:none;line-height:1;}
 .drag-handle:hover{color:var(--blue);}
 .staff-row:hover .drag-handle{color:var(--text-2);}
+
+/* Nav links */
+.hnav-link{padding:4px 10px;border-radius:5px;font-size:12px;font-weight:500;color:#8a8784;text-decoration:none;transition:background .15s;}
+.hnav-link:hover{background:#3d3a37;color:#fff;}
+.hnav-link.active{color:#fff;background:#3d3a37;}
+
+/* View bar — big buttons below header */
+.view-bar{display:flex;background:#1e1c1a;border-bottom:1px solid #3d3a37;padding:0 12px;gap:4px;flex-shrink:0;}
+.vbig{padding:8px 24px;border:none;background:none;color:#7a7774;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);border-bottom:3px solid transparent;margin-bottom:-1px;transition:all .15s;}
+.vbig:hover{color:#fff;}
+.vbig.on{color:#fff;border-bottom-color:#fff;}
 </style>
 </head>
 <body>
@@ -272,38 +283,39 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
   <div class="logo"><div class="logo-mk">PLS</div>ProLabSupport</div>
   <div class="hdiv"></div>
   <nav style="display:flex;gap:2px;">
-    <a href="/" style="padding:4px 10px;border-radius:5px;font-size:12px;font-weight:500;color:#8a8784;text-decoration:none;" onmouseover="this.style.background='#3d3a37'" onmouseout="this.style.background='none'">← Дашборд</a>
-    <a href="/equipment-map.html" style="padding:4px 10px;border-radius:5px;font-size:12px;font-weight:500;color:#8a8784;text-decoration:none;" onmouseover="this.style.background='#3d3a37'" onmouseout="this.style.background='none'">🗺 Карта</a>
-    <a href="/licenses-map.html" style="padding:4px 10px;border-radius:5px;font-size:12px;font-weight:500;color:#8a8784;text-decoration:none;" onmouseover="this.style.background='#3d3a37'" onmouseout="this.style.background='none'">⛏ Лицензии</a>
-    <span style="padding:4px 10px;border-radius:5px;font-size:12px;font-weight:600;color:#fff;background:#3d3a37;">📅 Планировщик</span>
+    <a href="/" class="hnav-link">← Дашборд</a>
+    <a href="/equipment-map.html" class="hnav-link">🗺 Карта</a>
+    <a href="/licenses-map.html" class="hnav-link">⛏ Лицензии</a>
+    <span class="hnav-link active">📅 Планировщик</span>
   </nav>
   <div class="hdiv"></div>
-  <span class="hdr-lbl">Ресурсы</span>
+  <!-- Date nav with period arrows -->
   <div class="dnav">
-    <button class="nb" onclick="shift(-1)">‹</button>
+    <button class="nb" onclick="shift(-1)" title="Назад">‹</button>
     <span class="drng" id="drng">—</span>
-    <button class="nb" onclick="shift(1)">›</button>
+    <button class="nb" onclick="shift(1)" title="Вперёд">›</button>
     <button class="tbtn" onclick="goToday()">Сегодня</button>
   </div>
-  <div class="vsw">
-    <button class="vb" onclick="setV('day',this)">День</button>
-    <button class="vb" onclick="setV('week',this)">Неделя</button>
-    <button class="vb on" onclick="setV('1m',this)">Месяц</button>
-    <button class="vb" onclick="setV('year',this)">Год</button>
-  </div>
   <div class="hdr-r">
-    <span id="uChip" style="font-size:11px;color:#8a8784;background:#3d3a37;border-radius:20px;padding:3px 10px 3px 7px;display:flex;align-items:center;gap:5px;"><span style="width:6px;height:6px;border-radius:50%;background:#4caf7d;display:inline-block"></span><span id="uName">—</span></span>
     <div class="leg">
       <div class="leg-i"><div class="leg-d" style="background:#f5c842"></div>Командировка</div>
-      <div class="leg-i"><div class="leg-d" style="background:#4caf7d"></div>Командировка (подтв.)</div>
+      <div class="leg-i"><div class="leg-d" style="background:#4caf7d"></div>Подтв.</div>
       <div class="leg-i"><div class="leg-d" style="background:#64b5e8"></div>Отпуск</div>
       <div class="leg-i"><div class="leg-d" style="background:#8B6547"></div>Обучение</div>
     </div>
     <button class="hbtn" onclick="openAdmin()">👤 Управление</button>
     <button class="hbtn" onclick="openDF()">⚙ Data Fields</button>
     <button class="hbtn p" onclick="openNew()">+ Событие</button>
+    <span id="uChip" style="font-size:11px;color:#8a8784;background:#3d3a37;border-radius:20px;padding:3px 10px 3px 7px;display:flex;align-items:center;gap:5px;"><span style="width:6px;height:6px;border-radius:50%;background:#4caf7d;display:inline-block"></span><span id="uName">—</span></span>
   </div>
 </header>
+<!-- View switcher bar — separate row below header -->
+<div class="view-bar" id="viewBar">
+  <button class="vbig" onclick="setV('day',this)">День</button>
+  <button class="vbig" onclick="setV('week',this)">Неделя</button>
+  <button class="vbig on" onclick="setV('1m',this)">Месяц</button>
+  <button class="vbig" onclick="setV('year',this)">Год</button>
+</div>
 
 <div class="app">
   <div class="main">
@@ -541,8 +553,19 @@ function fmtDT(d){
          String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
 }
 function fmtT(d){ return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
-function fmtDTL(d){ return d.toISOString().slice(0,16); }
-function parseDT(s){ return s ? new Date(s) : new Date(); }
+function fmtDTL(d){
+  // Use local time, not UTC
+  const y=d.getFullYear(), mo=String(d.getMonth()+1).padStart(2,'0');
+  const dy=String(d.getDate()).padStart(2,'0');
+  const h=String(d.getHours()).padStart(2,'0'), m=String(d.getMinutes()).padStart(2,'0');
+  return `${y}-${mo}-${dy}T${h}:${m}`;
+}
+function parseDT(s){
+  if (!s) return new Date();
+  // Handle both ISO and datetime-local format
+  const d = new Date(s);
+  return isNaN(d) ? new Date() : d;
+}
 
 function nameColor(n){
   const cs=['#3b7dd8','#7c5cd6','#d63b7c','#d63b3b','#c87820','#1da067','#1a9aaf','#5c5cd6'];
@@ -742,15 +765,22 @@ function buildGrid() {
         grid.appendChild(ln);
       }
     }
-    // Current time line
+    // Current time line (red)
     const now=new Date();
     const dayOff=Math.floor((today-viewStart)/86400000);
-    if (dayOff>=0 && dayOff<vp.cols && now.getHours()>=9 && now.getHours()<18) {
-      const hOff = now.getHours() + now.getMinutes()/60 - 9;
-      const nx=(dayOff*9+hOff)*vp.colW;
-      const nl=document.createElement('div'); nl.className='vline now';
-      nl.style.cssText=`left:${nx}px;top:0;bottom:0;position:absolute;z-index:6;`;
-      grid.appendChild(nl);
+    if (dayOff>=0 && dayOff<vp.cols) {
+      const h = now.getHours(), mn = now.getMinutes();
+      if (h>=9 && h<18) {
+        const hOff = h + mn/60 - 9;
+        const nx=(dayOff*9+hOff)*vp.colW;
+        const nl=document.createElement('div'); nl.className='vline now';
+        nl.style.cssText=`left:${nx}px;top:0;bottom:0;position:absolute;z-index:20;`;
+        grid.appendChild(nl);
+      }
+      // Light shade for today in day view
+      const sh=document.createElement('div');
+      sh.style.cssText=`position:absolute;left:${dayOff*9*vp.colW}px;width:${9*vp.colW}px;top:0;bottom:0;background:rgba(229,57,53,.03);pointer-events:none;z-index:0;`;
+      grid.appendChild(sh);
     }
   } else if (vp.isWeekly) {
     for (let i=0; i<=vp.cols; i++) {
@@ -990,7 +1020,7 @@ function onResizeUP(){
 
 // ── View controls ──────────────────────────────────────────────
 function setV(v,btn){
-  document.querySelectorAll('.vb').forEach(b=>b.classList.remove('on')); btn.classList.add('on');
+  document.querySelectorAll('.vbig,.vb').forEach(b=>b.classList.remove('on')); btn.classList.add('on');
   viewMode=v;
   requestAnimationFrame(()=>render());
 }
@@ -1019,17 +1049,25 @@ function goToday(){
   render();
 }
 function updateDRng(){
-  const f=d=>d.toLocaleDateString('ru',{day:'numeric',month:'short',year:'numeric'});
+  const fd=d=>d.toLocaleDateString('ru',{day:'numeric',month:'short'});
+  const fy=d=>d.toLocaleDateString('ru',{month:'long',year:'numeric'});
   if (viewMode==='year') {
-    const end=new Date(viewStart); end.setFullYear(end.getFullYear()+1); end.setDate(end.getDate()-1);
     document.getElementById('drng').textContent=`${viewStart.getFullYear()} г.`;
     return;
   }
+  if (viewMode==='1m') {
+    document.getElementById('drng').textContent=fy(viewStart);
+    return;
+  }
+  if (viewMode==='week') {
+    const end=new Date(viewStart); end.setDate(end.getDate()+6);
+    document.getElementById('drng').textContent=`${fd(viewStart)} — ${fd(end)}`;
+    return;
+  }
+  // day
   const vp=getViewParams();
-  const end=new Date(viewStart);
-  if (vp.isWeekly) end.setDate(end.getDate()+vp.cols*7-1);
-  else end.setDate(end.getDate()+vp.cols-1);
-  document.getElementById('drng').textContent=`${f(viewStart)} — ${f(end)}`;
+  const end=new Date(viewStart); end.setDate(end.getDate()+vp.cols-1);
+  document.getElementById('drng').textContent=`${fd(viewStart)} — ${fd(end)}`;
 }
 
 // ── Load calc ──────────────────────────────────────────────────
@@ -1126,8 +1164,8 @@ function renderForm(ev){
       <div class="frow"><label class="flbl">Тип</label><div class="tgrid">${chips}</div></div>
       <div class="frow"><label class="flbl">Название</label><input class="fi" id="fTitle" value="${esc(ev.title||'')}" placeholder="Описание…"></div>
       <div class="frow2">
-        <div><label class="flbl">Начало</label><input class="fi" type="datetime-local" id="fS" value="${ev.start||''}"></div>
-        <div><label class="flbl">Конец</label><input class="fi" type="datetime-local" id="fE" value="${ev.end||''}"></div>
+        <div><label class="flbl">Начало</label><input class="fi" type="datetime-local" id="fS" value="${ev.start||''}" step="1800"></div>
+        <div><label class="flbl">Конец</label><input class="fi" type="datetime-local" id="fE" value="${ev.end||''}" step="1800"></div>
       </div>
       <label class="fchk frow"><input type="checkbox" id="fAD" ${ev.allDay?'checked':''}> Весь день</label>
       ${curType==='trip' ? `<label class="fchk frow" id="fConfirmRow" style="margin-top:6px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:7px 10px;color:#15803d;font-weight:600"><input type="checkbox" id="fConfirm" ${ev.confirmed?'checked':''}> ✅ Подтверждено (блок станет зелёным)</label>` : `<div id="fConfirmRow" style="display:none"></div>`}
@@ -1170,8 +1208,16 @@ function addCl(){
 function saveEv(){
   const resource=document.getElementById('fRes')?.value; if(!resource) return;
   const title=document.getElementById('fTitle')?.value||'';
-  const start=document.getElementById('fS')?.value; if(!start) return;
-  const end=document.getElementById('fE')?.value||start;
+  let start=document.getElementById('fS')?.value; if(!start) return;
+  let end=document.getElementById('fE')?.value||start;
+  // Enforce working hours 09:00-18:00
+  function clampWorkHours(dtStr) {
+    const d=new Date(dtStr); if(isNaN(d)) return dtStr;
+    if(d.getHours()<9){d.setHours(9,0,0,0);}
+    if(d.getHours()>=18){d.setHours(18,0,0,0);}
+    return fmtDTL(d);
+  }
+  start=clampWorkHours(start); end=clampWorkHours(end);
   const allDay=document.getElementById('fAD')?.checked||false;
   const confirmed=document.getElementById('fConfirm')?.checked||false;
   const note=document.getElementById('fNote')?.value||'';
