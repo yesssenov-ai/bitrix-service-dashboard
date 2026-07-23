@@ -271,7 +271,7 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 .hnav-link.active{color:#fff;background:#3d3a37;}
 
 /* View bar — big buttons below header */
-.view-bar{display:flex;background:#1e1c1a;border-bottom:1px solid #3d3a37;padding:0 12px;gap:4px;flex-shrink:0;}
+.view-bar{position:fixed;top:var(--head-h);left:0;right:0;height:40px;display:flex;background:#1e1c1a;border-bottom:1px solid #3d3a37;padding:0 12px;gap:4px;flex-shrink:0;z-index:399;}
 .vbig{padding:8px 24px;border:none;background:none;color:#7a7774;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);border-bottom:3px solid transparent;margin-bottom:-1px;transition:all .15s;}
 .vbig:hover{color:#fff;}
 .vbig.on{color:#fff;border-bottom-color:#fff;}
@@ -519,7 +519,15 @@ function dtToX(dt, vp) {
   if (vp.isWeekly) {
     return Math.floor((dt - viewStart) / 86400000 / 7) * vp.colW;
   }
-  return (dt - viewStart) / 86400000 * vp.colW;
+  // Non-hourly (week/month): map time-of-day onto the 09:00-18:00 working-hours
+  // span within its day column, mirroring xToDt, so event width is proportional
+  // to the actual duration within working hours instead of a fraction of 24h.
+  const dayStart = new Date(dt); dayStart.setHours(0,0,0,0);
+  const vStart = new Date(viewStart); vStart.setHours(0,0,0,0);
+  const dayIdx = Math.round((dayStart - vStart) / 86400000);
+  const hoursFrac = dt.getHours() + dt.getMinutes()/60;
+  const frac = Math.max(0, Math.min(1, (hoursFrac - 9) / 9));
+  return (dayIdx + frac) * vp.colW;
 }
 function xToDt(x, vp) {
   if (vp.isHourly) {
