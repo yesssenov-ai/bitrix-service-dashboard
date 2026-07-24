@@ -228,5 +228,29 @@ router.delete('/datafields/:id', requireAuth(), async (req, res) => {
   }
 });
 
+// ── Generic config blob API (staff roster, color palette) ─────────────────
+router.get('/config/:key', requireAuth(), async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT value FROM ticketsmodule_planner_config WHERE key=$1', [req.params.key]);
+    res.json({ value: rows[0]?.value ?? null });
+  } catch (e) {
+    console.error('GET /api/planner/config/:key error:', e.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+router.put('/config/:key', requireAuth(), async (req, res) => {
+  try {
+    await pool.query(
+      `INSERT INTO ticketsmodule_planner_config (key, value, updated_at) VALUES ($1,$2,NOW())
+       ON CONFLICT (key) DO UPDATE SET value=$2, updated_at=NOW()`,
+      [req.params.key, JSON.stringify(req.body.value)]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('PUT /api/planner/config/:key error:', e.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = { router, rowToEvent, SELECT_COLS, TZ };
 

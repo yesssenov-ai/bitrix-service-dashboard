@@ -122,6 +122,12 @@ async function initDB() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS ticketsmodule_planner_config (
+      key VARCHAR(50) PRIMARY KEY,
+      value JSONB NOT NULL,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
     CREATE INDEX IF NOT EXISTS idx_tm_audit_created ON ticketsmodule_audit_logs(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_tm_audit_user ON ticketsmodule_audit_logs(user_id);
     CREATE INDEX IF NOT EXISTS idx_tm_audit_ticket ON ticketsmodule_audit_logs(ticket_id);

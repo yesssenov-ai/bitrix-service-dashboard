@@ -1608,17 +1608,20 @@ async function loadStorage(){
 
 
 // ── ADMIN STATE ────────────────────────────────────────────────
-let adminDepts = JSON.parse(localStorage.getItem('pls3_depts') || 'null') || Object.entries(DEPTS).map(([name,members],i) => ({
-  id: 'dept'+(i+1),
-  name,
-  color: ['#3b7dd8','#e8a020','#2e8a55','#8B6547','#c53b2f'][i%5],
-  members: members.map((m,j) => ({
-    id: 'staff'+(i*20+j+1),
-    name: m,
-    role: i===0 ? 'admin' : 'member',
-    perms: { view: true, edit: i===0||i===1, admin: i===0 }
-  }))
-}));
+function defaultAdminDepts() {
+  return Object.entries(DEPTS).map(([name,members],i) => ({
+    id: 'dept'+(i+1),
+    name,
+    color: ['#3b7dd8','#e8a020','#2e8a55','#8B6547','#c53b2f'][i%5],
+    members: members.map((m,j) => ({
+      id: 'staff'+(i*20+j+1),
+      name: m,
+      role: i===0 ? 'admin' : 'member',
+      perms: { view: true, edit: i===0||i===1, admin: i===0 }
+    }))
+  }));
+}
+let adminDepts = defaultAdminDepts();
 
 const EVENT_COLORS = {
   trip:         { label:'Командировка (не подтв.)', color:'#f5c842' },
@@ -1627,11 +1630,28 @@ const EVENT_COLORS = {
   train:        { label:'Обучение',                 color:'#8B6547' },
 };
 
-let paletteColors = JSON.parse(localStorage.getItem('pls3_palette') || 'null') || {...EVENT_COLORS};
+let paletteColors = {...EVENT_COLORS};
+
+async function loadAdminConfig(){
+  try{
+    const r = await fetch('/api/planner/config/depts');
+    if (r.ok) {
+      const { value } = await r.json();
+      if (value) adminDepts = value;
+    }
+  }catch(e){ console.error('Failed to load staff roster from server', e); }
+  try{
+    const r = await fetch('/api/planner/config/palette');
+    if (r.ok) {
+      const { value } = await r.json();
+      if (value) paletteColors = value;
+    }
+  }catch(e){ console.error('Failed to load palette from server', e); }
+}
 
 function saveAdminState() {
-  localStorage.setItem('pls3_depts', JSON.stringify(adminDepts));
-  localStorage.setItem('pls3_palette', JSON.stringify(paletteColors));
+  fetch('/api/planner/config/depts', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({value:adminDepts})}).catch(e=>console.error('Failed to save staff roster', e));
+  fetch('/api/planner/config/palette', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({value:paletteColors})}).catch(e=>console.error('Failed to save palette', e));
   // Rebuild ALL_RES from adminDepts
   ALL_RES.length = 0;
   const _s = new Set();
@@ -2235,7 +2255,7 @@ async function repExportPDF(e){
 }
 
 
-window.addEventListener('load', ()=>{syncAdminToRes();init();});
+window.addEventListener('load', async ()=>{ await loadAdminConfig(); syncAdminToRes(); init(); });
 window.addEventListener('resize', ()=>{ clearTimeout(window._resizeT); window._resizeT=setTimeout(render,150); });
 </script>
 
