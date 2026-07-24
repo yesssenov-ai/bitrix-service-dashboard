@@ -262,9 +262,13 @@ function normalizeName(name) { return (name || '').toLowerCase().replace(/\s+/g,
 
 async function syncStaffFromBitrix() {
   const { result: users } = await b24('user.get', { ACTIVE: true });
-  const { result: depts } = await b24('department.get', {});
-  const deptNameById = {};
-  (depts || []).forEach(d => { deptNameById[d.ID] = d.NAME; });
+  let deptNameById = {};
+  try {
+    const { result: depts } = await b24('department.get', {});
+    (depts || []).forEach(d => { deptNameById[d.ID] = d.NAME; });
+  } catch (e) {
+    console.warn('department.get failed (missing "company structure" scope on the webhook?) — falling back to "Без отдела" for everyone:', e.message);
+  }
 
   const { rows } = await pool.query(`SELECT value FROM ticketsmodule_planner_config WHERE key='depts'`);
   const adminDepts = rows[0]?.value || [];
