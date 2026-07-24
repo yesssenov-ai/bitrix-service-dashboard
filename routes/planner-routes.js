@@ -261,6 +261,7 @@ const SERVICE_ACCOUNT_NAMES = new Set(['Администратор', 'Power BI']
 function normalizeName(name) { return (name || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
 
 async function syncStaffFromBitrix() {
+  const FALLBACK_DEPT = 'Без отдела';
   const { result: users } = await b24('user.get', { ACTIVE: true });
   let deptNameById = {};
   try {
@@ -275,33 +276,52 @@ async function syncStaffFromBitrix() {
 
   const byNormName = new Map();
   adminDepts.forEach(d => d.members.forEach(m => byNormName.set(normalizeName(m.name), m)));
+  const findDeptOf = (member) => adminDepts.find(d => d.members.includes(member));
+  const findOrCreateDept = (name) => {
+    let dept = adminDepts.find(d => normalizeName(d.name) === normalizeName(name));
+    if (!dept) { dept = { id: 'dept_'+Date.now()+'_'+adminDepts.length, name, color: '#8a8784', members: [] }; adminDepts.push(dept); }
+    return dept;
+  };
 
-  let added = 0, idBackfilled = 0;
+  let added = 0, idBackfilled = 0, reassigned = 0;
   let nextStaffNum = Date.now() % 100000; // avoid collisions with existing 'staffN' ids
 
   for (const u of users) {
     const fullName = `${u.NAME || ''} ${u.LAST_NAME || ''}`.trim();
     if (!fullName || SERVICE_ACCOUNT_NAMES.has(fullName)) continue;
+    const bitrixDeptId = (u.UF_DEPARTMENT || [])[0];
+    const bitrixDeptName = deptNameById[bitrixDeptId] || FALLBACK_DEPT;
 
     const existing = byNormName.get(normalizeName(fullName));
     if (existing) {
       if (!existing.bitrixUserId) { existing.bitrixUserId = parseInt(u.ID, 10); idBackfilled++; }
+      // Only reassign when we actually resolved a real department name —
+      // never blindly move someone into the fallback bucket just because
+      // department.get failed or this person's dept lookup came up empty.
+      if (bitrixDeptName !== FALLBACK_DEPT) {
+        const currentDept = findDeptOf(existing);
+        if (currentDept && normalizeName(currentDept.name) !== normalizeName(bitrixDeptName)) {
+          currentDept.members = currentDept.members.filter(m => m !== existing);
+          findOrCreateDept(bitrixDeptName).members.push(existing);
+          reassigned++;
+        }
+      }
       continue;
     }
 
-    const bitrixDeptId = (u.UF_DEPARTMENT || [])[0];
-    const bitrixDeptName = deptNameById[bitrixDeptId] || 'Без отдела';
-    let dept = adminDepts.find(d => normalizeName(d.name) === normalizeName(bitrixDeptName));
-    if (!dept) {
-      dept = { id: 'dept_'+Date.now()+'_'+adminDepts.length, name: bitrixDeptName, color: '#8a8784', members: [] };
-      adminDepts.push(dept);
-    }
-    dept.members.push({
+    const dept = findOrCreateDept(bitrixDeptName);
+    const newMember = {
       id: 'staff'+(nextStaffNum++), name: fullName, bitrixUserId: parseInt(u.ID, 10),
       role: 'member', perms: { view: true, edit: false, admin: false },
-    });
-    byNormName.set(normalizeName(fullName), dept.members[dept.members.length-1]);
+    };
+    dept.members.push(newMember);
+    byNormName.set(normalizeName(fullName), newMember);
     added++;
+  }
+
+  // Clean up any department left empty by the reassignment above
+  for (let i = adminDepts.length - 1; i >= 0; i--) {
+    if (adminDepts[i].members.length === 0) adminDepts.splice(i, 1);
   }
 
   await pool.query(
@@ -309,7 +329,7 @@ async function syncStaffFromBitrix() {
      ON CONFLICT (key) DO UPDATE SET value=$1, updated_at=NOW()`,
     [JSON.stringify(adminDepts)]
   );
-  return { added, idBackfilled, totalBitrixUsers: users.length };
+  return { added, idBackfilled, reassigned, totalBitrixUsers: users.length };
 }
 
 router.post('/sync-staff', requireAuth(), async (req, res) => {
