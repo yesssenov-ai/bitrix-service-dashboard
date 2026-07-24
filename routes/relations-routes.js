@@ -9,6 +9,7 @@ const { tgMgt } = require('../notifications');
 const { notifyProcessCompleted, notifyEngineerAssigned, setPool: setMgrNotifyPool } = require('../manager-notifications');
 const { USERS } = require('../constants');
 const { b24 } = require('../bitrix');
+const { computeSyncHash } = require('./planner-routes');
 
 setMgrNotifyPool(pool);
 
@@ -111,27 +112,38 @@ async function syncPlannerEvent(item, itemId) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { rows } = await client.query('SELECT id FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1', [itemId]);
+    const { rows } = await client.query('SELECT id, bitrix_sync_hash FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1', [itemId]);
+    const newHash = computeSyncHash(engineerId, startLocal.slice(0, 10), endLocal.slice(0, 10));
 
-    if (rows.length) {
+    if (rows.length && rows[0].bitrix_sync_hash === newHash) {
+      // Bitrix's current engineer+dates match what we last recorded — this
+      // is either an echo of our own outbound push, or an unrelated field
+      // changed on the request. Either way, don't touch resource/dates (a
+      // newer local planner edit may be mid-flight); just refresh the
+      // read-only fields.
+      await client.query(
+        `UPDATE ticketsmodule_planner_events SET title=$1, confirmed=true, fields=$2, clients=$3, updated_at=NOW() WHERE id=$4`,
+        [title, JSON.stringify(fieldsObj), JSON.stringify(clientsArr), rows[0].id]
+      );
+    } else if (rows.length) {
       await client.query(
         `UPDATE ticketsmodule_planner_events
          SET resource=$1, title=$2, type='trip',
              start_at=$3::timestamp AT TIME ZONE '${PLANNER_TZ}',
              end_at=$4::timestamp AT TIME ZONE '${PLANNER_TZ}',
-             confirmed=true, fields=$5, clients=$6, updated_at=NOW()
-         WHERE id=$7`,
-        [engineerName, title, startLocal, endLocal, JSON.stringify(fieldsObj), JSON.stringify(clientsArr), rows[0].id]
+             confirmed=true, fields=$5, clients=$6, bitrix_sync_hash=$7, updated_at=NOW()
+         WHERE id=$8`,
+        [engineerName, title, startLocal, endLocal, JSON.stringify(fieldsObj), JSON.stringify(clientsArr), newHash, rows[0].id]
       );
     } else {
       const { rows: ins } = await client.query(
         `INSERT INTO ticketsmodule_planner_events
-          (group_id, resource, title, type, start_at, end_at, all_day, confirmed, note, fields, clients, bitrix_item_id, source)
+          (group_id, resource, title, type, start_at, end_at, all_day, confirmed, note, fields, clients, bitrix_item_id, source, bitrix_sync_hash)
          VALUES (0,$1,$2,'trip',
              $3::timestamp AT TIME ZONE '${PLANNER_TZ}', $4::timestamp AT TIME ZONE '${PLANNER_TZ}',
-             false, true, '', $5,$6,$7,'bitrix')
+             false, true, '', $5,$6,$7,'bitrix',$8)
          RETURNING id`,
-        [engineerName, title, startLocal, endLocal, JSON.stringify(fieldsObj), JSON.stringify(clientsArr), itemId]
+        [engineerName, title, startLocal, endLocal, JSON.stringify(fieldsObj), JSON.stringify(clientsArr), itemId, newHash]
       );
       await client.query('UPDATE ticketsmodule_planner_events SET group_id=$1 WHERE id=$1', [ins[0].id]);
     }

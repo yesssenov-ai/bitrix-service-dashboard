@@ -9,6 +9,31 @@ const { b24 } = require('../bitrix');
 // write/read without this would silently assume UTC and shift every time by
 // several hours.
 const TZ = 'Asia/Almaty';
+const crypto = require('crypto');
+const { USERS } = require('../constants');
+
+// Fingerprint of {engineerId, start, end} — used on both sides of the sync
+// to tell a genuine external Bitrix change apart from Bitrix simply echoing
+// back an update we ourselves just pushed.
+function computeSyncHash(engineerId, start, end) {
+  return crypto.createHash('sha256').update(`${engineerId}|${start}|${end}`).digest('hex').slice(0, 16);
+}
+
+// Reverse-lookup: planner resource name → Bitrix user ID, needed to push an
+// engineer reassignment back to Bitrix. Prefers the live staff roster
+// (bitrixUserId backfilled by the staff sync); falls back to the USERS map.
+async function resolveBitrixUserId(resourceName) {
+  try {
+    const { rows } = await pool.query(`SELECT value FROM ticketsmodule_planner_config WHERE key='depts'`);
+    const adminDepts = rows[0]?.value || [];
+    for (const d of adminDepts) {
+      const m = d.members.find(x => x.name === resourceName);
+      if (m?.bitrixUserId) return m.bitrixUserId;
+    }
+  } catch (e) { /* fall through to USERS map */ }
+  const found = Object.entries(USERS).find(([, name]) => name === resourceName);
+  return found ? parseInt(found[0], 10) : null;
+}
 
 const SELECT_COLS = `
   id, group_id, resource, title, type,
@@ -103,6 +128,30 @@ router.post('/events', requireAuth(), async (req, res) => {
 });
 
 // ── PUT /api/planner/events/:id — update (syncs co-assignee group) ────────
+// ── Outbound push: planner edit → Bitrix (dates + engineer only) ──────────
+async function pushEventToBitrix(bitrixItemId, resource, start, end) {
+  const engineerId = await resolveBitrixUserId(resource);
+  if (!engineerId) {
+    console.warn(`Outbound push: no Bitrix user ID found for "${resource}" — skipping push for item ${bitrixItemId}`);
+    return;
+  }
+  const sDateOnly = start.slice(0, 10), eDateOnly = end.slice(0, 10);
+  const hash = computeSyncHash(engineerId, sDateOnly, eDateOnly);
+  try {
+    await b24('crm.item.update', {
+      entityTypeId: 1058, id: bitrixItemId,
+      fields: {
+        ufCrm8_1732856367: engineerId,
+        ufCrm8_1764742554715: sDateOnly,
+        ufCrm8_1764742724958: eDateOnly,
+      },
+    });
+    await pool.query('UPDATE ticketsmodule_planner_events SET bitrix_sync_hash=$1 WHERE bitrix_item_id=$2', [hash, bitrixItemId]);
+  } catch (e) {
+    console.error(`Outbound push to Bitrix failed for item ${bitrixItemId}:`, e.message);
+  }
+}
+
 router.put('/events/:id', requireAuth(), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const { resource, title, type, start, end, allDay, confirmed, note, fields, clients, coAssignees } = req.body;
@@ -111,9 +160,10 @@ router.put('/events/:id', requireAuth(), async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { rows: existingRows } = await client.query('SELECT group_id FROM ticketsmodule_planner_events WHERE id=$1', [id]);
+    const { rows: existingRows } = await client.query('SELECT group_id, bitrix_item_id FROM ticketsmodule_planner_events WHERE id=$1', [id]);
     if (!existingRows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
     const groupId = existingRows[0].group_id || id;
+    const bitrixItemId = existingRows[0].bitrix_item_id;
 
     await client.query(
       `UPDATE ticketsmodule_planner_events
@@ -156,6 +206,7 @@ router.put('/events/:id', requireAuth(), async (req, res) => {
 
     const result = await fetchByIds(client, ids);
     await client.query('COMMIT');
+    if (bitrixItemId) pushEventToBitrix(bitrixItemId, resource, start, end).catch(()=>{});
     res.json({ events: result.map(rowToEvent) });
   } catch (e) {
     await client.query('ROLLBACK');
@@ -260,9 +311,22 @@ router.put('/config/:key', requireAuth(), async (req, res) => {
 const SERVICE_ACCOUNT_NAMES = new Set(['Администратор', 'Power BI']);
 function normalizeName(name) { return (name || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
 
+async function fetchAllActiveUsers() {
+  const users = [];
+  let start = 0;
+  while (true) {
+    const { result, next } = await b24('user.get', { ACTIVE: true, start });
+    if (!result || !result.length) break;
+    users.push(...result);
+    if (next === undefined) break;
+    start = next;
+  }
+  return users;
+}
+
 async function syncStaffFromBitrix() {
   const FALLBACK_DEPT = 'Без отдела';
-  const { result: users } = await b24('user.get', { ACTIVE: true });
+  const users = await fetchAllActiveUsers();
   let deptNameById = {};
   try {
     const { result: depts } = await b24('department.get', {});
@@ -342,5 +406,5 @@ router.post('/sync-staff', requireAuth(), async (req, res) => {
   }
 });
 
-module.exports = { router, rowToEvent, SELECT_COLS, TZ, syncStaffFromBitrix };
+module.exports = { router, rowToEvent, SELECT_COLS, TZ, syncStaffFromBitrix, fetchAllActiveUsers, computeSyncHash, resolveBitrixUserId };
 
