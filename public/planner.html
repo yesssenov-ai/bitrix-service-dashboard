@@ -1637,21 +1637,27 @@ async function loadAdminConfig(){
     const r = await fetch('/api/planner/config/depts');
     if (r.ok) {
       const { value } = await r.json();
-      if (value) adminDepts = value;
+      if (value) { adminDepts = value; }
+      else { putConfig('depts', adminDepts); } // first run ever — seed the server
     }
   }catch(e){ console.error('Failed to load staff roster from server', e); }
   try{
     const r = await fetch('/api/planner/config/palette');
     if (r.ok) {
       const { value } = await r.json();
-      if (value) paletteColors = value;
+      if (value) { paletteColors = value; }
+      else { putConfig('palette', paletteColors); } // first run ever — seed the server
     }
   }catch(e){ console.error('Failed to load palette from server', e); }
 }
+function putConfig(key, value){
+  fetch('/api/planner/config/'+key, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({value})})
+    .catch(e=>console.error('Failed to seed config '+key, e));
+}
 
 function saveAdminState() {
-  fetch('/api/planner/config/depts', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({value:adminDepts})}).catch(e=>console.error('Failed to save staff roster', e));
-  fetch('/api/planner/config/palette', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({value:paletteColors})}).catch(e=>console.error('Failed to save palette', e));
+  putConfig('depts', adminDepts);
+  putConfig('palette', paletteColors);
   // Rebuild ALL_RES from adminDepts
   ALL_RES.length = 0;
   const _s = new Set();
