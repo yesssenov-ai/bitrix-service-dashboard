@@ -8,16 +8,16 @@
 // deploy, then in Railway Console:
 //   node sync-bitrix-employees.js
 
-const { b24 } = require('./bitrix');
 const { pool } = require('./auth');
+const { fetchAllActiveUsers } = require('./routes/planner-routes');
 
 function normalize(name) {
   return (name || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
 async function main() {
-  // 1. Active Bitrix users
-  const { result: users } = await b24('user.get', { ACTIVE: true });
+  // 1. Active Bitrix users (paginated — user.get caps at 50 per page)
+  const users = await fetchAllActiveUsers();
   const bitrixNames = users
     .map(u => `${u.NAME || ''} ${u.LAST_NAME || ''}`.trim())
     .filter(Boolean);
