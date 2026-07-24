@@ -400,4 +400,4 @@ async function handleBitrixWebhook(req, res) {
   }
 }
 
-module.exports = { router, handleBitrixWebhook };
+module.exports = { router, handleBitrixWebhook, syncPlannerEvent };
