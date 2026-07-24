@@ -111,7 +111,7 @@ async function notifyOverdueNew(tickets) {
 
   await tgMgt(
     `⚠️ <b>Необработанные заявки > 8 часов (${tickets.length})</b>\n\n${lines}\n\n` +
-    `🔗 <a href="${process.env.DASH_URL || 'https://bitrix-service-dashboard-production.up.railway.app'}">Открыть дашборд</a>`
+    `🔗 <a href="${process.env.DASH_URL || 'https://nms.prolabsupport.kz'}">Открыть дашборд</a>`
   );
 
   // Email
@@ -146,7 +146,7 @@ async function notifyOverdueNew(tickets) {
           <tbody>${rows}</tbody>
         </table>
         <div style="padding:20px 24px">
-          <a href="${process.env.DASH_URL || 'https://bitrix-service-dashboard-production.up.railway.app'}" style="background:#C53B2F;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Открыть дашборд</a>
+          <a href="${process.env.DASH_URL || 'https://nms.prolabsupport.kz'}" style="background:#C53B2F;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Открыть дашборд</a>
         </div>
       </div>
       <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:16px">ProLabSupport Service Dashboard · Автоматическое уведомление</p>
