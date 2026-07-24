@@ -1697,7 +1697,29 @@ function renderAdmTab(tab) {
 let dndStaffId = null, dndFromDeptId = null;
 
 // ── TAB 1: Отделы и сотрудники (с DnD) ───────────────────────
+async function syncStaffFromBitrixUI(){
+  const btn=document.getElementById('syncStaffBtn');
+  if(btn){ btn.disabled=true; btn.textContent='Обновляю…'; }
+  try{
+    const r=await fetch('/api/planner/sync-staff', {method:'POST'});
+    if(!r.ok) throw new Error();
+    const res=await r.json();
+    await loadAdminConfig();
+    syncAdminToRes();
+    renderDeptsTab(document.getElementById('admBody'));
+    render();
+    alert(`Готово. Добавлено новых сотрудников: ${res.added}.`);
+  }catch(e){
+    alert('Не удалось обновить с Bitrix. Попробуйте ещё раз.');
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='⟳ Обновить с Bitrix'; }
+  }
+}
 function renderDeptsTab(body) {
+  const syncBar = `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+      <button class="adm-btn" id="syncStaffBtn" onclick="syncStaffFromBitrixUI()">⟳ Обновить с Bitrix</button>
+    </div>`;
   const deptCards = adminDepts.map((dept) => `
     <div class="dept-card" id="dc-${dept.id}"
       ondragover="onDeptDragOver(event,'${dept.id}')"
@@ -1738,7 +1760,7 @@ function renderDeptsTab(body) {
         </div>`).join('')}
     </div>`).join('');
 
-  body.innerHTML = deptCards + `
+  body.innerHTML = syncBar + deptCards + `
     <div class="adm-form">
       <div class="adm-form-title">+ Новый отдел</div>
       <div class="adm-row">

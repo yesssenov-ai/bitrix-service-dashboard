@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool, requireAuth } = require('../auth');
+const { b24 } = require('../bitrix');
 
 // All start/end values from the client are naive "YYYY-MM-DDTHH:mm" strings
 // (no timezone) representing local Kazakhstan wall-clock time. We must be
@@ -252,5 +253,70 @@ router.put('/config/:key', requireAuth(), async (req, res) => {
   }
 });
 
-module.exports = { router, rowToEvent, SELECT_COLS, TZ };
+// ── Staff sync from Bitrix (one-directional: Bitrix → planner only) ───────
+// Adds active Bitrix employees not yet in the roster; never removes or
+// overwrites anything a person set up manually in the planner admin panel.
+// Names/departments already in the roster are left completely alone.
+const SERVICE_ACCOUNT_NAMES = new Set(['Администратор', 'Power BI']);
+function normalizeName(name) { return (name || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+
+async function syncStaffFromBitrix() {
+  const { result: users } = await b24('user.get', { ACTIVE: true });
+  const { result: depts } = await b24('department.get', {});
+  const deptNameById = {};
+  (depts || []).forEach(d => { deptNameById[d.ID] = d.NAME; });
+
+  const { rows } = await pool.query(`SELECT value FROM ticketsmodule_planner_config WHERE key='depts'`);
+  const adminDepts = rows[0]?.value || [];
+
+  const byNormName = new Map();
+  adminDepts.forEach(d => d.members.forEach(m => byNormName.set(normalizeName(m.name), m)));
+
+  let added = 0, idBackfilled = 0;
+  let nextStaffNum = Date.now() % 100000; // avoid collisions with existing 'staffN' ids
+
+  for (const u of users) {
+    const fullName = `${u.NAME || ''} ${u.LAST_NAME || ''}`.trim();
+    if (!fullName || SERVICE_ACCOUNT_NAMES.has(fullName)) continue;
+
+    const existing = byNormName.get(normalizeName(fullName));
+    if (existing) {
+      if (!existing.bitrixUserId) { existing.bitrixUserId = parseInt(u.ID, 10); idBackfilled++; }
+      continue;
+    }
+
+    const bitrixDeptId = (u.UF_DEPARTMENT || [])[0];
+    const bitrixDeptName = deptNameById[bitrixDeptId] || 'Без отдела';
+    let dept = adminDepts.find(d => normalizeName(d.name) === normalizeName(bitrixDeptName));
+    if (!dept) {
+      dept = { id: 'dept_'+Date.now()+'_'+adminDepts.length, name: bitrixDeptName, color: '#8a8784', members: [] };
+      adminDepts.push(dept);
+    }
+    dept.members.push({
+      id: 'staff'+(nextStaffNum++), name: fullName, bitrixUserId: parseInt(u.ID, 10),
+      role: 'member', perms: { view: true, edit: false, admin: false },
+    });
+    byNormName.set(normalizeName(fullName), dept.members[dept.members.length-1]);
+    added++;
+  }
+
+  await pool.query(
+    `INSERT INTO ticketsmodule_planner_config (key, value, updated_at) VALUES ('depts',$1,NOW())
+     ON CONFLICT (key) DO UPDATE SET value=$1, updated_at=NOW()`,
+    [JSON.stringify(adminDepts)]
+  );
+  return { added, idBackfilled, totalBitrixUsers: users.length };
+}
+
+router.post('/sync-staff', requireAuth(), async (req, res) => {
+  try {
+    const result = await syncStaffFromBitrix();
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    console.error('POST /api/planner/sync-staff error:', e.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+module.exports = { router, rowToEvent, SELECT_COLS, TZ, syncStaffFromBitrix };
 
