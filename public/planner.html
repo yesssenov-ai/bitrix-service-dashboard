@@ -1047,6 +1047,42 @@ function renderEvents() {
   const vp=getViewParams();
   const totalW=vp.isHourly?vp.cols*24*vp.colW:vp.cols*vp.colW;
 
+  // ── Overlap layout: group events by row, split overlapping ones into
+  // side-by-side "lanes" (like Google Calendar) instead of stacking them
+  // invisibly on top of each other.
+  const byRi = new Map();
+  events.forEach(ev=>{
+    const ri=rowList.findIndex(r=>r.kind==='emp'&&r.res.name===ev.resource);
+    if (ri<0) return;
+    if (!byRi.has(ri)) byRi.set(ri, []);
+    byRi.get(ri).push({id:ev.id, s:+parseDT(ev.start), e:+parseDT(ev.end)});
+  });
+  const layout = new Map(); // ev.id -> {lane, lanes}
+  byRi.forEach(list=>{
+    list.sort((a,b)=>a.s-b.s);
+    let cluster=[], clusterEnd=-Infinity;
+    const flush=()=>{
+      if (!cluster.length) return;
+      const laneEnds=[];
+      cluster.forEach(item=>{
+        let assigned=-1;
+        for(let i=0;i<laneEnds.length;i++){ if(laneEnds[i]<=item.s){assigned=i;break;} }
+        if(assigned===-1){ assigned=laneEnds.length; laneEnds.push(item.e); }
+        else laneEnds[assigned]=item.e;
+        layout.set(item.id, {lane:assigned});
+      });
+      const totalLanes=laneEnds.length;
+      cluster.forEach(item=>{ layout.get(item.id).lanes=totalLanes; });
+      cluster=[]; clusterEnd=-Infinity;
+    };
+    list.forEach(item=>{
+      if (cluster.length && item.s>=clusterEnd) flush();
+      cluster.push(item);
+      clusterEnd=Math.max(clusterEnd,item.e);
+    });
+    flush();
+  });
+
   events.forEach(ev => {
     const ri=rowList.findIndex(r=>r.kind==='emp'&&r.res.name===ev.resource);
     if (ri<0) return;
@@ -1056,12 +1092,16 @@ function renderEvents() {
     const visL=Math.max(0,lx), visR=Math.min(totalW,rx);
     if (visR-visL<2) return;
 
+    const {lane=0, lanes=1} = layout.get(ev.id) || {};
+    const laneH = (ROW_H-8)/lanes;
+    const top = ri*ROW_H + 4 + lane*laneH;
+
     // Use confirmed variant for trips
     const evType = (ev.type==='trip' && ev.confirmed) ? 'trip_confirm' : ev.type;
     const t=ET[evType]||ET.trip;
     const block=document.createElement('div');
     block.className='ev'; block.dataset.id=ev.id;
-    block.style.cssText=`left:${visL+1}px;width:${visR-visL-2}px;top:${ri*ROW_H+4}px;background:${t.bg};color:${t.fg};`;
+    block.style.cssText=`left:${visL+1}px;width:${visR-visL-2}px;top:${top}px;height:${Math.max(12,laneH-2)}px;background:${t.bg};color:${t.fg};`;
     // Build label: client > service type > instrument > title
     const f=ev.fields||{};
     const clients=ev.clients||[];
