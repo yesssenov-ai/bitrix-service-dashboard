@@ -413,8 +413,10 @@ const AREAS = ['Алматы','Астана','Шымкент','Абайская'
   'Карагандинская','Костанайская','Кызылординская','Мангистауская',
   'Павлодарская','СКО','Туркестанская','Улытауская','Зарубеж'];
 
-const SVC = ['Installation','Warranty (Installation)','Diagnostics',
-  'Preventive Maintenance','Qualification','Remote support','Training','Other'];
+const SVC = ['Установка','Техническое обслуживание','Диагностика','Ремонт',
+  'Методическое сопровождение','Обучение сервисного отдела','Обучение ТЦ',
+  'Квалификация','Подбор дополнительного оборудования','Подбор расходки / запасных частей',
+  'Претензия','Подготовка документов','Другое','Заявка клиента'];
 
 const INSTRUMENTS = [
   'MP-AES','HPLC','HPLC-MS','AA Spectroscopy','ICP-OES','ICP-MS',
@@ -678,7 +680,7 @@ async function initAuth() {
 }
 async function init() {
   await initAuth();
-  loadStorage();
+  await loadStorage();
   render();
   // sync header scroll with body scroll
   const sb = document.getElementById('scrollBody');
@@ -1141,7 +1143,7 @@ function onDragMV(e){
     r.style.background = (+r.dataset.ri===newRi) ? '#dbeafe' : '';
   });
 }
-function onDragUP(){
+async function onDragUP(){
   document.removeEventListener('mousemove',onDragMV);
   document.removeEventListener('mouseup',onDragUP);
   if(!dragging) return; dragging=false; document.body.style.cursor='';
@@ -1159,8 +1161,14 @@ function onDragUP(){
     if(block._ds) ev.start=block._ds;
     if(block._de) ev.end=block._de;
     if(block._dri!=null) ev.resource=rowList[block._dri]?.res?.name||ev.resource;
+    try{
+      const siblings=events.filter(e=>e.groupId===ev.groupId && e.id!==ev.id).map(e=>e.resource);
+      const updated=await apiUpdateEvent(ev.id, {resource:ev.resource,title:ev.title,type:ev.type,start:ev.start,end:ev.end,allDay:ev.allDay,confirmed:ev.confirmed,note:ev.note,fields:ev.fields,clients:ev.clients,coAssignees:siblings});
+      events = events.filter(e=>e.groupId!==updated[0].groupId);
+      events.push(...updated);
+    }catch(e){ /* keep optimistic local state; next full reload will reconcile */ }
   }
-  saveStorage(); buildStickyRows(); renderEvents();
+  buildStickyRows(); renderEvents();
 }
 
 // ── Resize ─────────────────────────────────────────────────────
@@ -1181,7 +1189,7 @@ function onResizeMV(e){
   block.style.width=(dtToX(newE,vp)-dtToX(parseDT(ev.start),vp)-2)+'px';
   block._re=fmtDTL(newE);
 }
-function onResizeUP(){
+async function onResizeUP(){
   document.removeEventListener('mousemove',onResizeMV);
   document.removeEventListener('mouseup',onResizeUP);
   if(!resizing) return; resizing=false; document.body.style.cursor='';
@@ -1189,7 +1197,13 @@ function onResizeUP(){
   const block=document.querySelector(`.ev[data-id="${resizeId}"]`);
   if(!ev||!block||!block._re) return; // no actual resize — leave DOM alone so click can still fire
   ev.end=block._re;
-  saveStorage(); renderEvents();
+  try{
+    const siblings=events.filter(e=>e.groupId===ev.groupId && e.id!==ev.id).map(e=>e.resource);
+    const updated=await apiUpdateEvent(ev.id, {resource:ev.resource,title:ev.title,type:ev.type,start:ev.start,end:ev.end,allDay:ev.allDay,confirmed:ev.confirmed,note:ev.note,fields:ev.fields,clients:ev.clients,coAssignees:siblings});
+    events = events.filter(e=>e.groupId!==updated[0].groupId);
+    events.push(...updated);
+  }catch(e){ /* keep optimistic local state */ }
+  renderEvents();
 }
 
 // ── View controls ──────────────────────────────────────────────
@@ -1409,7 +1423,28 @@ function addCl(){
     <div><label class="flbl">Тип / С кем / О чем</label><input class="fi" id="cl_t_${i}" placeholder="Контакт…"></div></div>`;
   list.appendChild(d);
 }
-function saveEv(){
+// ── Events API (server-backed, shared across all users) ────────
+async function apiCreateEvent(payload){
+  const r = await fetch('/api/planner/events', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if (!r.ok) throw new Error('Create failed');
+  return (await r.json()).events;
+}
+async function apiUpdateEvent(id, payload){
+  const r = await fetch('/api/planner/events/'+id, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if (!r.ok) throw new Error('Update failed');
+  return (await r.json()).events;
+}
+async function apiDeleteEvent(id){
+  const r = await fetch('/api/planner/events/'+id, {method:'DELETE'});
+  if (!r.ok) throw new Error('Delete failed');
+}
+async function apiLoadEvents(){
+  const r = await fetch('/api/planner/events');
+  if (!r.ok) throw new Error('Load failed');
+  return (await r.json()).events;
+}
+
+async function saveEv(){
   const resource=document.getElementById('fRes')?.value; if(!resource) return;
   const title=document.getElementById('fTitle')?.value||'';
   let start=document.getElementById('fS')?.value; if(!start) return;
@@ -1440,33 +1475,31 @@ function saveEv(){
     Array.from(document.querySelectorAll('#coAssignList .co-assign-sel'))
       .map(s=>s.value).filter(v=>v && v!==resource)
   )];
-  const common={title,type:curType,start,end,allDay,confirmed,note,fields,clients};
-  const cloneCommon=()=>({...common, fields:{...fields}, clients:clients.map(c=>({...c}))});
+  const payload={resource,title,type:curType,start,end,allDay,confirmed,note,fields,clients,coAssignees:extraRes};
 
-  if(editId){
-    const ev=events.find(e=>e.id===editId); if(!ev) return;
-    const groupId = ev.groupId ?? ev.id;
-    ev.groupId=groupId;
-    Object.assign(ev,{resource},cloneCommon());
-    // Sync sibling copies (same job, other engineers)
-    const siblings=events.filter(e=>e.groupId===groupId && e.id!==editId);
-    const keep=new Set(extraRes);
-    siblings.forEach(s=>{
-      if(keep.has(s.resource)){ Object.assign(s,cloneCommon()); keep.delete(s.resource); }
-      else { events=events.filter(e=>e!==s); } // unchecked → remove that engineer's copy
-    });
-    keep.forEach(name=>{ events.push({id:nextId++,groupId,resource:name,...cloneCommon()}); });
-  } else {
-    const groupId=nextId;
-    events.push({id:nextId++,groupId,resource,...cloneCommon()});
-    extraRes.forEach(name=>{ events.push({id:nextId++,groupId,resource:name,...cloneCommon()}); });
+  try{
+    let updated;
+    if(editId){
+      updated = await apiUpdateEvent(editId, payload);
+    } else {
+      updated = await apiCreateEvent(payload);
+    }
+    // Merge the server's authoritative copy of this group into local state
+    const groupId = updated[0]?.groupId;
+    events = events.filter(e=>e.groupId!==groupId && (!editId || e.id!==editId));
+    events.push(...updated);
+  } catch(e){
+    alert('Не удалось сохранить событие. Попробуйте ещё раз.');
+    return;
   }
-  saveStorage(); closePanel(); buildStickyRows(); renderEvents();
+  closePanel(); buildStickyRows(); renderEvents();
 }
-function deleteEv(){
+async function deleteEv(){
   if(!editId) return;
+  try{ await apiDeleteEvent(editId); }
+  catch(e){ alert('Не удалось удалить событие.'); return; }
   events=events.filter(e=>e.id!==editId);
-  saveStorage(); closePanel(); buildStickyRows(); renderEvents();
+  closePanel(); buildStickyRows(); renderEvents();
 }
 
 // ── Data Fields ────────────────────────────────────────────────
@@ -1495,35 +1528,42 @@ function renderDFPanel(){
     <div id="ndfO" style="display:none"><div class="frow"><label class="flbl">Варианты (через Enter)</label><textarea class="fi" id="ndfV" rows="3" placeholder="Вариант 1\nВариант 2"></textarea></div></div>`;
   document.getElementById('pFoot').innerHTML=`<button class="pb pb-cancel" onclick="closePanel()">Закрыть</button>`;
 }
-function addDF(){
+async function addDF(){
   const name=document.getElementById('ndfN').value.trim(); if(!name) return;
   const type=document.getElementById('ndfT').value;
   const opts=type==='select'?document.getElementById('ndfV').value.split('\n').map(s=>s.trim()).filter(Boolean):[];
-  dataFields.push({id:'df'+nextDfId++,name,type,options:opts});
-  saveStorage(); renderDFPanel();
+  try{
+    const r=await fetch('/api/planner/datafields',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,type,options:opts})});
+    if(!r.ok) throw new Error();
+    const {id}=await r.json();
+    dataFields.push({id,name,type,options:opts});
+    renderDFPanel();
+  }catch(e){ alert('Не удалось добавить поле.'); }
 }
-function delDF(id){ dataFields=dataFields.filter(d=>d.id!==id); saveStorage(); renderDFPanel(); }
-function editDF(id){
+async function delDF(id){
+  try{ await fetch('/api/planner/datafields/'+id,{method:'DELETE'}); }catch(e){}
+  dataFields=dataFields.filter(d=>d.id!==id); renderDFPanel();
+}
+async function editDF(id){
   const df=dataFields.find(d=>d.id===id); if(!df) return;
-  const n=prompt('Название поля:',df.name); if(n&&n.trim()){df.name=n.trim();saveStorage();renderDFPanel();}
+  const n=prompt('Название поля:',df.name); if(!n||!n.trim()) return;
+  try{
+    await fetch('/api/planner/datafields/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n.trim()})});
+    df.name=n.trim(); renderDFPanel();
+  }catch(e){ alert('Не удалось переименовать поле.'); }
 }
 
 // ── Storage ────────────────────────────────────────────────────
-function saveStorage(){
-  localStorage.setItem('pls3_ev',JSON.stringify(events));
-  localStorage.setItem('pls3_id',String(nextId));
-  localStorage.setItem('pls3_df',JSON.stringify(dataFields));
-}
-function loadStorage(){
-  try{const r=localStorage.getItem('pls3_ev');if(r){events=JSON.parse(r);nextId=Math.max(...events.map(e=>e.id),0)+1;}}catch(e){}
+async function loadStorage(){
+  try{ events = await apiLoadEvents(); nextId = Math.max(...events.map(e=>e.id),0)+1; }
+  catch(e){ console.error('Failed to load planner events from server', e); events=[]; }
   try{
-    const r=localStorage.getItem('pls3_df');
-    if(r){
-      const stored=JSON.parse(r);
-      const extra=stored.filter(df=>!['df1','df2','df3','df4'].includes(df.id));
-      dataFields=[...BUILTIN_DFS, ...extra];
+    const r = await fetch('/api/planner/datafields');
+    if (r.ok) {
+      const { dataFields: extra } = await r.json();
+      dataFields = [...BUILTIN_DFS, ...extra];
     }
-  }catch(e){}
+  }catch(e){ console.error('Failed to load data fields from server', e); }
 }
 
 

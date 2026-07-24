@@ -88,6 +88,40 @@ async function initDB() {
     );
     CREATE INDEX IF NOT EXISTS idx_tm_login_ip ON ticketsmodule_login_attempts(ip, attempted_at DESC);
 
+    CREATE TABLE IF NOT EXISTS ticketsmodule_planner_events (
+      id SERIAL PRIMARY KEY,
+      group_id INTEGER NOT NULL,
+      resource VARCHAR(200) NOT NULL,
+      title VARCHAR(500) DEFAULT '',
+      type VARCHAR(20) NOT NULL DEFAULT 'trip',
+      start_at TIMESTAMPTZ NOT NULL,
+      end_at TIMESTAMPTZ NOT NULL,
+      all_day BOOLEAN DEFAULT false,
+      confirmed BOOLEAN DEFAULT false,
+      note TEXT DEFAULT '',
+      fields JSONB DEFAULT '{}',
+      clients JSONB DEFAULT '[]',
+      bitrix_item_id INTEGER,
+      bitrix_sync_hash VARCHAR(64),
+      source VARCHAR(20) NOT NULL DEFAULT 'manual',
+      created_by VARCHAR(100),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_planner_ev_resource ON ticketsmodule_planner_events(resource);
+    CREATE INDEX IF NOT EXISTS idx_tm_planner_ev_bitrix ON ticketsmodule_planner_events(bitrix_item_id);
+    CREATE INDEX IF NOT EXISTS idx_tm_planner_ev_group ON ticketsmodule_planner_events(group_id);
+
+    CREATE TABLE IF NOT EXISTS ticketsmodule_planner_datafields (
+      id VARCHAR(20) PRIMARY KEY,
+      name VARCHAR(200) NOT NULL,
+      type VARCHAR(20) NOT NULL,
+      options JSONB DEFAULT '[]',
+      required BOOLEAN DEFAULT false,
+      sort_order INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
     CREATE INDEX IF NOT EXISTS idx_tm_audit_created ON ticketsmodule_audit_logs(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_tm_audit_user ON ticketsmodule_audit_logs(user_id);
     CREATE INDEX IF NOT EXISTS idx_tm_audit_ticket ON ticketsmodule_audit_logs(ticket_id);
