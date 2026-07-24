@@ -8,8 +8,141 @@ const {
 const { tgMgt } = require('../notifications');
 const { notifyProcessCompleted, notifyEngineerAssigned, setPool: setMgrNotifyPool } = require('../manager-notifications');
 const { USERS } = require('../constants');
+const { b24 } = require('../bitrix');
 
 setMgrNotifyPool(pool);
+
+// ── Planner sync (Заявка на сервис 1058 → ticketsmodule_planner_events) ────
+const PLANNER_TZ = 'Asia/Almaty';
+
+// "Тип оказываемых услуг (УС)" (ufCrm8_1744300223) — full id→label map,
+// confirmed against the live field editor (crm.item.fields doesn't expose
+// choices for iblock_element fields, so this is hand-verified, not fetched).
+const SERVICE_TYPE_MAP = {
+  103:'Установка', 104:'Техническое обслуживание', 105:'Диагностика', 106:'Ремонт',
+  107:'Методическое сопровождение', 108:'Обучение сервисного отдела', 109:'Обучение ТЦ',
+  110:'Квалификация', 111:'Подбор дополнительного оборудования',
+  112:'Подбор расходки / запасных частей', 113:'Претензия',
+  114:'Другое', 402:'Подготовка документов', 619:'Заявка клиента',
+};
+
+// "Название прибора." (ufCrmPribor) is a real Bitrix enumeration field, so
+// its choices ARE fetchable via crm.item.fields — cache them instead of
+// hardcoding 300+ entries that Bitrix can add to at any time.
+let priborCache = null, priborCacheAt = 0;
+async function getPriborMap() {
+  if (priborCache && Date.now() - priborCacheAt < 60 * 60 * 1000) return priborCache;
+  try {
+    const { result } = await b24('crm.item.fields', { entityTypeId: 1058 });
+    const items = result?.fields?.ufCrmPribor?.items || [];
+    const map = {};
+    items.forEach(i => { map[i.ID] = i.VALUE; });
+    priborCache = map; priborCacheAt = Date.now();
+  } catch (e) {
+    console.error('getPriborMap error:', e.message);
+    if (!priborCache) priborCache = {};
+  }
+  return priborCache;
+}
+
+const companyNameCache = new Map(); // companyId -> {name, at}
+async function getCompanyName(companyId) {
+  const cached = companyNameCache.get(companyId);
+  if (cached && Date.now() - cached.at < 60 * 60 * 1000) return cached.name;
+  try {
+    const { result } = await b24('crm.company.get', { id: companyId });
+    const name = result?.TITLE || '';
+    companyNameCache.set(companyId, { name, at: Date.now() });
+    return name;
+  } catch (e) {
+    console.error('getCompanyName error:', e.message);
+    return '';
+  }
+}
+
+function fmtLocalNaive(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+// Sync one Заявка на сервис (1058) item into the shared planner events table.
+// Only creates/updates an event once engineer + both dates + service type +
+// company are all filled in — regardless of which stage the request is on.
+// If those fields are later cleared out again, the synced event is removed.
+async function syncPlannerEvent(item, itemId) {
+  const engineerId = parseInt(item.ufCrm8_1732856367, 10);
+  const startRaw = item.ufCrm8_1764742554715;
+  const endRaw = item.ufCrm8_1764742724958;
+  const svcIds = Array.isArray(item.ufCrm8_1744300223) ? item.ufCrm8_1744300223 : (item.ufCrm8_1744300223 ? [item.ufCrm8_1744300223] : []);
+  const companyId = parseInt(item.companyId, 10);
+
+  const ready = engineerId && startRaw && endRaw && svcIds.length && companyId;
+  if (!ready) {
+    // Required data isn't (or is no longer) complete — remove any previously
+    // synced event for this item so the planner doesn't show a stale job.
+    try { await pool.query('DELETE FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1', [itemId]); }
+    catch (e) { console.error('Planner sync cleanup error:', e.message); }
+    return;
+  }
+
+  const engineerName = USERS[engineerId];
+  if (!engineerName) {
+    console.warn(`Planner sync: unknown Bitrix user #${engineerId} (item ${itemId}) — skipping`);
+    return;
+  }
+
+  const sDate = new Date(startRaw); sDate.setHours(9, 0, 0, 0);
+  const eDate = new Date(endRaw); eDate.setHours(18, 0, 0, 0);
+  if (isNaN(sDate) || isNaN(eDate)) return;
+
+  const svcLabel = SERVICE_TYPE_MAP[svcIds[0]] || '';
+  const priborIds = Array.isArray(item.ufCrmPribor) ? item.ufCrmPribor : (item.ufCrmPribor ? [item.ufCrmPribor] : []);
+  let instrLabel = '';
+  if (priborIds.length) {
+    const map = await getPriborMap();
+    instrLabel = priborIds.map(id => map[id] || id).join(', ');
+  }
+  const clientName = await getCompanyName(companyId);
+
+  const fieldsObj = { df3: svcLabel, df4: instrLabel };
+  const clientsArr = clientName ? [{ name: clientName, type: '' }] : [];
+  const startLocal = fmtLocalNaive(sDate), endLocal = fmtLocalNaive(eDate);
+  const title = item.title || '';
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT id FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1', [itemId]);
+
+    if (rows.length) {
+      await client.query(
+        `UPDATE ticketsmodule_planner_events
+         SET resource=$1, title=$2, type='trip',
+             start_at=$3::timestamp AT TIME ZONE '${PLANNER_TZ}',
+             end_at=$4::timestamp AT TIME ZONE '${PLANNER_TZ}',
+             confirmed=true, fields=$5, clients=$6, updated_at=NOW()
+         WHERE id=$7`,
+        [engineerName, title, startLocal, endLocal, JSON.stringify(fieldsObj), JSON.stringify(clientsArr), rows[0].id]
+      );
+    } else {
+      const { rows: ins } = await client.query(
+        `INSERT INTO ticketsmodule_planner_events
+          (group_id, resource, title, type, start_at, end_at, all_day, confirmed, note, fields, clients, bitrix_item_id, source)
+         VALUES (0,$1,$2,'trip',
+             $3::timestamp AT TIME ZONE '${PLANNER_TZ}', $4::timestamp AT TIME ZONE '${PLANNER_TZ}',
+             false, true, '', $5,$6,$7,'bitrix')
+         RETURNING id`,
+        [engineerName, title, startLocal, endLocal, JSON.stringify(fieldsObj), JSON.stringify(clientsArr), itemId]
+      );
+      await client.query('UPDATE ticketsmodule_planner_events SET group_id=$1 WHERE id=$1', [ins[0].id]);
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('Planner sync error:', e.message);
+  } finally {
+    client.release();
+  }
+}
 
 // Entity types we track for completion notifications (per user request)
 const TRACKED_FOR_COMPLETION = new Set([1058, 1066, 1070]); // Заявка на сервис, Закупки, Логистика
@@ -160,7 +293,7 @@ async function handleBitrixWebhook(req, res) {
 
     const event = req.body?.event;
     const data = req.body?.data;
-    if (event !== 'ONCRMDYNAMICITEMUPDATE' || !data) {
+    if (!['ONCRMDYNAMICITEMUPDATE','ONCRMDYNAMICITEMADD'].includes(event) || !data) {
       return res.status(200).send('ok');
     }
 
@@ -174,6 +307,11 @@ async function handleBitrixWebhook(req, res) {
 
     const item = await getItem(entityTypeId, itemId);
     if (!item) return;
+
+    // ── Case 0: Sync into the planner (Заявка на сервис only) ──────────────
+    if (entityTypeId === 1058) {
+      await syncPlannerEvent(item, itemId);
+    }
 
     // ── Case 1: Engineer assigned (only for Заявка на сервис, 1058) ────────────
     if (entityTypeId === 1058) {
