@@ -26,15 +26,28 @@ async function getManagerTelegramChatId(bitrixUserId) {
 
 // ── Send personal Telegram message ────────────────────────────────────────────
 
-async function sendPersonalTg(bitrixUserId, text) {
+async function sendPersonalTg(bitrixUserId, text, _isRetry = false) {
   const chatId = await getManagerTelegramChatId(bitrixUserId);
   if (!chatId || !TG_TOKEN) return false;
   try {
-    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+    const res = await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
     });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.ok) {
+      // Telegram rejected it — most commonly 429 (too many messages to this
+      // chat). Respect retry_after and try once more instead of silently
+      // reporting success on a message that never actually arrived.
+      const retryAfter = data?.parameters?.retry_after;
+      if (!_isRetry && retryAfter) {
+        await new Promise(r => setTimeout(r, (retryAfter + 1) * 1000));
+        return sendPersonalTg(bitrixUserId, text, true);
+      }
+      console.error(`sendPersonalTg failed for user ${bitrixUserId}:`, JSON.stringify(data));
+      return false;
+    }
     return true;
   } catch(e) {
     console.error('sendPersonalTg error:', e.message);
