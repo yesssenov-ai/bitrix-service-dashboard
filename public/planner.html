@@ -348,6 +348,10 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
       <button class="drng-arrow-btn drng-arrow-r" onclick="shift(1)" title="Вперёд">›</button>
     </div>
     <button class="tbtn" onclick="goToday()">Сегодня</button>
+    <div class="dept-filter-wrap" style="position:relative;margin-left:4px">
+      <button class="tbtn" onclick="toggleDeptFilterMenu()" id="deptFilterBtn">Отделы ▾</button>
+      <div id="deptFilterMenu" style="display:none;position:absolute;top:calc(100% + 6px);left:0;background:#141311;border:1px solid #3d3a37;border-radius:8px;padding:8px 0;min-width:200px;z-index:500;box-shadow:0 8px 24px rgba(0,0,0,.35)"></div>
+    </div>
   </div>
 </div>
 
@@ -463,6 +467,63 @@ const BUILTIN_DFS = [
 let dataFields = [...BUILTIN_DFS];
 let nextId=1, nextDfId=10;
 let filteredRes = [...ALL_RES];
+let hiddenDepts = new Set();
+let searchQuery = '';
+
+// Single place that computes filteredRes from ALL_RES — combines the name
+// search box with the personal department-visibility filter, so neither
+// overwrites the other.
+function applyFilters(){
+  filteredRes = ALL_RES.filter(r =>
+    !hiddenDepts.has(r.dept) &&
+    (!searchQuery || r.name.toLowerCase().includes(searchQuery))
+  );
+}
+
+async function loadHiddenDepts(){
+  try{
+    const r = await fetch('/api/planner/my-prefs/hidden-depts');
+    if (r.ok) {
+      const { value } = await r.json();
+      if (Array.isArray(value)) hiddenDepts = new Set(value);
+    }
+  }catch(e){ console.error('Failed to load department filter', e); }
+}
+function saveHiddenDepts(){
+  fetch('/api/planner/my-prefs/hidden-depts', {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ value:[...hiddenDepts] })
+  }).catch(e=>console.error('Failed to save department filter', e));
+}
+
+function toggleDeptFilterMenu(){
+  const menu = document.getElementById('deptFilterMenu');
+  if (menu.style.display==='none'){
+    const deptNames = adminDepts.map(d=>d.name);
+    menu.innerHTML = deptNames.map(name=>`
+      <label style="display:flex;align-items:center;gap:8px;padding:6px 14px;font-size:12.5px;color:#eef0f3;cursor:pointer;white-space:nowrap">
+        <input type="checkbox" ${hiddenDepts.has(name)?'':'checked'} onchange="toggleDeptVisibility('${esc(name).replace(/'/g,"\\'")}',this.checked)">
+        ${esc(name)}
+      </label>`).join('');
+    menu.style.display='block';
+    setTimeout(()=>document.addEventListener('click', closeDeptFilterMenuOnce), 0);
+  } else {
+    menu.style.display='none';
+  }
+}
+function closeDeptFilterMenuOnce(e){
+  const wrap = document.querySelector('.dept-filter-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('deptFilterMenu').style.display='none';
+    document.removeEventListener('click', closeDeptFilterMenuOnce);
+  }
+}
+function toggleDeptVisibility(name, visible){
+  if (visible) hiddenDepts.delete(name); else hiddenDepts.add(name);
+  saveHiddenDepts();
+  applyFilters();
+  render();
+}
 // rowList interleaves department-header rows with employee rows, in the exact
 // order rendered in both the sidebar and the grid — kept in lockstep so row
 // indices always line up between the two.
@@ -1314,8 +1375,8 @@ function calcLoad(name){
 }
 
 function filterRes(q){
-  q=q.toLowerCase();
-  filteredRes=q?ALL_RES.filter(r=>r.name.toLowerCase().includes(q)):[...ALL_RES];
+  searchQuery=q.toLowerCase();
+  applyFilters();
   render();
 }
 
@@ -1666,7 +1727,7 @@ function saveAdminState() {
       if (!_s.has(m.name)) { _s.add(m.name); ALL_RES.push({name:m.name, dept:dept.name}); }
     }
   }
-  filteredRes = [...ALL_RES];
+  applyFilters();
   // Update ET colors from palette
   for (const [k,v] of Object.entries(paletteColors)) {
     if (ET[k]) { ET[k].bg = v.color; ET[k].bd = v.color; }
@@ -1695,6 +1756,31 @@ function renderAdmTab(tab) {
 
 // ── DnD state ─────────────────────────────────────────────────
 let dndStaffId = null, dndFromDeptId = null;
+let dndDeptId = null;
+
+function onDeptCardDragStart(e, deptId){
+  dndDeptId = deptId;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', deptId);
+  requestAnimationFrame(() => {
+    const el = document.getElementById('dc-'+deptId);
+    if (el) el.classList.add('dragging-staff');
+  });
+}
+function onDeptCardDragEnd(){
+  dndDeptId = null;
+  document.querySelectorAll('.dragging-staff,.drag-over,.drag-over-dept')
+    .forEach(el => el.classList.remove('dragging-staff','drag-over','drag-over-dept'));
+}
+function reorderDept(deptId, targetDeptId){
+  const from = adminDepts.findIndex(d=>d.id===deptId);
+  const to = adminDepts.findIndex(d=>d.id===targetDeptId);
+  if (from<0 || to<0 || from===to) return;
+  const [d] = adminDepts.splice(from,1);
+  adminDepts.splice(to,0,d);
+  saveAdminState();
+  renderDeptsTab(document.getElementById('admBody'));
+}
 
 // ── TAB 1: Отделы и сотрудники (с DnD) ───────────────────────
 async function syncStaffFromBitrixUI(){
@@ -1725,7 +1811,11 @@ function renderDeptsTab(body) {
       ondragover="onDeptDragOver(event,'${dept.id}')"
       ondragleave="onDeptDragLeave(event,'${dept.id}')"
       ondrop="onDeptDrop(event,'${dept.id}')">
-      <div class="dept-card-head">
+      <div class="dept-card-head"
+        draggable="true"
+        ondragstart="onDeptCardDragStart(event,'${dept.id}')"
+        ondragend="onDeptCardDragEnd(event)">
+        <span class="drag-handle" title="Перетащить, чтобы изменить порядок отделов" style="cursor:grab">⠿</span>
         <div class="dept-color" style="background:${dept.color}"></div>
         <span class="dept-card-name">${esc(dept.name)}</span>
         <span style="font-size:10px;color:var(--text-3);margin-left:4px">${dept.members.length} чел.</span>
@@ -1796,7 +1886,8 @@ function onDeptDragOver(e, deptId) {
   e.dataTransfer.dropEffect = 'move';
   document.querySelectorAll('.drag-over-dept').forEach(c => c.classList.remove('drag-over-dept'));
   const card = document.getElementById('dc-'+deptId);
-  if (card && deptId !== dndFromDeptId) card.classList.add('drag-over-dept');
+  const draggingSomethingElse = dndDeptId ? deptId !== dndDeptId : deptId !== dndFromDeptId;
+  if (card && draggingSomethingElse) card.classList.add('drag-over-dept');
 }
 function onDeptDragLeave(e, deptId) {
   const card = document.getElementById('dc-'+deptId);
@@ -1807,6 +1898,11 @@ function onDeptDragLeave(e, deptId) {
 function onDeptDrop(e, toDeptId) {
   e.preventDefault(); e.stopPropagation();
   document.querySelectorAll('.drag-over-dept').forEach(c => c.classList.remove('drag-over-dept'));
+  if (dndDeptId) {
+    if (toDeptId !== dndDeptId) reorderDept(dndDeptId, toDeptId);
+    dndDeptId = null;
+    return;
+  }
   if (!dndStaffId) return;
   if (toDeptId !== dndFromDeptId) moveStaffToDept(dndStaffId, dndFromDeptId, toDeptId);
   else { dndStaffId=null; dndFromDeptId=null; }
@@ -2044,7 +2140,7 @@ function syncAdminToRes(){
       if(!_s.has(m.name)){_s.add(m.name);ALL_RES.push({name:m.name,dept:dept.name});}
     }
   }
-  filteredRes=[...ALL_RES];
+  applyFilters();
 }
 // ═══════════════════════════════════════════════════════════════
 // ── REPORTS MODULE ────────────────────────────────────────────
@@ -2283,7 +2379,7 @@ async function repExportPDF(e){
 }
 
 
-window.addEventListener('load', async ()=>{ await loadAdminConfig(); syncAdminToRes(); init(); });
+window.addEventListener('load', async ()=>{ await loadAdminConfig(); await loadHiddenDepts(); syncAdminToRes(); init(); });
 window.addEventListener('resize', ()=>{ clearTimeout(window._resizeT); window._resizeT=setTimeout(render,150); });
 </script>
 

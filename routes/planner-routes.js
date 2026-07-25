@@ -406,5 +406,31 @@ router.post('/sync-staff', requireAuth(), async (req, res) => {
   }
 });
 
+// ── Personal per-user preferences (e.g. which departments this person hides) ─
+router.get('/my-prefs/:key', requireAuth(), async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT value FROM ticketsmodule_user_prefs WHERE user_id=$1 AND key=$2', [req.user.id, req.params.key]
+    );
+    res.json({ value: rows[0]?.value ?? null });
+  } catch (e) {
+    console.error('GET /api/planner/my-prefs/:key error:', e.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+router.put('/my-prefs/:key', requireAuth(), async (req, res) => {
+  try {
+    await pool.query(
+      `INSERT INTO ticketsmodule_user_prefs (user_id, key, value, updated_at) VALUES ($1,$2,$3,NOW())
+       ON CONFLICT (user_id, key) DO UPDATE SET value=$3, updated_at=NOW()`,
+      [req.user.id, req.params.key, JSON.stringify(req.body.value)]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('PUT /api/planner/my-prefs/:key error:', e.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = { router, rowToEvent, SELECT_COLS, TZ, syncStaffFromBitrix, fetchAllActiveUsers, computeSyncHash, resolveBitrixUserId };
 
