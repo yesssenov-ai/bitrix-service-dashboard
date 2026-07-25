@@ -435,6 +435,11 @@ initDB().then(() => {
     // Single interval: check new tickets every 30 min + overdue every run
     checkNewAndOverdue();
     setInterval(checkNewAndOverdue, 30 * 60 * 1000);
+    // Planner ↔ Bitrix reconciliation — webhooks are best-effort, this catches
+    // anything a missed/failed webhook delivery would otherwise leave stale.
+    const { reconcileAllPlannerEvents } = require('./routes/relations-routes');
+    setTimeout(() => reconcileAllPlannerEvents().catch(e => console.error('reconcileAllPlannerEvents error:', e.message)), 10000);
+    setInterval(() => reconcileAllPlannerEvents().catch(e => console.error('reconcileAllPlannerEvents error:', e.message)), 10 * 60 * 1000);
     // Telegram linking bot
     telegramLinkBot.setPool(pool);
     telegramLinkBot.startPolling(15000);

@@ -280,31 +280,24 @@ const notifiedAssignments = new Map(); // itemId -> last assignedById seen
 // контрактов, entityTypeId 1036) — more reliable than the "Контракт" field   
 // directly on the Заявка на сервис item, which is often left empty ─────────
 
-const contractCache = new Map(); // itemId -> {label, at}
 async function getContractFromChain(entityTypeId, item) {
-  const cached = contractCache.get(item.id);
-  if (cached && Date.now() - cached.at < 24 * 60 * 60 * 1000) return cached.label;
-
   let current = { entityTypeId, item };
   let safety = 0;
-  let label = '';
   while (safety++ < 10) {
     if (current.item.parentId1036) {
       try {
         const { result } = await b24('crm.item.get', { entityTypeId: 1036, id: current.item.parentId1036 });
-        label = result?.item?.title || '';
-      } catch (e) { label = ''; }
-      break;
+        return result?.item?.title || '';
+      } catch (e) { return ''; }
     }
-    if (current.item.parentId2) break; // reached the deal, no contract link found along the way
+    if (current.item.parentId2) return ''; // reached the deal, no contract link found along the way
     const parent = await findParent(current.entityTypeId, current.item);
-    if (!parent || parent.type === 'deal') break;
+    if (!parent || parent.type === 'deal') return '';
     const parentItem = await getItem(parent.type, parent.id);
-    if (!parentItem) break;
+    if (!parentItem) return '';
     current = { entityTypeId: parent.type, item: parentItem };
   }
-  contractCache.set(item.id, { label, at: Date.now() });
-  return label;
+  return '';
 }
 
 // ── Resolve the responsible manager (root deal's ASSIGNED_BY_ID) ──────────────

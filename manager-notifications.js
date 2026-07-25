@@ -133,9 +133,70 @@ async function notifyEngineerAssigned(managerId, { itemId, title, engineerName, 
   await sendPersonalEmail(managerId, `👤 Назначен инженер: заявка #${itemId}`, html);
 }
 
+// ── Notify engineer + sales manager: full job assignment details ──────────────
+
+async function notifyJobAssigned({ engineerId, managerId, itemId, title, reason, svcLabel,
+  engineerName, assignDate, startDate, endDate, clientName, contractLabel,
+  managerName, instrLabel, location, url, dealUrl }) {
+
+  const headerText = reason || 'Назначен инженер на заявку';
+  const cleanTitle = (title || '').replace(/^[-\s–—]+/, '').replace(/[-\s–—]+$/, '').trim() || `#${itemId}`;
+
+  const row = (label, val) => val ? `${label}: <b>${esc(val)}</b>\n` : '';
+  const tgText = `🔧 <b>${esc(headerText)}</b>\n` +
+    `📋 Заявка на сервис #${itemId}: ${esc(cleanTitle)}\n\n` +
+    row('Тип услуг', svcLabel) +
+    row('Ответственный инженер', engineerName) +
+    row('Дата назначения', assignDate) +
+    row('Дата начала работ', startDate) +
+    row('Дата завершения работ', endDate) +
+    row('Клиент / Компания', clientName) +
+    row('Контракт', contractLabel) +
+    row('Ответственный сейл-менеджер', managerName) +
+    row('Прибор', instrLabel) +
+    row('Локация', location) +
+    `\n🔗 <a href="${url}">Открыть заявку</a>` +
+    (dealUrl ? `\n⬆️ <a href="${dealUrl}">Открыть родительскую сделку</a>` : '');
+
+  const emailRow = (label, val) => val ? `<tr><td style="padding:6px 0;color:#6b7280;font-size:13px;width:190px">${esc(label)}</td><td style="padding:6px 0;font-weight:600">${esc(val)}</td></tr>` : '';
+  const html = `
+    <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto">
+      <div style="background:#0f6cbd;padding:18px 22px;border-radius:10px 10px 0 0">
+        <h2 style="color:#fff;margin:0;font-size:17px">🔧 ${esc(headerText)}</h2>
+        <p style="color:rgba(255,255,255,.85);margin:4px 0 0;font-size:13px">Заявка на сервис #${itemId}</p>
+      </div>
+      <div style="background:#fff;border:1px solid #e3e6ef;border-top:none;padding:22px;border-radius:0 0 10px 10px">
+        <table style="width:100%;border-collapse:collapse">
+          <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;width:190px">Заявка</td><td style="padding:6px 0;font-weight:600">#${itemId} — ${esc(cleanTitle)}</td></tr>
+          ${emailRow('Тип оказываемых услуг', svcLabel)}
+          ${emailRow('Ответственный инженер', engineerName)}
+          ${emailRow('Дата назначения', assignDate)}
+          ${emailRow('Дата начала работ', startDate)}
+          ${emailRow('Дата завершения работ', endDate)}
+          ${emailRow('Клиент / Компания', clientName)}
+          ${emailRow('Контракт', contractLabel)}
+          ${emailRow('Ответственный сейл-менеджер', managerName)}
+          ${emailRow('Название прибора', instrLabel)}
+          ${emailRow('Локация', location)}
+        </table>
+        <div style="margin-top:18px">
+          <a href="${url}" style="background:#0f6cbd;color:#fff;padding:9px 18px;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px">Открыть заявку</a>
+          ${dealUrl ? `<a href="${dealUrl}" style="background:#fff;border:1px solid #d2d0ce;color:#201f1e;padding:9px 18px;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px;margin-left:8px">Открыть сделку</a>` : ''}
+        </div>
+      </div>
+      <p style="color:#9ca3af;font-size:11.5px;text-align:center;margin-top:14px">ProLabSupport Service Dashboard</p>
+    </div>`;
+
+  const recipients = [...new Set([engineerId, managerId].filter(Boolean))];
+  for (const uid of recipients) {
+    await sendPersonalTg(uid, tgText);
+    await sendPersonalEmail(uid, `🔧 ${headerText}: заявка #${itemId}`, html);
+  }
+}
+
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 module.exports = {
   setPool, getManagerTelegramChatId, sendPersonalTg, sendPersonalEmail,
-  notifyProcessCompleted, notifyEngineerAssigned,
+  notifyProcessCompleted, notifyEngineerAssigned, notifyJobAssigned,
 };
