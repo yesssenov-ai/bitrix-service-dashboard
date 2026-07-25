@@ -5,7 +5,7 @@ const {
   SMART_TYPES, getItem, getDeal, buildTree, searchDeals, findParent, isFinalStage, WEBHOOK_TOKEN,
   getDealsByManager, SALES_CATEGORIES, resolveStageName,
 } = require('../relations');
-const { tgMgt } = require('../notifications');
+const { tgMgt, tgOps } = require('../notifications');
 const { notifyProcessCompleted, notifyEngineerAssigned, notifyJobAssigned, setPool: setMgrNotifyPool } = require('../manager-notifications');
 const { USERS } = require('../constants');
 const { b24 } = require('../bitrix');
@@ -192,7 +192,8 @@ async function syncPlannerEvent(item, itemId) {
   } catch (e) {
     await client.query('ROLLBACK');
     console.error('Planner sync error:', e.message);
-    return;
+    try { await tgOps(`⚠️ Планировщик: не удалось синхронизировать заявку #${itemId}\n${e.message}`); } catch(e2){}
+    return { ok: false, error: e.message };
   } finally {
     client.release();
   }
@@ -223,8 +224,46 @@ async function syncPlannerEvent(item, itemId) {
       });
     } catch (e) {
       console.error('notifyJobAssigned error:', e.message);
+      try { await tgOps(`⚠️ Планировщик: заявка #${itemId} синхронизирована, но уведомление не отправлено\n${e.message}`); } catch(e2){}
     }
   }
+  return { ok: true };
+}
+
+// ── Periodic reconciliation sweep ───────────────────────────────────────────
+// Webhooks are inherently best-effort (Bitrix delivery hiccups, a restart at
+// the wrong moment, etc.) — this walks every Заявка на сервис and re-runs the
+// exact same sync logic, so any missed webhook is caught and fixed here
+// instead of silently staying wrong until someone notices.
+async function reconcileAllPlannerEvents() {
+  let start = 0, checked = 0, errors = 0;
+  const failedIds = [];
+  while (true) {
+    let items, next;
+    try {
+      const resp = await b24('crm.item.list', { entityTypeId: 1058, select: ['*', 'uf_*'], order: { id: 'asc' }, start });
+      items = resp.result?.items || [];
+      next = resp.next;
+    } catch (e) {
+      console.error('reconcileAllPlannerEvents: crm.item.list failed:', e.message);
+      break;
+    }
+    if (!items.length) break;
+    for (const item of items) {
+      checked++;
+      const result = await syncPlannerEvent(item, item.id);
+      if (result && result.ok === false) { errors++; failedIds.push(item.id); }
+    }
+    if (next === undefined || items.length < 50) break;
+    start = next;
+  }
+  if (errors > 0) {
+    try {
+      await tgOps(`⚠️ Плановая сверка планировщика: ${errors} из ${checked} заявок не удалось синхронизировать (ID: ${failedIds.slice(0,20).join(', ')}${failedIds.length>20?'…':''})`);
+    } catch (e) {}
+  }
+  console.log(`Planner reconciliation: checked ${checked}, ${errors} error(s)`);
+  return { checked, errors };
 }
 
 // Entity types we track for completion notifications (per user request)
@@ -241,24 +280,31 @@ const notifiedAssignments = new Map(); // itemId -> last assignedById seen
 // контрактов, entityTypeId 1036) — more reliable than the "Контракт" field   
 // directly on the Заявка на сервис item, which is often left empty ─────────
 
+const contractCache = new Map(); // itemId -> {label, at}
 async function getContractFromChain(entityTypeId, item) {
+  const cached = contractCache.get(item.id);
+  if (cached && Date.now() - cached.at < 24 * 60 * 60 * 1000) return cached.label;
+
   let current = { entityTypeId, item };
   let safety = 0;
+  let label = '';
   while (safety++ < 10) {
     if (current.item.parentId1036) {
       try {
         const { result } = await b24('crm.item.get', { entityTypeId: 1036, id: current.item.parentId1036 });
-        return result?.item?.title || '';
-      } catch (e) { return ''; }
+        label = result?.item?.title || '';
+      } catch (e) { label = ''; }
+      break;
     }
-    if (current.item.parentId2) return ''; // reached the deal, no contract link found along the way
+    if (current.item.parentId2) break; // reached the deal, no contract link found along the way
     const parent = await findParent(current.entityTypeId, current.item);
-    if (!parent || parent.type === 'deal') return '';
+    if (!parent || parent.type === 'deal') break;
     const parentItem = await getItem(parent.type, parent.id);
-    if (!parentItem) return '';
+    if (!parentItem) break;
     current = { entityTypeId: parent.type, item: parentItem };
   }
-  return '';
+  contractCache.set(item.id, { label, at: Date.now() });
+  return label;
 }
 
 // ── Resolve the responsible manager (root deal's ASSIGNED_BY_ID) ──────────────
@@ -507,4 +553,4 @@ async function handleBitrixWebhook(req, res) {
   }
 }
 
-module.exports = { router, handleBitrixWebhook, syncPlannerEvent };
+module.exports = { router, handleBitrixWebhook, syncPlannerEvent, reconcileAllPlannerEvents };

@@ -749,6 +749,22 @@ async function init() {
   sb.addEventListener('scroll', () => {
     thWrap.scrollLeft = sb.scrollLeft;
   }, {passive:true});
+  startSilentRefresh();
+}
+
+// Bitrix-driven changes (webhook or the periodic server-side reconciliation)
+// land in the database, but an already-open tab won't know about them until
+// it asks — this quietly re-fetches events every couple of minutes so people
+// don't have to manually reload to see a new/changed assignment appear.
+function startSilentRefresh(){
+  setInterval(async () => {
+    if (dragging || resizing || drawing) return; // don't disrupt an in-progress interaction
+    try {
+      events = await apiLoadEvents();
+      buildStickyRows();
+      renderEvents();
+    } catch(e) { /* silent — next tick retries */ }
+  }, 120000);
 }
 
 // ── Full render ────────────────────────────────────────────────
