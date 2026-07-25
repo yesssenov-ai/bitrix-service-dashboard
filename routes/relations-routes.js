@@ -6,7 +6,7 @@ const {
   getDealsByManager, SALES_CATEGORIES, resolveStageName,
 } = require('../relations');
 const { tgMgt } = require('../notifications');
-const { notifyProcessCompleted, notifyEngineerAssigned, setPool: setMgrNotifyPool } = require('../manager-notifications');
+const { notifyProcessCompleted, notifyEngineerAssigned, notifyJobAssigned, setPool: setMgrNotifyPool } = require('../manager-notifications');
 const { USERS } = require('../constants');
 const { b24 } = require('../bitrix');
 const { computeSyncHash } = require('./planner-routes');
@@ -61,6 +61,33 @@ async function getCompanyName(companyId) {
   }
 }
 
+// Best-effort resolver for "crm" type link fields (e.g. Контракт), which
+// Bitrix stores as a prefixed reference like "D_123" (deal) or
+// "DYNAMIC_<entityTypeId>_<id>" (smart-process item). Falls back to the raw
+// value if the format isn't one we recognize.
+async function resolveCrmFieldLabel(crmValue) {
+  if (!crmValue) return '';
+  const dynMatch = String(crmValue).match(/^DYNAMIC_(\d+)_(\d+)$/);
+  if (dynMatch) {
+    try {
+      const { result } = await b24('crm.item.get', { entityTypeId: parseInt(dynMatch[1], 10), id: parseInt(dynMatch[2], 10) });
+      return result?.item?.title || String(crmValue);
+    } catch (e) { return String(crmValue); }
+  }
+  const dealMatch = String(crmValue).match(/^D_(\d+)$/);
+  if (dealMatch) {
+    try {
+      const { result } = await b24('crm.deal.get', { id: parseInt(dealMatch[1], 10) });
+      return result?.TITLE || String(crmValue);
+    } catch (e) { return String(crmValue); }
+  }
+  return String(crmValue);
+}
+
+function fmtDateOnly(d) {
+  return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+}
+
 function fmtLocalNaive(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
@@ -103,6 +130,9 @@ async function syncPlannerEvent(item, itemId) {
     instrLabel = priborIds.map(id => map[id] || id).join(', ');
   }
   const clientName = await getCompanyName(companyId);
+  const location = item.ufCrm8_1732855494458 || '';
+  let contractLabel = await getContractFromChain(1058, item);
+  if (!contractLabel) contractLabel = await resolveCrmFieldLabel(item.ufCrm8_1732855521);
 
   const fieldsObj = { df3: svcLabel, df4: instrLabel };
   const clientsArr = clientName ? [{ name: clientName, type: '' }] : [];
@@ -110,9 +140,15 @@ async function syncPlannerEvent(item, itemId) {
   const title = item.title || '';
 
   const client = await pool.connect();
+  let notifyKind = null; // null | 'new' | array of change reasons like ['engineer','dates']
   try {
     await client.query('BEGIN');
-    const { rows } = await client.query('SELECT id, bitrix_sync_hash FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1', [itemId]);
+    const { rows } = await client.query(
+      `SELECT id, resource, bitrix_sync_hash,
+        to_char(start_at AT TIME ZONE '${PLANNER_TZ}', 'YYYY-MM-DD') AS start_date_old,
+        to_char(end_at AT TIME ZONE '${PLANNER_TZ}', 'YYYY-MM-DD') AS end_date_old
+       FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1`, [itemId]
+    );
     const newHash = computeSyncHash(engineerId, startLocal.slice(0, 10), endLocal.slice(0, 10));
 
     if (rows.length && rows[0].bitrix_sync_hash === newHash) {
@@ -126,6 +162,10 @@ async function syncPlannerEvent(item, itemId) {
         [title, JSON.stringify(fieldsObj), JSON.stringify(clientsArr), rows[0].id]
       );
     } else if (rows.length) {
+      const changes = [];
+      if (rows[0].resource !== engineerName) changes.push('engineer');
+      if (rows[0].start_date_old !== startLocal.slice(0,10) || rows[0].end_date_old !== endLocal.slice(0,10)) changes.push('dates');
+      if (changes.length) notifyKind = changes;
       await client.query(
         `UPDATE ticketsmodule_planner_events
          SET resource=$1, title=$2, type='trip',
@@ -136,6 +176,7 @@ async function syncPlannerEvent(item, itemId) {
         [engineerName, title, startLocal, endLocal, JSON.stringify(fieldsObj), JSON.stringify(clientsArr), newHash, rows[0].id]
       );
     } else {
+      notifyKind = 'new';
       const { rows: ins } = await client.query(
         `INSERT INTO ticketsmodule_planner_events
           (group_id, resource, title, type, start_at, end_at, all_day, confirmed, note, fields, clients, bitrix_item_id, source, bitrix_sync_hash)
@@ -151,8 +192,38 @@ async function syncPlannerEvent(item, itemId) {
   } catch (e) {
     await client.query('ROLLBACK');
     console.error('Planner sync error:', e.message);
+    return;
   } finally {
     client.release();
+  }
+
+  if (notifyKind) {
+    try {
+      const mgr = await getRootDealManager(1058, item);
+      const managerId = mgr?.managerId;
+      const managerName = managerId ? (USERS[managerId] || `Пользователь #${managerId}`) : '';
+      const itemUrl = `https://crm.prolabsupport.kz/crm/type/1058/details/${itemId}/`;
+      const dealUrl = mgr?.dealId ? `https://crm.prolabsupport.kz/crm/deal/details/${mgr.dealId}/` : null;
+
+      let reason = 'Назначен инженер на заявку';
+      if (Array.isArray(notifyKind)) {
+        const parts = [];
+        if (notifyKind.includes('engineer')) parts.push('изменён инженер');
+        if (notifyKind.includes('dates')) parts.push('изменены даты работ');
+        reason = 'Обновление по заявке: ' + parts.join(', ');
+      }
+
+      await notifyJobAssigned({
+        engineerId, managerId, itemId, title, reason,
+        svcLabel, engineerName,
+        assignDate: fmtDateOnly(new Date()),
+        startDate: fmtDateOnly(sDate), endDate: fmtDateOnly(eDate),
+        clientName, contractLabel, managerName, instrLabel, location,
+        url: itemUrl, dealUrl,
+      });
+    } catch (e) {
+      console.error('notifyJobAssigned error:', e.message);
+    }
   }
 }
 
@@ -165,6 +236,30 @@ const COORDINATOR_IDS = new Set([26, 79]);
 // In-memory cache to avoid duplicate notifications for same item+stage
 const notifiedCompletions = new Set();
 const notifiedAssignments = new Map(); // itemId -> last assignedById seen
+
+// ── Resolve the contract by walking the parent chain (Регистрация            
+// контрактов, entityTypeId 1036) — more reliable than the "Контракт" field   
+// directly on the Заявка на сервис item, which is often left empty ─────────
+
+async function getContractFromChain(entityTypeId, item) {
+  let current = { entityTypeId, item };
+  let safety = 0;
+  while (safety++ < 10) {
+    if (current.item.parentId1036) {
+      try {
+        const { result } = await b24('crm.item.get', { entityTypeId: 1036, id: current.item.parentId1036 });
+        return result?.item?.title || '';
+      } catch (e) { return ''; }
+    }
+    if (current.item.parentId2) return ''; // reached the deal, no contract link found along the way
+    const parent = await findParent(current.entityTypeId, current.item);
+    if (!parent || parent.type === 'deal') return '';
+    const parentItem = await getItem(parent.type, parent.id);
+    if (!parentItem) return '';
+    current = { entityTypeId: parent.type, item: parentItem };
+  }
+  return '';
+}
 
 // ── Resolve the responsible manager (root deal's ASSIGNED_BY_ID) ──────────────
 
