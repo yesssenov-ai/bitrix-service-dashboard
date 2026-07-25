@@ -10,87 +10,15 @@ const { notifyProcessCompleted, notifyEngineerAssigned, notifyJobAssigned, setPo
 const { USERS } = require('../constants');
 const { b24 } = require('../bitrix');
 const { computeSyncHash } = require('./planner-routes');
+const {
+  SERVICE_TYPE_MAP, getPriborMap, getCompanyName, resolveCrmFieldLabel,
+  getContractFromChain, getRootDealManager, fmtDateOnly, fmtLocalNaive,
+} = require('../bitrix-lookups');
 
 setMgrNotifyPool(pool);
 
 // ── Planner sync (Заявка на сервис 1058 → ticketsmodule_planner_events) ────
 const PLANNER_TZ = 'Asia/Almaty';
-
-// "Тип оказываемых услуг (УС)" (ufCrm8_1744300223) — full id→label map,
-// confirmed against the live field editor (crm.item.fields doesn't expose
-// choices for iblock_element fields, so this is hand-verified, not fetched).
-const SERVICE_TYPE_MAP = {
-  103:'Установка', 104:'Техническое обслуживание', 105:'Диагностика', 106:'Ремонт',
-  107:'Методическое сопровождение', 108:'Обучение сервисного отдела', 109:'Обучение ТЦ',
-  110:'Квалификация', 111:'Подбор дополнительного оборудования',
-  112:'Подбор расходки / запасных частей', 113:'Претензия',
-  114:'Другое', 402:'Подготовка документов', 619:'Заявка клиента',
-};
-
-// "Название прибора." (ufCrmPribor) is a real Bitrix enumeration field, so
-// its choices ARE fetchable via crm.item.fields — cache them instead of
-// hardcoding 300+ entries that Bitrix can add to at any time.
-let priborCache = null, priborCacheAt = 0;
-async function getPriborMap() {
-  if (priborCache && Date.now() - priborCacheAt < 60 * 60 * 1000) return priborCache;
-  try {
-    const { result } = await b24('crm.item.fields', { entityTypeId: 1058 });
-    const items = result?.fields?.ufCrmPribor?.items || [];
-    const map = {};
-    items.forEach(i => { map[i.ID] = i.VALUE; });
-    priborCache = map; priborCacheAt = Date.now();
-  } catch (e) {
-    console.error('getPriborMap error:', e.message);
-    if (!priborCache) priborCache = {};
-  }
-  return priborCache;
-}
-
-const companyNameCache = new Map(); // companyId -> {name, at}
-async function getCompanyName(companyId) {
-  const cached = companyNameCache.get(companyId);
-  if (cached && Date.now() - cached.at < 60 * 60 * 1000) return cached.name;
-  try {
-    const { result } = await b24('crm.company.get', { id: companyId });
-    const name = result?.TITLE || '';
-    companyNameCache.set(companyId, { name, at: Date.now() });
-    return name;
-  } catch (e) {
-    console.error('getCompanyName error:', e.message);
-    return '';
-  }
-}
-
-// Best-effort resolver for "crm" type link fields (e.g. Контракт), which
-// Bitrix stores as a prefixed reference like "D_123" (deal) or
-// "DYNAMIC_<entityTypeId>_<id>" (smart-process item). Falls back to the raw
-// value if the format isn't one we recognize.
-async function resolveCrmFieldLabel(crmValue) {
-  if (!crmValue) return '';
-  const dynMatch = String(crmValue).match(/^DYNAMIC_(\d+)_(\d+)$/);
-  if (dynMatch) {
-    try {
-      const { result } = await b24('crm.item.get', { entityTypeId: parseInt(dynMatch[1], 10), id: parseInt(dynMatch[2], 10) });
-      return result?.item?.title || String(crmValue);
-    } catch (e) { return String(crmValue); }
-  }
-  const dealMatch = String(crmValue).match(/^D_(\d+)$/);
-  if (dealMatch) {
-    try {
-      const { result } = await b24('crm.deal.get', { id: parseInt(dealMatch[1], 10) });
-      return result?.TITLE || String(crmValue);
-    } catch (e) { return String(crmValue); }
-  }
-  return String(crmValue);
-}
-
-function fmtDateOnly(d) {
-  return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
-}
-
-function fmtLocalNaive(d) {
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-}
 
 // Sync one Заявка на сервис (1058) item into the shared planner events table.
 // Only creates/updates an event once engineer + both dates + service type +
@@ -275,64 +203,6 @@ const COORDINATOR_IDS = new Set([26, 79]);
 // In-memory cache to avoid duplicate notifications for same item+stage
 const notifiedCompletions = new Set();
 const notifiedAssignments = new Map(); // itemId -> last assignedById seen
-
-// ── Resolve the contract by walking the parent chain (Регистрация            
-// контрактов, entityTypeId 1036) — more reliable than the "Контракт" field   
-// directly on the Заявка на сервис item, which is often left empty ─────────
-
-const contractCache = new Map(); // itemId -> {label, at}
-async function getContractFromChain(entityTypeId, item) {
-  const cached = contractCache.get(item.id);
-  if (cached && Date.now() - cached.at < 24 * 60 * 60 * 1000) return cached.label;
-
-  let current = { entityTypeId, item };
-  let safety = 0;
-  let label = '';
-  while (safety++ < 10) {
-    if (current.item.parentId1036) {
-      try {
-        const { result } = await b24('crm.item.get', { entityTypeId: 1036, id: current.item.parentId1036 });
-        label = result?.item?.title || '';
-      } catch (e) { label = ''; }
-      break;
-    }
-    if (current.item.parentId2) break; // reached the deal, no contract link found along the way
-    const parent = await findParent(current.entityTypeId, current.item);
-    if (!parent || parent.type === 'deal') break;
-    const parentItem = await getItem(parent.type, parent.id);
-    if (!parentItem) break;
-    current = { entityTypeId: parent.type, item: parentItem };
-  }
-  contractCache.set(item.id, { label, at: Date.now() });
-  return label;
-}
-
-// ── Resolve the responsible manager (root deal's ASSIGNED_BY_ID) ──────────────
-
-async function getRootDealManager(entityTypeId, item) {
-  // Walk up to the root deal
-  let current = { entityTypeId, item };
-  let safety = 0;
-  while (safety++ < 10) {
-    if (current.item.parentId2) {
-      const deal = await getDeal(current.item.parentId2);
-      if (!deal) return null;
-      return { managerId: parseInt(deal.ASSIGNED_BY_ID), dealId: current.item.parentId2, deal };
-    }
-    const parent = await findParent(current.entityTypeId, current.item);
-    if (!parent) return null;
-    if (parent.type === 'deal') {
-      const deal = await getDeal(parent.id);
-      if (!deal) return null;
-      return { managerId: parseInt(deal.ASSIGNED_BY_ID), dealId: parent.id, deal };
-    }
-    const parentItem = await getItem(parent.type, parent.id);
-    if (!parentItem) return null;
-    current = { entityTypeId: parent.type, item: parentItem };
-  }
-  return null;
-}
-
 
 // ── GET /relations/search?q=... ───────────────────────────────────────────────
 router.get('/search', requireAuth(), async (req, res) => {

@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const { pool, requireAuth } = require('../auth');
 const { b24 } = require('../bitrix');
+const { getItem } = require('../relations');
+const { getRootDealManager, getContractFromChain, fmtDateOnly } = require('../bitrix-lookups');
+const { notifyJobAssigned } = require('../manager-notifications');
 
 // All start/end values from the client are naive "YYYY-MM-DDTHH:mm" strings
 // (no timezone) representing local Kazakhstan wall-clock time. We must be
@@ -152,6 +155,44 @@ async function pushEventToBitrix(bitrixItemId, resource, start, end) {
   }
 }
 
+// Sends the same rich "job changed" notification the inbound webhook sends,
+// but for edits that originated in the planner itself. The inbound echo that
+// results from our own outbound push is deliberately NOT treated as a new
+// change (see the hash check in syncPlannerEvent) — so without this, nobody
+// would ever be told about a change made by dragging/editing in the planner.
+async function notifyOutboundChange(bitrixItemId, resource, start, end, oldRow, changeFlags) {
+  const item = await getItem(1058, bitrixItemId);
+  if (!item) return;
+
+  const engineerId = await resolveBitrixUserId(resource);
+  const engineerName = resource;
+  const mgr = await getRootDealManager(1058, item);
+  const managerId = mgr?.managerId;
+  const managerName = managerId ? (USERS[managerId] || `Пользователь #${managerId}`) : '';
+  const contractLabel = await getContractFromChain(1058, item);
+  const companyId = parseInt(item.companyId, 10);
+  const clientName = (oldRow.clients || [])[0]?.name || '';
+  const f = oldRow.fields || {};
+
+  const parts = [];
+  if (changeFlags.engineerChanged) parts.push('изменён инженер');
+  if (changeFlags.datesChanged) parts.push('изменены даты работ');
+  const reason = 'Обновление по заявке (из планировщика): ' + parts.join(', ');
+
+  const sDate = new Date(start), eDate = new Date(end);
+  const itemUrl = `https://crm.prolabsupport.kz/crm/type/1058/details/${bitrixItemId}/`;
+  const dealUrl = mgr?.dealId ? `https://crm.prolabsupport.kz/crm/deal/details/${mgr.dealId}/` : null;
+
+  await notifyJobAssigned({
+    engineerId, managerId, itemId: bitrixItemId, title: item.title || '', reason,
+    svcLabel: f.df3 || '', engineerName,
+    assignDate: fmtDateOnly(new Date()),
+    startDate: fmtDateOnly(sDate), endDate: fmtDateOnly(eDate),
+    clientName, contractLabel, managerName, instrLabel: f.df4 || '', location: '',
+    url: itemUrl, dealUrl,
+  });
+}
+
 router.put('/events/:id', requireAuth(), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const { resource, title, type, start, end, allDay, confirmed, note, fields, clients, coAssignees } = req.body;
@@ -160,10 +201,16 @@ router.put('/events/:id', requireAuth(), async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { rows: existingRows } = await client.query('SELECT group_id, bitrix_item_id FROM ticketsmodule_planner_events WHERE id=$1', [id]);
+    const { rows: existingRows } = await client.query(
+      `SELECT group_id, bitrix_item_id, resource, fields, clients,
+        to_char(start_at AT TIME ZONE '${TZ}', 'YYYY-MM-DD') AS start_date_old,
+        to_char(end_at AT TIME ZONE '${TZ}', 'YYYY-MM-DD') AS end_date_old
+       FROM ticketsmodule_planner_events WHERE id=$1`, [id]
+    );
     if (!existingRows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
     const groupId = existingRows[0].group_id || id;
     const bitrixItemId = existingRows[0].bitrix_item_id;
+    const oldRow = existingRows[0];
 
     await client.query(
       `UPDATE ticketsmodule_planner_events
@@ -206,7 +253,14 @@ router.put('/events/:id', requireAuth(), async (req, res) => {
 
     const result = await fetchByIds(client, ids);
     await client.query('COMMIT');
-    if (bitrixItemId) pushEventToBitrix(bitrixItemId, resource, start, end).catch(()=>{});
+    if (bitrixItemId) {
+      pushEventToBitrix(bitrixItemId, resource, start, end).catch(()=>{});
+      const engineerChanged = oldRow.resource !== resource;
+      const datesChanged = oldRow.start_date_old !== start.slice(0,10) || oldRow.end_date_old !== end.slice(0,10);
+      if (engineerChanged || datesChanged) {
+        notifyOutboundChange(bitrixItemId, resource, start, end, oldRow, { engineerChanged, datesChanged }).catch(e=>console.error('notifyOutboundChange error:', e.message));
+      }
+    }
     res.json({ events: result.map(rowToEvent) });
   } catch (e) {
     await client.query('ROLLBACK');
