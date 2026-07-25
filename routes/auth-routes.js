@@ -57,13 +57,67 @@ router.post('/login', async (req, res) => {
       return res.json({ ok: true, requireTotp: true, tempToken: temp, displayName: user.display_name });
     }
 
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: `${SESSION_HOURS}h` });
-    res.cookie('token', token, COOKIE_OPTS(SESSION_HOURS * 3600000));
-    await auditLog(user.id, user.username, 'LOGIN_SUCCESS', null, {}, ip, ua);
-    res.json({ ok: true, user: { id: user.id, username: user.username, displayName: user.display_name, role: user.role, engineerName: user.engineer_name } });
+    // 2FA is mandatory — reuse an in-progress secret if this user already
+    // started setup before (so a QR they'd already scanned keeps working),
+    // otherwise generate a fresh one.
+    let secretBase32 = user.totp_secret;
+    if (!secretBase32) {
+      const secret = speakeasy.generateSecret({ name: `ProLab Service (${user.username})`, issuer: 'ProLabSupport', length: 20 });
+      secretBase32 = secret.base32;
+      await pool.query('UPDATE ticketsmodule_users SET totp_secret=$1, updated_at=NOW() WHERE id=$2', [secretBase32, user.id]);
+    }
+    const otpauthUrl = speakeasy.otpauthURL({ secret: secretBase32, label: `ProLab Service (${user.username})`, issuer: 'ProLabSupport', encoding: 'base32' });
+    const qrcode = require('qrcode');
+    const qr = await qrcode.toDataURL(otpauthUrl);
+    const setupToken = jwt.sign({ userId: user.id, step: 'setup' }, JWT_SECRET, { expiresIn: '10m' });
+    await auditLog(user.id, user.username, 'LOGIN_REQUIRES_2FA_SETUP', null, {}, ip, ua);
+    return res.json({ ok: true, requireSetup: true, tempToken: setupToken, displayName: user.display_name, qr, secret: secretBase32 });
   } catch(e) {
     console.error('Login error:', e.message);
     res.status(500).json({ ok: false, error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// POST /auth/setup-confirm — completes MANDATORY first-time 2FA enrollment
+// (uses the short-lived setup token from /auth/login, not a full session,
+// since a user without 2FA configured can't have one yet).
+router.post('/setup-confirm', async (req, res) => {
+  const { tempToken, code } = req.body;
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+  const ua = req.headers['user-agent'];
+
+  if (!tempToken || !code) return res.status(400).json({ ok: false, error: 'Неверный запрос' });
+
+  const blocked = await checkLoginRateLimit(ip + ':setup');
+  if (blocked) return res.status(429).json({ ok: false, error: 'Слишком много попыток' });
+
+  try {
+    const payload = jwt.verify(tempToken, JWT_SECRET);
+    if (payload.step !== 'setup') return res.status(401).json({ ok: false, error: 'Неверный токен' });
+
+    const r = await pool.query('SELECT * FROM ticketsmodule_users WHERE id=$1 AND active=true', [payload.userId]);
+    if (!r.rows.length) return res.status(401).json({ ok: false, error: 'Пользователь не найден' });
+    const user = r.rows[0];
+
+    const ok = speakeasy.totp.verify({
+      secret: user.totp_secret, encoding: 'base32',
+      token: String(code).replace(/\s/g, ''), window: 2,
+    });
+    if (!ok) {
+      await recordLoginAttempt(ip + ':setup');
+      await auditLog(user.id, user.username, 'TOTP_SETUP_FAIL', null, {}, ip, ua);
+      return res.status(401).json({ ok: false, error: 'Неверный код. Попробуйте ещё раз' });
+    }
+
+    await clearLoginAttempts(ip + ':setup');
+    await pool.query('UPDATE ticketsmodule_users SET totp_enabled=true, updated_at=NOW() WHERE id=$1', [user.id]);
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: `${SESSION_HOURS}h` });
+    res.cookie('token', token, COOKIE_OPTS(SESSION_HOURS * 3600000));
+    await auditLog(user.id, user.username, 'TOTP_ENABLED', null, {}, ip, ua);
+    await auditLog(user.id, user.username, 'LOGIN_SUCCESS', null, {}, ip, ua);
+    res.json({ ok: true, user: { id: user.id, username: user.username, displayName: user.display_name, role: user.role, engineerName: user.engineer_name } });
+  } catch(e) {
+    res.status(401).json({ ok: false, error: 'Сессия истекла, войдите заново' });
   }
 });
 

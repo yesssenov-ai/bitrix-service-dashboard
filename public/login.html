@@ -166,6 +166,26 @@ input:focus{border-color:var(--signal);box-shadow:0 0 0 3px rgba(53,208,192,.12)
       <button class="btn" id="btnTotp" onclick="doTotp()">Подтвердить</button>
       <button class="back-link" onclick="backToLogin()">← Назад</button>
     </div>
+
+    <!-- Step 3: Mandatory first-time 2FA setup -->
+    <div class="step" id="step3">
+      <div class="card-head">
+        <div class="eyebrow">ОБЯЗАТЕЛЬНАЯ НАСТРОЙКА</div>
+        <h2>Настройте двухфакторную аутентификацию</h2>
+        <p class="sub" id="setupSub">Вход без 2FA недоступен. Отсканируйте QR-код приложением Google Authenticator (или аналогом)</p>
+      </div>
+      <div style="display:flex;justify-content:center;margin:18px 0">
+        <img id="setupQr" alt="QR-код" style="width:170px;height:170px;border-radius:10px;background:#fff;padding:10px">
+      </div>
+      <p class="totp-hint" style="margin-bottom:6px">Не получается отсканировать? Введите код вручную:</p>
+      <p style="text-align:center;font-family:var(--font-mono);font-size:12px;color:var(--text-dim);word-break:break-all;margin-bottom:18px" id="setupSecret"></p>
+      <div class="field">
+        <label>Код из приложения</label>
+        <input type="text" id="setupCode" placeholder="000 000" maxlength="7"
+          inputmode="numeric" autocomplete="one-time-code" style="font-family:var(--font-mono);font-size:22px;letter-spacing:4px;text-align:center">
+      </div>
+      <button class="btn" id="btnSetup" onclick="doSetupConfirm()">Подтвердить и войти</button>
+    </div>
   </div>
 </div>
 
@@ -189,11 +209,34 @@ async function doLogin() {
       document.getElementById('totpSub').textContent = `Добро пожаловать, ${d.displayName}. Введите код из Google Authenticator`;
       showStep('step2');
       setTimeout(() => document.getElementById('totpCode').focus(), 100);
+    } else if (d.requireSetup) {
+      tempToken = d.tempToken;
+      document.getElementById('setupSub').textContent = `Добро пожаловать, ${d.displayName}. Вход без 2FA недоступен — настройте его сейчас`;
+      document.getElementById('setupQr').src = d.qr;
+      document.getElementById('setupSecret').textContent = d.secret;
+      showStep('step3');
+      setTimeout(() => document.getElementById('setupCode').focus(), 100);
     } else {
       window.location.href = '/';
     }
   } catch(e) { showErr('Ошибка сети'); }
   finally { setLoading('btnLogin', false, 'Войти'); }
+}
+
+async function doSetupConfirm() {
+  const code = document.getElementById('setupCode').value.replace(/\s/g,'');
+  if (code.length < 6) return showErr('Введите 6-значный код');
+  setLoading('btnSetup', true, 'Проверяю…');
+  try {
+    const r = await fetch('/auth/setup-confirm', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ tempToken, code })
+    });
+    const d = await r.json();
+    if (!d.ok) { showErr(d.error); return; }
+    window.location.href = '/';
+  } catch(e) { showErr('Ошибка сети'); }
+  finally { setLoading('btnSetup', false, 'Подтвердить и войти'); }
 }
 
 async function doTotp() {
@@ -222,13 +265,16 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter') {
     if (document.getElementById('step1').classList.contains('active')) doLogin();
     else if (document.getElementById('step2').classList.contains('active')) doTotp();
+    else if (document.getElementById('step3').classList.contains('active')) doSetupConfirm();
   }
 });
 
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('totpCode').addEventListener('input', function() {
-    let v = this.value.replace(/\D/g,'').slice(0,6);
-    this.value = v.length > 3 ? v.slice(0,3) + ' ' + v.slice(3) : v;
+  ['totpCode','setupCode'].forEach(id => {
+    document.getElementById(id).addEventListener('input', function() {
+      let v = this.value.replace(/\D/g,'').slice(0,6);
+      this.value = v.length > 3 ? v.slice(0,3) + ' ' + v.slice(3) : v;
+    });
   });
 });
 </script>

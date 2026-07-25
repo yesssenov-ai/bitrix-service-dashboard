@@ -161,6 +161,7 @@ footer{text-align:center;color:var(--text-faint);font-size:11.5px;padding:20px;f
     </div>
     <div class="user-chip">
       <span class="name" id="userName"></span>
+      <a href="/cup-admin.html" id="cupAdminLink" style="display:none;font-size:12.5px;color:var(--text-dim);text-decoration:none;border:1px solid var(--line-2);padding:7px 14px;border-radius:8px;transition:border-color .15s,color .15s" onmouseover="this.style.borderColor='var(--signal)';this.style.color='var(--text)'" onmouseout="this.style.borderColor='var(--line-2)';this.style.color='var(--text-dim)'">⚙ Доступ к модулям</a>
       <button class="logout-btn" onclick="logout()">Выйти</button>
     </div>
   </div>
@@ -184,10 +185,10 @@ const MODULES = [
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-function renderGrid(role){
+function renderGrid(role, overrideModules){
   const grid = document.getElementById('grid');
   grid.innerHTML = MODULES.map(m=>{
-    const allowed = m.roles.includes(role);
+    const allowed = overrideModules ? overrideModules.includes(m.code) : m.roles.includes(role);
     const tag = allowed ? 'a' : 'div';
     const hrefAttr = allowed ? `href="${m.href}"` : '';
     return `<${tag} class="card${allowed?'':' locked'}" ${hrefAttr} ${allowed?'':'tabindex="0"'}>
@@ -227,7 +228,19 @@ async function init(){
     const hour = new Date().getHours();
     const greeting = hour<6?'Доброй ночи':hour<12?'Доброе утро':hour<18?'Добрый день':'Добрый вечер';
     document.getElementById('helloLine').textContent = `${greeting} · роль: ${user.role}`;
-    renderGrid(user.role);
+    if (user.role === 'admin') document.getElementById('cupAdminLink').style.display = '';
+
+    let overrideModules = null;
+    try{
+      const ar = await fetch('/api/portal/my-access');
+      if (ar.ok) {
+        const a = await ar.json();
+        if (a.admin) overrideModules = MODULES.map(m=>m.code); // admin sees everything
+        else if (a.hasOverride) overrideModules = a.modules;
+      }
+    }catch(e){ /* fall back to role defaults below */ }
+
+    renderGrid(user.role, overrideModules);
   }catch(e){
     window.location.href='/login.html';
   }

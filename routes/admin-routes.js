@@ -155,4 +155,43 @@ router.get('/logs', requireAuth(['admin']), async (req, res) => {
   } catch(e) { sanitizeError(e, res); }
 });
 
+// ── ЦУП module access (which portal modules each Bitrix employee can see) ──
+// Keep this list in sync with MODULES in public/portal.html and cup-admin.html.
+const MODULE_CODES = ['PLN', 'SVC', 'EQP', 'LIC', 'REL', 'ADM'];
+
+// GET /admin/bitrix-employees — every active Bitrix employee + their current module access
+router.get('/bitrix-employees', requireAuth(['admin']), async (req, res) => {
+  try {
+    const { fetchAllActiveUsers } = require('./planner-routes');
+    const users = await fetchAllActiveUsers();
+    const { rows } = await pool.query('SELECT bitrix_user_id, modules FROM ticketsmodule_module_access');
+    const accessById = new Map(rows.map(r => [r.bitrix_user_id, r.modules]));
+    const SERVICE_ACCOUNT_NAMES = new Set(['Администратор', 'Power BI']);
+
+    const employees = users
+      .map(u => ({ id: parseInt(u.ID, 10), name: `${u.NAME || ''} ${u.LAST_NAME || ''}`.trim() }))
+      .filter(e => e.name && !SERVICE_ACCOUNT_NAMES.has(e.name))
+      .map(e => ({ ...e, modules: accessById.get(e.id) || [] }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+
+    res.json({ ok: true, employees, moduleCodes: MODULE_CODES });
+  } catch (e) { sanitizeError(e, res); }
+});
+
+// PUT /admin/module-access/:bitrixUserId — save one employee's allowed modules
+router.put('/module-access/:bitrixUserId', requireAuth(['admin']), async (req, res) => {
+  try {
+    const bitrixUserId = parseInt(req.params.bitrixUserId, 10);
+    const modules = Array.isArray(req.body.modules) ? req.body.modules.filter(m => MODULE_CODES.includes(m)) : [];
+    if (!bitrixUserId) return res.status(400).json({ ok: false, error: 'Неверный ID' });
+    await pool.query(
+      `INSERT INTO ticketsmodule_module_access (bitrix_user_id, modules, updated_at) VALUES ($1,$2,NOW())
+       ON CONFLICT (bitrix_user_id) DO UPDATE SET modules=$2, updated_at=NOW()`,
+      [bitrixUserId, JSON.stringify(modules)]
+    );
+    await auditLog(req.user.id, req.user.username, 'MODULE_ACCESS_UPDATED', null, { bitrixUserId, modules }, req.ip, req.headers['user-agent']);
+    res.json({ ok: true });
+  } catch (e) { sanitizeError(e, res); }
+});
+
 module.exports = router;

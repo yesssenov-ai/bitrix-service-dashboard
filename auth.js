@@ -128,6 +128,12 @@ async function initDB() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS ticketsmodule_module_access (
+      bitrix_user_id INTEGER PRIMARY KEY,
+      modules JSONB NOT NULL DEFAULT '[]',
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
     CREATE INDEX IF NOT EXISTS idx_tm_audit_created ON ticketsmodule_audit_logs(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_tm_audit_user ON ticketsmodule_audit_logs(user_id);
     CREATE INDEX IF NOT EXISTS idx_tm_audit_ticket ON ticketsmodule_audit_logs(ticket_id);
@@ -220,6 +226,26 @@ function requireAuth(roles = []) {
   };
 }
 
+function requirePageAuth(roles = []) {
+  return async (req, res, next) => {
+    try {
+      const token = req.cookies?.token;
+      if (!token) return res.redirect('/login.html');
+      if (tokenBlacklist.has(token)) return res.redirect('/login.html');
+      const payload = jwt.verify(token, JWT_SECRET);
+      if (payload.step) return res.redirect('/login.html');
+      const result = await pool.query('SELECT * FROM ticketsmodule_users WHERE id=$1 AND active=true', [payload.userId]);
+      if (!result.rows.length) return res.redirect('/login.html');
+      const user = result.rows[0];
+      if (roles.length && !roles.includes(user.role)) return res.redirect('/');
+      req.user = user;
+      next();
+    } catch (e) {
+      res.redirect('/login.html');
+    }
+  };
+}
+
 function canEdit(user, ticket) {
   if (['admin', 'coordinator'].includes(user.role)) return true;
   if (user.role === 'engineer' && user.engineer_name) {
@@ -232,7 +258,7 @@ function canEdit(user, ticket) {
 async function initEquipmentMapDB() {} // no-op, table created in initDB above
 
 module.exports = {
-  pool, initDB, initEquipmentMapDB, auditLog, requireAuth, canEdit,
+  pool, initDB, initEquipmentMapDB, auditLog, requireAuth, requirePageAuth, canEdit,
   checkLoginRateLimit, recordLoginAttempt, clearLoginAttempts, tokenBlacklist,
   bcrypt, jwt, speakeasy, JWT_SECRET, SESSION_HOURS, VALID_ROLES,
 };

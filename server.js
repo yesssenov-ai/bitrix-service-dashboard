@@ -12,7 +12,7 @@ for (const key of REQUIRED) {
 }
 
 const { b24, flattenInto } = require('./bitrix');
-const { initDB, requireAuth, auditLog, canEdit, pool } = require('./auth');
+const { initDB, requireAuth, requirePageAuth, auditLog, canEdit, pool } = require('./auth');
 const { tgMgt, tgOps, tgBoth, notifyNewTicket, notifyOverdueNew } = require('./notifications');
 const telegramLinkBot = require('./telegram-link-bot');
 const equipmentRoutes = require('./routes/equipment-routes');
@@ -48,7 +48,24 @@ app.use('/auth/totp', authLimiter);
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
+
+// ── Page routes — MUST be registered before express.static, or static's
+// default file-serving would hand out these pages to anyone, auth or not. ──
+app.get('/login', (_, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
+app.get('/login.html', (_, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
+app.get('/', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'portal.html')));
+app.get('/portal.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'portal.html')));
+app.get('/index.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/planner.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'planner.html')));
+app.get('/equipment-map.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'equipment-map.html')));
+app.get('/licenses-map.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'licenses-map.html')));
+app.get('/relations.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'relations.html')));
+app.get('/admin.html', requirePageAuth(['admin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/cup-admin.html', requirePageAuth(['admin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'cup-admin.html')));
+
+// `index:false` — without this, static would auto-serve public/index.html
+// for "/" and silently undo everything above.
+app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/auth', require('./routes/auth-routes'));
@@ -61,11 +78,7 @@ const { router: relationsRouter, handleBitrixWebhook } = require('./routes/relat
 app.use('/relations', relationsRouter);
 app.post('/webhook/bitrix-update', express.urlencoded({ extended: true }), handleBitrixWebhook);
 
-app.get('/login', (_, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 app.get('/api/health', (_, res) => res.json({ ok: true, ts: new Date().toISOString() }));
-app.get('/', requireAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'portal.html')));
-app.get('/index.html', requireAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-app.get('/planner.html', requireAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'planner.html')));
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const STAGES = {
@@ -317,12 +330,28 @@ app.get('/api/users', requireAuth(), (_, res) => {
   res.json({ ok: true, users: engineers, coordinators: [...COORDINATORS].map(id => ({ id, name: USERS[id] })) });
 });
 
-// ── SPA fallback — must be LAST ───────────────────────────────────────────────
-app.get('*', (req, res) => {
-  if (req.path === '/login' || req.path === '/login.html') {
-    return res.sendFile(path.join(__dirname, 'public', 'login.html'));
+// GET /api/portal/my-access — which ЦУП modules the current user can see.
+// Admins always see everything. Otherwise: if this person's Bitrix identity
+// has an explicit override set in the ЦУП admin panel, use exactly that;
+// if not, tell the client to fall back to its own role-based defaults.
+app.get('/api/portal/my-access', requireAuth(), async (req, res) => {
+  try {
+    if (req.user.role === 'admin') return res.json({ ok: true, admin: true });
+    const found = Object.entries(USERS).find(([, name]) => name === req.user.engineer_name);
+    if (!found) return res.json({ ok: true, hasOverride: false });
+    const bitrixUserId = parseInt(found[0], 10);
+    const { rows } = await pool.query('SELECT modules FROM ticketsmodule_module_access WHERE bitrix_user_id=$1', [bitrixUserId]);
+    if (!rows.length) return res.json({ ok: true, hasOverride: false });
+    res.json({ ok: true, hasOverride: true, modules: rows[0].modules || [] });
+  } catch (e) {
+    console.error('GET /api/portal/my-access error:', e.message);
+    res.json({ ok: true, hasOverride: false }); // fail open to role defaults rather than break the portal
   }
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// ── SPA fallback — must be LAST ───────────────────────────────────────────────
+app.get('*', requirePageAuth(), (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'portal.html'));
 });
 
 // ── Background: check new & overdue tickets (single interval) ─────────────────
