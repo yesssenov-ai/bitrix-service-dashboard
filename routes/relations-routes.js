@@ -96,7 +96,7 @@ function fmtLocalNaive(d) {
 // Only creates/updates an event once engineer + both dates + service type +
 // company are all filled in — regardless of which stage the request is on.
 // If those fields are later cleared out again, the synced event is removed.
-async function syncPlannerEvent(item, itemId) {
+async function syncPlannerEvent(item, itemId, opts = {}) {
   const engineerId = parseInt(item.ufCrm8_1732856367, 10);
   const startRaw = item.ufCrm8_1764742554715;
   const endRaw = item.ufCrm8_1764742724958;
@@ -198,7 +198,7 @@ async function syncPlannerEvent(item, itemId) {
     client.release();
   }
 
-  if (notifyKind) {
+  if (notifyKind && !opts.silent) {
     try {
       const mgr = await getRootDealManager(1058, item);
       const managerId = mgr?.managerId;
@@ -251,7 +251,7 @@ async function reconcileAllPlannerEvents() {
     if (!items.length) break;
     for (const item of items) {
       checked++;
-      const result = await syncPlannerEvent(item, item.id);
+      const result = await syncPlannerEvent(item, item.id, { silent: true });
       if (result && result.ok === false) { errors++; failedIds.push(item.id); }
     }
     if (next === undefined || items.length < 50) break;
@@ -280,24 +280,31 @@ const notifiedAssignments = new Map(); // itemId -> last assignedById seen
 // контрактов, entityTypeId 1036) — more reliable than the "Контракт" field   
 // directly on the Заявка на сервис item, which is often left empty ─────────
 
+const contractCache = new Map(); // itemId -> {label, at}
 async function getContractFromChain(entityTypeId, item) {
+  const cached = contractCache.get(item.id);
+  if (cached && Date.now() - cached.at < 24 * 60 * 60 * 1000) return cached.label;
+
   let current = { entityTypeId, item };
   let safety = 0;
+  let label = '';
   while (safety++ < 10) {
     if (current.item.parentId1036) {
       try {
         const { result } = await b24('crm.item.get', { entityTypeId: 1036, id: current.item.parentId1036 });
-        return result?.item?.title || '';
-      } catch (e) { return ''; }
+        label = result?.item?.title || '';
+      } catch (e) { label = ''; }
+      break;
     }
-    if (current.item.parentId2) return ''; // reached the deal, no contract link found along the way
+    if (current.item.parentId2) break; // reached the deal, no contract link found along the way
     const parent = await findParent(current.entityTypeId, current.item);
-    if (!parent || parent.type === 'deal') return '';
+    if (!parent || parent.type === 'deal') break;
     const parentItem = await getItem(parent.type, parent.id);
-    if (!parentItem) return '';
+    if (!parentItem) break;
     current = { entityTypeId: parent.type, item: parentItem };
   }
-  return '';
+  contractCache.set(item.id, { label, at: Date.now() });
+  return label;
 }
 
 // ── Resolve the responsible manager (root deal's ASSIGNED_BY_ID) ──────────────
