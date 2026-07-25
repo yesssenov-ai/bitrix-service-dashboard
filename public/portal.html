@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" href="/favicon-180.png">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ЦУП — ProLabSupport</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#14171d;
+  --panel:#1b1f27;
+  --panel-h:#20242e;
+  --line:#2a2f3a;
+  --line-2:#363c49;
+  --text:#eef0f3;
+  --text-dim:#8b93a3;
+  --text-faint:#565d6b;
+  --brand:#C53B2F;
+  --brand-h:#d94737;
+  --signal:#35d0c0;
+  --signal-dim:rgba(53,208,192,.35);
+  --warn:#e0a940;
+  --font-display:'Space Grotesk',sans-serif;
+  --font-body:'Inter',system-ui,sans-serif;
+  --font-mono:'IBM Plex Mono',monospace;
+  --radius:14px;
+}
+html,body{height:100%;}
+body{
+  font-family:var(--font-body);
+  background:
+    radial-gradient(ellipse 900px 500px at 15% -10%, rgba(197,59,47,.08), transparent 60%),
+    radial-gradient(ellipse 700px 500px at 100% 0%, rgba(53,208,192,.06), transparent 55%),
+    var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+}
+
+/* ── Topbar ─────────────────────────────────────────────── */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:18px 32px;flex-shrink:0;
+}
+.brand{display:flex;align-items:center;gap:10px;}
+.brand img{height:22px;width:auto;}
+.brand-name{font-family:var(--font-display);font-weight:600;font-size:16px;letter-spacing:.2px;}
+.brand-name b{color:var(--brand);}
+.clock{
+  font-family:var(--font-mono);font-size:13px;color:var(--text-dim);
+  display:flex;align-items:center;gap:9px;letter-spacing:.3px;
+}
+.clock .dot{width:7px;height:7px;border-radius:50%;background:var(--signal);box-shadow:0 0 8px var(--signal-dim);animation:pulse 2.4s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.45;transform:scale(.72);}}
+
+/* ── Signature telemetry line ──────────────────────────────── */
+.telemetry{width:100%;height:34px;flex-shrink:0;overflow:hidden;position:relative;opacity:.55;}
+.telemetry svg{width:200%;height:100%;animation:drift 22s linear infinite;}
+@keyframes drift{from{transform:translateX(0);}to{transform:translateX(-50%);}}
+@media (prefers-reduced-motion:reduce){
+  .telemetry svg{animation:none;}
+  .clock .dot{animation:none;}
+}
+
+/* ── Main ─────────────────────────────────────────────────── */
+main{flex:1;padding:8px 32px 48px;max-width:1180px;width:100%;margin:0 auto;}
+.hello{font-size:13px;color:var(--text-dim);font-family:var(--font-mono);margin-bottom:4px;}
+.hello b{color:var(--text);font-weight:600;}
+h1{font-family:var(--font-display);font-size:30px;font-weight:600;letter-spacing:-.2px;margin-bottom:6px;}
+.h1-sub{color:var(--text-dim);font-size:14.5px;margin-bottom:34px;max-width:560px;}
+
+.user-chip{
+  display:flex;align-items:center;gap:10px;
+}
+.user-chip .name{font-size:13px;color:var(--text-dim);}
+.user-chip .name b{color:var(--text);font-weight:600;}
+.logout-btn{
+  border:1px solid var(--line-2);background:transparent;color:var(--text-dim);
+  font-family:var(--font-body);font-size:12.5px;font-weight:600;padding:7px 14px;
+  border-radius:8px;cursor:pointer;transition:border-color .15s,color .15s;
+}
+.logout-btn:hover{border-color:var(--brand);color:var(--text);}
+
+.grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;
+}
+.card{
+  position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:22px 22px 20px;text-decoration:none;color:inherit;display:flex;flex-direction:column;
+  min-height:168px;transition:transform .16s ease,border-color .16s ease,background .16s ease;
+  cursor:pointer;
+}
+.card:hover:not(.locked){
+  transform:translateY(-3px);border-color:var(--line-2);background:var(--panel-h);
+}
+.card:focus-visible{outline:2px solid var(--signal);outline-offset:2px;}
+.card-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;}
+.card-code{
+  font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:1.5px;
+  color:var(--text-faint);border:1px solid var(--line-2);border-radius:5px;padding:3px 8px;
+}
+.status{display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.4px;}
+.status .dot{width:6px;height:6px;border-radius:50%;}
+.status.online .dot{background:var(--signal);box-shadow:0 0 6px var(--signal-dim);animation:pulse 2.4s ease-in-out infinite;}
+.status.online{color:var(--signal);}
+.status.locked .dot{background:var(--text-faint);}
+.status.locked{color:var(--text-faint);}
+.card-name{font-family:var(--font-display);font-size:17.5px;font-weight:600;margin-bottom:8px;}
+.card-desc{font-size:13px;color:var(--text-dim);line-height:1.5;flex:1;}
+.card-enter{font-size:12px;font-weight:600;color:var(--signal);margin-top:14px;display:flex;align-items:center;gap:5px;}
+.card-enter svg{width:12px;height:12px;transition:transform .15s;}
+.card:hover:not(.locked) .card-enter svg{transform:translateX(3px);}
+
+.card.locked{cursor:default;}
+.card.locked .card-name,.card.locked .card-desc{color:var(--text-faint);}
+.card.locked::after{
+  content:'Нет доступа';position:absolute;top:22px;right:22px;
+  font-family:var(--font-mono);font-size:9.5px;color:var(--text-faint);
+}
+
+footer{text-align:center;color:var(--text-faint);font-size:11.5px;padding:20px;font-family:var(--font-mono);}
+
+@media (max-width:640px){
+  .topbar{padding:16px 18px;}
+  main{padding:8px 18px 32px;}
+  h1{font-size:24px;}
+  .clock{display:none;}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <img src="/assets/logo-icon.png" alt="">
+    <span class="brand-name"><b>ЦУП</b> · ProLabSupport</span>
+  </div>
+  <div class="clock"><span class="dot"></span><span id="clockText">—</span></div>
+</div>
+
+<div class="telemetry">
+  <svg viewBox="0 0 800 34" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M0,17 L60,17 L72,17 L80,4 L88,30 L96,17 L110,17 L400,17 L412,17 L420,4 L428,30 L436,17 L450,17 L800,17
+             L860,17 L872,17 L880,4 L888,30 L896,17 L910,17 L1200,17 L1212,17 L1220,4 L1228,30 L1236,17 L1250,17 L1600,17"
+      fill="none" stroke="#35d0c0" stroke-width="1.3" stroke-linejoin="round"/>
+  </svg>
+</div>
+
+<main>
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px;">
+    <div>
+      <div class="hello" id="helloLine">Загрузка…</div>
+      <h1>Центр управления проектами</h1>
+      <p class="h1-sub">Все модули ProLabSupport в одном месте. Открывайте только то, что нужно для работы.</p>
+    </div>
+    <div class="user-chip">
+      <span class="name" id="userName"></span>
+      <button class="logout-btn" onclick="logout()">Выйти</button>
+    </div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+</main>
+
+<footer>ЦУП · ProLabSupport Service Dashboard</footer>
+
+<script>
+// Each module's `roles` list controls who sees it as active vs locked.
+// Edit this array to change access — it's the single source of truth here.
+const MODULES = [
+  { code:'PLN', name:'Планировщик', desc:'Календарь занятости инженеров, выезды и командировки, синхронизация с заявками Bitrix.', href:'/planner.html', roles:['admin','coordinator','engineer','viewer'] },
+  { code:'SVC', name:'Сервисные заявки', desc:'Учёт и обработка заявок на сервисное обслуживание оборудования.', href:'/index.html', roles:['admin','coordinator','engineer'] },
+  { code:'EQP', name:'Карта оборудования', desc:'География установленного оборудования клиентов по всей стране.', href:'/equipment-map.html', roles:['admin','coordinator','engineer'] },
+  { code:'LIC', name:'Карта лицензий ГМК', desc:'Реестр недропользователей и лицензий на добычу.', href:'/licenses-map.html', roles:['admin','coordinator'] },
+  { code:'REL', name:'Граф связей сделок', desc:'Иерархия сделок и смарт-процессов CRM по клиенту.', href:'/relations.html', roles:['admin','coordinator'] },
+  { code:'ADM', name:'Управление', desc:'Пользователи, роли доступа и журнал действий в системе.', href:'/admin.html', roles:['admin'] },
+];
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderGrid(role){
+  const grid = document.getElementById('grid');
+  grid.innerHTML = MODULES.map(m=>{
+    const allowed = m.roles.includes(role);
+    const tag = allowed ? 'a' : 'div';
+    const hrefAttr = allowed ? `href="${m.href}"` : '';
+    return `<${tag} class="card${allowed?'':' locked'}" ${hrefAttr} ${allowed?'':'tabindex="0"'}>
+      <div class="card-top">
+        <span class="card-code">${m.code}</span>
+        <span class="status ${allowed?'online':'locked'}"><span class="dot"></span>${allowed?'доступен':'закрыт'}</span>
+      </div>
+      <div class="card-name">${esc(m.name)}</div>
+      <div class="card-desc">${esc(m.desc)}</div>
+      ${allowed?'<div class="card-enter">Открыть <svg viewBox="0 0 12 12" fill="none"><path d="M2 6h8M7 2l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>':''}
+    </${tag}>`;
+  }).join('');
+}
+
+function tickClock(){
+  const now = new Date();
+  const days = ['ВС','ПН','ВТ','СР','ЧТ','ПТ','СБ'];
+  const months = ['ЯНВ','ФЕВ','МАР','АПР','МАЙ','ИЮН','ИЮЛ','АВГ','СЕН','ОКТ','НОЯ','ДЕК'];
+  const hh = String(now.getHours()).padStart(2,'0');
+  const mm = String(now.getMinutes()).padStart(2,'0');
+  const ss = String(now.getSeconds()).padStart(2,'0');
+  document.getElementById('clockText').textContent =
+    `${hh}:${mm}:${ss} · ${days[now.getDay()]}, ${now.getDate()} ${months[now.getMonth()]}`;
+}
+
+async function logout(){
+  await fetch('/auth/logout', { method:'POST' });
+  window.location.href = '/login.html';
+}
+
+async function init(){
+  try{
+    const r = await fetch('/auth/me');
+    if (!r.ok) { window.location.href='/login.html'; return; }
+    const { user } = await r.json();
+    document.getElementById('userName').innerHTML = `<b>${esc(user.displayName)}</b>`;
+    const hour = new Date().getHours();
+    const greeting = hour<6?'Доброй ночи':hour<12?'Доброе утро':hour<18?'Добрый день':'Добрый вечер';
+    document.getElementById('helloLine').textContent = `${greeting} · роль: ${user.role}`;
+    renderGrid(user.role);
+  }catch(e){
+    window.location.href='/login.html';
+  }
+}
+
+tickClock();
+setInterval(tickClock, 1000);
+init();
+</script>
+</body>
+</html>

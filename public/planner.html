@@ -301,7 +301,7 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 <body>
 
 <header class="hdr">
-  <div class="logo"><img src="/assets/logo-icon.png" alt="" style="height:24px;width:auto;">ProLabSupport</div>
+  <a href="/" class="logo" style="text-decoration:none;color:inherit;cursor:pointer" title="Вернуться в ЦУП"><img src="/assets/logo-icon.png" alt="" style="height:24px;width:auto;">ProLabSupport</a>
   <div class="hdiv"></div>
   <nav style="display:flex;gap:2px;">
     <a href="/" class="hnav-link">← Дашборд</a>
@@ -1708,7 +1708,7 @@ async function syncStaffFromBitrixUI(){
     syncAdminToRes();
     renderDeptsTab(document.getElementById('admBody'));
     render();
-    alert(`Готово. Добавлено новых сотрудников: ${res.added}.`);
+    alert(`Готово. Добавлено новых: ${res.added}. Перенесено из "Без отдела" в реальные отделы: ${res.reassigned}.`);
   }catch(e){
     alert('Не удалось обновить с Bitrix. Попробуйте ещё раз.');
   }finally{

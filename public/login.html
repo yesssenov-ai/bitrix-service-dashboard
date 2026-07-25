@@ -5,69 +5,167 @@
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="apple-touch-icon" href="/favicon-180.png">
-
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ProLabSupport - Вход</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>ЦУП — Вход</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-:root{--accent:#C53B2F;--accent-h:#a83226;--border:#e3e6ef;--bg:#f5f6fa;--text:#111827;--text-3:#6b7280;--font:'Inter',system-ui,sans-serif;}
-body{font-family:var(--font);background:var(--bg);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
-.card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:40px;width:100%;max-width:400px;box-shadow:0 8px 40px rgba(0,0,0,.08);}
-.logo{display:flex;align-items:center;gap:10px;margin-bottom:32px;justify-content:center;}
-.logo-mark{width:40px;height:40px;background:var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:center;}
-.logo-mark svg{width:20px;height:20px;}
-.logo-name{font-size:18px;font-weight:700;color:var(--text);}
-h2{font-size:20px;font-weight:700;color:var(--text);margin-bottom:6px;text-align:center;}
-.sub{font-size:13px;color:var(--text-3);text-align:center;margin-bottom:28px;}
+:root{
+  --bg:#14171d;
+  --panel:#1b1f27;
+  --line:#2a2f3a;
+  --line-2:#363c49;
+  --text:#eef0f3;
+  --text-dim:#8b93a3;
+  --text-faint:#565d6b;
+  --brand:#C53B2F;
+  --brand-h:#d94737;
+  --signal:#35d0c0;
+  --signal-dim:rgba(53,208,192,.35);
+  --err:#f0554a;
+  --font-display:'Space Grotesk',sans-serif;
+  --font-body:'Inter',system-ui,sans-serif;
+  --font-mono:'IBM Plex Mono',monospace;
+}
+html,body{height:100%;}
+body{
+  font-family:var(--font-body);background:var(--bg);color:var(--text);
+  min-height:100vh;display:flex;
+}
+
+.side{
+  flex:1.15;position:relative;overflow:hidden;display:flex;flex-direction:column;
+  justify-content:space-between;padding:44px 48px;
+  background:
+    radial-gradient(ellipse 700px 500px at 20% 10%, rgba(197,59,47,.14), transparent 60%),
+    radial-gradient(ellipse 600px 500px at 90% 90%, rgba(53,208,192,.10), transparent 55%);
+  border-right:1px solid var(--line);
+}
+.side .brand{display:flex;align-items:center;gap:10px;}
+.side .brand img{height:24px;width:auto;}
+.side .brand-name{font-family:var(--font-display);font-weight:600;font-size:16px;}
+.side .brand-name b{color:var(--brand);}
+
+.side-mid{margin:auto 0;}
+.side h1{
+  font-family:var(--font-display);font-weight:600;font-size:44px;line-height:1.08;
+  letter-spacing:-.5px;margin-bottom:16px;
+}
+.side h1 span{color:var(--signal);}
+.side p{color:var(--text-dim);font-size:14.5px;max-width:400px;line-height:1.6;}
+
+.telemetry-wrap{height:64px;margin-top:34px;opacity:.5;overflow:hidden;}
+.telemetry-wrap svg{width:200%;height:100%;animation:drift 22s linear infinite;}
+@keyframes drift{from{transform:translateX(0);}to{transform:translateX(-50%);}}
+
+.side-foot{font-family:var(--font-mono);font-size:11px;color:var(--text-faint);display:flex;gap:18px;}
+.side-foot .dot{width:6px;height:6px;border-radius:50%;background:var(--signal);display:inline-block;margin-right:6px;box-shadow:0 0 6px var(--signal-dim);animation:pulse 2.4s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.45;transform:scale(.72);}}
+
+@media (prefers-reduced-motion:reduce){
+  .telemetry-wrap svg{animation:none;}
+  .side-foot .dot{animation:none;}
+}
+
+.right{flex:1;display:flex;align-items:center;justify-content:center;padding:32px;}
+.card{width:100%;max-width:380px;}
+.card-head{margin-bottom:30px;}
+.card-head .eyebrow{font-family:var(--font-mono);font-size:11px;color:var(--signal);letter-spacing:1.5px;margin-bottom:10px;}
+.card-head h2{font-family:var(--font-display);font-size:23px;font-weight:600;margin-bottom:6px;}
+.card-head .sub{font-size:13.5px;color:var(--text-dim);}
+
 .field{margin-bottom:16px;}
-label{display:block;font-size:12px;font-weight:600;color:var(--text);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;}
-input{width:100%;border:1.5px solid var(--border);border-radius:9px;padding:11px 14px;font-size:14px;color:var(--text);font-family:var(--font);outline:none;transition:border-color .15s,box-shadow .15s;background:#f9fafb;}
-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(197,59,47,.1);background:#fff;}
-.btn{width:100%;background:var(--accent);color:#fff;border:none;border-radius:9px;padding:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font);transition:background .15s;margin-top:8px;}
-.btn:hover{background:var(--accent-h);}
-.btn:disabled{opacity:.6;cursor:not-allowed;}
-.err{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;font-size:13px;color:#dc2626;margin-bottom:16px;display:none;}
+label{display:block;font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.6px;margin-bottom:7px;}
+input{
+  width:100%;border:1px solid var(--line-2);border-radius:9px;padding:12px 14px;font-size:14px;
+  color:var(--text);font-family:var(--font-body);outline:none;background:var(--panel);
+  transition:border-color .15s,box-shadow .15s;
+}
+input::placeholder{color:var(--text-faint);}
+input:focus{border-color:var(--signal);box-shadow:0 0 0 3px rgba(53,208,192,.12);}
+
+.btn{
+  width:100%;background:var(--brand);color:#fff;border:none;border-radius:9px;padding:13px;
+  font-size:14.5px;font-weight:600;cursor:pointer;font-family:var(--font-body);
+  transition:background .15s;margin-top:10px;
+}
+.btn:hover{background:var(--brand-h);}
+.btn:disabled{opacity:.55;cursor:not-allowed;}
+.btn:focus-visible{outline:2px solid var(--signal);outline-offset:2px;}
+
+.err{
+  background:rgba(240,85,74,.1);border:1px solid rgba(240,85,74,.35);border-radius:8px;
+  padding:10px 14px;font-size:13px;color:var(--err);margin-bottom:16px;display:none;
+}
 .err.show{display:block;}
-.totp-hint{font-size:12px;color:var(--text-3);text-align:center;margin-top:12px;}
-.back-link{display:block;text-align:center;font-size:13px;color:var(--accent);cursor:pointer;margin-top:16px;background:none;border:none;font-family:var(--font);}
+.totp-hint{font-size:12.5px;color:var(--text-dim);text-align:center;margin-top:14px;}
+.back-link{
+  display:block;text-align:center;font-size:13px;color:var(--text-dim);cursor:pointer;
+  margin-top:16px;background:none;border:none;font-family:var(--font-body);
+}
+.back-link:hover{color:var(--signal);}
 .step{display:none;} .step.active{display:block;}
+
+@media (max-width:860px){
+  .side{display:none;}
+  .right{padding:20px;}
+}
 </style>
 </head>
 <body>
-<div class="card">
-  <div class="logo">
-    <img src="/assets/logo-wordmark.png" alt="ProLabSupport" style="height:34px;width:auto;">
+
+<div class="side">
+  <div class="brand"><img src="/assets/logo-icon.png" alt=""><span class="brand-name"><b>ЦУП</b> · ProLabSupport</span></div>
+  <div class="side-mid">
+    <h1>Центр<br>управления<br><span>проектами</span></h1>
+    <p>Планировщик, сервисные заявки, карты оборудования и лицензий — все модули ProLabSupport под одним входом.</p>
+    <div class="telemetry-wrap">
+      <svg viewBox="0 0 800 64" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M0,32 L70,32 L84,32 L94,8 L104,56 L114,32 L130,32 L420,32 L434,32 L444,8 L454,56 L464,32 L480,32 L800,32
+                 L870,32 L884,32 L894,8 L904,56 L914,32 L930,32 L1220,32 L1234,32 L1244,8 L1254,56 L1264,32 L1280,32 L1600,32"
+          fill="none" stroke="#35d0c0" stroke-width="1.3" stroke-linejoin="round"/>
+      </svg>
+    </div>
   </div>
+  <div class="side-foot"><span><span class="dot"></span>Система в норме</span><span>Astana, KZ · UTC+5</span></div>
+</div>
 
-  <div class="err" id="err"></div>
+<div class="right">
+  <div class="card">
+    <div class="err" id="err"></div>
 
-  <!-- Step 1: Login -->
-  <div class="step active" id="step1">
-    <h2>Вход в систему</h2>
-    <p class="sub">Сервисный модуль - управление заявками</p>
-    <div class="field">
-      <label>Логин</label>
-      <input type="text" id="username" placeholder="username" autocomplete="username">
+    <div class="step active" id="step1">
+      <div class="card-head">
+        <div class="eyebrow">ДОСТУП</div>
+        <h2>Вход в систему</h2>
+        <p class="sub">Введите учётные данные, чтобы продолжить</p>
+      </div>
+      <div class="field">
+        <label>Логин</label>
+        <input type="text" id="username" placeholder="username" autocomplete="username">
+      </div>
+      <div class="field">
+        <label>Пароль</label>
+        <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button class="btn" id="btnLogin" onclick="doLogin()">Войти</button>
     </div>
-    <div class="field">
-      <label>Пароль</label>
-      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
-    </div>
-    <button class="btn" id="btnLogin" onclick="doLogin()">Войти</button>
-  </div>
 
-  <!-- Step 2: TOTP -->
-  <div class="step" id="step2">
-    <h2>Двухфакторная аутентификация</h2>
-    <p class="sub" id="totpSub">Введите 6-значный код из приложения</p>
-    <div class="field" style="margin-top:20px">
-      <label>Код подтверждения</label>
-      <input type="text" id="totpCode" placeholder="000 000" maxlength="7"
-        inputmode="numeric" autocomplete="one-time-code" style="font-size:24px;letter-spacing:4px;text-align:center">
+    <div class="step" id="step2">
+      <div class="card-head">
+        <div class="eyebrow">ПОДТВЕРЖДЕНИЕ</div>
+        <h2>Двухфакторная аутентификация</h2>
+        <p class="sub" id="totpSub">Введите 6-значный код из приложения</p>
+      </div>
+      <div class="field" style="margin-top:20px">
+        <label>Код подтверждения</label>
+        <input type="text" id="totpCode" placeholder="000 000" maxlength="7"
+          inputmode="numeric" autocomplete="one-time-code" style="font-family:var(--font-mono);font-size:22px;letter-spacing:4px;text-align:center">
+      </div>
+      <button class="btn" id="btnTotp" onclick="doTotp()">Подтвердить</button>
+      <button class="back-link" onclick="backToLogin()">← Назад</button>
     </div>
-    <button class="btn" id="btnTotp" onclick="doTotp()">Подтвердить</button>
-    <button class="back-link" onclick="backToLogin()">← Назад</button>
   </div>
 </div>
 
@@ -127,7 +225,6 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// Format TOTP code with space
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('totpCode').addEventListener('input', function() {
     let v = this.value.replace(/\D/g,'').slice(0,6);
