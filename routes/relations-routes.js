@@ -11,7 +11,7 @@ const { USERS } = require('../constants');
 const { b24 } = require('../bitrix');
 const { computeSyncHash } = require('./planner-routes');
 const {
-  SERVICE_TYPE_MAP, getPriborMap, getCompanyName, resolveCrmFieldLabel,
+  SERVICE_TYPE_MAP, AREA_MAP, getPriborMap, getCompanyName, resolveCrmFieldLabel,
   getContractFromChain, getRootDealManager, fmtDateOnly, fmtLocalNaive, wasRecentlyDeleted,
 } = require('../bitrix-lookups');
 
@@ -59,10 +59,12 @@ async function syncPlannerEvent(item, itemId, opts = {}) {
   }
   const clientName = await getCompanyName(companyId);
   const location = item.ufCrm8_1732855494458 || '';
+  const areaIds = Array.isArray(item.ufCrm8_1732855428) ? item.ufCrm8_1732855428 : (item.ufCrm8_1732855428 ? [item.ufCrm8_1732855428] : []);
+  const areaLabel = areaIds.length ? (AREA_MAP[areaIds[0]] || '') : '';
   let contractLabel = await getContractFromChain(1058, item);
   if (!contractLabel) contractLabel = await resolveCrmFieldLabel(item.ufCrm8_1732855521);
 
-  const fieldsObj = { df2: location, df3: svcLabel, df4: instrLabel };
+  const fieldsObj = { df1: areaLabel, df2: location, df3: svcLabel, df4: instrLabel };
   const clientsArr = clientName ? [{ name: clientName, type: '' }] : [];
   const startLocal = fmtLocalNaive(sDate), endLocal = fmtLocalNaive(eDate);
   const title = item.title || '';

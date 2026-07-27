@@ -132,7 +132,37 @@ function fmtLocalNaive(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
 
+// If someone deletes a Bitrix-linked event from the planner, Bitrix itself
+// is untouched — the item will be recreated the next time it's synced
+// (sweep or webhook), since the assignment is still valid there. That's
+// expected (the planner warns about it), but it shouldn't look like a brand
+// new assignment and re-notify everyone — mark it here for a grace window.
+const recentlyDeleted = new Map(); // bitrixItemId -> deletedAt
+const RECENTLY_DELETED_WINDOW_MS = 20 * 60 * 1000; // 20 minutes
+function markRecentlyDeleted(bitrixItemId) {
+  recentlyDeleted.set(bitrixItemId, Date.now());
+}
+function wasRecentlyDeleted(bitrixItemId) {
+  const at = recentlyDeleted.get(bitrixItemId);
+  if (at === undefined) return false;
+  if (Date.now() - at > RECENTLY_DELETED_WINDOW_MS) { recentlyDeleted.delete(bitrixItemId); return false; }
+  return true;
+}
+
+// "Город / Область / Страна (УС)" (ufCrm8_1732855428) — full id→label map,
+// hand-verified against the live field editor (iblock_element fields aren't
+// exposed via crm.item.fields the way real enumerations are).
+const AREA_MAP = {
+  47:'Абайская', 64:'Азербайджан', 48:'Акмолинская', 49:'Актюбинская', 50:'Алматинская',
+  44:'Алматы', 45:'Астана', 51:'Атырауская', 52:'ВКО', 654:'Другое', 53:'Жамбылская',
+  54:'Жетысуская', 55:'ЗКО', 56:'Карагандинская', 57:'Костанайская', 58:'Кызылординская',
+  65:'Кыргызстан', 59:'Мангистауская', 66:'Монголия', 60:'Павлодарская', 61:'СКО',
+  67:'Таджикистан', 62:'Туркестанская', 68:'Туркменистан', 69:'Узбекистан',
+  63:'Ультыауская', 46:'Шымкент',
+};
+
 module.exports = {
-  SERVICE_TYPE_MAP, getPriborMap, getCompanyName, resolveCrmFieldLabel,
+  SERVICE_TYPE_MAP, AREA_MAP, getPriborMap, getCompanyName, resolveCrmFieldLabel,
   getContractFromChain, getRootDealManager, fmtDateOnly, fmtLocalNaive,
+  markRecentlyDeleted, wasRecentlyDeleted,
 };
