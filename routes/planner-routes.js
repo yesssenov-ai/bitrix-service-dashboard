@@ -3,7 +3,7 @@ const router = express.Router();
 const { pool, requireAuth } = require('../auth');
 const { b24 } = require('../bitrix');
 const { getItem } = require('../relations');
-const { getRootDealManager, getContractFromChain, fmtDateOnly } = require('../bitrix-lookups');
+const { getRootDealManager, getContractFromChain, fmtDateOnly, markRecentlyDeleted } = require('../bitrix-lookups');
 const { notifyJobAssigned } = require('../manager-notifications');
 
 // All start/end values from the client are naive "YYYY-MM-DDTHH:mm" strings
@@ -274,7 +274,9 @@ router.put('/events/:id', requireAuth(), async (req, res) => {
 // ── DELETE /api/planner/events/:id — removes just this one instance ───────
 router.delete('/events/:id', requireAuth(), async (req, res) => {
   try {
+    const { rows } = await pool.query('SELECT bitrix_item_id FROM ticketsmodule_planner_events WHERE id=$1', [req.params.id]);
     await pool.query('DELETE FROM ticketsmodule_planner_events WHERE id=$1', [req.params.id]);
+    if (rows[0]?.bitrix_item_id) markRecentlyDeleted(rows[0].bitrix_item_id);
     res.json({ ok: true });
   } catch (e) {
     console.error('DELETE /api/planner/events/:id error:', e.message);
@@ -482,6 +484,23 @@ router.put('/my-prefs/:key', requireAuth(), async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     console.error('PUT /api/planner/my-prefs/:key error:', e.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/planner/notifications/:bitrixItemId — notification history for one Bitrix item, shown in the event's "Уведомления" tab
+router.get('/notifications/:bitrixItemId', requireAuth(), async (req, res) => {
+  try {
+    const itemId = parseInt(req.params.bitrixItemId, 10);
+    if (!itemId) return res.status(400).json({ error: 'Неверный ID' });
+    const { rows } = await pool.query(
+      `SELECT sent_at, reason, channel, recipient_label, success, error
+       FROM ticketsmodule_notification_log WHERE bitrix_item_id=$1 ORDER BY sent_at DESC`,
+      [itemId]
+    );
+    res.json({ logs: rows });
+  } catch (e) {
+    console.error('GET /api/planner/notifications/:bitrixItemId error:', e.message);
     res.status(500).json({ error: 'Server error' });
   }
 });

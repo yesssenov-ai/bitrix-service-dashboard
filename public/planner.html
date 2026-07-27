@@ -1522,6 +1522,7 @@ function renderForm(ev){
       <div class="tab on" onclick="stab('main',this)">Основное</div>
       <div class="tab" onclick="stab('clients',this)">Клиенты</div>
       <div class="tab" onclick="stab('extra',this)">Доп. поля</div>
+      <div class="tab" id="tabNotifBtn" onclick="stab('notif',this)" style="display:none">Уведомления</div>
     </div>
     <div id="tb-main">
       <div class="frow"><label class="flbl">Сотрудник</label><select class="fi" id="fRes" onchange="toggleSvcInstr()">${resOpts}</select></div>
@@ -1554,13 +1555,41 @@ function renderForm(ev){
     </div>
     <div id="tb-extra" style="display:none">
       ${extraHTML||'<p style="color:var(--text-3);font-size:12px;text-align:center;padding:20px 0">Добавьте поля через ⚙ Data Fields</p>'}
+    </div>
+    <div id="tb-notif" style="display:none">
+      <div id="notifEvTable"><p style="color:var(--text-3);font-size:12px;text-align:center;padding:20px 0">Загрузка…</p></div>
     </div>`;
   document.getElementById('pFoot').innerHTML=`<button class="pb pb-cancel" onclick="closePanel()">Отмена</button>`;
+  document.getElementById('tabNotifBtn').style.display = ev.bitrixItemId ? '' : 'none';
 }
 
+async function loadNotifForEvent(){
+  const ev = events.find(e=>e.id===editId);
+  const wrap = document.getElementById('notifEvTable');
+  if (!ev || !ev.bitrixItemId) { wrap.innerHTML = '<p style="color:var(--text-3);font-size:12px;text-align:center;padding:20px 0">Событие не синхронизировано с Bitrix</p>'; return; }
+  wrap.innerHTML = '<p style="color:var(--text-3);font-size:12px;text-align:center;padding:20px 0">Загрузка…</p>';
+  try{
+    const r = await fetch('/api/planner/notifications/'+ev.bitrixItemId);
+    const d = await r.json();
+    if (!d.logs || !d.logs.length) { wrap.innerHTML = '<p style="color:var(--text-3);font-size:12px;text-align:center;padding:20px 0">Уведомлений по этой заявке ещё не было</p>'; return; }
+    const CHANNEL_LABELS = { telegram:'✈️ Telegram', email:'📧 Email', skipped:'⏸ Пропущено (сверка)' };
+    wrap.innerHTML = d.logs.map(l=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #eee;font-size:12.5px">
+        <div>
+          <div style="font-weight:600">${esc(l.recipient_label||'—')}</div>
+          <div style="color:var(--text-3);font-size:11px">${esc(l.reason||'')} · ${CHANNEL_LABELS[l.channel]||l.channel}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:var(--text-3)">${new Date(l.sent_at).toLocaleString('ru',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>
+          <div style="font-weight:600;color:${l.success?'#15803d':'#dc2626'}">${l.success?'✅ Доставлено':'❌ Не доставлено'}</div>
+        </div>
+      </div>`).join('');
+  }catch(e){ wrap.innerHTML = '<p style="color:var(--text-3);font-size:12px;text-align:center;padding:20px 0">Ошибка загрузки</p>'; }
+}
 function stab(t,el){
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on')); el.classList.add('on');
-  ['main','clients','extra'].forEach(x=>{ document.getElementById('tb-'+x).style.display=x===t?'':'none'; });
+  ['main','clients','extra','notif'].forEach(x=>{ document.getElementById('tb-'+x).style.display=x===t?'':'none'; });
+  if (t==='notif') loadNotifForEvent();
 }
 function selType(t,el){
   curType=t;
