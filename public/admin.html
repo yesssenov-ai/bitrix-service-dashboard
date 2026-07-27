@@ -562,7 +562,7 @@ async function loadNotifLog() {
   const wrap = document.getElementById('notifLogTable');
   if (!d.logs.length) { wrap.innerHTML = '<div class="empty">Нет записей</div>'; document.getElementById('notifLogPager').style.display='none'; return; }
 
-  const CHANNEL_LABELS = { telegram: '✈️ Telegram', email: '📧 Email' };
+  const CHANNEL_LABELS = { telegram: '✈️ Telegram', email: '📧 Email', skipped: '⏸ Пропущено (сверка)' };
 
   wrap.innerHTML = `<table>
     <thead><tr><th>Время</th><th>Заявка</th><th>Причина</th><th>Канал</th><th>Получатель</th><th>Статус</th></tr></thead>

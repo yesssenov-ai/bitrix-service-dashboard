@@ -131,7 +131,20 @@ async function syncPlannerEvent(item, itemId, opts = {}) {
     client.release();
   }
 
-  if (notifyKind && !opts.silent) {
+  if (notifyKind) {
+    if (opts.silent) {
+      // Created/updated by the background reconciliation sweep, not the live
+      // webhook — we deliberately don't send a notification here (see the
+      // mass-notification incident), but log that fact so it's distinguishable
+      // from "we tried and it failed" or "nothing was ever attempted".
+      try {
+        const { logNotification } = require('../manager-notifications');
+        await logNotification({
+          itemId, reason: 'Пропущено (фоновая сверка, не живой вебхук)',
+          channel: 'skipped', recipientId: null, recipientLabel: null, success: false,
+        });
+      } catch (e) { /* logging is best-effort */ }
+    } else {
     try {
       const mgr = await getRootDealManager(1058, item);
       const managerId = mgr?.managerId;
@@ -158,6 +171,7 @@ async function syncPlannerEvent(item, itemId, opts = {}) {
     } catch (e) {
       console.error('notifyJobAssigned error:', e.message);
       try { await tgOps(`⚠️ Планировщик: заявка #${itemId} синхронизирована, но уведомление не отправлено\n${e.message}`); } catch(e2){}
+    }
     }
   }
   return { ok: true };
