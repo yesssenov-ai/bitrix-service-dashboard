@@ -1473,7 +1473,8 @@ function openEdit(id){
 function closePanel(){ document.getElementById('overlay').style.display='none'; editId=null; }
 
 function isTechnicalRes(name){
-  return ALL_RES.find(r=>r.name===name)?.dept === 'Технический';
+  const dept = ALL_RES.find(r=>r.name===name)?.dept || '';
+  return dept.toLowerCase().includes('техническ');
 }
 function toggleSvcInstr(){
   const name = document.getElementById('fRes')?.value;

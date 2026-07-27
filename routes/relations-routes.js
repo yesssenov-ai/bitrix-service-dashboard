@@ -12,7 +12,7 @@ const { b24 } = require('../bitrix');
 const { computeSyncHash } = require('./planner-routes');
 const {
   SERVICE_TYPE_MAP, getPriborMap, getCompanyName, resolveCrmFieldLabel,
-  getContractFromChain, getRootDealManager, fmtDateOnly, fmtLocalNaive,
+  getContractFromChain, getRootDealManager, fmtDateOnly, fmtLocalNaive, wasRecentlyDeleted,
 } = require('../bitrix-lookups');
 
 setMgrNotifyPool(pool);
@@ -62,7 +62,7 @@ async function syncPlannerEvent(item, itemId, opts = {}) {
   let contractLabel = await getContractFromChain(1058, item);
   if (!contractLabel) contractLabel = await resolveCrmFieldLabel(item.ufCrm8_1732855521);
 
-  const fieldsObj = { df3: svcLabel, df4: instrLabel };
+  const fieldsObj = { df2: location, df3: svcLabel, df4: instrLabel };
   const clientsArr = clientName ? [{ name: clientName, type: '' }] : [];
   const startLocal = fmtLocalNaive(sDate), endLocal = fmtLocalNaive(eDate);
   const title = item.title || '';
@@ -104,7 +104,7 @@ async function syncPlannerEvent(item, itemId, opts = {}) {
         [engineerName, title, startLocal, endLocal, JSON.stringify(fieldsObj), JSON.stringify(clientsArr), newHash, rows[0].id]
       );
     } else {
-      notifyKind = 'new';
+      notifyKind = wasRecentlyDeleted(itemId) ? null : 'new';
       const { rows: ins } = await client.query(
         `INSERT INTO ticketsmodule_planner_events
           (group_id, resource, title, type, start_at, end_at, all_day, confirmed, note, fields, clients, bitrix_item_id, source, bitrix_sync_hash)
