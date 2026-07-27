@@ -302,6 +302,7 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 
 <header class="hdr">
   <a href="/" class="logo" style="text-decoration:none;color:inherit;cursor:pointer" title="Вернуться в ЦУП"><img src="/assets/logo-icon.png" alt="" style="height:24px;width:auto;">ProLabSupport</a>
+  <a href="/" style="display:flex;align-items:center;gap:5px;font-size:12.5px;color:#8b93a3;text-decoration:none;border:1px solid #3d3a37;padding:6px 12px;border-radius:7px;margin-left:10px;white-space:nowrap" onmouseover="this.style.borderColor='#C53B2F';this.style.color='#C53B2F'" onmouseout="this.style.borderColor='#3d3a37';this.style.color='#8b93a3'">← Все модули</a>
   <div class="hdiv"></div>
   <nav style="display:flex;gap:2px;">
     <a href="/" class="hnav-link">← Дашборд</a>
@@ -1613,6 +1614,11 @@ async function saveEv(){
 }
 async function deleteEv(){
   if(!editId) return;
+  const ev = events.find(e=>e.id===editId);
+  if (ev?.bitrixItemId) {
+    const ok = confirm('Это событие связано с заявкой в Bitrix. Пока там стоит инженер и даты — оно появится здесь снова само (в течение 10 минут или раньше). Чтобы убрать насовсем, измените заявку в Bitrix. Всё равно удалить сейчас?');
+    if (!ok) return;
+  }
   try{ await apiDeleteEvent(editId); }
   catch(e){ alert('Не удалось удалить событие.'); return; }
   events=events.filter(e=>e.id!==editId);
