@@ -478,8 +478,8 @@ let events = [];
 const BUILTIN_DFS = [
   {id:'df1',name:'Область (Каз)/Страна',type:'select',options:AREAS,required:true},
   {id:'df2',name:'Локация/Город',type:'text',required:true},
-  {id:'df3',name:'Type of service',type:'select',options:SVC},
-  {id:'df4',name:'Instrument',type:'select',options:INSTRUMENTS},
+  {id:'df3',name:'Тип услуг',type:'select',options:SVC},
+  {id:'df4',name:'Название прибора',type:'text'},
 ];
 let dataFields = [...BUILTIN_DFS];
 let nextId=1, nextDfId=10;
@@ -1486,7 +1486,7 @@ function renderForm(ev){
   const resOpts=ALL_RES.map(r=>`<option value="${esc(r.name)}" ${ev.resource===r.name?'selected':''}>${esc(r.name)}</option>`).join('');
   const areaOpts=['<option value="">Выберите…</option>',...AREAS.map(a=>`<option ${f.df1===a?'selected':''}>${esc(a)}</option>`)].join('');
   const svcOpts=['<option value="">Выберите…</option>',...SVC.map(s=>`<option ${f.df3===s?'selected':''}>${esc(s)}</option>`)].join('');
-  const instrOpts=['<option value="">Выберите…</option>',...INSTRUMENTS.map(x=>`<option ${f.df4===x?'selected':''}>${esc(x)}</option>`)].join('');
+  const instrDatalist=INSTRUMENTS.map(x=>`<option value="${esc(x)}">`).join('');
   const chips=['trip','leave','train'].map(k=>{const v=ET[k];
     return `<button class="tc tc-${k}${curType===k?' on':''}" onclick="selType('${k}',this)">${v.icon} ${v.label}</button>`;
   }).join('');
@@ -1543,8 +1543,8 @@ function renderForm(ev){
       <div class="frow"><label class="flbl">Область (Каз)/Страна <span class="req">*</span></label><select class="fi" id="f_df1">${areaOpts}</select></div>
       <div class="frow"><label class="flbl">Локация/Город <span class="req">*</span></label><input class="fi" id="f_df2" value="${esc(f.df2||'')}" placeholder="Город…"></div>
       <div id="svcInstrBlock" style="display:${isTechnicalRes(ev.resource||ALL_RES[0]?.name)?'':'none'}">
-        <div class="frow"><label class="flbl">Type of service</label><select class="fi" id="f_df3">${svcOpts}</select></div>
-        <div class="frow"><label class="flbl">Instrument</label><select class="fi" id="f_df4">${instrOpts}</select></div>
+        <div class="frow"><label class="flbl">Тип услуг</label><select class="fi" id="f_df3">${svcOpts}</select></div>
+        <div class="frow"><label class="flbl">Название прибора</label><input class="fi" id="f_df4" list="instrList" value="${esc(f.df4||'')}" placeholder="Начните вводить или выберите категорию…"><datalist id="instrList">${instrDatalist}</datalist></div>
       </div>
       <div class="frow"><label class="flbl">Примечание</label><textarea class="fi" id="fNote" rows="2" style="resize:vertical">${esc(ev.note||'')}</textarea></div>
     </div>
