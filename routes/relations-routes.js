@@ -84,11 +84,12 @@ async function syncPlannerEvent(item, itemId, opts = {}) {
     if (rows.length && rows[0].bitrix_sync_hash === newHash) {
       // Bitrix's current engineer+dates match what we last recorded — this
       // is either an echo of our own outbound push, or an unrelated field
-      // changed on the request. Either way, don't touch resource/dates (a
-      // newer local planner edit may be mid-flight); just refresh the
-      // read-only fields.
+      // changed on the request. Either way, don't touch resource/dates/
+      // confirmed (a newer local planner edit may be mid-flight, and this
+      // was overwriting a manual "Подтверждено" uncheck on every sync pass);
+      // just refresh the read-only fields.
       await client.query(
-        `UPDATE ticketsmodule_planner_events SET title=$1, confirmed=true, fields=$2, clients=$3, updated_at=NOW() WHERE id=$4`,
+        `UPDATE ticketsmodule_planner_events SET title=$1, fields=$2, clients=$3, updated_at=NOW() WHERE id=$4`,
         [title, JSON.stringify(fieldsObj), JSON.stringify(clientsArr), rows[0].id]
       );
     } else if (rows.length) {
