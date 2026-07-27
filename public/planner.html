@@ -72,7 +72,21 @@ html,body{height:100%;font-family:var(--font);background:#e8e6e3;color:var(--tex
 /* ── MAIN SCROLL AREA ───────────────────────────────────────── */
 /* KEY FIX: sidebar and grid in ONE scrollable container */
 .main{flex:1;display:flex;overflow:hidden;background:#ffffff;}
-.right-col{display:flex;flex-direction:column;flex:1;overflow:hidden;}
+.right-col{display:flex;flex-direction:column;flex:1;overflow:hidden;position:relative;}
+.edge-nav{
+  position:absolute;top:78px;bottom:0;width:44px;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;z-index:50;opacity:0;transition:opacity .15s;background:linear-gradient(to var(--edge-dir,right),rgba(255,255,255,.9),rgba(255,255,255,0));
+  pointer-events:none;
+}
+.right-col:hover .edge-nav{opacity:1;pointer-events:auto;}
+.edge-nav.left{left:var(--sb-w);--edge-dir:right;}
+.edge-nav.right{right:0;--edge-dir:left;flex-direction:row-reverse;}
+.edge-nav .arrow-btn{
+  width:32px;height:32px;border-radius:50%;background:#fff;border:1px solid var(--stroke);
+  display:flex;align-items:center;justify-content:center;font-size:16px;color:#555;
+  box-shadow:0 2px 8px rgba(0,0,0,.12);transition:background .15s,transform .1s;
+}
+.edge-nav .arrow-btn:hover{background:#f0f2f7;transform:scale(1.08);}
 /* left-col removed - sidebar is sticky inside scroll-body */
 
 /* right-col defined above */
@@ -134,7 +148,7 @@ html,body{height:100%;font-family:var(--font);background:#e8e6e3;color:var(--tex
 .vline.d{border-left:1px solid #d0d5e0;z-index:4;}
 .vline.w{border-left:1px solid #dedad6;}
 .vline.h{border-left:1px dashed #eceae8;}
-.vline.now{border-left:2px solid rgba(59,125,216,.5);z-index:5;}
+.vline.now{border-left:2px solid #e53935;z-index:5;}
 .col-wknd-future{position:absolute;top:0;bottom:0;background:#f4f4f4;pointer-events:none;z-index:1;}
 .col-holiday{position:absolute;top:0;bottom:0;background:#fef0f0;pointer-events:none;z-index:1;}
 .col-holiday::after{content:'🎉';position:absolute;top:2px;left:50%;transform:translateX(-50%);font-size:8px;opacity:.5;}
@@ -377,6 +391,8 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
           <div class="grid" id="grid"></div>
         </div>
       </div>
+      <div class="edge-nav left" onclick="shiftView(-1)" title="Неделя назад"><div class="arrow-btn">‹</div></div>
+      <div class="edge-nav right" onclick="shiftView(1)" title="Неделя вперёд"><div class="arrow-btn">›</div></div>
     </div>
   </div>
 </div>
@@ -457,7 +473,7 @@ for (const [dept,names] of Object.entries(DEPTS)) {
 
 // ── State ──────────────────────────────────────────────────────
 let viewMode = '1m';
-let viewStart = (() => { const d=new Date(); d.setHours(0,0,0,0); return d; })();
+let viewStart = (() => { const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()-7); return d; })();
 let events = [];
 const BUILTIN_DFS = [
   {id:'df1',name:'Область (Каз)/Страна',type:'select',options:AREAS,required:true},
@@ -750,6 +766,21 @@ async function init() {
   sb.addEventListener('scroll', () => {
     thWrap.scrollLeft = sb.scrollLeft;
   }, {passive:true});
+
+  // Scrolling over the date header always pans left/right (it has no
+  // vertical content of its own). Shift+wheel anywhere in the grid does
+  // the same, leaving plain wheel free for normal vertical row scrolling.
+  thWrap.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    sb.scrollLeft += (e.deltaY !== 0 ? e.deltaY : e.deltaX);
+  }, {passive:false});
+  sb.addEventListener('wheel', (e) => {
+    if (e.shiftKey) {
+      e.preventDefault();
+      sb.scrollLeft += e.deltaY;
+    }
+  }, {passive:false});
+
   startSilentRefresh();
 }
 
@@ -1036,12 +1067,19 @@ function buildGrid() {
       grid.appendChild(nl);
     }
   } else {
+    const now=new Date();
     for (let i=0; i<=vp.cols; i++) {
       const dt=new Date(viewStart); dt.setDate(dt.getDate()+i);
       const isT=+dt===+today;
       const ln=document.createElement('div');
       ln.className='vline '+(isT?'now':'d');
-      ln.style.cssText=`left:${i*vp.colW}px;top:0;bottom:0;position:absolute;z-index:4;`;
+      let lineLeft = i*vp.colW;
+      if (isT) {
+        const h = now.getHours(), mn = now.getMinutes();
+        const frac = Math.max(0, Math.min(1, (h + mn/60 - 9) / 9)); // 09:00-18:00 window
+        lineLeft = i*vp.colW + frac*vp.colW;
+      }
+      ln.style.cssText=`left:${lineLeft}px;top:0;bottom:0;position:absolute;z-index:4;`;
       grid.appendChild(ln);
     }
   }
@@ -1341,10 +1379,14 @@ function shift(d){
   }
   render();
 }
+function shiftView(weeks){
+  viewStart.setDate(viewStart.getDate() + weeks*7);
+  render();
+}
 function goToday(){
   const t=new Date(); t.setHours(0,0,0,0);
   viewStart=new Date(t);
-  if (viewMode==='1m') { viewStart=new Date(t); viewStart.setDate(1); }
+  if (viewMode==='1m') { viewStart=new Date(t); viewStart.setDate(viewStart.getDate()-7); }
   if (viewMode==='week') {
     const day=t.getDay(); viewStart.setDate(t.getDate()-(day===0?6:day-1));
   }
