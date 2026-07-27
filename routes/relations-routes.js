@@ -61,6 +61,8 @@ async function syncPlannerEvent(item, itemId, opts = {}) {
   const location = item.ufCrm8_1732855494458 || '';
   const areaIds = Array.isArray(item.ufCrm8_1732855428) ? item.ufCrm8_1732855428 : (item.ufCrm8_1732855428 ? [item.ufCrm8_1732855428] : []);
   const areaLabel = areaIds.length ? (AREA_MAP[areaIds[0]] || '') : '';
+  const datesConfirmedRaw = item.ufCrm8_1785151880;
+  const datesConfirmed = datesConfirmedRaw === 'Y' || datesConfirmedRaw === '1' || datesConfirmedRaw === 1 || datesConfirmedRaw === true;
   let contractLabel = await getContractFromChain(1058, item);
   if (!contractLabel) contractLabel = await resolveCrmFieldLabel(item.ufCrm8_1732855521);
 
@@ -102,9 +104,9 @@ async function syncPlannerEvent(item, itemId, opts = {}) {
          SET resource=$1, title=$2, type='trip',
              start_at=$3::timestamp AT TIME ZONE '${PLANNER_TZ}',
              end_at=$4::timestamp AT TIME ZONE '${PLANNER_TZ}',
-             confirmed=true, fields=$5, clients=$6, bitrix_sync_hash=$7, updated_at=NOW()
-         WHERE id=$8`,
-        [engineerName, title, startLocal, endLocal, JSON.stringify(fieldsObj), JSON.stringify(clientsArr), newHash, rows[0].id]
+             confirmed=$5, fields=$6, clients=$7, bitrix_sync_hash=$8, updated_at=NOW()
+         WHERE id=$9`,
+        [engineerName, title, startLocal, endLocal, datesConfirmed, JSON.stringify(fieldsObj), JSON.stringify(clientsArr), newHash, rows[0].id]
       );
     } else {
       notifyKind = wasRecentlyDeleted(itemId) ? null : 'new';
@@ -113,9 +115,9 @@ async function syncPlannerEvent(item, itemId, opts = {}) {
           (group_id, resource, title, type, start_at, end_at, all_day, confirmed, note, fields, clients, bitrix_item_id, source, bitrix_sync_hash)
          VALUES (0,$1,$2,'trip',
              $3::timestamp AT TIME ZONE '${PLANNER_TZ}', $4::timestamp AT TIME ZONE '${PLANNER_TZ}',
-             false, true, '', $5,$6,$7,'bitrix',$8)
+             false, $5, '', $6,$7,$8,'bitrix',$9)
          RETURNING id`,
-        [engineerName, title, startLocal, endLocal, JSON.stringify(fieldsObj), JSON.stringify(clientsArr), itemId, newHash]
+        [engineerName, title, startLocal, endLocal, datesConfirmed, JSON.stringify(fieldsObj), JSON.stringify(clientsArr), itemId, newHash]
       );
       await client.query('UPDATE ticketsmodule_planner_events SET group_id=$1 WHERE id=$1', [ins[0].id]);
     }
