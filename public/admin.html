@@ -137,6 +137,7 @@ tr:hover td{background:#fafbfd;}
     <button class="tab" onclick="showTab('logs',this)">📋 Журнал действий</button>
     <button class="tab" onclick="showTab('totp',this)">🔐 Настройка 2FA</button>
     <button class="tab" onclick="showTab('tglinks',this)">🔔 Telegram-уведомления</button>
+    <button class="tab" onclick="showTab('notiflog',this)">📨 Лог уведомлений</button>
   </div>
 
   <!-- USERS TAB -->
@@ -207,6 +208,34 @@ tr:hover td{background:#fafbfd;}
         </p>
       </div>
       <div id="tgLinksTable"><div class="empty">Загрузка…</div></div>
+    </div>
+  </div>
+
+  <!-- NOTIFICATION LOG TAB -->
+  <div id="tabNotiflog" style="display:none">
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Лог уведомлений по заявкам</span>
+        <div style="display:flex;gap:8px">
+          <input class="form-input" style="width:140px;padding:6px 10px" type="text" id="notifItemId" placeholder="№ заявки" oninput="debNotifLog()">
+          <select class="form-select" style="width:150px;padding:6px 10px" id="notifChannel" onchange="loadNotifLog()">
+            <option value="">Все каналы</option>
+            <option value="telegram">Telegram</option>
+            <option value="email">Email</option>
+          </select>
+          <select class="form-select" style="width:150px;padding:6px 10px" id="notifSuccess" onchange="loadNotifLog()">
+            <option value="">Любой статус</option>
+            <option value="true">Доставлено</option>
+            <option value="false">Не доставлено</option>
+          </select>
+        </div>
+      </div>
+      <div id="notifLogTable"><div class="empty">Загрузка…</div></div>
+      <div class="pager" id="notifLogPager" style="display:none">
+        <span class="pager-info" id="notifLogInfo"></span>
+        <button class="btn btn-sm" id="btnNotifPrev" onclick="changeNotifPage(-1)">← Назад</button>
+        <button class="btn btn-sm" id="btnNotifNext" onclick="changeNotifPage(1)">Вперёд →</button>
+      </div>
     </div>
   </div>
 </div>
@@ -290,6 +319,10 @@ let curTab = 'users';
 let logsPage = 0;
 let logsTotal = 0;
 const LOGS_LIMIT = 50;
+let notifLogPage = 0;
+let notifLogTotal = 0;
+const NOTIF_LOG_LIMIT = 50;
+let debNotifT = null;
 let debT = null;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -319,8 +352,10 @@ function showTab(tab, el) {
   document.getElementById('tabLogs').style.display = tab === 'logs' ? '' : 'none';
   document.getElementById('tabTotp').style.display = tab === 'totp' ? '' : 'none';
   document.getElementById('tabTglinks').style.display = tab === 'tglinks' ? '' : 'none';
+  document.getElementById('tabNotiflog').style.display = tab === 'notiflog' ? '' : 'none';
   if (tab === 'logs') loadLogs();
   if (tab === 'tglinks') loadTgLinks();
+  if (tab === 'notiflog') loadNotifLog();
 }
 
 async function loadTgLinks() {
@@ -506,6 +541,49 @@ function formatDetails(d) {
 }
 
 function changePage(dir) { logsPage = Math.max(0, logsPage + dir); loadLogs(); }
+
+// ── Notification log ────────────────────────────────────────────────────────
+function debNotifLog() { clearTimeout(debNotifT); debNotifT = setTimeout(loadNotifLog, 400); }
+
+async function loadNotifLog() {
+  const itemId = document.getElementById('notifItemId').value.trim();
+  const channel = document.getElementById('notifChannel').value;
+  const success = document.getElementById('notifSuccess').value;
+  const params = new URLSearchParams({ limit: NOTIF_LOG_LIMIT, offset: notifLogPage * NOTIF_LOG_LIMIT });
+  if (itemId) params.set('itemId', itemId);
+  if (channel) params.set('channel', channel);
+  if (success) params.set('success', success);
+
+  const r = await fetch('/admin/notification-log?' + params);
+  const d = await r.json();
+  if (!d.ok) return;
+  notifLogTotal = d.total;
+
+  const wrap = document.getElementById('notifLogTable');
+  if (!d.logs.length) { wrap.innerHTML = '<div class="empty">Нет записей</div>'; document.getElementById('notifLogPager').style.display='none'; return; }
+
+  const CHANNEL_LABELS = { telegram: '✈️ Telegram', email: '📧 Email' };
+
+  wrap.innerHTML = `<table>
+    <thead><tr><th>Время</th><th>Заявка</th><th>Причина</th><th>Канал</th><th>Получатель</th><th>Статус</th></tr></thead>
+    <tbody>${d.logs.map(l => `<tr>
+      <td class="log-time">${new Date(l.sent_at).toLocaleString('ru',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})}</td>
+      <td>${l.bitrix_item_id ? `#${l.bitrix_item_id}` : '—'}</td>
+      <td class="log-details">${esc(l.reason||'—')}</td>
+      <td>${CHANNEL_LABELS[l.channel]||l.channel}</td>
+      <td><strong>${esc(l.recipient_label||'—')}</strong></td>
+      <td>${l.success ? '<span style="color:#15803d">✅ Доставлено</span>' : `<span style="color:#dc2626" title="${esc(l.error||'')}">❌ Не доставлено</span>`}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+
+  const pager = document.getElementById('notifLogPager');
+  pager.style.display = notifLogTotal > NOTIF_LOG_LIMIT ? '' : 'none';
+  document.getElementById('notifLogInfo').textContent = `Показано ${notifLogPage*NOTIF_LOG_LIMIT+1}–${Math.min((notifLogPage+1)*NOTIF_LOG_LIMIT,notifLogTotal)} из ${notifLogTotal}`;
+  document.getElementById('btnNotifPrev').disabled = notifLogPage === 0;
+  document.getElementById('btnNotifNext').disabled = (notifLogPage+1)*NOTIF_LOG_LIMIT >= notifLogTotal;
+}
+
+function changeNotifPage(dir) { notifLogPage = Math.max(0, notifLogPage + dir); loadNotifLog(); }
 
 // ── TOTP Setup ────────────────────────────────────────────────────────────────
 function loadTotpStatus(user) {

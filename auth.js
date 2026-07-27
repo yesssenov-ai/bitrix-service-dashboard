@@ -142,6 +142,20 @@ async function initDB() {
       PRIMARY KEY (user_id, key)
     );
 
+    CREATE TABLE IF NOT EXISTS ticketsmodule_notification_log (
+      id SERIAL PRIMARY KEY,
+      sent_at TIMESTAMPTZ DEFAULT NOW(),
+      bitrix_item_id INTEGER,
+      reason VARCHAR(100),
+      channel VARCHAR(20) NOT NULL,
+      recipient_bitrix_id INTEGER,
+      recipient_label VARCHAR(300),
+      success BOOLEAN NOT NULL,
+      error TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_notiflog_sent ON ticketsmodule_notification_log(sent_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_tm_notiflog_item ON ticketsmodule_notification_log(bitrix_item_id);
+
     CREATE TABLE IF NOT EXISTS ticketsmodule_mail_emails (
       id TEXT PRIMARY KEY,
       message_id TEXT UNIQUE,

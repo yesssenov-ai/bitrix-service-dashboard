@@ -201,9 +201,30 @@ async function notifyJobAssigned({ engineerId, managerId, itemId, title, reason,
     </div>`;
 
   const recipients = [...new Set([engineerId, managerId].filter(Boolean))];
+  const nameByUid = {};
+  if (engineerId) nameByUid[engineerId] = engineerName;
+  if (managerId) nameByUid[managerId] = managerName;
+
   for (const uid of recipients) {
-    await sendPersonalTg(uid, tgText);
-    await sendPersonalEmail(uid, `🔧 ${headerText}: заявка #${itemId}`, html);
+    const tgOk = await sendPersonalTg(uid, tgText);
+    await logNotification({ itemId, reason: headerText, channel: 'telegram', recipientId: uid, recipientLabel: nameByUid[uid] || `#${uid}`, success: tgOk });
+
+    const emailAddr = USER_EMAILS[uid] || null;
+    const emailOk = await sendPersonalEmail(uid, `🔧 ${headerText}: заявка #${itemId}`, html);
+    await logNotification({ itemId, reason: headerText, channel: 'email', recipientId: uid, recipientLabel: emailAddr || nameByUid[uid] || `#${uid}`, success: emailOk });
+  }
+}
+
+async function logNotification({ itemId, reason, channel, recipientId, recipientLabel, success, error }) {
+  if (!pool) return;
+  try {
+    await pool.query(
+      `INSERT INTO ticketsmodule_notification_log (bitrix_item_id, reason, channel, recipient_bitrix_id, recipient_label, success, error)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [itemId || null, reason || null, channel, recipientId || null, recipientLabel || null, success, error || null]
+    );
+  } catch (e) {
+    console.error('logNotification error:', e.message);
   }
 }
 
@@ -211,5 +232,5 @@ function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'
 
 module.exports = {
   setPool, getManagerTelegramChatId, sendPersonalTg, sendPersonalEmail,
-  notifyProcessCompleted, notifyEngineerAssigned, notifyJobAssigned,
+  notifyProcessCompleted, notifyEngineerAssigned, notifyJobAssigned, logNotification,
 };

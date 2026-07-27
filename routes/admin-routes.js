@@ -155,6 +155,33 @@ router.get('/logs', requireAuth(['admin']), async (req, res) => {
   } catch(e) { sanitizeError(e, res); }
 });
 
+// GET /admin/notification-log — who was notified about which planner event, when, and whether it actually went through
+router.get('/notification-log', requireAuth(['admin']), async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const offset = Math.max(parseInt(req.query.offset) || 0, 0);
+    const { itemId, channel, success } = req.query;
+
+    const conditions = [];
+    const params = [];
+    if (itemId && /^\d+$/.test(itemId)) { params.push(parseInt(itemId)); conditions.push(`bitrix_item_id=$${params.length}`); }
+    if (channel && ['telegram','email'].includes(channel)) { params.push(channel); conditions.push(`channel=$${params.length}`); }
+    if (success === 'true' || success === 'false') { params.push(success === 'true'); conditions.push(`success=$${params.length}`); }
+
+    const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+    params.push(limit, offset);
+
+    const r = await pool.query(
+      `SELECT id, sent_at, bitrix_item_id, reason, channel, recipient_bitrix_id, recipient_label, success, error
+       FROM ticketsmodule_notification_log
+       ${where} ORDER BY sent_at DESC LIMIT $${params.length-1} OFFSET $${params.length}`,
+      params
+    );
+    const cnt = await pool.query(`SELECT COUNT(*) FROM ticketsmodule_notification_log ${where}`, params.slice(0, -2));
+    res.json({ ok: true, logs: r.rows, total: parseInt(cnt.rows[0].count) });
+  } catch(e) { sanitizeError(e, res); }
+});
+
 // ── ЦУП module access (which portal modules each Bitrix employee can see) ──
 // Keep this list in sync with MODULES in public/portal.html and cup-admin.html.
 const MODULE_CODES = ['PLN', 'SVC', 'EQP', 'LIC', 'REL', 'MAIL', 'ADM'];
