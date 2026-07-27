@@ -330,3 +330,4 @@ async function getDealsByManager(assignedById) {
 
 module.exports.SALES_CATEGORIES = SALES_CATEGORIES;
 module.exports.getDealsByManager = getDealsByManager;
+module.exports.resolveStageName = resolveStageName;
