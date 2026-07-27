@@ -40,7 +40,7 @@ router.get('/tg-links', requireAuth(['admin']), async (req, res) => {
 router.get('/users', requireAuth(['admin']), async (req, res) => {
   try {
     const r = await pool.query(
-      'SELECT id,username,display_name,role,totp_enabled,active,engineer_name,created_at FROM ticketsmodule_users ORDER BY created_at DESC'
+      'SELECT id,username,display_name,role,totp_enabled,active,engineer_name,mail_mailbox,created_at FROM ticketsmodule_users ORDER BY created_at DESC'
     );
     res.json({ ok: true, users: r.rows });
   } catch(e) { sanitizeError(e, res); }
@@ -49,7 +49,7 @@ router.get('/users', requireAuth(['admin']), async (req, res) => {
 // POST /admin/users
 router.post('/users', requireAuth(['admin']), async (req, res) => {
   try {
-    const { username, displayName, password, role, engineerName } = req.body;
+    const { username, displayName, password, role, engineerName, mailMailbox } = req.body;
 
     if (!username || !password || !role) {
       return res.status(400).json({ ok: false, error: 'Заполните все обязательные поля' });
@@ -66,9 +66,9 @@ router.post('/users', requireAuth(['admin']), async (req, res) => {
 
     const hash = await bcrypt.hash(password, 12);
     const r = await pool.query(
-      `INSERT INTO ticketsmodule_users (username, display_name, password_hash, role, engineer_name)
-       VALUES ($1,$2,$3,$4,$5) RETURNING id`,
-      [username.trim().toLowerCase(), (displayName || username).trim(), hash, role, engineerName || null]
+      `INSERT INTO ticketsmodule_users (username, display_name, password_hash, role, engineer_name, mail_mailbox)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+      [username.trim().toLowerCase(), (displayName || username).trim(), hash, role, engineerName || null, mailMailbox || null]
     );
     await auditLog(req.user.id, req.user.username, 'USER_CREATED', null,
       { newUser: username, role }, req.ip, req.headers['user-agent']);
@@ -82,7 +82,7 @@ router.post('/users', requireAuth(['admin']), async (req, res) => {
 // PUT /admin/users/:id
 router.put('/users/:id', requireAuth(['admin']), async (req, res) => {
   try {
-    const { displayName, role, active, engineerName, password } = req.body;
+    const { displayName, role, active, engineerName, mailMailbox, password } = req.body;
     const id = parseInt(req.params.id);
     if (!id) return res.status(400).json({ ok: false, error: 'Неверный ID' });
 
@@ -106,8 +106,8 @@ router.put('/users/:id', requireAuth(['admin']), async (req, res) => {
       await pool.query('UPDATE ticketsmodule_users SET password_hash=$1, updated_at=NOW() WHERE id=$2', [hash, id]);
     }
     await pool.query(
-      `UPDATE ticketsmodule_users SET display_name=$1, role=$2, active=$3, engineer_name=$4, updated_at=NOW() WHERE id=$5`,
-      [(displayName||'').trim(), role, Boolean(active), engineerName||null, id]
+      `UPDATE ticketsmodule_users SET display_name=$1, role=$2, active=$3, engineer_name=$4, mail_mailbox=$5, updated_at=NOW() WHERE id=$6`,
+      [(displayName||'').trim(), role, Boolean(active), engineerName||null, mailMailbox||null, id]
     );
     await auditLog(req.user.id, req.user.username, 'USER_UPDATED', null,
       { targetId: id, role, active }, req.ip, req.headers['user-agent']);
@@ -157,7 +157,7 @@ router.get('/logs', requireAuth(['admin']), async (req, res) => {
 
 // ── ЦУП module access (which portal modules each Bitrix employee can see) ──
 // Keep this list in sync with MODULES in public/portal.html and cup-admin.html.
-const MODULE_CODES = ['PLN', 'SVC', 'EQP', 'LIC', 'REL', 'ADM'];
+const MODULE_CODES = ['PLN', 'SVC', 'EQP', 'LIC', 'REL', 'MAIL', 'ADM'];
 
 // GET /admin/bitrix-employees — every active Bitrix employee + their current module access
 router.get('/bitrix-employees', requireAuth(['admin']), async (req, res) => {

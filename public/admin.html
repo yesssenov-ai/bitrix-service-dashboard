@@ -256,6 +256,17 @@ tr:hover td{background:#fafbfd;}
         </select>
         <div class="form-hint">Нужно для фильтрации "своих" заявок</div>
       </div>
+      <div class="form-group" id="mailboxField">
+        <label class="form-label">Почтовый ящик (модуль "Почта")</label>
+        <select class="form-select" id="fMailMailbox">
+          <option value="">— не назначен —</option>
+          <option value="service">service@ (Сервис)</option>
+          <option value="sales">sales@ (Продажи)</option>
+          <option value="orders">orders@ (Заказы)</option>
+          <option value="training">training@ (Обучение)</option>
+        </select>
+        <div class="form-hint">Админы видят все ящики независимо от этого поля</div>
+      </div>
       <div class="form-group" id="activeField" style="display:none">
         <label class="form-label">Статус</label>
         <select class="form-select" id="fActive">
@@ -344,13 +355,14 @@ async function loadUsers() {
   const wrap = document.getElementById('usersTable');
   if (!d.users.length) { wrap.innerHTML = '<div class="empty">Нет пользователей</div>'; return; }
   wrap.innerHTML = `<table>
-    <thead><tr><th>Пользователь</th><th>Логин</th><th>Роль</th><th>2FA</th><th>Инженер в Б24</th><th>Статус</th><th>Создан</th><th></th></tr></thead>
+    <thead><tr><th>Пользователь</th><th>Логин</th><th>Роль</th><th>2FA</th><th>Инженер в Б24</th><th>Почта</th><th>Статус</th><th>Создан</th><th></th></tr></thead>
     <tbody>${d.users.map(u => `<tr>
       <td><strong>${esc(u.display_name)}</strong></td>
       <td style="color:var(--text-3);font-family:monospace">${esc(u.username)}</td>
       <td><span class="role-badge role-${u.role}">${u.role}</span></td>
       <td>${u.totp_enabled ? '<span class="status-on"><span class="dot"></span>Включён</span>' : '<span class="status-off"><span class="dot"></span>Выкл</span>'}</td>
       <td style="color:var(--text-3)">${u.engineer_name ? esc(u.engineer_name) : '—'}</td>
+      <td style="color:var(--text-3)">${u.mail_mailbox ? esc(u.mail_mailbox) : '—'}</td>
       <td>${u.active ? '<span class="status-on"><span class="dot"></span>Активен</span>' : '<span class="status-off"><span class="dot"></span>Деактивирован</span>'}</td>
       <td class="log-time">${new Date(u.created_at).toLocaleDateString('ru')}</td>
       <td><div style="display:flex;gap:6px">
@@ -369,6 +381,7 @@ function openCreate() {
   document.getElementById('fPassword').value = '';
   document.getElementById('fRole').value = 'viewer';
   document.getElementById('fEngineerName').value = '';
+  document.getElementById('fMailMailbox').value = '';
   document.getElementById('fActive').value = 'true';
   document.getElementById('passHint').style.display = 'none';
   document.getElementById('activeField').style.display = 'none';
@@ -386,6 +399,7 @@ function openEdit(u) {
   document.getElementById('fPassword').value = '';
   document.getElementById('fRole').value = u.role;
   document.getElementById('fEngineerName').value = u.engineer_name || '';
+  document.getElementById('fMailMailbox').value = u.mail_mailbox || '';
   document.getElementById('fActive').value = String(u.active);
   document.getElementById('passHint').style.display = '';
   document.getElementById('activeField').style.display = '';
@@ -408,6 +422,7 @@ async function saveUser() {
     password: document.getElementById('fPassword').value,
     role: document.getElementById('fRole').value,
     engineerName: document.getElementById('fEngineerName').value || null,
+    mailMailbox: document.getElementById('fMailMailbox').value || null,
     active: document.getElementById('fActive').value === 'true',
   };
   if (!id && !body.password) return toast('Введите пароль', 'error');

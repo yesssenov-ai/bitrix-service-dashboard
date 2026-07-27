@@ -142,6 +142,53 @@ async function initDB() {
       PRIMARY KEY (user_id, key)
     );
 
+    CREATE TABLE IF NOT EXISTS ticketsmodule_mail_emails (
+      id TEXT PRIMARY KEY,
+      message_id TEXT UNIQUE,
+      in_reply_to TEXT,
+      from_addr TEXT NOT NULL,
+      from_name TEXT,
+      subject TEXT,
+      received_at TIMESTAMPTZ NOT NULL,
+      category TEXT DEFAULT 'uncategorized',
+      category_source TEXT DEFAULT 'manual',
+      answered INTEGER DEFAULT 0,
+      answered_at TIMESTAMPTZ,
+      answered_by TEXT,
+      answer_body TEXT,
+      answer_subject TEXT,
+      notified INTEGER DEFAULT 0,
+      body_preview TEXT,
+      mailbox TEXT DEFAULT 'service'
+    );
+
+    CREATE TABLE IF NOT EXISTS ticketsmodule_mail_rules (
+      id SERIAL PRIMARY KEY,
+      field TEXT NOT NULL,
+      pattern TEXT NOT NULL,
+      category TEXT NOT NULL,
+      hit_count INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS ticketsmodule_mail_learned_patterns (
+      id SERIAL PRIMARY KEY,
+      pattern TEXT NOT NULL,
+      field TEXT NOT NULL,
+      category TEXT NOT NULL,
+      confidence INTEGER DEFAULT 1,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(pattern, field)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_tm_mail_received ON ticketsmodule_mail_emails(received_at);
+    CREATE INDEX IF NOT EXISTS idx_tm_mail_answered ON ticketsmodule_mail_emails(answered);
+    CREATE INDEX IF NOT EXISTS idx_tm_mail_category ON ticketsmodule_mail_emails(category);
+    CREATE INDEX IF NOT EXISTS idx_tm_mail_msgid ON ticketsmodule_mail_emails(message_id);
+    CREATE INDEX IF NOT EXISTS idx_tm_mail_mailbox ON ticketsmodule_mail_emails(mailbox);
+
+    ALTER TABLE ticketsmodule_users ADD COLUMN IF NOT EXISTS mail_mailbox VARCHAR(20);
+
     CREATE INDEX IF NOT EXISTS idx_tm_audit_created ON ticketsmodule_audit_logs(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_tm_audit_user ON ticketsmodule_audit_logs(user_id);
     CREATE INDEX IF NOT EXISTS idx_tm_audit_ticket ON ticketsmodule_audit_logs(ticket_id);
@@ -158,6 +205,27 @@ async function initDB() {
     );
     console.log('✅ Default admin created');
   }
+
+  // Seed default mail classification rules if none exist yet
+  const ruleCount = await pool.query('SELECT COUNT(*) FROM ticketsmodule_mail_rules');
+  if (parseInt(ruleCount.rows[0].count) === 0) {
+    const defaultRules = [
+      ['subject', 'тендер', 'tender'], ['subject', 'закупк', 'tender'], ['subject', 'конкурс', 'tender'],
+      ['from', 'zakupki.gov', 'tender'], ['from', 'samruk', 'tender'],
+      ['subject', 'предложение о сотрудничестве', 'adv'], ['subject', 'реклам', 'adv'],
+      ['subject', 'прайс-лист', 'adv'], ['subject', 'акция', 'adv'], ['subject', 'скидк', 'adv'],
+      ['from', 'noreply', 'spam'], ['from', 'no-reply', 'spam'], ['from', 'newsletter', 'spam'],
+      ['subject', '[spam]', 'spam'], ['from', 'e-tender', 'tender'], ['from', 'tender', 'tender'],
+    ];
+    for (const [field, pattern, category] of defaultRules) {
+      await pool.query(
+        'INSERT INTO ticketsmodule_mail_rules (field, pattern, category) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
+        [field, pattern, category]
+      );
+    }
+    console.log('✅ Default mail classification rules created');
+  }
+
   console.log('✅ ticketsmodule DB ready');
 }
 

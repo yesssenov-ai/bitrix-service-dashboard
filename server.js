@@ -61,6 +61,7 @@ app.get('/equipment-map.html', requirePageAuth(), (_, res) => res.sendFile(path.
 app.get('/licenses-map.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'licenses-map.html')));
 app.get('/relations.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'relations.html')));
 app.get('/admin.html', requirePageAuth(['admin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/mail.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'mail.html')));
 app.get('/cup-admin.html', requirePageAuth(['admin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'cup-admin.html')));
 
 // `index:false` — without this, static would auto-serve public/index.html
@@ -74,6 +75,7 @@ equipmentRoutes.setB24(b24);
 app.use('/equipment', equipmentRoutes.router);
 app.use('/licenses', require('./routes/licenses-routes'));
 app.use('/api/planner', require('./routes/planner-routes').router);
+app.use('/api/mail', require('./routes/mail-routes').router);
 const { router: relationsRouter, handleBitrixWebhook } = require('./routes/relations-routes');
 app.use('/relations', relationsRouter);
 app.post('/webhook/bitrix-update', express.urlencoded({ extended: true }), handleBitrixWebhook);
@@ -444,6 +446,52 @@ initDB().then(() => {
     telegramLinkBot.setPool(pool);
     telegramLinkBot.startPolling(15000);
     console.log('✅ Telegram link bot started');
+
+    // Mail tracker: poll inbox, alert on unanswered client emails, daily digest/report
+    const { pollInbox } = require('./mail-poller');
+    const mailLib = require('./mail-lib');
+    const { notifyPendingEmails, sendDailyDigest } = require('./mail-telegram');
+    const { sendEmailReport } = require('./mail-mailer');
+    const MAIL_ALERT_AFTER = parseInt(process.env.MAIL_ALERT_AFTER_MINUTES || '60');
+    const MAIL_POLL_INTERVAL = parseInt(process.env.MAIL_POLL_INTERVAL_MINUTES || '3');
+
+    pollInbox().catch(e => console.error('mail pollInbox error:', e.message));
+    setInterval(() => pollInbox().catch(e => console.error('mail pollInbox error:', e.message)), MAIL_POLL_INTERVAL * 60 * 1000);
+
+    setInterval(async () => {
+      try {
+        const pending = await mailLib.getUnnotified(MAIL_ALERT_AFTER);
+        if (pending.length > 0) {
+          await notifyPendingEmails(pending);
+          for (const e of pending) await mailLib.markNotified(e.id);
+        }
+      } catch (e) { console.error('mail unanswered-check error:', e.message); }
+    }, 15 * 60 * 1000);
+
+    // Daily digest at 04:00 and 13:00 UTC (~09:00 and 18:00 Almaty)
+    let lastDigestHour = null;
+    setInterval(async () => {
+      const h = new Date().getUTCHours();
+      if ((h === 4 || h === 13) && lastDigestHour !== h) {
+        lastDigestHour = h;
+        try { await sendDailyDigest(await mailLib.getStats()); } catch (e) { console.error('mail daily digest error:', e.message); }
+      }
+    }, 5 * 60 * 1000);
+
+    // Daily email report at 13:00 UTC (18:00 Almaty)
+    let lastReportDate = null;
+    setInterval(async () => {
+      const now = new Date();
+      const dateKey = now.toISOString().slice(0, 10);
+      if (now.getUTCHours() === 13 && lastReportDate !== dateKey) {
+        lastReportDate = dateKey;
+        try {
+          const stats = await mailLib.getStats();
+          const pending = await mailLib.getPendingEmails();
+          await sendEmailReport(stats, pending);
+        } catch (e) { console.error('mail daily report error:', e.message); }
+      }
+    }, 5 * 60 * 1000);
   });
 }).catch(err => {
   console.error('DB init failed:', err);

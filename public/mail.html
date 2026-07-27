@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProLabSupport Mail Tracker</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#F5F6FA;
+  --bg2:#FFFFFF;
+  --bg3:#F0F1F6;
+  --surface:#FFFFFF;
+  --surface2:#F5F6FA;
+  --border:#E4E6EF;
+  --border2:#D0D3E2;
+  --text:#111827;
+  --text2:#374151;
+  --text3:#9CA3AF;
+  --terra:#C53B2F;
+  --terra2:#A32920;
+  --terra-light:#FEF2F1;
+  --terra-border:#FECACA;
+  --green:#059669;
+  --green-bg:#ECFDF5;
+  --red:#DC2626;
+  --red-bg:#FEF2F2;
+  --yellow:#D97706;
+  --yellow-bg:#FFFBEB;
+  --purple:#7C3AED;
+  --purple-bg:#F5F3FF;
+  --cyan:#0891B2;
+  --cyan-bg:#ECFEFF;
+  --shadow:0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md:0 4px 16px rgba(0,0,0,0.08);
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+/* Header */
+.header{
+  background:#fff;border-bottom:1px solid var(--border);
+  padding:0 28px;height:58px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:100;
+  box-shadow:var(--shadow);
+}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{
+  width:34px;height:34px;background:var(--terra);border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:700;color:#fff;letter-spacing:-0.3px;
+}
+.logo-text{font-size:15px;font-weight:600;color:var(--text)}
+.logo-text b{color:var(--terra)}
+.logo-sub{font-size:11px;color:var(--text3);margin-left:2px}
+.header-right{display:flex;align-items:center;gap:10px}
+.live-pill{
+  display:flex;align-items:center;gap:5px;
+  padding:4px 10px;background:var(--green-bg);
+  border-radius:20px;border:1px solid #A7F3D0;
+}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.live-text{font-size:11px;color:var(--green);font-weight:600}
+.user-pill{
+  font-size:12px;color:var(--text2);
+  padding:5px 12px;background:var(--bg3);
+  border:1px solid var(--border);border-radius:20px;
+}
+.btn-report{
+  background:#fff;color:var(--terra);
+  border:1px solid var(--terra);padding:8px 14px;
+  border-radius:8px;font-size:13px;font-weight:600;
+  cursor:pointer;font-family:'Inter',sans-serif;transition:all 0.2s;
+}
+.btn-report:hover{background:var(--terra-light)}
+.btn-refresh{
+  background:var(--terra);color:#fff;border:none;
+  padding:8px 18px;border-radius:8px;font-size:13px;font-weight:600;
+  cursor:pointer;font-family:'Inter',sans-serif;transition:all 0.2s;
+}
+.btn-refresh:hover{background:var(--terra2)}
+.btn-refresh:disabled{opacity:0.5;cursor:not-allowed}
+.btn-logout{
+  background:#fff;color:var(--text3);
+  border:1px solid var(--border);padding:8px 14px;
+  border-radius:8px;font-size:13px;cursor:pointer;
+  font-family:'Inter',sans-serif;transition:all 0.2s;
+}
+.btn-logout:hover{border-color:var(--terra);color:var(--terra)}
+
+/* Stats */
+.stats-grid{
+  display:grid;grid-template-columns:repeat(6,1fr);
+  gap:12px;padding:16px 24px;
+  background:var(--bg);border-bottom:1px solid var(--border);
+}
+.stat-card{
+  background:#fff;border:1px solid var(--border);
+  border-radius:12px;padding:14px 16px;
+  cursor:pointer;transition:all 0.2s;
+  position:relative;overflow:hidden;
+}
+.stat-card:hover{box-shadow:var(--shadow-md);transform:translateY(-1px)}
+.stat-card::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:3px;
+  background:var(--accent,var(--terra));opacity:0;transition:opacity 0.2s;
+}
+.stat-card:hover::after{opacity:1}
+.stat-val{font-size:26px;font-weight:700;color:var(--accent,var(--terra));line-height:1;margin-bottom:3px}
+.stat-lbl{font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:0.5px}
+.stat-total{--accent:var(--terra)}
+.stat-answered{--accent:var(--green)}
+.stat-pending{--accent:var(--red)}
+.stat-tender{--accent:var(--purple)}
+.stat-spam{--accent:var(--text3)}
+.stat-uncat{--accent:var(--yellow)}
+
+/* Layout */
+.layout{display:flex;height:calc(100vh - 58px - 85px)}
+
+/* Sidebar */
+.sidebar{
+  width:200px;min-width:200px;
+  background:#fff;border-right:1px solid var(--border);
+  padding:12px 0;overflow-y:auto;
+}
+.nav-label{
+  font-size:10px;color:var(--text3);text-transform:uppercase;
+  letter-spacing:1px;font-weight:600;padding:0 14px;margin:8px 0 4px;
+}
+.nav-item{
+  display:flex;align-items:center;gap:9px;
+  padding:8px 14px;cursor:pointer;font-size:13px;
+  color:var(--text2);transition:all 0.12s;
+  border-left:2px solid transparent;user-select:none;
+}
+.nav-item:hover{background:var(--bg3);color:var(--text)}
+.nav-item.active{background:var(--terra-light);color:var(--terra);border-left-color:var(--terra);font-weight:500}
+.nav-dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:0.6;flex-shrink:0}
+.nav-badge{
+  margin-left:auto;font-size:10px;font-weight:700;
+  padding:2px 6px;border-radius:10px;
+  background:var(--terra);color:#fff;min-width:18px;text-align:center;
+}
+.nav-divider{height:1px;background:var(--border);margin:6px 0}
+
+/* Content */
+.content{flex:1;overflow-y:auto;display:flex;flex-direction:column;background:var(--bg)}
+.content-header{
+  padding:12px 20px;display:flex;align-items:center;gap:10px;
+  background:#fff;border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:50;
+}
+.search-wrap{flex:1;position:relative}
+.search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px}
+.search-input{
+  width:100%;background:var(--bg3);border:1px solid var(--border);
+  color:var(--text);padding:8px 12px 8px 34px;border-radius:8px;
+  font-size:13px;font-family:'Inter',sans-serif;outline:none;transition:all 0.2s;
+}
+.search-input:focus{border-color:var(--terra);background:#fff;box-shadow:0 0 0 3px var(--terra-light)}
+.search-input::placeholder{color:var(--text3)}
+.last-update{font-size:11px;color:var(--text3);white-space:nowrap}
+
+/* Table */
+.table-wrap{background:#fff;margin:0}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead{background:var(--bg3)}
+th{
+  padding:9px 16px;text-align:left;
+  font-size:10px;color:var(--text3);
+  text-transform:uppercase;letter-spacing:0.8px;font-weight:600;
+  border-bottom:1px solid var(--border);
+}
+td{padding:12px 16px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:hover td{background:var(--bg3)}
+tr{cursor:pointer;transition:background 0.1s}
+.td-from .name{font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+.td-from .email{font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;margin-top:1px}
+.td-subject .subj{font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:360px}
+.td-subject .prev{font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:360px;margin-top:2px}
+.td-time{color:var(--text3);font-size:12px;white-space:nowrap}
+
+/* Badges */
+.cat-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600;
+  cursor:pointer;transition:opacity 0.15s;white-space:nowrap;border:1px solid transparent;
+}
+.cat-badge:hover{opacity:0.75}
+.cat-client{background:var(--cyan-bg);color:var(--cyan);border-color:#A5F3FC}
+.cat-spam{background:var(--bg3);color:var(--text3);border-color:var(--border)}
+.cat-adv{background:var(--yellow-bg);color:var(--yellow);border-color:#FDE68A}
+.cat-tender{background:var(--purple-bg);color:var(--purple);border-color:#DDD6FE}
+.cat-internal{background:#F0FDF4;color:#15803D;border-color:#BBF7D0}
+.cat-uncategorized{background:var(--bg3);color:var(--text3);border-color:var(--border)}
+
+.ans-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap}
+.ans-yes{background:var(--green-bg);color:var(--green)}
+.ans-no{background:var(--red-bg);color:var(--red)}
+.ans-skip{background:transparent;color:var(--text3)}
+
+/* Empty */
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px;color:var(--text3)}
+.empty-icon{font-size:36px;margin-bottom:10px;opacity:0.3}
+.empty-text{font-size:14px}
+
+/* Cat picker */
+.cat-picker{
+  position:fixed;background:#fff;
+  border:1px solid var(--border);border-radius:10px;padding:6px;
+  z-index:500;min-width:150px;box-shadow:var(--shadow-md);
+}
+.cat-picker-item{padding:7px 12px;border-radius:6px;font-size:13px;cursor:pointer;color:var(--text2);transition:background 0.1s}
+.cat-picker-item:hover{background:var(--bg3)}
+
+/* Detail panel */
+.detail-overlay{position:fixed;inset:0;background:rgba(17,24,39,0.4);z-index:300;display:none;backdrop-filter:blur(2px)}
+.detail-overlay.open{display:block}
+.detail-panel{
+  position:absolute;right:0;top:0;bottom:0;width:520px;
+  background:#fff;border-left:1px solid var(--border);
+  overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:14px;
+  box-shadow:-4px 0 24px rgba(0,0,0,0.08);
+}
+.detail-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.detail-subject{font-size:16px;font-weight:600;line-height:1.4;flex:1;color:var(--text)}
+.detail-close{
+  background:var(--bg3);border:1px solid var(--border);color:var(--text3);
+  width:32px;height:32px;border-radius:8px;font-size:15px;
+  cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  transition:all 0.15s;
+}
+.detail-close:hover{background:var(--border);color:var(--text)}
+.detail-meta{background:var(--bg3);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.detail-meta-row{display:flex;gap:10px;font-size:13px}
+.detail-meta-row .lbl{color:var(--text3);width:75px;flex-shrink:0;font-weight:500}
+.detail-meta-row .val{color:var(--text2)}
+.detail-badges{display:flex;gap:8px}
+.detail-tabs{display:flex;gap:2px;background:var(--bg3);border-radius:8px;padding:3px}
+.detail-tab{
+  flex:1;padding:7px;border-radius:6px;font-size:12px;font-weight:600;
+  cursor:pointer;text-align:center;color:var(--text3);
+  transition:all 0.15s;border:none;background:transparent;font-family:'Inter',sans-serif;
+}
+.detail-tab.active{background:#fff;color:var(--text);box-shadow:var(--shadow)}
+.detail-body{
+  background:var(--bg3);border:1px solid var(--border);
+  border-radius:10px;padding:16px;font-size:13px;
+  color:var(--text2);line-height:1.7;white-space:pre-wrap;
+  word-break:break-word;min-height:180px;flex:1;
+}
+
+/* Rules panel */
+.rules-panel{padding:24px;max-width:680px}
+.rules-panel h2{font-size:18px;font-weight:600;margin-bottom:4px;color:var(--text)}
+.rules-panel .subtitle{font-size:13px;color:var(--text3);margin-bottom:20px}
+.rule-form{display:grid;grid-template-columns:120px 1fr 140px 100px;gap:10px;margin-bottom:20px;align-items:end}
+.form-group label{display:block;font-size:11px;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600}
+.form-input{
+  background:#fff;border:1px solid var(--border);color:var(--text);
+  padding:9px 12px;border-radius:8px;font-size:13px;width:100%;
+  outline:none;font-family:'Inter',sans-serif;transition:all 0.2s;
+}
+.form-input:focus{border-color:var(--terra);box-shadow:0 0 0 3px var(--terra-light)}
+.btn-add{
+  background:var(--terra);color:#fff;border:none;padding:9px 16px;
+  border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;
+  width:100%;font-family:'Inter',sans-serif;transition:background 0.2s;
+}
+.btn-add:hover{background:var(--terra2)}
+.rules-list{display:flex;flex-direction:column;gap:8px}
+.rule-row{
+  display:flex;align-items:center;gap:12px;
+  background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;
+}
+.rule-field{font-size:10px;color:var(--text3);width:55px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600}
+.rule-pattern{flex:1;font-weight:500;font-size:13px}
+.rule-hits{font-size:11px;color:var(--text3)}
+.btn-del{
+  background:var(--red-bg);color:var(--red);border:none;
+  padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;
+  font-family:'Inter',sans-serif;transition:background 0.2s;
+}
+.btn-del:hover{background:#FEE2E2}
+
+/* Mobile */
+@media(max-width:768px){
+  .header{padding:0 14px;height:52px}
+  .logo-sub,.live-text,.user-pill{display:none}
+  .stats-grid{grid-template-columns:repeat(3,1fr);gap:8px;padding:10px 12px}
+  .stat-card{padding:10px 12px}
+  .stat-val{font-size:20px}
+  .stat-lbl{font-size:9px}
+  .layout{flex-direction:column;height:auto}
+  .sidebar{display:none}
+  .sidebar.open{display:flex;position:fixed;inset:0;z-index:200;width:240px;background:#fff;border-right:1px solid var(--border);padding-top:52px}
+  .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:199}
+  .sidebar-overlay.open{display:block}
+  .mobile-menu-btn{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);cursor:pointer;font-size:15px;margin-right:6px}
+  .content{min-height:60vh}
+  .content-header{padding:10px 12px}
+  table{display:none}
+  .mobile-cards{display:flex;flex-direction:column;gap:1px;background:var(--border)}
+  .email-card{background:#fff;padding:14px 14px;cursor:pointer;transition:background 0.1s;display:flex;flex-direction:column;gap:7px}
+  .email-card:hover{background:var(--bg3)}
+  .email-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .email-card-from{font-weight:600;font-size:13px;color:var(--text);flex:1}
+  .email-card-time{font-size:11px;color:var(--text3);white-space:nowrap}
+  .email-card-subj{font-size:13px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .email-card-bottom{display:flex;gap:6px;align-items:center}
+  .detail-panel{width:100vw}
+}
+@media(min-width:769px){
+  .mobile-menu-btn{display:none}
+  .mobile-cards{display:none}
+  .sidebar-overlay{display:none!important}
+}
+
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <a href="/" class="logo" style="text-decoration:none;color:inherit" title="Вернуться в ЦУП">
+    <button class="mobile-menu-btn" onclick="event.preventDefault();toggleSidebar()">☰</button>
+    <div class="logo-icon">PLS</div>
+    <div class="logo-text"><b>ProLab</b>Support <span class="logo-sub">Mail Tracker</span></div>
+  </a>
+  <div class="header-right">
+    <div class="live-pill"><div class="live-dot"></div><span class="live-text">Live</span></div>
+    <span class="user-pill" id="userInfo"></span>
+    <button class="btn-report" onclick="showReportDialog()" title="Отправить отчёт на email">📊 Отчёт</button>
+    <button class="btn-refresh" id="btnPoll" onclick="triggerPoll()">↻ Обновить</button>
+    <button class="btn-logout" onclick="logout()">Выйти</button>
+  </div>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card stat-total" onclick="setStatFilter('today')" title="Все письма за сегодня">
+    <div class="stat-val" id="sTotal">—</div><div class="stat-lbl">Всего сегодня</div>
+  </div>
+  <div class="stat-card stat-answered" onclick="setStatFilter('answered')" title="Отвечено сегодня">
+    <div class="stat-val" id="sAnswered">—</div><div class="stat-lbl">Отвечено сегодня</div>
+  </div>
+  <div class="stat-card stat-pending" onclick="setStatFilter('pending')" title="Без ответа">
+    <div class="stat-val" id="sPending">—</div><div class="stat-lbl">Без ответа</div>
+  </div>
+  <div class="stat-card stat-tender" onclick="setStatFilter('tender')" title="Тендеры">
+    <div class="stat-val" id="sTender">—</div><div class="stat-lbl">Тендеры</div>
+  </div>
+  <div class="stat-card stat-spam" onclick="setStatFilter('spam')" title="Спам и реклама">
+    <div class="stat-val" id="sSpam">—</div><div class="stat-lbl">Спам + Реклама</div>
+  </div>
+  <div class="stat-card stat-uncat" onclick="setStatFilter('uncategorized')" title="Без категории">
+    <div class="stat-val" id="sUncategorized">—</div><div class="stat-lbl">Без категории</div>
+  </div>
+</div>
+
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+<div class="layout">
+  <div class="sidebar" id="sidebar">
+    <div class="nav-label">Входящие</div>
+    <div class="nav-item active" onclick="setFilter('all',this)"><div class="nav-dot"></div>Все письма</div>
+    <div class="nav-item" onclick="setFilter('client',this)"><div class="nav-dot" style="background:var(--cyan)"></div>Клиенты</div>
+    <div class="nav-item" onclick="setFilter('pending',this)" id="navPending">
+      <div class="nav-dot" style="background:var(--red)"></div>Без ответа
+      <span class="nav-badge" id="badgePending">0</span>
+    </div>
+    <div class="nav-divider"></div>
+    <div class="nav-label">Категории</div>
+    <div class="nav-item" onclick="setFilter('tender',this)"><div class="nav-dot" style="background:var(--purple)"></div>Тендеры</div>
+    <div class="nav-item" onclick="setFilter('adv',this)"><div class="nav-dot" style="background:var(--yellow)"></div>Реклама</div>
+    <div class="nav-item" onclick="setFilter('spam',this)"><div class="nav-dot" style="background:var(--text3)"></div>Спам</div>
+    <div class="nav-item" onclick="setFilter('uncategorized',this)"><div class="nav-dot"></div>Без категории</div>
+    <div class="nav-item" onclick="setFilter('internal',this)"><div class="nav-dot" style="background:var(--green)"></div>Внутренние</div>
+    <div id="mailboxSection" style="display:none">
+    <div class="nav-divider"></div>
+    <div class="nav-label">Ящики</div>
+    <div class="nav-item" onclick="setMailbox('all',this)"><div class="nav-dot" style="background:var(--terra)"></div>Все ящики</div>
+    <div class="nav-item" onclick="setMailbox('service',this)"><div class="nav-dot"></div>service@</div>
+    <div class="nav-item" onclick="setMailbox('orders',this)"><div class="nav-dot"></div>orders@</div>
+    <div class="nav-item" onclick="setMailbox('sales',this)"><div class="nav-dot"></div>sales@</div>
+    <div class="nav-item" onclick="setMailbox('training',this)"><div class="nav-dot"></div>training@</div>
+    </div>
+    <div class="nav-divider"></div>
+    <div class="nav-label">Настройки</div>
+    <div class="nav-item" onclick="showRules()"><div class="nav-dot"></div>Правила сортировки</div>
+  </div>
+
+  <div class="content" id="contentArea">
+    <div class="content-header">
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input class="search-input" id="searchInput" placeholder="Поиск по теме или отправителю..." oninput="renderTable()">
+      </div>
+      <div class="last-update" id="lastUpdate">Загрузка...</div>
+    </div>
+    <div id="tableContainer" style="flex:1;display:flex;flex-direction:column"></div>
+  </div>
+</div>
+
+<!-- Detail panel -->
+<div class="detail-overlay" id="detailOverlay" onclick="closeDetailOutside(event)">
+  <div class="detail-panel">
+    <div class="detail-header">
+      <div class="detail-subject" id="detailSubject">—</div>
+      <button class="detail-close" onclick="closeDetailPanel()">✕</button>
+    </div>
+    <div class="detail-meta">
+      <div class="detail-meta-row"><span class="lbl">От кого</span><span class="val" id="detailFrom">—</span></div>
+      <div class="detail-meta-row"><span class="lbl">Получено</span><span class="val" id="detailDate">—</span></div>
+      <div class="detail-meta-row"><span class="lbl">Статус</span><span class="val" id="detailStatus">—</span></div>
+    </div>
+    <div class="detail-badges" id="detailBadges"></div>
+    <div class="detail-tabs" id="detailTabs" style="display:none">
+      <button class="detail-tab active" onclick="switchTab('letter')">📨 Письмо клиента</button>
+      <button class="detail-tab" onclick="switchTab('answer')">✅ Ответ сотрудника</button>
+    </div>
+    <div class="detail-body" id="detailBody">Загрузка...</div>
+    <div class="detail-body" id="detailAnswerBody" style="display:none"></div>
+  </div>
+</div>
+
+<!-- Report dialog -->
+<div id="reportOverlay" style="display:none;position:fixed;inset:0;background:rgba(17,24,39,0.4);z-index:400;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px)">
+  <div style="background:#fff;border-radius:14px;padding:28px;width:420px;box-shadow:0 20px 60px rgba(0,0,0,0.15)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div style="font-size:16px;font-weight:600;color:var(--text)">📊 Отправить отчёт</div>
+      <button onclick="closeReportDialog()" style="background:var(--bg3);border:1px solid var(--border);color:var(--text3);width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:15px">✕</button>
+    </div>
+    <p style="font-size:13px;color:var(--text3);margin-bottom:16px">Отчёт по неотвеченным письмам будет отправлен на указанный адрес</p>
+    <div style="margin-bottom:16px">
+      <label style="display:block;font-size:11px;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Email получателя</label>
+      <input id="reportEmail" type="email" class="form-input" placeholder="email@company.kz" style="width:100%">
+    </div>
+    <div id="reportMsg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
+    <div style="display:flex;gap:10px">
+      <button onclick="closeReportDialog()" style="flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:10px;border-radius:8px;font-size:13px;cursor:pointer;font-family:'Inter',sans-serif">Отмена</button>
+      <button onclick="sendReport()" id="btnSendReport" style="flex:2;background:var(--terra);color:#fff;border:none;padding:10px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">Отправить отчёт →</button>
+    </div>
+    <p style="font-size:11px;color:var(--text3);margin-top:12px;text-align:center">Автоотчёт также отправляется ежедневно в 18:00</p>
+  </div>
+</div>
+
+<!-- Cat picker -->
+<div class="cat-picker" id="catPicker" style="display:none">
+  <div class="cat-picker-item" onclick="pickCat('client')">🟢 Клиент</div>
+  <div class="cat-picker-item" onclick="pickCat('tender')">📋 Тендер</div>
+  <div class="cat-picker-item" onclick="pickCat('adv')">📢 Реклама</div>
+  <div class="cat-picker-item" onclick="pickCat('spam')">🗑 Спам</div>
+  <div class="cat-picker-item" onclick="pickCat('internal')">🏢 Внутреннее</div>
+  <div class="cat-picker-item" onclick="pickCat('uncategorized')">❓ Без категории</div>
+</div>
+
+<script>
+let allEmails = [];
+let currentFilter = 'all';
+let currentMailbox = 'all';
+let currentEditId = null;
+const picker = document.getElementById('catPicker');
+
+const CAT_LABELS = {
+  client:'🟢 Клиент', spam:'🗑 Спам', adv:'📢 Реклама',
+  tender:'📋 Тендер', internal:'🏢 Внутреннее', uncategorized:'❓ Без кат.'
+};
+
+function timeAgo(d) {
+  const m = Math.floor((Date.now()-new Date(d))/60000);
+  if(m<1) return 'только что';
+  if(m<60) return m+' мин назад';
+  const h=Math.floor(m/60);
+  if(h<24) return h+' ч назад';
+  return Math.floor(h/24)+' д назад';
+}
+function formatDate(d){return new Date(d).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+function updateStats(){
+  const today=new Date().toDateString();
+  // Фильтруем по текущему ящику
+  const base=currentMailbox==='all'?allEmails:allEmails.filter(e=>e.mailbox===currentMailbox);
+  const td=base.filter(e=>new Date(e.received_at).toDateString()===today);
+  const pending=base.filter(e=>!e.answered&&(e.category==='client'||e.category==='uncategorized')).length;
+  document.getElementById('sTotal').textContent=td.length;
+  document.getElementById('sAnswered').textContent=td.filter(e=>e.answered).length;
+  document.getElementById('sPending').textContent=pending;
+  document.getElementById('sTender').textContent=base.filter(e=>e.category==='tender').length;
+  document.getElementById('sSpam').textContent=base.filter(e=>e.category==='spam'||e.category==='adv').length;
+  document.getElementById('sUncategorized').textContent=base.filter(e=>e.category==='uncategorized').length;
+  document.getElementById('badgePending').textContent=pending;
+}
+
+async function loadEmails(){
+  try{
+    const r=await fetch('/api/mail/emails');
+    allEmails=await r.json();
+    document.getElementById('lastUpdate').textContent='Обновлено: '+new Date().toLocaleTimeString('ru-RU');
+    updateStats();renderTable();
+  }catch(e){document.getElementById('lastUpdate').textContent='Ошибка';}
+}
+
+function getFiltered(){
+  let emails=currentMailbox==='all'?[...allEmails]:allEmails.filter(e=>e.mailbox===currentMailbox);
+  const q=(document.getElementById('searchInput')||{}).value?.toLowerCase()||'';
+  const today=new Date().toDateString();
+  if(currentFilter==='today') emails=emails.filter(e=>new Date(e.received_at).toDateString()===today);
+  else if(currentFilter==='answered') emails=emails.filter(e=>e.answered&&new Date(e.received_at).toDateString()===today);
+  else if(currentFilter==='client') emails=emails.filter(e=>e.category==='client');
+  else if(currentFilter==='pending') emails=emails.filter(e=>!e.answered&&(e.category==='client'||e.category==='uncategorized'));
+  else if(currentFilter==='tender') emails=emails.filter(e=>e.category==='tender');
+  else if(currentFilter==='adv') emails=emails.filter(e=>e.category==='adv');
+  else if(currentFilter==='spam') emails=emails.filter(e=>e.category==='spam');
+  else if(currentFilter==='spam_adv') emails=emails.filter(e=>e.category==='spam'||e.category==='adv');
+  else if(currentFilter==='uncategorized') emails=emails.filter(e=>e.category==='uncategorized');
+  else if(currentFilter==='internal') emails=emails.filter(e=>e.category==='internal');
+  if(q) emails=emails.filter(e=>(e.subject||'').toLowerCase().includes(q)||(e.from_addr||'').toLowerCase().includes(q)||(e.from_name||'').toLowerCase().includes(q));
+  return emails;
+}
+
+function renderTable(){
+  const container=document.getElementById('tableContainer');
+  if(!container) return;
+  const emails=getFiltered();
+  if(!emails.length){
+    container.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Писем не найдено</div></div>';
+    return;
+  }
+  const skip=e=>e.category==='spam'||e.category==='adv'||e.category==='tender'||e.category==='internal';
+  const rows=emails.map((e,i)=>{
+    const cc='cat-'+(e.category||'uncategorized');
+    const cl=CAT_LABELS[e.category]||e.category;
+    const ab=skip(e)?'<span class="ans-badge ans-skip">—</span>'
+      :e.answered?'<span class="ans-badge ans-yes">✓ Отвечено</span>'
+      :'<span class="ans-badge ans-no">⏳ Нет ответа</span>';
+    const eid=e.id.replace(/'/g,"\\'");
+    return `<tr data-idx="${i}" onclick="openDetailByIdx(this.dataset.idx)">
+      <td><div class="td-from"><div class="name">${esc(e.from_name||e.from_addr)}</div><div class="email">${esc(e.from_addr)}</div></div></td>
+      <td><div class="td-subject"><div class="subj">${esc(e.subject||'(без темы)')}</div>${e.body_preview?`<div class="prev">${esc(e.body_preview.slice(0,80))}</div>`:''}</div></td>
+      <td class="td-time" title="${formatDate(e.received_at)}">${timeAgo(e.received_at)}</td>
+      <td><span class="cat-badge ${cc}" onclick="openCatPickerByIdx(event,this.closest('[data-idx]').dataset.idx);event.stopPropagation()">${cl} ▾</span></td>
+      <td>${ab}</td>
+    </tr>`;
+  }).join('');
+
+  const mc=emails.map((e,i)=>{
+    const cc='cat-'+(e.category||'uncategorized');
+    const cl=CAT_LABELS[e.category]||e.category;
+    const ab=skip(e)?'<span class="ans-badge ans-skip">—</span>'
+      :e.answered?'<span class="ans-badge ans-yes">✓ Отвечено</span>'
+      :'<span class="ans-badge ans-no">⏳ Нет ответа</span>';
+    const eid=e.id.replace(/'/g,"\\'");
+    return `<div class="email-card" data-idx="${i}" onclick="openDetailByIdx(this.dataset.idx)">
+      <div class="email-card-top"><div class="email-card-from">${esc(e.from_name||e.from_addr)}</div><div class="email-card-time">${timeAgo(e.received_at)}</div></div>
+      <div class="email-card-subj">${esc(e.subject||'(без темы)')}</div>
+      <div class="email-card-bottom"><span class="cat-badge ${cc}" onclick="openCatPickerByIdx(event,this.closest('[data-idx]').dataset.idx);event.stopPropagation()">${cl} ▾</span>${ab}</div>
+    </div>`;
+  }).join('');
+
+  container.innerHTML=`<div style="overflow-y:auto;height:100%" class="table-wrap"><table>
+    <thead><tr>
+      <th style="width:200px">Отправитель</th><th>Тема / Превью</th>
+      <th style="width:110px">Получено</th><th style="width:140px">Категория</th><th style="width:130px">Статус</th>
+    </tr></thead><tbody>${rows}</tbody></table>
+    <div class="mobile-cards">${mc}</div></div>`;
+}
+
+function setStatFilter(type){
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  currentFilter=type==='spam'?'spam_adv':type;
+  const ca=document.getElementById('contentArea');
+  if(ca){ca.innerHTML=`<div class="content-header"><div class="search-wrap"><span class="search-icon">⌕</span><input class="search-input" id="searchInput" placeholder="Поиск..." oninput="renderTable()"></div><div class="last-update" id="lastUpdate">Обновлено: ${new Date().toLocaleTimeString('ru-RU')}</div></div><div id="tableContainer" style="flex:1;display:flex;flex-direction:column"></div>`;}
+  renderTable();
+}
+
+function setMailbox(mb, el) {
+  currentMailbox = mb;
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  el.classList.add('active');
+  renderTable();
+  updateStats();
+}
+
+function setFilter(f,el){
+  const sidebar=document.getElementById('sidebar');
+  const overlay=document.getElementById('sidebarOverlay');
+  if(sidebar) sidebar.classList.remove('open');
+  if(overlay) overlay.classList.remove('open');
+  currentFilter=f;
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  el.classList.add('active');
+  const ca=document.getElementById('contentArea');
+  ca.innerHTML=`<div class="content-header"><div class="search-wrap"><span class="search-icon">⌕</span><input class="search-input" id="searchInput" placeholder="Поиск по теме или отправителю..." oninput="renderTable()"></div><div class="last-update" id="lastUpdate">Обновлено: ${new Date().toLocaleTimeString('ru-RU')}</div></div><div id="tableContainer" style="flex:1;display:flex;flex-direction:column"></div>`;
+  renderTable();
+}
+
+// Храним текущий отфильтрованный список для доступа по индексу
+let currentFiltered = [];
+
+function openDetailByIdx(idx) {
+  const email = getFiltered()[parseInt(idx)];
+  if (email) openDetail(email.id);
+}
+
+function openCatPickerByIdx(e, idx) {
+  e.stopPropagation();
+  const email = getFiltered()[parseInt(idx)];
+  if (email) { currentEditId = email.id; }
+  picker.style.display='block';picker.style.position='fixed';
+  picker.style.left=e.pageX+'px';picker.style.top=(e.pageY+8)+'px';
+}
+
+function openCatPicker(e,id){
+  e.stopPropagation();currentEditId=id;
+  picker.style.display='block';picker.style.position='fixed';
+  picker.style.left=e.pageX+'px';picker.style.top=(e.pageY+8)+'px';
+}
+async function pickCat(category){
+  picker.style.display='none';if(!currentEditId) return;
+  await fetch(`/api/mail/emails/${encodeURIComponent(currentEditId)}/category`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({category})});
+  const email=allEmails.find(e=>e.id===currentEditId);
+  if(email) email.category=category;
+  updateStats();renderTable();
+}
+document.addEventListener('click',()=>{picker.style.display='none'});
+
+function switchTab(tab){
+  document.querySelectorAll('.detail-tab').forEach(t=>t.classList.remove('active'));
+  if(tab==='letter'){
+    document.querySelectorAll('.detail-tab')[0].classList.add('active');
+    document.getElementById('detailBody').style.display='';
+    document.getElementById('detailAnswerBody').style.display='none';
+  } else {
+    document.querySelectorAll('.detail-tab')[1].classList.add('active');
+    document.getElementById('detailBody').style.display='none';
+    document.getElementById('detailAnswerBody').style.display='';
+  }
+}
+
+function openDetail(id){
+  const email=allEmails.find(e=>e.id===id) || currentFiltered.find(e=>e.id===id);
+  if(!email) return;
+  document.getElementById('detailOverlay').classList.add('open');
+  document.getElementById('detailSubject').textContent=email.subject||'(без темы)';
+  document.getElementById('detailFrom').textContent=(email.from_name?email.from_name+' ':'')+'<'+email.from_addr+'>';
+  document.getElementById('detailDate').textContent=formatDate(email.received_at);
+  const skip=email.category==='spam'||email.category==='adv'||email.category==='tender'||email.category==='internal';
+  document.getElementById('detailStatus').innerHTML=skip
+    ?'<span class="ans-badge ans-skip">—</span>'
+    :email.answered
+      ?`<span class="ans-badge ans-yes" style="cursor:pointer" onclick="switchTab('answer')" title="Нажмите чтобы увидеть ответ">✓ Отвечено (${email.answered_by||'?'}) →</span>`
+      :'<span class="ans-badge ans-no">⏳ Нет ответа</span>';
+  const cl=CAT_LABELS[email.category]||email.category;
+  document.getElementById('detailBadges').innerHTML=`<span class="cat-badge cat-${email.category}" onclick="openCatPicker(event,'${email.id}')">${cl} ▾</span>`;
+  document.getElementById('detailBody').textContent=email.body_preview||'(текст письма недоступен)';
+  const tabs=document.getElementById('detailTabs');
+  if(email.answered&&email.answer_body){
+    tabs.style.display='flex';
+    document.getElementById('detailAnswerBody').textContent=email.answer_body;
+    switchTab('letter');
+  } else {
+    tabs.style.display='none';
+    document.getElementById('detailBody').style.display='';
+    document.getElementById('detailAnswerBody').style.display='none';
+  }
+}
+function closeDetailPanel(){document.getElementById('detailOverlay').classList.remove('open')}
+function closeDetailOutside(e){if(e.target===document.getElementById('detailOverlay')) closeDetailPanel()}
+
+async function showRules(){
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const r=await fetch('/api/mail/rules');const rules=await r.json();
+  const rr=rules.map(rule=>`<div class="rule-row">
+    <span class="rule-field">${esc(rule.field)}</span>
+    <span class="rule-pattern">${esc(rule.pattern)}</span>
+    <span class="cat-badge cat-${rule.category}">${CAT_LABELS[rule.category]||rule.category}</span>
+    <span class="rule-hits">${rule.hit_count} раз</span>
+    <button class="btn-del" onclick="deleteRule(${rule.id})">Удалить</button>
+  </div>`).join('');
+  const ca=document.getElementById('contentArea');
+  ca.innerHTML=`<div class="rules-panel"><h2>Правила сортировки</h2>
+    <p class="subtitle">Нажмите на категорию письма чтобы изменить — система запомнит и обучится.</p>
+    <div class="rule-form">
+      <div class="form-group"><label>Поле</label><select class="form-input" id="rField"><option value="from">От кого</option><option value="subject">Тема</option></select></div>
+      <div class="form-group"><label>Содержит текст</label><input class="form-input" id="rPattern" placeholder="напр: tender.gov"></div>
+      <div class="form-group"><label>Категория</label><select class="form-input" id="rCategory"><option value="client">Клиент</option><option value="spam">Спам</option><option value="adv">Реклама</option><option value="tender">Тендер</option></select></div>
+      <div class="form-group"><label>&nbsp;</label><button class="btn-add" onclick="addRule()">+ Добавить</button></div>
+    </div>
+    <div class="rules-list" id="rulesList">${rr||'<p style="color:var(--text3);font-size:13px">Правил нет</p>'}</div>
+  </div>`;
+}
+async function addRule(){
+  const field=document.getElementById('rField').value;
+  const pattern=document.getElementById('rPattern').value.trim();
+  const category=document.getElementById('rCategory').value;
+  if(!pattern) return alert('Введите текст');
+  await fetch('/api/mail/rules',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({field,pattern,category})});
+  showRules();
+}
+async function deleteRule(id){
+  if(!confirm('Удалить правило?')) return;
+  await fetch(`/api/mail/rules/${id}`,{method:'DELETE'});showRules();
+}
+
+function toggleSidebar(){
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('open');
+}
+
+async function logout(){await fetch('/auth/logout',{method:'POST'});window.location.href='/login.html'}
+
+async function loadUserInfo(){
+  try{
+    const r=await fetch('/auth/me');
+    if(!r.ok){window.location.href='/login.html';return;}
+    const d=await r.json();
+    const u=d.user;
+    document.getElementById('userInfo').textContent=u.displayName+' · '+u.role;
+    // Показываем раздел ящиков только для админа
+    if(u.role==='admin'){
+      document.getElementById('mailboxSection').style.display='block';
+    }
+  }catch(e){}
+}
+
+function showReportDialog() {
+  const overlay = document.getElementById('reportOverlay');
+  overlay.style.display = 'flex';
+  document.getElementById('reportEmail').value = '';
+  document.getElementById('reportMsg').style.display = 'none';
+  setTimeout(() => document.getElementById('reportEmail').focus(), 100);
+}
+
+function closeReportDialog() {
+  document.getElementById('reportOverlay').style.display = 'none';
+}
+
+async function sendReport() {
+  const email = document.getElementById('reportEmail').value.trim();
+  const btn = document.getElementById('btnSendReport');
+  const msg = document.getElementById('reportMsg');
+
+  if (!email || !email.includes('@')) {
+    msg.style.display = 'block';
+    msg.style.background = 'var(--red-bg)';
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Введите корректный email адрес';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Отправляем...';
+
+  try {
+    const r = await fetch('/api/mail/report', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email})
+    });
+    const data = await r.json();
+
+    if (r.ok) {
+      msg.style.display = 'block';
+      msg.style.background = 'var(--green-bg)';
+      msg.style.color = 'var(--green)';
+      msg.textContent = '✓ Отчёт отправлен на ' + email;
+      btn.textContent = '✓ Отправлено';
+      setTimeout(() => closeReportDialog(), 2000);
+    } else {
+      msg.style.display = 'block';
+      msg.style.background = 'var(--red-bg)';
+      msg.style.color = 'var(--red)';
+      msg.textContent = data.error || 'Ошибка отправки';
+      btn.disabled = false;
+      btn.textContent = 'Отправить отчёт →';
+    }
+  } catch(e) {
+    msg.style.display = 'block';
+    msg.style.background = 'var(--red-bg)';
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Ошибка сети';
+    btn.disabled = false;
+    btn.textContent = 'Отправить отчёт →';
+  }
+}
+
+// Close on overlay click
+document.getElementById('reportOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeReportDialog();
+});
+
+async function triggerPoll(){
+  const btn=document.getElementById('btnPoll');
+  btn.disabled=true;btn.textContent='⏳ Получаем...';
+  try{await fetch('/api/mail/poll',{method:'POST'});await new Promise(r=>setTimeout(r,5000));await refresh();}
+  finally{btn.disabled=false;btn.textContent='↻ Обновить';}
+}
+
+async function refresh(){await loadEmails();}
+loadUserInfo();refresh();
+setInterval(refresh,2*60*1000);
+</script>
+</body>
+</html>
