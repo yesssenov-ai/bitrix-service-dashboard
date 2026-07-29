@@ -51,6 +51,15 @@ app.use(cookieParser());
 
 // ── Page routes — MUST be registered before express.static, or static's
 // default file-serving would hand out these pages to anyone, auth or not. ──
+// Public-facing subdomain for the client-facing service request form —
+// no auth, any path. Must come before the auth-gated routes below.
+app.use((req, res, next) => {
+  if (req.hostname === 'service.prolabsupport.kz') {
+    return res.sendFile(path.join(__dirname, 'public', 'service-redirect.html'));
+  }
+  next();
+});
+
 app.get('/login', (_, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 app.get('/login.html', (_, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 app.get('/', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'portal.html')));
