@@ -51,11 +51,14 @@ app.use(cookieParser());
 
 // ── Page routes — MUST be registered before express.static, or static's
 // default file-serving would hand out these pages to anyone, auth or not. ──
-// Public-facing subdomain for the client-facing service request form —
-// no auth, any path. Must come before the auth-gated routes below.
+// Public-facing subdomains for client-facing forms — no auth, any path.
+// Must come before the auth-gated routes below.
 app.use((req, res, next) => {
   if (req.hostname === 'service.prolabsupport.kz') {
     return res.sendFile(path.join(__dirname, 'public', 'service-redirect.html'));
+  }
+  if (req.hostname === 'feedback.prolabsupport.kz') {
+    return res.sendFile(path.join(__dirname, 'public', 'feedback-redirect.html'));
   }
   next();
 });
