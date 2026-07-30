@@ -12,9 +12,10 @@ body{
   min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
   background:#fafafa;color:#201f1e;text-align:center;padding:24px;
 }
-.logo{margin-bottom:32px;opacity:0;transition:opacity .3s;}
-.logo.loaded{opacity:1;}
-.logo img{width:min(90vw,520px);height:auto;}
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:28px;}
+.logo img{height:36px;width:auto;}
+.logo span{font-size:20px;font-weight:700;}
+.logo b{color:#C53B2F;}
 .spinner{
   width:28px;height:28px;border:3px solid #eee;border-top-color:#C53B2F;border-radius:50%;
   animation:spin .8s linear infinite;margin-bottom:18px;
@@ -25,25 +26,16 @@ a{color:#C53B2F;text-decoration:none;font-weight:600;}
 </style>
 </head>
 <body>
-  <div class="logo" id="logoWrap"><img id="logoImg" src="/assets/company-full-logo.png" alt="ProLabSupport"></div>
+  <div class="logo"><img src="/assets/logo-icon.png" alt=""><span><b>ProLab</b>Support</span></div>
   <div class="spinner"></div>
   <p>Открываем форму обратной связи…</p>
   <p style="margin-top:14px;font-size:12.5px">Если страница не открылась автоматически —
     <a href="https://qualtricsxmgrwkqw5xd.qualtrics.com/jfe/form/SV_beVO0YBcg5OaYCi">нажмите здесь</a>
   </p>
   <script>
-    var TARGET = 'https://qualtricsxmgrwkqw5xd.qualtrics.com/jfe/form/SV_beVO0YBcg5OaYCi';
-    var redirected = false;
-    function goNow(){ if (redirected) return; redirected = true; window.location.replace(TARGET); }
-    var img = document.getElementById('logoImg');
-    var wrap = document.getElementById('logoWrap');
-    function onLogoReady(){
-      wrap.classList.add('loaded');
-      setTimeout(goNow, 1200); // let the person actually see the logo before leaving
-    }
-    if (img.complete) onLogoReady();
-    else { img.addEventListener('load', onLogoReady); img.addEventListener('error', onLogoReady); }
-    setTimeout(goNow, 3500); // hard fallback in case the image never loads at all
+    setTimeout(function(){
+      window.location.replace('https://qualtricsxmgrwkqw5xd.qualtrics.com/jfe/form/SV_beVO0YBcg5OaYCi');
+    }, 900);
   </script>
 </body>
 </html>
