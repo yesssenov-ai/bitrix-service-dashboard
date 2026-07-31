@@ -360,6 +360,9 @@ async function saveExpertCategory(categoryId){
 function renderPmDetail(d){
   const STATUS_LABELS = { pending:'Не заполнено', saved:'Сохранено', needs_revision:'Нужна правка' };
   let grandTotal = 0;
+  const assignedCatIds = new Set(d.categories.map(c => c.category_id));
+  const missingCats = catalog.categories.filter(c => !assignedCatIds.has(c.id));
+
   const catRows = d.categories.map(rc => {
     const items = d.lineItems.filter(li => li.category_id === rc.category_id);
     const catTotal = items.reduce((s,li) => s + (li.is_included_snapshot ? 0 : li.quantity * (li.unit_price_snapshot||0)), 0);
@@ -375,7 +378,12 @@ function renderPmDetail(d){
     return `
       <div class="card">
         <div class="row">
-          <div><strong>${esc(rc.category_name)}</strong> <span style="color:var(--text-dim);font-size:12px">· ${esc(rc.expert_name||'без эксперта')}</span></div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <strong>${esc(rc.category_name)}</strong>
+            <select class="fselect" style="width:auto;padding:5px 8px;font-size:12px" onchange="reassignExpert(${rc.category_id}, this.value)" id="expertSel-${rc.category_id}">
+              <option value="">— без эксперта —</option>
+            </select>
+          </div>
           <div style="display:flex;align-items:center;gap:10px">
             <span class="status-pill status-${rc.status==='saved'?'approved':rc.status==='needs_revision'?'needs_revision':'draft'}">${STATUS_LABELS[rc.status]||rc.status}</span>
             <button class="btn btn-ghost" onclick="openReviseModal(${rc.category_id}, '${esc(rc.category_name)}')">Комментарий / на доработку</button>
@@ -384,6 +392,19 @@ function renderPmDetail(d){
         <div style="margin-top:10px">${itemsHtml}</div>
       </div>`;
   }).join('');
+
+  const addCatHtml = missingCats.length ? `
+    <div class="card">
+      <div class="row">
+        <div style="color:var(--text-dim);font-size:13px">Добавить категорию в заявку</div>
+        <div style="display:flex;gap:8px">
+          <select class="fselect" style="width:auto" id="addCatSelect">
+            ${missingCats.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}
+          </select>
+          <button class="btn btn-ghost" onclick="addCategoryToRequest()">+ Добавить</button>
+        </div>
+      </div>
+    </div>` : '';
 
   const allSaved = d.categories.every(c => c.status === 'saved');
   const generalComments = d.comments.filter(c => !c.category_id);
@@ -403,8 +424,41 @@ function renderPmDetail(d){
     </div>
     ${commentsHtml}
     ${catRows}
+    ${addCatHtml}
     <div class="grand-total"><span class="label">Общая сумма</span><span class="value">${money(grandTotal)} $</span></div>
   `;
+
+  loadExpertsIntoSelects(d.categories);
+}
+
+async function loadExpertsIntoSelects(categories){
+  const ex = await (await fetch('/api/kp/experts')).json();
+  const experts = ex.experts || [];
+  categories.forEach(rc => {
+    const sel = document.getElementById('expertSel-'+rc.category_id);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— без эксперта —</option>' +
+      experts.map(e => `<option value="${e.id}" ${rc.expert_id===e.id?'selected':''}>${esc(e.display_name)}</option>`).join('');
+  });
+}
+
+async function reassignExpert(categoryId, expertId){
+  const r = await fetch(`/api/kp/requests/${currentRequestId}/categories/${categoryId}/assign`, {
+    method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ expertId: expertId || null })
+  });
+  const d = await r.json();
+  if (!r.ok) return alert(d.error || 'Ошибка');
+  openRequest(currentRequestId, true);
+}
+
+async function addCategoryToRequest(){
+  const categoryId = parseInt(document.getElementById('addCatSelect').value);
+  const r = await fetch(`/api/kp/requests/${currentRequestId}/categories`, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ categoryId })
+  });
+  const d = await r.json();
+  if (!r.ok) return alert(d.error || 'Ошибка');
+  openRequest(currentRequestId, true);
 }
 
 function openReviseModal(categoryId, label){

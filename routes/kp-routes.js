@@ -34,7 +34,15 @@ router.get('/catalog', requireAuth(), async (req, res) => {
 
 // GET /api/kp/my-categories — which category slugs the current user is assigned to (for the expert view)
 router.get('/my-categories', requireAuth(), async (req, res) => {
-  res.json({ categories: req.user.kp_categories || [], isPm: isPm(req.user) });
+  const { rows } = await pool.query(
+    `SELECT DISTINCT c.slug FROM ticketsmodule_kp_request_categories rc
+     JOIN ticketsmodule_kp_categories c ON c.id=rc.category_id
+     WHERE rc.expert_id=$1`, [req.user.id]
+  );
+  const assignedSlugs = rows.map(r => r.slug);
+  const accountSlugs = req.user.kp_categories || [];
+  const categories = [...new Set([...assignedSlugs, ...accountSlugs])];
+  res.json({ categories, isPm: isPm(req.user) });
 });
 
 // ── Requests ─────────────────────────────────────────────────────────────────
@@ -253,6 +261,49 @@ router.get('/experts', requireAuth(PM_ROLES), async (req, res) => {
     const { rows } = await pool.query(`SELECT id, display_name, kp_categories FROM ticketsmodule_users WHERE active=true ORDER BY display_name`);
     res.json({ experts: rows });
   } catch (e) { res.status(500).json({ error: 'Server error' }); }
+});
+
+// PM adds a category to an already-created request
+router.post('/requests/:id/categories', requireAuth(PM_ROLES), async (req, res) => {
+  const kpId = parseInt(req.params.id, 10);
+  const { categoryId, expertId } = req.body;
+  if (!categoryId) return res.status(400).json({ error: 'Не указана категория' });
+  try {
+    await pool.query(
+      `INSERT INTO ticketsmodule_kp_request_categories (kp_request_id, category_id, expert_id, status)
+       VALUES ($1,$2,$3,'pending') ON CONFLICT (kp_request_id, category_id) DO NOTHING`,
+      [kpId, categoryId, expertId || null]
+    );
+    if (expertId) {
+      const { rows: reqInfo } = await pool.query(`SELECT client_name FROM ticketsmodule_kp_requests WHERE id=$1`, [kpId]);
+      notifyPersonal(expertId, `📋 Вам назначена категория КП`,
+        `Вам назначена категория в заявке на КП для клиента «${reqInfo[0]?.client_name}».`,
+        `/kp.html?request=${kpId}`).catch(()=>{});
+    }
+    res.json({ ok: true });
+  } catch (e) { console.error('POST /requests/:id/categories error:', e.message); res.status(500).json({ error: 'Server error' }); }
+});
+
+// PM reassigns the expert for one category in an existing request
+router.put('/requests/:id/categories/:categoryId/assign', requireAuth(PM_ROLES), async (req, res) => {
+  const kpId = parseInt(req.params.id, 10);
+  const categoryId = parseInt(req.params.categoryId, 10);
+  const expertId = req.body.expertId ? parseInt(req.body.expertId, 10) : null;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE ticketsmodule_kp_request_categories SET expert_id=$1, status='pending', saved_at=NULL
+       WHERE kp_request_id=$2 AND category_id=$3 RETURNING *`,
+      [expertId, kpId, categoryId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Категория не найдена' });
+    if (expertId) {
+      const { rows: reqInfo } = await pool.query(`SELECT client_name FROM ticketsmodule_kp_requests WHERE id=$1`, [kpId]);
+      notifyPersonal(expertId, `📋 Вам назначена категория КП`,
+        `Вам назначена категория в заявке на КП для клиента «${reqInfo[0]?.client_name}».`,
+        `/kp.html?request=${kpId}`).catch(()=>{});
+    }
+    res.json({ ok: true });
+  } catch (e) { console.error('PUT /categories/:categoryId/assign error:', e.message); res.status(500).json({ error: 'Server error' }); }
 });
 
 module.exports = { router };
