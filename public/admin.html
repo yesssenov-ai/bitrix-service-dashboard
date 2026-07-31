@@ -297,6 +297,11 @@ tr:hover td{background:#fafbfd;}
         </select>
         <div class="form-hint">Админы видят все ящики независимо от этого поля</div>
       </div>
+      <div class="form-group" id="kpCategoriesField">
+        <label class="form-label">Категории КП (модуль "Коммерческие предложения")</label>
+        <div id="kpCategoriesChecks" style="display:flex;flex-wrap:wrap;gap:10px;font-size:13px;color:var(--text-2)"></div>
+        <div class="form-hint">Эксперт увидит и сможет заполнять только отмеченные категории каталога</div>
+      </div>
       <div class="form-group" id="activeField" style="display:none">
         <label class="form-label">Статус</label>
         <select class="form-select" id="fActive">
@@ -418,6 +423,7 @@ function openCreate() {
   document.getElementById('fRole').value = 'viewer';
   document.getElementById('fEngineerName').value = '';
   document.getElementById('fMailMailbox').value = '';
+  renderKpCategoryChecks([]);
   document.getElementById('fActive').value = 'true';
   document.getElementById('passHint').style.display = 'none';
   document.getElementById('activeField').style.display = 'none';
@@ -436,6 +442,7 @@ function openEdit(u) {
   document.getElementById('fRole').value = u.role;
   document.getElementById('fEngineerName').value = u.engineer_name || '';
   document.getElementById('fMailMailbox').value = u.mail_mailbox || '';
+  renderKpCategoryChecks(u.kp_categories || []);
   document.getElementById('fActive').value = String(u.active);
   document.getElementById('passHint').style.display = '';
   document.getElementById('activeField').style.display = '';
@@ -444,6 +451,25 @@ function openEdit(u) {
 }
 
 function closeUser() { document.getElementById('userOverlay').classList.remove('show'); }
+
+const KP_CATEGORIES = [
+  { slug:'priemka', name:'Приёмка' },
+  { slug:'probopodgotovka', name:'Пробоподготовка' },
+  { slug:'probirny', name:'Пробирный анализ' },
+  { slug:'analitika', name:'Аналитика' },
+  { slug:'prekursornaya', name:'Прекурсорная' },
+  { slug:'uslugi', name:'Услуги' },
+];
+function renderKpCategoryChecks(selected) {
+  const sel = new Set(selected);
+  document.getElementById('kpCategoriesChecks').innerHTML = KP_CATEGORIES.map(c => `
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+      <input type="checkbox" value="${c.slug}" ${sel.has(c.slug)?'checked':''} class="kp-cat-check"> ${c.name}
+    </label>`).join('');
+}
+function getSelectedKpCategories() {
+  return [...document.querySelectorAll('.kp-cat-check:checked')].map(el => el.value);
+}
 
 function toggleEngineerField() {
   const role = document.getElementById('fRole').value;
@@ -459,6 +485,7 @@ async function saveUser() {
     role: document.getElementById('fRole').value,
     engineerName: document.getElementById('fEngineerName').value || null,
     mailMailbox: document.getElementById('fMailMailbox').value || null,
+    kpCategories: getSelectedKpCategories(),
     active: document.getElementById('fActive').value === 'true',
   };
   if (!id && !body.password) return toast('Введите пароль', 'error');

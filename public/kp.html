@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ЦУП — Коммерческие предложения</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#14171d; --panel:#1b1f27; --panel-h:#20242e; --line:#2a2f3a; --line-2:#363c49;
+  --text:#eef0f3; --text-dim:#8b93a3; --text-faint:#565d6b;
+  --brand:#C53B2F; --brand-h:#d94737; --signal:#35d0c0; --signal-dim:rgba(53,208,192,.35);
+  --warn:#e0a940; --font-display:'Space Grotesk',sans-serif; --font-body:'Inter',system-ui,sans-serif; --font-mono:'IBM Plex Mono',monospace;
+}
+body{font-family:var(--font-body);background:var(--bg);color:var(--text);min-height:100vh;}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:16px 28px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:20;}
+.brand{display:flex;align-items:center;gap:16px;}
+.brand a{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit;}
+.brand img{height:22px;width:auto;}
+.brand-name{font-family:var(--font-display);font-weight:600;font-size:15px;}
+.brand-name b{color:var(--brand);}
+.backlink{font-size:12px;color:var(--text-dim);text-decoration:none;border:1px solid var(--line-2);padding:6px 12px;border-radius:7px;}
+.backlink:hover{border-color:var(--signal);color:var(--text);}
+.user-chip{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--text-dim);}
+.logout-btn{border:1px solid var(--line-2);background:transparent;color:var(--text-dim);font-size:12px;font-weight:600;padding:6px 12px;border-radius:7px;cursor:pointer;}
+.logout-btn:hover{border-color:var(--brand);color:var(--text);}
+
+main{max-width:1180px;margin:0 auto;padding:28px;}
+h1{font-family:var(--font-display);font-size:24px;font-weight:600;margin-bottom:4px;}
+.sub{color:var(--text-dim);font-size:13.5px;margin-bottom:22px;}
+
+.viewtabs{display:flex;gap:8px;margin-bottom:22px;}
+.vtab{font-family:var(--font-mono);font-size:12px;letter-spacing:.4px;padding:8px 16px;border-radius:8px;border:1px solid var(--line-2);color:var(--text-dim);cursor:pointer;background:var(--panel);}
+.vtab.on{border-color:var(--signal);color:var(--signal);}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:16px;}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.btn{font-family:var(--font-body);font-weight:600;font-size:13px;padding:9px 16px;border-radius:8px;border:none;cursor:pointer;}
+.btn-brand{background:var(--brand);color:#fff;}
+.btn-brand:hover{background:var(--brand-h);}
+.btn-ghost{background:transparent;border:1px solid var(--line-2);color:var(--text-dim);}
+.btn-ghost:hover{border-color:var(--signal);color:var(--text);}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+
+.req-list{display:flex;flex-direction:column;gap:10px;}
+.req-item{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 18px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:border-color .15s;}
+.req-item:hover{border-color:var(--line-2);}
+.req-name{font-weight:600;font-size:14px;}
+.req-meta{font-size:11.5px;color:var(--text-faint);font-family:var(--font-mono);margin-top:3px;}
+.status-pill{font-family:var(--font-mono);font-size:10.5px;padding:4px 10px;border-radius:20px;white-space:nowrap;}
+.status-draft{background:#3a3d454d;color:var(--text-dim);}
+.status-in_review{background:rgba(224,169,64,.15);color:var(--warn);}
+.status-needs_revision{background:rgba(197,59,47,.15);color:var(--brand-h);}
+.status-approved{background:rgba(53,208,192,.15);color:var(--signal);}
+
+.cat-tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
+.cat-tab{font-size:12.5px;padding:8px 14px;border-radius:8px;border:1px solid var(--line-2);cursor:pointer;color:var(--text-dim);display:flex;align-items:center;gap:6px;}
+.cat-tab.on{border-color:var(--signal);color:var(--text);}
+.cat-dot{width:7px;height:7px;border-radius:50%;}
+.dot-pending{background:var(--text-faint);}
+.dot-saved{background:var(--signal);}
+.dot-needs_revision{background:var(--brand);}
+
+.section-hd{font-family:var(--font-mono);font-size:11px;color:var(--text-faint);letter-spacing:.5px;text-transform:uppercase;margin:18px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--line);}
+.item-row{display:grid;grid-template-columns:1fr 90px 110px 110px;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px;}
+.item-row:last-child{border-bottom:none;}
+.item-name{color:var(--text);line-height:1.4;}
+.item-price{color:var(--text-dim);font-family:var(--font-mono);font-size:12.5px;text-align:right;}
+.item-total{color:var(--signal);font-family:var(--font-mono);font-size:12.5px;text-align:right;font-weight:600;}
+.qty-input{width:80px;padding:6px 8px;border-radius:6px;border:1px solid var(--line-2);background:var(--bg);color:var(--text);font-family:var(--font-mono);font-size:13px;text-align:center;}
+.qty-input:focus{outline:none;border-color:var(--signal);}
+
+.grand-total{display:flex;justify-content:flex-end;gap:14px;align-items:baseline;padding:16px 0 4px;font-family:var(--font-mono);}
+.grand-total .label{color:var(--text-dim);font-size:13px;}
+.grand-total .value{font-size:22px;font-weight:600;color:var(--signal);}
+
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);align-items:center;justify-content:center;z-index:100;}
+.modal-overlay.show{display:flex;}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px;width:480px;max-width:92vw;max-height:86vh;overflow:auto;}
+.modal h2{font-family:var(--font-display);font-size:17px;margin-bottom:16px;}
+.field{margin-bottom:14px;}
+.flabel{font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:block;}
+.finput,.fselect,.ftextarea{width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--line-2);background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:13.5px;}
+.ftextarea{resize:vertical;min-height:70px;}
+.cat-assign-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;}
+.cat-assign-row label{flex:0 0 150px;color:var(--text-dim);}
+.comment-item{padding:10px 0;border-bottom:1px solid var(--line);font-size:12.5px;}
+.comment-item:last-child{border-bottom:none;}
+.comment-author{font-weight:600;color:var(--text);}
+.comment-time{color:var(--text-faint);font-family:var(--font-mono);font-size:10.5px;margin-left:6px;}
+.back-btn{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:12.5px;margin-bottom:16px;padding:0;}
+.back-btn:hover{color:var(--signal);}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <a href="/"><img src="/assets/logo-icon.png" alt=""><span class="brand-name"><b>ЦУП</b> · ProLabSupport</span></a>
+    <a href="/" class="backlink">← Все модули</a>
+  </div>
+  <div class="user-chip">
+    <span id="userName"></span>
+    <button class="logout-btn" onclick="logout()">Выйти</button>
+  </div>
+</div>
+
+<main>
+  <h1>Коммерческие предложения</h1>
+  <p class="sub">Каталог оборудования, сбор позиций от экспертов, согласование и формирование КП.</p>
+
+  <div class="viewtabs" id="viewTabs"></div>
+  <div id="content"></div>
+</main>
+
+<div class="modal-overlay" id="newReqModal">
+  <div class="modal">
+    <h2>Новая заявка на КП</h2>
+    <div class="field">
+      <label class="flabel">Клиент</label>
+      <input class="finput" id="nrClient" placeholder="ТОО «Клиент»">
+    </div>
+    <div class="field">
+      <label class="flabel">Категории и ответственные эксперты</label>
+      <div id="nrCategories"></div>
+    </div>
+    <div class="row" style="margin-top:18px">
+      <button class="btn btn-ghost" onclick="closeModal('newReqModal')">Отмена</button>
+      <button class="btn btn-brand" onclick="createRequest()">Создать</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="reviseModal">
+  <div class="modal">
+    <h2 id="reviseModalTitle">Вернуть на доработку</h2>
+    <div class="field">
+      <label class="flabel">Комментарий для эксперта</label>
+      <textarea class="ftextarea" id="reviseComment" placeholder="Что нужно поправить…"></textarea>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn btn-ghost" onclick="closeModal('reviseModal')">Отмена</button>
+      <button class="btn btn-brand" onclick="submitRevise()">Отправить</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let me = null, myCategories = [], isPm = false, catalog = null;
+let currentRequestId = null, currentRequestDetail = null, currentCatSlug = null;
+let reviseCategoryId = null;
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function money(n){ return (n||0).toLocaleString('ru-RU', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+async function logout(){ await fetch('/auth/logout',{method:'POST'}); window.location.href='/login.html'; }
+
+function openModal(id){ document.getElementById(id).classList.add('show'); }
+function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+
+async function init(){
+  try{
+    const r = await fetch('/auth/me');
+    if (!r.ok) { window.location.href='/login.html'; return; }
+    const d = await r.json();
+    me = d.user;
+    document.getElementById('userName').innerHTML = `<b>${esc(me.displayName)}</b>`;
+
+    const mc = await (await fetch('/api/kp/my-categories')).json();
+    myCategories = mc.categories || [];
+    isPm = mc.isPm;
+
+    const cat = await (await fetch('/api/kp/catalog')).json();
+    catalog = cat;
+
+    renderViewTabs();
+  }catch(e){ console.error(e); }
+}
+
+function renderViewTabs(){
+  const tabs = [];
+  if (myCategories.length) tabs.push({ key:'expert', label:'Мои категории' });
+  if (isPm) tabs.push({ key:'pm', label:'Заявки (менеджер)' });
+  if (!tabs.length) { document.getElementById('content').innerHTML = '<div class="card">У вас пока нет доступа ни к одной категории. Обратитесь к администратору.</div>'; return; }
+  document.getElementById('viewTabs').innerHTML = tabs.map((t,i) =>
+    `<div class="vtab ${i===0?'on':''}" data-key="${t.key}" onclick="switchView('${t.key}', this)">${t.label}</div>`
+  ).join('');
+  switchView(tabs[0].key);
+}
+
+function switchView(key, el){
+  document.querySelectorAll('.vtab').forEach(t=>t.classList.remove('on'));
+  if (el) el.classList.add('on'); else { const t=document.querySelector(`.vtab[data-key="${key}"]`); if(t) t.classList.add('on'); }
+  currentRequestId = null;
+  if (key==='expert') loadRequestList(false);
+  else loadRequestList(true);
+}
+
+async function loadRequestList(pmMode){
+  const r = await fetch('/api/kp/requests');
+  const d = await r.json();
+  const wrap = document.getElementById('content');
+
+  const newBtn = pmMode ? `<div class="row" style="margin-bottom:16px"><span></span><button class="btn btn-brand" onclick="openNewRequestModal()">+ Новая заявка</button></div>` : '';
+  const STATUS_LABELS = { draft:'Черновик', in_review:'На проверке', needs_revision:'На доработке', approved:'Одобрено' };
+
+  if (!d.requests || !d.requests.length) {
+    wrap.innerHTML = newBtn + '<div class="card" style="text-align:center;color:var(--text-dim)">Заявок пока нет</div>';
+    return;
+  }
+
+  wrap.innerHTML = newBtn + '<div class="req-list">' + d.requests.map(req => `
+    <div class="req-item" onclick="openRequest(${req.id}, ${pmMode})">
+      <div>
+        <div class="req-name">${esc(req.client_name)}</div>
+        <div class="req-meta">#${req.id} · создано ${esc(req.created_by_name||'—')} · ${new Date(req.created_at).toLocaleDateString('ru-RU')}</div>
+      </div>
+      <span class="status-pill status-${req.status}">${STATUS_LABELS[req.status]||req.status}</span>
+    </div>`).join('') + '</div>';
+}
+
+async function openNewRequestModal(){
+  const ex = await (await fetch('/api/kp/experts')).json();
+  const experts = ex.experts || [];
+  document.getElementById('nrClient').value = '';
+  document.getElementById('nrCategories').innerHTML = catalog.categories.map(c => `
+    <div class="cat-assign-row">
+      <label><input type="checkbox" class="nr-cat-check" value="${c.id}" checked> ${esc(c.name)}</label>
+      <select class="fselect nr-cat-expert" data-cat="${c.id}" style="flex:1">
+        <option value="">— без эксперта —</option>
+        ${experts.map(e => `<option value="${e.id}" ${(e.kp_categories||[]).includes(c.slug)?'selected':''}>${esc(e.display_name)}</option>`).join('')}
+      </select>
+    </div>`).join('');
+  openModal('newReqModal');
+}
+
+async function createRequest(){
+  const clientName = document.getElementById('nrClient').value.trim();
+  if (!clientName) return alert('Укажите клиента');
+  const categories = [];
+  document.querySelectorAll('.nr-cat-check:checked').forEach(chk => {
+    const catId = parseInt(chk.value);
+    const sel = document.querySelector(`.nr-cat-expert[data-cat="${catId}"]`);
+    categories.push({ categoryId: catId, expertId: sel.value ? parseInt(sel.value) : null });
+  });
+  if (!categories.length) return alert('Отметьте хотя бы одну категорию');
+  const r = await fetch('/api/kp/requests', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ clientName, categories }) });
+  const d = await r.json();
+  if (!r.ok) return alert(d.error || 'Ошибка');
+  closeModal('newReqModal');
+  loadRequestList(true);
+}
+
+async function openRequest(id, pmMode){
+  currentRequestId = id;
+  const r = await fetch('/api/kp/requests/'+id);
+  const d = await r.json();
+  currentRequestDetail = d;
+  if (pmMode) renderPmDetail(d); else renderExpertDetail(d);
+}
+
+function renderExpertDetail(d){
+  const myCats = d.categories.filter(c => myCategories.includes(c.slug));
+  if (!myCats.length) { document.getElementById('content').innerHTML = '<div class="card">У вас нет категорий в этой заявке.</div>'; return; }
+  currentCatSlug = myCats[0].slug;
+
+  const STATUS_LABELS = { pending:'Не заполнено', saved:'Сохранено', needs_revision:'Нужна правка' };
+  const tabsHtml = myCats.map(c => `
+    <div class="cat-tab ${c.slug===currentCatSlug?'on':''}" onclick="switchExpertCat('${c.slug}', this)">
+      <span class="cat-dot dot-${c.status}"></span> ${esc(c.category_name)}
+    </div>`).join('');
+
+  document.getElementById('content').innerHTML = `
+    <button class="back-btn" onclick="switchView('expert')">← К списку заявок</button>
+    <div class="card">
+      <div class="row"><div><strong>${esc(d.request.client_name)}</strong></div><span class="status-pill status-${d.request.status}">${d.request.status}</span></div>
+    </div>
+    <div class="cat-tabs">${tabsHtml}</div>
+    <div id="expertCatBody"></div>
+  `;
+  renderExpertCategoryBody();
+}
+
+function switchExpertCat(slug, el){
+  currentCatSlug = slug;
+  document.querySelectorAll('.cat-tab').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on');
+  renderExpertCategoryBody();
+}
+
+function renderExpertCategoryBody(){
+  const rc = currentRequestDetail.categories.find(c => c.slug === currentCatSlug);
+  const cat = catalog.categories.find(c => c.slug === currentCatSlug);
+  const existingByItem = {};
+  currentRequestDetail.lineItems.filter(li => li.category_id === cat.id).forEach(li => { existingByItem[li.item_id] = li.quantity; });
+
+  const myComments = currentRequestDetail.comments.filter(c => c.category_id === cat.id);
+  const commentsHtml = myComments.length ? `<div class="card" style="border-color:var(--brand)"><div class="section-hd" style="border:none;margin:0 0 8px">Комментарии PM</div>${myComments.map(c=>`<div class="comment-item"><span class="comment-author">${esc(c.author_name)}</span><span class="comment-time">${new Date(c.created_at).toLocaleString('ru-RU')}</span><div style="margin-top:4px">${esc(c.body)}</div></div>`).join('')}</div>` : '';
+
+  let sections = {};
+  cat.items.forEach(it => { (sections[it.section_name || '—'] = sections[it.section_name || '—'] || []).push(it); });
+
+  let bodyHtml = commentsHtml + '<div class="card">';
+  Object.entries(sections).forEach(([sec, its]) => {
+    bodyHtml += `<div class="section-hd">${esc(sec)}</div>`;
+    its.forEach(it => {
+      const qty = existingByItem[it.id] || '';
+      const priceLabel = it.is_included ? 'Включено' : money(it.unit_price) + ' $';
+      bodyHtml += `
+        <div class="item-row" data-item="${it.id}" data-price="${it.unit_price||0}" data-included="${it.is_included}">
+          <div class="item-name">${esc(it.name)}</div>
+          <input type="number" min="0" step="1" class="qty-input" value="${qty}" oninput="recalcExpertTotal()">
+          <div class="item-price">${priceLabel}</div>
+          <div class="item-total">${it.is_included ? '—' : ''}</div>
+        </div>`;
+    });
+  });
+  bodyHtml += `<div class="grand-total"><span class="label">Итого по категории</span><span class="value" id="expertCatTotal">0.00 $</span></div>`;
+  bodyHtml += `<div class="row" style="margin-top:6px"><span></span><button class="btn btn-brand" onclick="saveExpertCategory(${cat.id})">Сохранить</button></div>`;
+  bodyHtml += '</div>';
+
+  document.getElementById('expertCatBody').innerHTML = bodyHtml;
+  recalcExpertTotal();
+}
+
+function recalcExpertTotal(){
+  let total = 0;
+  document.querySelectorAll('#expertCatBody .item-row').forEach(row => {
+    const qty = parseFloat(row.querySelector('.qty-input').value) || 0;
+    const price = parseFloat(row.dataset.price) || 0;
+    const included = row.dataset.included === 'true';
+    const totalCell = row.querySelector('.item-total');
+    if (!included) {
+      const lineTotal = qty * price;
+      totalCell.textContent = qty > 0 ? money(lineTotal) + ' $' : '';
+      total += lineTotal;
+    }
+  });
+  const el = document.getElementById('expertCatTotal');
+  if (el) el.textContent = money(total) + ' $';
+}
+
+async function saveExpertCategory(categoryId){
+  const items = [];
+  document.querySelectorAll('#expertCatBody .item-row').forEach(row => {
+    const qty = parseFloat(row.querySelector('.qty-input').value) || 0;
+    if (qty > 0) items.push({ itemId: parseInt(row.dataset.item), quantity: qty });
+  });
+  const r = await fetch(`/api/kp/requests/${currentRequestId}/categories/${categoryId}`, {
+    method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ items })
+  });
+  const d = await r.json();
+  if (!r.ok) return alert(d.error || 'Ошибка сохранения');
+  openRequest(currentRequestId, false);
+}
+
+function renderPmDetail(d){
+  const STATUS_LABELS = { pending:'Не заполнено', saved:'Сохранено', needs_revision:'Нужна правка' };
+  let grandTotal = 0;
+  const catRows = d.categories.map(rc => {
+    const items = d.lineItems.filter(li => li.category_id === rc.category_id);
+    const catTotal = items.reduce((s,li) => s + (li.is_included_snapshot ? 0 : li.quantity * (li.unit_price_snapshot||0)), 0);
+    grandTotal += catTotal;
+    const itemsHtml = items.length ? items.map(li => `
+      <div class="item-row" style="grid-template-columns:1fr 70px 100px 100px">
+        <div class="item-name">${esc(li.name)}</div>
+        <div class="item-price">${li.quantity}</div>
+        <div class="item-price">${li.is_included_snapshot?'Включено':money(li.unit_price_snapshot)+' $'}</div>
+        <div class="item-total">${li.is_included_snapshot?'—':money(li.quantity*li.unit_price_snapshot)+' $'}</div>
+      </div>`).join('') : '<div style="color:var(--text-faint);font-size:12.5px;padding:8px 0">Пока ничего не выбрано</div>';
+
+    return `
+      <div class="card">
+        <div class="row">
+          <div><strong>${esc(rc.category_name)}</strong> <span style="color:var(--text-dim);font-size:12px">· ${esc(rc.expert_name||'без эксперта')}</span></div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="status-pill status-${rc.status==='saved'?'approved':rc.status==='needs_revision'?'needs_revision':'draft'}">${STATUS_LABELS[rc.status]||rc.status}</span>
+            <button class="btn btn-ghost" onclick="openReviseModal(${rc.category_id}, '${esc(rc.category_name)}')">Комментарий / на доработку</button>
+          </div>
+        </div>
+        <div style="margin-top:10px">${itemsHtml}</div>
+      </div>`;
+  }).join('');
+
+  const allSaved = d.categories.every(c => c.status === 'saved');
+  const generalComments = d.comments.filter(c => !c.category_id);
+  const commentsHtml = generalComments.length ? `<div class="card">${generalComments.map(c=>`<div class="comment-item"><span class="comment-author">${esc(c.author_name)}</span><span class="comment-time">${new Date(c.created_at).toLocaleString('ru-RU')}</span><div style="margin-top:4px">${esc(c.body)}</div></div>`).join('')}</div>` : '';
+
+  document.getElementById('content').innerHTML = `
+    <button class="back-btn" onclick="switchView('pm')">← К списку заявок</button>
+    <div class="card">
+      <div class="row">
+        <div><strong>${esc(d.request.client_name)}</strong><div class="req-meta">#${d.request.id}</div></div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <span class="status-pill status-${d.request.status}">${d.request.status}</span>
+          <button class="btn btn-ghost" onclick="openReviseModal(null, 'всей заявке')">Вернуть всё на доработку</button>
+          <button class="btn btn-brand" ${allSaved?'':'disabled'} onclick="approveRequest()">Одобрить и сформировать КП</button>
+        </div>
+      </div>
+    </div>
+    ${commentsHtml}
+    ${catRows}
+    <div class="grand-total"><span class="label">Общая сумма</span><span class="value">${money(grandTotal)} $</span></div>
+  `;
+}
+
+function openReviseModal(categoryId, label){
+  reviseCategoryId = categoryId;
+  document.getElementById('reviseModalTitle').textContent = categoryId ? `Комментарий: ${label}` : 'Вернуть на доработку';
+  document.getElementById('reviseComment').value = '';
+  openModal('reviseModal');
+}
+async function submitRevise(){
+  const comment = document.getElementById('reviseComment').value.trim();
+  if (!comment) return alert('Введите комментарий');
+  const r = await fetch(`/api/kp/requests/${currentRequestId}/revise`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ categoryId: reviseCategoryId, comment })
+  });
+  const d = await r.json();
+  if (!r.ok) return alert(d.error || 'Ошибка');
+  closeModal('reviseModal');
+  openRequest(currentRequestId, true);
+}
+async function approveRequest(){
+  const r = await fetch(`/api/kp/requests/${currentRequestId}/approve`, { method:'POST' });
+  const d = await r.json();
+  if (!r.ok) return alert(d.error || 'Ошибка');
+  alert('Заявка одобрена. Формирование файла КП подключим следующим шагом.');
+  openRequest(currentRequestId, true);
+}
+
+init();
+</script>
+</body>
+</html>
