@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 const { requireAuth, pool } = require('../auth');
 const { notifyPersonal } = require('../kp-notify');
 
@@ -326,6 +328,46 @@ router.get('/requests/:id/document', requireAuth(PM_ROLES), async (req, res) => 
     console.error('GET /requests/:id/document error:', e.message);
     res.status(500).json({ error: 'Не удалось сформировать файл' });
   }
+});
+
+// ── Catalog version management (upload / rollback) ──────────────────────────
+router.get('/catalog/versions', requireAuth(PM_ROLES), async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT v.id, v.uploaded_at, v.filename, v.note, v.active, u.display_name AS uploaded_by_name,
+              (SELECT COUNT(*) FROM ticketsmodule_kp_items WHERE catalog_version_id=v.id) AS item_count
+       FROM ticketsmodule_kp_catalog_versions v
+       LEFT JOIN ticketsmodule_users u ON u.id=v.uploaded_by
+       ORDER BY v.uploaded_at DESC`
+    );
+    res.json({ versions: rows });
+  } catch (e) { console.error('GET /catalog/versions error:', e.message); res.status(500).json({ error: 'Server error' }); }
+});
+
+router.post('/catalog/upload', requireAuth(PM_ROLES), upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Файл не получен' });
+  try {
+    const { importCatalogVersion } = require('../kp-catalog-import');
+    const result = await importCatalogVersion({
+      buffer: req.file.buffer, filename: req.file.originalname,
+      note: req.body.note || null, uploadedBy: req.user.id,
+    });
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    console.error('POST /catalog/upload error:', e.message);
+    res.status(500).json({ error: 'Не удалось разобрать файл: ' + e.message });
+  }
+});
+
+router.post('/catalog/versions/:id/activate', requireAuth(PM_ROLES), async (req, res) => {
+  try {
+    const versionId = parseInt(req.params.id, 10);
+    const { rows } = await pool.query('SELECT id FROM ticketsmodule_kp_catalog_versions WHERE id=$1', [versionId]);
+    if (!rows.length) return res.status(404).json({ error: 'Версия не найдена' });
+    await pool.query('UPDATE ticketsmodule_kp_catalog_versions SET active=false');
+    await pool.query('UPDATE ticketsmodule_kp_catalog_versions SET active=true WHERE id=$1', [versionId]);
+    res.json({ ok: true });
+  } catch (e) { console.error('POST /catalog/versions/:id/activate error:', e.message); res.status(500).json({ error: 'Server error' }); }
 });
 
 module.exports = { router };
