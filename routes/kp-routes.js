@@ -306,4 +306,33 @@ router.put('/requests/:id/categories/:categoryId/assign', requireAuth(PM_ROLES),
   } catch (e) { console.error('PUT /categories/:categoryId/assign error:', e.message); res.status(500).json({ error: 'Server error' }); }
 });
 
+// Download the generated KP document — only once the request is approved
+router.get('/requests/:id/document', requireAuth(PM_ROLES), async (req, res) => {
+  const kpId = parseInt(req.params.id, 10);
+  const format = req.query.format === 'pdf' ? 'pdf' : 'docx';
+  try {
+    const { rows } = await pool.query('SELECT status, client_name FROM ticketsmodule_kp_requests WHERE id=$1', [kpId]);
+    if (!rows.length) return res.status(404).json({ error: 'Не найдено' });
+    if (rows[0].status !== 'approved') return res.status(400).json({ error: 'Заявка ещё не одобрена' });
+
+    const safeClient = rows[0].client_name.replace(/[^\p{L}\p{N}\s-]/gu, '').trim().replace(/\s+/g, '_');
+    if (format === 'pdf') {
+      const { generateKpPdf } = require('../kp-generate-pdf');
+      const buf = await generateKpPdf(kpId);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="KP_${safeClient}.pdf"`);
+      res.send(buf);
+    } else {
+      const { generateKpDocx } = require('../kp-generate-docx');
+      const buf = await generateKpDocx(kpId);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.setHeader('Content-Disposition', `attachment; filename="KP_${safeClient}.docx"`);
+      res.send(buf);
+    }
+  } catch (e) {
+    console.error('GET /requests/:id/document error:', e.message);
+    res.status(500).json({ error: 'Не удалось сформировать файл' });
+  }
+});
+
 module.exports = { router };

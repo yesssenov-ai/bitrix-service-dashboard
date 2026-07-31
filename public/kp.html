@@ -10,8 +10,9 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
+  color-scheme: dark;
   --bg:#14171d; --panel:#1b1f27; --panel-h:#20242e; --line:#2a2f3a; --line-2:#363c49;
-  --text:#eef0f3; --text-dim:#8b93a3; --text-faint:#565d6b;
+  --text:#eef0f3; --text-dim:#a7afbd; --text-faint:#7a8291;
   --brand:#C53B2F; --brand-h:#d94737; --signal:#35d0c0; --signal-dim:rgba(53,208,192,.35);
   --warn:#e0a940; --font-display:'Space Grotesk',sans-serif; --font-body:'Inter',system-ui,sans-serif; --font-mono:'IBM Plex Mono',monospace;
 }
@@ -51,7 +52,7 @@ h1{font-family:var(--font-display);font-size:24px;font-weight:600;margin-bottom:
 .req-name{font-weight:600;font-size:14px;}
 .req-meta{font-size:11.5px;color:var(--text-faint);font-family:var(--font-mono);margin-top:3px;}
 .status-pill{font-family:var(--font-mono);font-size:10.5px;padding:4px 10px;border-radius:20px;white-space:nowrap;}
-.status-draft{background:#3a3d454d;color:var(--text-dim);}
+.status-draft{background:#454b5866;color:#c3c9d3;}
 .status-in_review{background:rgba(224,169,64,.15);color:var(--warn);}
 .status-needs_revision{background:rgba(197,59,47,.15);color:var(--brand-h);}
 .status-approved{background:rgba(53,208,192,.15);color:var(--signal);}
@@ -407,6 +408,11 @@ function renderPmDetail(d){
     </div>` : '';
 
   const allSaved = d.categories.every(c => c.status === 'saved');
+  const isApproved = d.request.status === 'approved';
+  const downloadBtns = isApproved ? `
+    <a class="btn btn-brand" href="/api/kp/requests/${d.request.id}/document?format=docx" style="text-decoration:none;display:inline-block">⬇ Word</a>
+    <a class="btn btn-brand" href="/api/kp/requests/${d.request.id}/document?format=pdf" style="text-decoration:none;display:inline-block">⬇ PDF</a>
+  ` : `<button class="btn btn-brand" ${allSaved?'':'disabled'} onclick="approveRequest()">Одобрить и сформировать КП</button>`;
   const generalComments = d.comments.filter(c => !c.category_id);
   const commentsHtml = generalComments.length ? `<div class="card">${generalComments.map(c=>`<div class="comment-item"><span class="comment-author">${esc(c.author_name)}</span><span class="comment-time">${new Date(c.created_at).toLocaleString('ru-RU')}</span><div style="margin-top:4px">${esc(c.body)}</div></div>`).join('')}</div>` : '';
 
@@ -418,7 +424,7 @@ function renderPmDetail(d){
         <div style="display:flex;gap:10px;align-items:center">
           <span class="status-pill status-${d.request.status}">${d.request.status}</span>
           <button class="btn btn-ghost" onclick="openReviseModal(null, 'всей заявке')">Вернуть всё на доработку</button>
-          <button class="btn btn-brand" ${allSaved?'':'disabled'} onclick="approveRequest()">Одобрить и сформировать КП</button>
+          ${downloadBtns}
         </div>
       </div>
     </div>
@@ -483,7 +489,6 @@ async function approveRequest(){
   const r = await fetch(`/api/kp/requests/${currentRequestId}/approve`, { method:'POST' });
   const d = await r.json();
   if (!r.ok) return alert(d.error || 'Ошибка');
-  alert('Заявка одобрена. Формирование файла КП подключим следующим шагом.');
   openRequest(currentRequestId, true);
 }
 
