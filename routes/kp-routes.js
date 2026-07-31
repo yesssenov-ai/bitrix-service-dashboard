@@ -312,17 +312,18 @@ router.get('/requests/:id/document', requireAuth(PM_ROLES), async (req, res) => 
     if (rows[0].status !== 'approved') return res.status(400).json({ error: 'Заявка ещё не одобрена' });
 
     const safeClient = rows[0].client_name.replace(/[^\p{L}\p{N}\s-]/gu, '').trim().replace(/\s+/g, '_');
+    const encodedClient = encodeURIComponent(`KP_${safeClient}`);
     if (format === 'pdf') {
       const { generateKpPdf } = require('../kp-generate-pdf');
       const buf = await generateKpPdf(kpId);
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="KP_${safeClient}.pdf"`);
+      res.setHeader('Content-Disposition', `attachment; filename="KP.pdf"; filename*=UTF-8''${encodedClient}.pdf`);
       res.send(buf);
     } else {
       const { generateKpDocx } = require('../kp-generate-docx');
       const buf = await generateKpDocx(kpId);
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-      res.setHeader('Content-Disposition', `attachment; filename="KP_${safeClient}.docx"`);
+      res.setHeader('Content-Disposition', `attachment; filename="KP.docx"; filename*=UTF-8''${encodedClient}.docx`);
       res.send(buf);
     }
   } catch (e) {
