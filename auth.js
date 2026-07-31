@@ -179,7 +179,7 @@ async function initDB() {
       catalog_version_id INTEGER NOT NULL REFERENCES ticketsmodule_kp_catalog_versions(id) ON DELETE CASCADE,
       category_id INTEGER NOT NULL REFERENCES ticketsmodule_kp_categories(id),
       section_name VARCHAR(300),
-      item_no VARCHAR(20),
+      item_no VARCHAR(500),
       name TEXT NOT NULL,
       unit_price NUMERIC(14,2),
       is_included BOOLEAN DEFAULT false,
@@ -235,6 +235,7 @@ async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_tm_kp_comments_req ON ticketsmodule_kp_comments(kp_request_id);
 
     ALTER TABLE ticketsmodule_users ADD COLUMN IF NOT EXISTS kp_categories JSONB DEFAULT '[]';
+    ALTER TABLE ticketsmodule_kp_items ALTER COLUMN item_no TYPE VARCHAR(500);
 
     CREATE TABLE IF NOT EXISTS ticketsmodule_mail_emails (
       id TEXT PRIMARY KEY,
