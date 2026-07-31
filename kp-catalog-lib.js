@@ -68,6 +68,7 @@ function parseCatalogWorkbook(buffer) {
 
     let currentSection = null;
     let sortOrder = 0;
+    const seenKeys = {}; // dedupe counter for genuinely repeated (section+name) combos
 
     for (let r = 1; r < rows.length; r++) {
       const row = rows[r] || [];
@@ -84,7 +85,10 @@ function parseCatalogWorkbook(buffer) {
       }
 
       sortOrder++;
-      const stable_key = stableHash(mapping.slug + '|' + normalizeForKey(nameVal));
+      const baseKeyInput = mapping.slug + '|' + normalizeForKey(currentSection) + '|' + normalizeForKey(nameVal);
+      const dupCount = (seenKeys[baseKeyInput] = (seenKeys[baseKeyInput] || 0) + 1);
+      const keyInput = dupCount > 1 ? `${baseKeyInput}|${dupCount}` : baseKeyInput;
+      const stable_key = stableHash(keyInput);
       items.push({
         stable_key,
         category_slug: mapping.slug,
