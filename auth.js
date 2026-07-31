@@ -156,6 +156,86 @@ async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_tm_notiflog_sent ON ticketsmodule_notification_log(sent_at DESC);
     CREATE INDEX IF NOT EXISTS idx_tm_notiflog_item ON ticketsmodule_notification_log(bitrix_item_id);
 
+    -- ── КП (Коммерческие предложения) module ──────────────────────────────
+    CREATE TABLE IF NOT EXISTS ticketsmodule_kp_catalog_versions (
+      id SERIAL PRIMARY KEY,
+      uploaded_by INTEGER,
+      uploaded_at TIMESTAMPTZ DEFAULT NOW(),
+      filename VARCHAR(300),
+      active BOOLEAN DEFAULT false,
+      note TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS ticketsmodule_kp_categories (
+      id SERIAL PRIMARY KEY,
+      slug VARCHAR(50) UNIQUE NOT NULL,
+      name VARCHAR(200) NOT NULL,
+      sort_order INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS ticketsmodule_kp_items (
+      id SERIAL PRIMARY KEY,
+      stable_key VARCHAR(64) NOT NULL,
+      catalog_version_id INTEGER NOT NULL REFERENCES ticketsmodule_kp_catalog_versions(id) ON DELETE CASCADE,
+      category_id INTEGER NOT NULL REFERENCES ticketsmodule_kp_categories(id),
+      section_name VARCHAR(300),
+      item_no VARCHAR(20),
+      name TEXT NOT NULL,
+      unit_price NUMERIC(14,2),
+      is_included BOOLEAN DEFAULT false,
+      specs TEXT,
+      power_kw VARCHAR(50),
+      sort_order INTEGER,
+      UNIQUE(catalog_version_id, stable_key)
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_kp_items_version ON ticketsmodule_kp_items(catalog_version_id);
+    CREATE INDEX IF NOT EXISTS idx_tm_kp_items_stable ON ticketsmodule_kp_items(stable_key);
+
+    CREATE TABLE IF NOT EXISTS ticketsmodule_kp_requests (
+      id SERIAL PRIMARY KEY,
+      client_name VARCHAR(300) NOT NULL,
+      created_by INTEGER,
+      pm_id INTEGER,
+      catalog_version_id INTEGER REFERENCES ticketsmodule_kp_catalog_versions(id),
+      status VARCHAR(30) NOT NULL DEFAULT 'draft',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS ticketsmodule_kp_request_categories (
+      id SERIAL PRIMARY KEY,
+      kp_request_id INTEGER NOT NULL REFERENCES ticketsmodule_kp_requests(id) ON DELETE CASCADE,
+      category_id INTEGER NOT NULL REFERENCES ticketsmodule_kp_categories(id),
+      expert_id INTEGER,
+      status VARCHAR(30) NOT NULL DEFAULT 'pending',
+      saved_at TIMESTAMPTZ,
+      UNIQUE(kp_request_id, category_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS ticketsmodule_kp_line_items (
+      id SERIAL PRIMARY KEY,
+      kp_request_id INTEGER NOT NULL REFERENCES ticketsmodule_kp_requests(id) ON DELETE CASCADE,
+      item_id INTEGER NOT NULL REFERENCES ticketsmodule_kp_items(id),
+      quantity NUMERIC(10,2) NOT NULL,
+      unit_price_snapshot NUMERIC(14,2),
+      is_included_snapshot BOOLEAN DEFAULT false,
+      UNIQUE(kp_request_id, item_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS ticketsmodule_kp_comments (
+      id SERIAL PRIMARY KEY,
+      kp_request_id INTEGER NOT NULL REFERENCES ticketsmodule_kp_requests(id) ON DELETE CASCADE,
+      category_id INTEGER REFERENCES ticketsmodule_kp_categories(id),
+      author_id INTEGER,
+      body TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_kp_req_categories ON ticketsmodule_kp_request_categories(kp_request_id);
+    CREATE INDEX IF NOT EXISTS idx_tm_kp_line_items_req ON ticketsmodule_kp_line_items(kp_request_id);
+    CREATE INDEX IF NOT EXISTS idx_tm_kp_comments_req ON ticketsmodule_kp_comments(kp_request_id);
+
+    ALTER TABLE ticketsmodule_users ADD COLUMN IF NOT EXISTS kp_categories JSONB DEFAULT '[]';
+
     CREATE TABLE IF NOT EXISTS ticketsmodule_mail_emails (
       id TEXT PRIMARY KEY,
       message_id TEXT UNIQUE,
