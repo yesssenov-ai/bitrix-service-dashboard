@@ -246,10 +246,6 @@ router.post('/requests/:id/revise', requireAuth(PM_ROLES), async (req, res) => {
 router.post('/requests/:id/approve', requireAuth(PM_ROLES), async (req, res) => {
   try {
     const kpId = parseInt(req.params.id, 10);
-    const { rows } = await pool.query(`SELECT status FROM ticketsmodule_kp_request_categories WHERE kp_request_id=$1`, [kpId]);
-    if (!rows.length || rows.some(r => r.status !== 'saved')) {
-      return res.status(400).json({ error: 'Не все категории сохранены экспертами' });
-    }
     await pool.query(`UPDATE ticketsmodule_kp_requests SET status='approved', updated_at=NOW() WHERE id=$1`, [kpId]);
     res.json({ ok: true });
   } catch (e) { console.error('POST /api/kp/requests/:id/approve error:', e.message); res.status(500).json({ error: 'Server error' }); }

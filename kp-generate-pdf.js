@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const PdfPrinter = require('pdfmake/src/printer');
 const { assembleKpData } = require('./kp-doc-data');
 const {
@@ -7,13 +8,13 @@ const {
 } = require('./kp-boilerplate');
 
 const FONT_DIR = path.join(__dirname, 'public', 'assets', 'fonts');
+const FONT_REGULAR = path.join(FONT_DIR, 'PTSans-Regular.ttf');
+const FONT_BOLD = path.join(FONT_DIR, 'PTSans-Bold.ttf');
+if (!fs.existsSync(FONT_REGULAR) || !fs.existsSync(FONT_BOLD)) {
+  console.error(`KP PDF generator: font files missing at ${FONT_DIR} — expected PTSans-Regular.ttf and PTSans-Bold.ttf`);
+}
 const fonts = {
-  PTSans: {
-    normal: path.join(FONT_DIR, 'PTSans-Regular.ttf'),
-    bold: path.join(FONT_DIR, 'PTSans-Bold.ttf'),
-    italics: path.join(FONT_DIR, 'PTSans-Regular.ttf'),
-    bolditalics: path.join(FONT_DIR, 'PTSans-Bold.ttf'),
-  },
+  PTSans: { normal: FONT_REGULAR, bold: FONT_BOLD, italics: FONT_REGULAR, bolditalics: FONT_BOLD },
 };
 
 const BRAND_RED = '#C53B2F';

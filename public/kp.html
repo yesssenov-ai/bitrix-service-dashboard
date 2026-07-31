@@ -412,7 +412,7 @@ function renderPmDetail(d){
   const downloadBtns = isApproved ? `
     <a class="btn btn-brand" href="/api/kp/requests/${d.request.id}/document?format=docx" style="text-decoration:none;display:inline-block">⬇ Word</a>
     <a class="btn btn-brand" href="/api/kp/requests/${d.request.id}/document?format=pdf" style="text-decoration:none;display:inline-block">⬇ PDF</a>
-  ` : `<button class="btn btn-brand" ${allSaved?'':'disabled'} onclick="approveRequest()">Одобрить и сформировать КП</button>`;
+  ` : `<button class="btn btn-brand" onclick="approveRequest()">Одобрить и сформировать КП</button>`;
   const generalComments = d.comments.filter(c => !c.category_id);
   const commentsHtml = generalComments.length ? `<div class="card">${generalComments.map(c=>`<div class="comment-item"><span class="comment-author">${esc(c.author_name)}</span><span class="comment-time">${new Date(c.created_at).toLocaleString('ru-RU')}</span><div style="margin-top:4px">${esc(c.body)}</div></div>`).join('')}</div>` : '';
 

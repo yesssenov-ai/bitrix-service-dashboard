@@ -31,7 +31,11 @@ async function assembleKpData(kpRequestId) {
   let moduleNo = 0;
 
   for (const cat of cats) {
-    const items = lineItems.filter(li => li.category_id === cat.category_id);
+    const items = lineItems.filter(li => li.category_id === cat.category_id).map(li => ({
+      ...li,
+      quantity: parseFloat(li.quantity) || 0,
+      unit_price_snapshot: li.unit_price_snapshot === null ? null : parseFloat(li.unit_price_snapshot),
+    }));
     if (!items.length) continue; // skip categories nobody filled in
 
     moduleNo++;
