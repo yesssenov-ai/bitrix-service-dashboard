@@ -157,6 +157,24 @@ let reviseCategoryId = null;
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function money(n){ return (n||0).toLocaleString('ru-RU', {minimumFractionDigits:2, maximumFractionDigits:2}); }
 
+function toast(msg, kind){
+  let el = document.getElementById('toastBox');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'toastBox';
+    el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;padding:12px 20px;border-radius:9px;font-size:13.5px;font-family:var(--font-body);box-shadow:0 8px 24px rgba(0,0,0,.4);max-width:80vw;text-align:center;transition:opacity .2s,transform .2s;opacity:0;';
+    document.body.appendChild(el);
+  }
+  el.style.background = kind === 'error' ? '#3a1a17' : '#16302c';
+  el.style.border = '1px solid ' + (kind === 'error' ? 'var(--brand)' : 'var(--signal)');
+  el.style.color = kind === 'error' ? '#ff8f85' : 'var(--signal)';
+  el.textContent = msg;
+  el.style.opacity = '1';
+  el.style.transform = 'translateX(-50%) translateY(0)';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.opacity = '0'; }, 3500);
+}
+
 async function logout(){ await fetch('/auth/logout',{method:'POST'}); window.location.href='/login.html'; }
 
 function openModal(id){ document.getElementById(id).classList.add('show'); }
@@ -240,17 +258,17 @@ async function openNewRequestModal(){
 
 async function createRequest(){
   const clientName = document.getElementById('nrClient').value.trim();
-  if (!clientName) return alert('Укажите клиента');
+  if (!clientName) return toast('Укажите клиента', 'error');
   const categories = [];
   document.querySelectorAll('.nr-cat-check:checked').forEach(chk => {
     const catId = parseInt(chk.value);
     const sel = document.querySelector(`.nr-cat-expert[data-cat="${catId}"]`);
     categories.push({ categoryId: catId, expertId: sel.value ? parseInt(sel.value) : null });
   });
-  if (!categories.length) return alert('Отметьте хотя бы одну категорию');
+  if (!categories.length) return toast('Отметьте хотя бы одну категорию', 'error');
   const r = await fetch('/api/kp/requests', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ clientName, categories }) });
   const d = await r.json();
-  if (!r.ok) return alert(d.error || 'Ошибка');
+  if (!r.ok) return toast(d.error || 'Ошибка', 'error');
   closeModal('newReqModal');
   loadRequestList(true);
 }
@@ -354,7 +372,7 @@ async function saveExpertCategory(categoryId){
     method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ items })
   });
   const d = await r.json();
-  if (!r.ok) return alert(d.error || 'Ошибка сохранения');
+  if (!r.ok) return toast(d.error || 'Ошибка сохранения', 'error');
   openRequest(currentRequestId, false);
 }
 
@@ -411,7 +429,6 @@ function renderPmDetail(d){
   const isApproved = d.request.status === 'approved';
   const downloadBtns = isApproved ? `
     <a class="btn btn-brand" href="/api/kp/requests/${d.request.id}/document?format=docx" style="text-decoration:none;display:inline-block">⬇ Word</a>
-    <a class="btn btn-brand" href="/api/kp/requests/${d.request.id}/document?format=pdf" style="text-decoration:none;display:inline-block">⬇ PDF</a>
   ` : `<button class="btn btn-brand" onclick="approveRequest()">Одобрить и сформировать КП</button>`;
   const generalComments = d.comments.filter(c => !c.category_id);
   const commentsHtml = generalComments.length ? `<div class="card">${generalComments.map(c=>`<div class="comment-item"><span class="comment-author">${esc(c.author_name)}</span><span class="comment-time">${new Date(c.created_at).toLocaleString('ru-RU')}</span><div style="margin-top:4px">${esc(c.body)}</div></div>`).join('')}</div>` : '';
@@ -453,7 +470,7 @@ async function reassignExpert(categoryId, expertId){
     method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ expertId: expertId || null })
   });
   const d = await r.json();
-  if (!r.ok) return alert(d.error || 'Ошибка');
+  if (!r.ok) return toast(d.error || 'Ошибка', 'error');
   openRequest(currentRequestId, true);
 }
 
@@ -463,7 +480,7 @@ async function addCategoryToRequest(){
     method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ categoryId })
   });
   const d = await r.json();
-  if (!r.ok) return alert(d.error || 'Ошибка');
+  if (!r.ok) return toast(d.error || 'Ошибка', 'error');
   openRequest(currentRequestId, true);
 }
 
@@ -475,20 +492,20 @@ function openReviseModal(categoryId, label){
 }
 async function submitRevise(){
   const comment = document.getElementById('reviseComment').value.trim();
-  if (!comment) return alert('Введите комментарий');
+  if (!comment) return toast('Введите комментарий', 'error');
   const r = await fetch(`/api/kp/requests/${currentRequestId}/revise`, {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ categoryId: reviseCategoryId, comment })
   });
   const d = await r.json();
-  if (!r.ok) return alert(d.error || 'Ошибка');
+  if (!r.ok) return toast(d.error || 'Ошибка', 'error');
   closeModal('reviseModal');
   openRequest(currentRequestId, true);
 }
 async function approveRequest(){
   const r = await fetch(`/api/kp/requests/${currentRequestId}/approve`, { method:'POST' });
   const d = await r.json();
-  if (!r.ok) return alert(d.error || 'Ошибка');
+  if (!r.ok) return toast(d.error || 'Ошибка', 'error');
   openRequest(currentRequestId, true);
 }
 
