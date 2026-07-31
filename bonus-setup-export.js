@@ -1,4 +1,4 @@
-// Run in Railway Console: node bonus-setup-export.js <kuanysh.e@prolabsupport.kz>
+// Run in Railway Console: node bonus-setup-export.js <your-email@prolabsupport.kz>
 // Produces:
 //   1. Console output — full field list for smart process 1046 (Отчёт)
 //   2. Console output — search for "Источник" fields within 1058, to confirm the field code
@@ -81,7 +81,7 @@ async function main() {
       headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         from: 'ProLabSupport ЦУП <noreply@prolabsupport.kz>',
-        to: [kuanysh.e@prolabsupport.kz],
+        to: [recipient],
         subject: 'Выгрузка приборов для настройки бонусов',
         html: '<p>Во вложении — полный список приборов из Bitrix. Заполни колонку "Категория тарифа" (можно свериться со справочным листом), пришли обратно.</p>',
         attachments: [{ filename: 'instruments-export.xlsx', content: buffer.toString('base64') }],
