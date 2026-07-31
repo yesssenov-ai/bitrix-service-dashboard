@@ -454,6 +454,11 @@ initDB().then(() => {
     // Single interval: check new tickets every 30 min + overdue every run
     checkNewAndOverdue();
     setInterval(checkNewAndOverdue, 30 * 60 * 1000);
+    // USD/KZT exchange rate — refresh once on boot, then daily. Bonus
+    // calculations read from the cache this keeps warm.
+    const { refreshDailyRate } = require('./nbrk-exchange-rate');
+    setTimeout(() => refreshDailyRate(), 5000);
+    setInterval(() => refreshDailyRate(), 24 * 60 * 60 * 1000);
     // Planner ↔ Bitrix reconciliation — webhooks are best-effort, this catches
     // anything a missed/failed webhook delivery would otherwise leave stale.
     const { reconcileAllPlannerEvents } = require('./routes/relations-routes');

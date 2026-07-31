@@ -237,6 +237,29 @@ async function initDB() {
     ALTER TABLE ticketsmodule_users ADD COLUMN IF NOT EXISTS kp_categories JSONB DEFAULT '[]';
     ALTER TABLE ticketsmodule_kp_items ALTER COLUMN item_no TYPE VARCHAR(500);
 
+    -- ── Бонусы инженеров module ─────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS ticketsmodule_exchange_rates (
+      rate_date DATE PRIMARY KEY,
+      rate NUMERIC(10,4) NOT NULL,
+      fetched_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS ticketsmodule_bonus_tariff_categories (
+      id SERIAL PRIMARY KEY,
+      slug VARCHAR(50) UNIQUE NOT NULL,
+      name VARCHAR(200) NOT NULL,
+      install_usd NUMERIC(10,2),
+      methodical_usd NUMERIC(10,2)
+    );
+
+    CREATE TABLE IF NOT EXISTS ticketsmodule_instrument_category_map (
+      id SERIAL PRIMARY KEY,
+      bitrix_pribor_id INTEGER UNIQUE NOT NULL,
+      pribor_name TEXT NOT NULL,
+      category_id INTEGER REFERENCES ticketsmodule_bonus_tariff_categories(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_instr_cat_map_pribor ON ticketsmodule_instrument_category_map(bitrix_pribor_id);
+
     CREATE TABLE IF NOT EXISTS ticketsmodule_mail_emails (
       id TEXT PRIMARY KEY,
       message_id TEXT UNIQUE,
