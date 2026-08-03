@@ -17,7 +17,7 @@ const { b24 } = require('./bitrix');
 const FIELD = 'UF_CRM_1731862648';
 
 async function main() {
-  const reference = JSON.parse(fs.readFileSync('./deal_manufacturer_reference.json', 'utf-8'));
+  const reference = JSON.parse(fs.readFileSync('./deal_manufacturer_reference_clean.json', 'utf-8'));
   const dealIds = Object.keys(reference).map(Number);
   console.log(`Сверяю ${dealIds.length} сделок...\n`);
 
