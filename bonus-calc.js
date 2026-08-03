@@ -110,7 +110,7 @@ async function resolveReportBonus(report, priborMap) {
     const currency = deal.CURRENCY_ID || 'KZT';
     const bonus = sum * 0.10;
     if (currency === 'USD') grossUsd = bonus; else grossKzt = bonus;
-    basis = `10% от сделки #${parent.id} (${sum} ${currency})`;
+    basis = `10% от сделки #${dealInfo.dealId} (${sum} ${currency})`;
   }
 
   const rate = grossUsd ? await getTodayRate() : null;
