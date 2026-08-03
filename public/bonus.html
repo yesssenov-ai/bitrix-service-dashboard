@@ -89,6 +89,9 @@ h1{font-family:var(--font-display);font-size:24px;font-weight:600;margin-bottom:
           <option value="3">3 квартал</option>
           <option value="4">4 квартал</option>
         </select>
+        <select class="fselect" id="fEngineer" style="display:none">
+          <option value="">Все инженеры</option>
+        </select>
       </div>
       <button class="btn btn-brand" onclick="calculate()">Рассчитать</button>
     </div>
@@ -131,23 +134,40 @@ async function init(){
   const nowQuarter = Math.floor(new Date().getMonth() / 3) + 1;
   document.getElementById('fQuarter').value = String(nowQuarter > 1 ? nowQuarter - 1 : 4);
 
-  calculate();
+  if (isPm) await loadEngineerOptions();
+
+  document.getElementById('content').innerHTML = '<div class="card" style="text-align:center;color:var(--text-dim)">Выберите период и нажмите «Рассчитать»</div>';
 }
 
 async function calculate(){
   const year = document.getElementById('fYear').value;
   const quarter = document.getElementById('fQuarter').value;
+  const engineerId = document.getElementById('fEngineer').value;
   const wrap = document.getElementById('content');
   wrap.innerHTML = '<div class="card" style="text-align:center;color:var(--text-dim)">Считаю по данным Bitrix, это может занять минуту…</div>';
 
   try {
-    const r = await fetch(`/api/bonus/calculate?year=${year}&quarter=${quarter}`);
+    const params = new URLSearchParams({ year, quarter });
+    if (engineerId) params.set('engineerId', engineerId);
+    const r = await fetch(`/api/bonus/calculate?${params}`);
     const d = await r.json();
     if (!r.ok) { wrap.innerHTML = `<div class="card" style="color:var(--brand-h)">${esc(d.error||'Ошибка')}</div>`; return; }
     render(d);
   } catch(e) {
     wrap.innerHTML = '<div class="card" style="color:var(--brand-h)">Ошибка соединения</div>';
   }
+}
+
+async function loadEngineerOptions(){
+  try {
+    const r = await fetch('/api/bonus/engineers');
+    const d = await r.json();
+    const sel = document.getElementById('fEngineer');
+    sel.style.display = '';
+    (d.engineers||[]).forEach(e => {
+      sel.innerHTML += `<option value="${e.bitrixId}">${esc(e.name)}</option>`;
+    });
+  } catch(e) { /* dropdown just stays hidden/empty on failure — not fatal */ }
 }
 
 function render(d){
@@ -180,7 +200,7 @@ function render(d){
   const skippedHtml = (isPm && d.skipped && d.skipped.length) ? `
     <div class="card">
       <div class="row" style="margin-bottom:10px"><strong style="font-size:13px">Пропущено (${d.skipped.length})</strong></div>
-      ${d.skipped.map(s => `<div class="skip-item">Заявка ${s.reportId?'#'+s.reportId:''}: ${esc(s.reason)}</div>`).join('')}
+      ${d.skipped.map(s => `<div class="skip-item">Заявка ${s.reportId?`<a href="https://crm.prolabsupport.kz/crm/type/1058/details/${s.reportId}/" target="_blank" style="color:var(--signal);text-decoration:none">#${s.reportId} ↗</a>`:''}: ${esc(s.reason)}</div>`).join('')}
     </div>` : '';
 
   wrap.innerHTML = `

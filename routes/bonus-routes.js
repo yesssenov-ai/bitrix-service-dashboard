@@ -64,4 +64,20 @@ router.get('/calculate', requireAuth(), async (req, res) => {
   }
 });
 
+// GET /api/bonus/engineers — list of ЦУП accounts that map to a Bitrix
+// employee, for the PM/admin "filter by engineer" dropdown.
+router.get('/engineers', requireAuth(PM_ROLES), async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT engineer_name FROM ticketsmodule_users WHERE engineer_name IS NOT NULL AND active=true');
+    const engineers = rows
+      .map(r => {
+        const found = Object.entries(USERS).find(([, n]) => n === r.engineer_name);
+        return found ? { bitrixId: parseInt(found[0], 10), name: found[1] } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    res.json({ engineers });
+  } catch (e) { console.error('GET /api/bonus/engineers error:', e.message); res.status(500).json({ error: 'Server error' }); }
+});
+
 module.exports = { router };
