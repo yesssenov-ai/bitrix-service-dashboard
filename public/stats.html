@@ -48,7 +48,7 @@ h1{font-family:var(--font-display);font-size:24px;font-weight:600;margin-bottom:
 
 table{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:13px;}
 th,td{padding:9px 12px;text-align:right;border-bottom:1px solid var(--line);}
-th:first-child,td:first-child{text-align:left;font-family:var(--font-body);}
+th:first-child,td:first-child{text-align:left;font-family:var(--font-body);position:sticky;left:0;background:var(--panel);z-index:1;}
 th{color:var(--text-dim);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;}
 tr.pct-row td{color:var(--text-faint);font-size:12px;}
 tr.total-row td{border-top:2px solid var(--line-2);font-weight:600;color:var(--signal);}
@@ -151,10 +151,12 @@ function renderSummary(d){
   wrap.innerHTML = `
     <div class="card">
       <div style="margin-bottom:10px;font-size:12.5px;color:var(--text-dim)">${d.year} год · сделок учтено: ${d.dealCount}</div>
-      <table>
-        <thead><tr><th>${d.year}</th>${cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead>
-        <tbody>${sumRows}<tr><td style="padding-top:14px"></td></tr>${pctRows}</tbody>
-      </table>
+      <div style="overflow-x:auto">
+        <table style="min-width:${640 + cols.length*110}px">
+          <thead><tr><th>${d.year}</th>${cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead>
+          <tbody>${sumRows}<tr><td style="padding-top:14px"></td></tr>${pctRows}</tbody>
+        </table>
+      </div>
     </div>`;
 }
 
@@ -170,16 +172,32 @@ function renderManagers(d){
     </div>`).join('') + `</div>`;
 }
 
+let lastInstruments = [];
 function renderInstruments(d){
+  lastInstruments = d.instruments;
   const wrap = document.getElementById('content');
-  wrap.innerHTML = `<div class="card">` + d.instruments.map(i => `
-    <div class="list-row">
-      <div>
-        <div class="list-name">${esc(i.instrumentName)}</div>
-        <div class="list-meta">${esc(i.manufacturer)} · ${i.count} продаж · средний чек ${money(i.avgCheckKzt)} ₸</div>
+  wrap.innerHTML = `<div class="card">` + d.instruments.map((i, idx) => `
+    <div class="list-row" style="cursor:pointer;flex-direction:column;align-items:stretch;gap:6px" onclick="toggleInstrument(${idx})">
+      <div style="display:flex;justify-content:space-between">
+        <div>
+          <div class="list-name">${esc(i.instrumentName)}</div>
+          <div class="list-meta">${esc(i.manufacturer)} · ${i.count} продаж · средний чек ${money(i.avgCheckKzt)} ₸</div>
+        </div>
+        <div class="list-val">${money(i.totalKzt)} ₸</div>
       </div>
-      <div class="list-val">${money(i.totalKzt)} ₸</div>
+      <div id="instrDept${idx}" style="display:none;padding:8px 0 0 14px;border-top:1px solid var(--line);margin-top:4px">
+        ${(i.byDepartment||[]).map(dep => `
+          <div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0;color:var(--text-dim)">
+            <span>Отдел ${esc(dep.departmentId)} · ${dep.count} сделок</span>
+            <span style="font-family:var(--font-mono);color:var(--signal)">${money(dep.totalKzt)} ₸</span>
+          </div>`).join('') || '<div style="font-size:12px;color:var(--text-faint)">Нет данных по отделам</div>'}
+      </div>
     </div>`).join('') + `</div>`;
+}
+
+function toggleInstrument(idx){
+  const el = document.getElementById('instrDept'+idx);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
 init();

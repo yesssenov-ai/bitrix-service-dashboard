@@ -139,13 +139,18 @@ function summarizeByInstrument(deals) {
   for (const d of deals) {
     if (!d.instrumentName) continue;
     const key = d.instrumentName;
-    if (!byInstrument[key]) byInstrument[key] = { instrumentName: key, manufacturer: d.manufacturer, totalKzt: 0, count: 0 };
+    if (!byInstrument[key]) byInstrument[key] = { instrumentName: key, manufacturer: d.manufacturer, totalKzt: 0, count: 0, byDepartment: {} };
     byInstrument[key].totalKzt += d.sumKzt;
     byInstrument[key].count += 1;
+    const deptKey = d.departmentId || 'Не указан';
+    if (!byInstrument[key].byDepartment[deptKey]) byInstrument[key].byDepartment[deptKey] = { departmentId: deptKey, totalKzt: 0, count: 0 };
+    byInstrument[key].byDepartment[deptKey].totalKzt += d.sumKzt;
+    byInstrument[key].byDepartment[deptKey].count += 1;
   }
   return Object.values(byInstrument).map(i => ({
     ...i,
     avgCheckKzt: i.count ? i.totalKzt / i.count : 0,
+    byDepartment: Object.values(i.byDepartment).sort((a, b) => b.totalKzt - a.totalKzt),
   })).sort((a, b) => b.totalKzt - a.totalKzt);
 }
 
