@@ -258,6 +258,7 @@ async function initDB() {
       deal_id INTEGER PRIMARY KEY,
       category_id INTEGER NOT NULL,
       stage_id VARCHAR(60),
+      deal_type_id VARCHAR(60),
       opportunity NUMERIC(16,2),
       currency_id VARCHAR(10),
       company_id INTEGER,
@@ -269,6 +270,7 @@ async function initDB() {
       industry VARCHAR(200),
       synced_at TIMESTAMPTZ DEFAULT NOW()
     );
+    ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS deal_type_id VARCHAR(60);
     CREATE INDEX IF NOT EXISTS idx_stat_deals_category ON ticketsmodule_stat_deals(category_id);
     CREATE INDEX IF NOT EXISTS idx_stat_deals_contract_date ON ticketsmodule_stat_deals(contract_date);
     CREATE INDEX IF NOT EXISTS idx_stat_deals_stage ON ticketsmodule_stat_deals(stage_id);

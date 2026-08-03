@@ -138,14 +138,14 @@ async function loadCurrent(){
 function renderSummary(d){
   const wrap = document.getElementById('content');
   const cols = ['Common', ...d.manufacturers];
-  const typeLabels = { Inst:'Инструменты', Spares:'Расходники', Training:'Обучение', Service:'Сервис' };
+  const typeLabels = { Instrument:'Инструменты', 'General lab':'General Lab', Robots:'Роботы', Spares:'Расходники', Training:'Обучение', Service:'Сервис' };
 
   let sumRows = '', pctRows = '';
   d.types.forEach(type => {
     const row = d.table[type];
-    sumRows += `<tr><td>${typeLabels[type]}, тыс.тг</td>${cols.map(c => `<td>${money((row[c]||0)/1000)}</td>`).join('')}</tr>`;
+    sumRows += `<tr><td>${typeLabels[type]||type}, тыс.тг</td>${cols.map(c => `<td>${money((row[c]||0)/1000)}</td>`).join('')}</tr>`;
     const common = row.Common || 1;
-    pctRows += `<tr class="pct-row"><td>${typeLabels[type]}, %</td>${cols.map(c => `<td>${common ? Math.round((row[c]||0)/common*100) : 0}</td>`).join('')}</tr>`;
+    pctRows += `<tr class="pct-row"><td>${typeLabels[type]||type}, %</td>${cols.map(c => `<td>${common ? Math.round((row[c]||0)/common*100) : 0}</td>`).join('')}</tr>`;
   });
 
   wrap.innerHTML = `

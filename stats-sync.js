@@ -13,7 +13,7 @@ const DEPARTMENT_FIELD = 'UF_CRM_DEPARTMENT';
 const CATEGORY_IDS = ['0', '1', '2', '3'];
 
 const SELECT_FIELDS = [
-  'ID', 'CATEGORY_ID', 'STAGE_ID', 'OPPORTUNITY', 'CURRENCY_ID',
+  'ID', 'CATEGORY_ID', 'STAGE_ID', 'TYPE_ID', 'OPPORTUNITY', 'CURRENCY_ID',
   'COMPANY_ID', 'ASSIGNED_BY_ID', REAL_CONTRACT_DATE_FIELD, INSTRUMENT_FIELD, DEPARTMENT_FIELD,
 ];
 
@@ -49,13 +49,13 @@ async function upsertDeal(d) {
 
   await pool.query(
     `INSERT INTO ticketsmodule_stat_deals
-      (deal_id, category_id, stage_id, opportunity, currency_id, company_id, assigned_by_id,
+      (deal_id, category_id, stage_id, deal_type_id, opportunity, currency_id, company_id, assigned_by_id,
        contract_date, instrument_name, department_id, manufacturer, industry, synced_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())
      ON CONFLICT (deal_id) DO UPDATE SET
-       category_id=$2, stage_id=$3, opportunity=$4, currency_id=$5, company_id=$6, assigned_by_id=$7,
-       contract_date=$8, instrument_name=$9, department_id=$10, manufacturer=$11, industry=$12, synced_at=NOW()`,
-    [d.ID, parseInt(d.CATEGORY_ID, 10), d.STAGE_ID, parseFloat(d.OPPORTUNITY) || 0, d.CURRENCY_ID || 'KZT',
+       category_id=$2, stage_id=$3, deal_type_id=$4, opportunity=$5, currency_id=$6, company_id=$7, assigned_by_id=$8,
+       contract_date=$9, instrument_name=$10, department_id=$11, manufacturer=$12, industry=$13, synced_at=NOW()`,
+    [d.ID, parseInt(d.CATEGORY_ID, 10), d.STAGE_ID, d.TYPE_ID || null, parseFloat(d.OPPORTUNITY) || 0, d.CURRENCY_ID || 'KZT',
      d.COMPANY_ID || null, d.ASSIGNED_BY_ID ? parseInt(d.ASSIGNED_BY_ID, 10) : null,
      contractDate, instrumentName, d[DEPARTMENT_FIELD] || null, manufacturer, industry]
   );

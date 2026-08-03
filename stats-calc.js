@@ -9,6 +9,12 @@ const PIPELINES = {
   3: { name: 'Продажа сервиса', shortName: 'Service', completedStages: ['C3:FINAL_INVOICE','C3:UC_YYTFYG','C3:2','C3:WON'] },
 };
 
+// Тип сделки within category 0 (Продажа инструментов) — confirmed directly
+// in Bitrix's own "Тип сделки" dropdown: only these 3 values exist for this
+// pipeline. Split out separately per the user's request, since lumping
+// General lab/Robots into "Instrument" overstated that category.
+const DEAL_TYPE_LABELS = { SALE: 'Instrument', UC_TA384N: 'General lab', SERVICE: 'Robots' };
+
 // Reads WON/completed deals for the given date range straight from our
 // local cache (ticketsmodule_stat_deals) — kept in sync via webhooks +
 // periodic reconciliation (see stats-sync.js) instead of scanning Bitrix
@@ -27,11 +33,14 @@ async function getWonDealsInRange(startDate, endDate) {
     const cfg = PIPELINES[d.category_id] || { name: 'Неизвестно', shortName: '?' };
     const sum = parseFloat(d.opportunity) || 0;
     const sumKzt = d.currency_id === 'USD' ? sum * rate : sum;
+    const saleType = d.category_id === 0
+      ? (DEAL_TYPE_LABELS[d.deal_type_id] || d.deal_type_id || 'Instrument')
+      : cfg.shortName;
     return {
       id: d.deal_id,
       pipelineId: d.category_id,
       pipelineName: cfg.name,
-      saleType: cfg.shortName,
+      saleType,
       sumKzt,
       managerId: d.assigned_by_id,
       managerName: d.assigned_by_id ? (USERS[d.assigned_by_id] || `#${d.assigned_by_id}`) : '—',
@@ -48,7 +57,11 @@ async function getWonDealsInRange(startDate, endDate) {
 
 function summarizeByManufacturerAndType(deals) {
   const manufacturers = [...new Set(deals.map(d => d.manufacturer))].filter(m => m !== 'Не определено').sort();
-  const types = ['Inst', 'Spares', 'Training', 'Service'];
+  const typeOrder = ['Instrument', 'General lab', 'Robots', 'Spares', 'Training', 'Service'];
+  const presentTypes = new Set(deals.map(d => d.saleType));
+  const types = typeOrder.filter(t => presentTypes.has(t));
+  // Any type not in our known order (shouldn't normally happen) still shows up, appended at the end
+  [...presentTypes].forEach(t => { if (!types.includes(t)) types.push(t); });
 
   const table = {};
   for (const type of types) {
