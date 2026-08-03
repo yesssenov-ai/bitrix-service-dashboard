@@ -9,7 +9,7 @@ const { pool } = require('./auth');
 
 const REAL_CONTRACT_DATE_FIELD = 'UF_CRM_1753708701368';
 const INSTRUMENT_FIELD = 'UF_CRM_NAME_PRIOBOR';
-const DEPARTMENT_FIELD = 'UF_CRM_DEPARTMENT';
+const DEPARTMENT_FIELD = 'UF_CRM_1758005356984'; // "Отдел" — confirmed via correlation across 93 deals (find-department-field.js)
 const CATEGORY_IDS = ['0', '1', '2', '3'];
 
 const SELECT_FIELDS = [

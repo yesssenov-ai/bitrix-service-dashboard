@@ -15,6 +15,14 @@ const PIPELINES = {
 // General lab/Robots into "Instrument" overstated that category.
 const DEAL_TYPE_LABELS = { SALE: 'Instrument', UC_TA384N: 'General lab', SERVICE: 'Robots' };
 
+// "Отдел" — confirmed via correlation across 93 deals (find-department-field.js).
+// Robots/Training/Материаловедение weren't in that sample yet — will show as
+// the raw ID until confirmed, same graceful-degradation pattern as elsewhere.
+const DEPARTMENT_LABELS = {
+  '4857': 'Элементный', '4858': 'Хроматография', '4859': 'Электрохимия',
+  '4862': 'Spares', '4865': 'General Lab', '4866': 'Complex',
+};
+
 // Reads WON/completed deals for the given date range straight from our
 // local cache (ticketsmodule_stat_deals) — kept in sync via webhooks +
 // periodic reconciliation (see stats-sync.js) instead of scanning Bitrix
@@ -44,7 +52,7 @@ async function getWonDealsInRange(startDate, endDate) {
       sumKzt,
       managerId: d.assigned_by_id,
       managerName: d.assigned_by_id ? (USERS[d.assigned_by_id] || `#${d.assigned_by_id}`) : '—',
-      departmentId: d.department_id,
+      departmentId: DEPARTMENT_LABELS[d.department_id] || d.department_id,
       companyId: d.company_id,
       industry: d.industry || '',
       instrumentName: d.instrument_name || '',
