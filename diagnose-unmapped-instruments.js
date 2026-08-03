@@ -26,6 +26,18 @@ async function main() {
   Object.entries(byInstrument)
     .sort((a, b) => b[1].sumKzt - a[1].sumKzt)
     .forEach(([name, v]) => console.log(`  ${name.padEnd(40)} | ${v.count} сделок | ${Math.round(v.sumKzt).toLocaleString('ru-RU')} ₸`));
+
+  console.log('\n=== Пустые "название прибора" — по строке (Отдел/тип продажи) ===\n');
+  const noNameDeals = unmapped.filter(d => !d.instrumentName);
+  const bySaleType = {};
+  for (const d of noNameDeals) {
+    if (!bySaleType[d.saleType]) bySaleType[d.saleType] = { count: 0, sumKzt: 0 };
+    bySaleType[d.saleType].count++;
+    bySaleType[d.saleType].sumKzt += d.sumKzt;
+  }
+  Object.entries(bySaleType)
+    .sort((a, b) => b[1].sumKzt - a[1].sumKzt)
+    .forEach(([type, v]) => console.log(`  ${type.padEnd(35)} | ${v.count} сделок | ${Math.round(v.sumKzt).toLocaleString('ru-RU')} ₸`));
 }
 
 main().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });
