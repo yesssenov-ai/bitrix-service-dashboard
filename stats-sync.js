@@ -82,17 +82,34 @@ async function paginatedDealList(filter) {
 
 // Full backfill/reconciliation — pulls every deal (any stage) across all 4
 // pipelines and upserts. Safe to re-run any time.
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
 async function fullSync() {
-  let total = 0;
+  let total = 0, errors = 0;
+  const startedAt = Date.now();
+
   for (const categoryId of CATEGORY_IDS) {
     const deals = await paginatedDealList({ CATEGORY_ID: categoryId });
     console.log(`Категория ${categoryId}: найдено ${deals.length} сделок`);
+
     for (const d of deals) {
-      await upsertDeal(d);
-      total++;
+      try {
+        await upsertDeal(d);
+        total++;
+      } catch (e) {
+        errors++;
+        console.error(`  ⚠️  Ошибка на сделке #${d.ID}: ${e.message} (продолжаю дальше)`);
+      }
+      if (total % 50 === 0 && total > 0) {
+        const elapsedMin = ((Date.now() - startedAt) / 60000).toFixed(1);
+        console.log(`  ...обработано ${total} сделок (${elapsedMin} мин, ошибок: ${errors})`);
+      }
+      await sleep(120); // stay under Bitrix's rate limit — long sync otherwise trips it partway through
     }
   }
-  console.log(`✅ Синхронизировано всего: ${total} сделок`);
+
+  const totalMin = ((Date.now() - startedAt) / 60000).toFixed(1);
+  console.log(`✅ Синхронизировано: ${total} сделок за ${totalMin} мин. Ошибок: ${errors}.`);
   return total;
 }
 
