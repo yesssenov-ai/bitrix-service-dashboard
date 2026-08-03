@@ -31,13 +31,25 @@ async function main() {
   const noNameDeals = unmapped.filter(d => !d.instrumentName);
   const bySaleType = {};
   for (const d of noNameDeals) {
-    if (!bySaleType[d.saleType]) bySaleType[d.saleType] = { count: 0, sumKzt: 0 };
+    if (!bySaleType[d.saleType]) bySaleType[d.saleType] = { count: 0, sumKzt: 0, deals: [] };
     bySaleType[d.saleType].count++;
     bySaleType[d.saleType].sumKzt += d.sumKzt;
+    bySaleType[d.saleType].deals.push(d);
   }
   Object.entries(bySaleType)
     .sort((a, b) => b[1].sumKzt - a[1].sumKzt)
     .forEach(([type, v]) => console.log(`  ${type.padEnd(35)} | ${v.count} сделок | ${Math.round(v.sumKzt).toLocaleString('ru-RU')} ₸`));
+
+  console.log('\n=== Конкретные сделки без названия прибора (для строк Элементный/Хроматография/Электрохимия) ===\n');
+  const targetTypes = ['Элементный', 'Хроматография и клеточный анализ', 'Электрохимия'];
+  for (const type of targetTypes) {
+    const list = bySaleType[type]?.deals || [];
+    if (!list.length) continue;
+    console.log(`--- ${type} ---`);
+    list.sort((a,b) => b.sumKzt - a.sumKzt).forEach(d => {
+      console.log(`  Заявка #${d.id} · ${Math.round(d.sumKzt).toLocaleString('ru-RU')} ₸ · https://crm.prolabsupport.kz/crm/deal/details/${d.id}/`);
+    });
+  }
 }
 
 main().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });
