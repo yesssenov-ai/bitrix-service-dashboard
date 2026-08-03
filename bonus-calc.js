@@ -23,14 +23,30 @@ async function getReportsInRange(startDate, endDate) {
     '>=ufCrm5_1732872202457': startDate, // Дата окончания работ/обучения
     '<=ufCrm5_1732872202457': endDate,
   };
-  const { result } = await b24call('crm.item.list', {
-    entityTypeId: REPORT_ENTITY,
-    filter,
-    select: ['id','title','ufCrm5_1732872053','ufCrm5_1732872312','ufCrm5_1732872194569',
-             'ufCrm5_1732872202457','parentId1058','ufCrmPribor'],
-  });
-  return result?.items || [];
+  const select = ['id','title','ufCrm5_1732872053','ufCrm5_1732872312','ufCrm5_1732872194569',
+                   'ufCrm5_1732872202457','parentId1058','ufCrmPribor'];
+
+  let items = [];
+  let start = 0;
+  let safety = 0;
+  while (safety++ < 50) { // hard ceiling — 50*50=2500 reports, far beyond any realistic quarter
+    const data = await b24call('crm.item.list', { entityTypeId: REPORT_ENTITY, filter, select, start });
+    if (!data || data.error) {
+      throw new Error(`Bitrix crm.item.list ошибка: ${data?.error_description || data?.error || 'нет ответа'}`);
+    }
+    const page = data.result?.items || [];
+    items = items.concat(page);
+    if (!data.next) break; // no more pages
+    start = data.next;
+  }
+  return items;
 }
+
+// Small delay to stay comfortably under Bitrix's webhook rate limit (2 req/s) —
+// each report resolves into several sequential API calls (item, deal, parent
+// lookups), and firing them back-to-back for many reports in a row caused
+// intermittent failures that silently looked like "no data".
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // Resolves one Отчёт into zero or more bonus line items (one per co-executor).
 async function resolveReportBonus(report, priborMap) {
@@ -114,6 +130,7 @@ async function calculateQuarterBonuses(startDate, endDate) {
     const resolved = await resolveReportBonus(report, priborMap);
     if (resolved.skipped) skippedItems.push({ reportId: report.id, reason: resolved.reason });
     else lineItems.push(resolved);
+    await sleep(150); // stay under Bitrix's rate limit — see note above getReportsInRange
   }
 
   const byEngineer = {};
