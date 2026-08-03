@@ -1,4 +1,4 @@
-const { b24call, getItem, getDeal, findParent } = require('./relations');
+const { b24call, getItem } = require('./relations');
 const { pool } = require('./auth');
 const { getTodayRate } = require('./nbrk-exchange-rate');
 const { SERVICE_TYPE_MAP, getPriborMap } = require('./bitrix-lookups');
@@ -7,6 +7,7 @@ const REPORT_ENTITY = 1046;
 const REQUEST_ENTITY = 1058;
 const SOURCE_FIELD = 'ufCrm8_1732857572';
 const SOURCE_SERVICE_SALE_ID = 95; // "Процесс продажа сервиса"
+const SOURCE_INSTRUMENT_SALE_ID = null; // TODO: "Процесс продажа инструментов" — fill in once confirmed (until then, falls back to matching "установ" in the service-type text)
 
 // "Установка"-family service types that trigger the fixed tariff bonus
 // instead of the 10% commission (see SERVICE_TYPE_MAP for the full list —
@@ -58,17 +59,27 @@ async function resolveReportBonus(report, priborMap) {
   const serviceTypeIds = Array.isArray(request.ufCrm8_1744300223) ? request.ufCrm8_1744300223 : (request.ufCrm8_1744300223 ? [request.ufCrm8_1744300223] : []);
   const serviceTypeLabel = serviceTypeIds.map(id => SERVICE_TYPE_MAP[id] || id).join(', ');
 
-  const priborIds = Array.isArray(report.ufCrmPribor) ? report.ufCrmPribor : (report.ufCrmPribor ? [report.ufCrmPribor] : []);
+  const rawPribor = request.ufCrmPribor || report.ufCrmPribor;
+  const priborIds = Array.isArray(rawPribor) ? rawPribor : (rawPribor ? [rawPribor] : []);
   const priborLabel = priborIds.map(id => priborMap[id] || `#${id}`).join(', ');
 
   const engineers = [report.ufCrm5_1732872053, ...(Array.isArray(report.ufCrm5_1732872312) ? report.ufCrm5_1732872312 : (report.ufCrm5_1732872312 ? [report.ufCrm5_1732872312] : []))]
     .filter(Boolean).map(id => parseInt(id, 10));
   if (!engineers.length) return { skipped: true, reason: 'не указан сотрудник' };
 
+  const sourceIds = Array.isArray(request[SOURCE_FIELD]) ? request[SOURCE_FIELD] : (request[SOURCE_FIELD] ? [request[SOURCE_FIELD]] : []);
+  const isServiceSale = sourceIds.includes(SOURCE_SERVICE_SALE_ID);
+  const isInstrumentSale = SOURCE_INSTRUMENT_SALE_ID ? sourceIds.includes(SOURCE_INSTRUMENT_SALE_ID) : null;
+
   let grossKzt = 0, grossUsd = 0, basis = '';
 
-  if (isInstallType(serviceTypeLabel)) {
-    // Fixed tariff by instrument category
+  // Primary rule: which sales funnel the request came from — confirmed
+  // against real historical data to be the reliable signal (the free-text
+  // "Тип услуг" label is not: the same contract can have an "Установка" row
+  // priced by tariff AND a "Квалификация" row priced as a 10% commission).
+  const useTariff = isInstrumentSale === true || (isInstrumentSale === null && isInstallType(serviceTypeLabel));
+
+  if (useTariff) {
     let tariffUsd = 0;
     const matchedCats = new Set();
     for (const pid of priborIds) {
@@ -80,20 +91,20 @@ async function resolveReportBonus(report, priborMap) {
       if (!rows.length) continue;
       matchedCats.add(rows[0].name);
       tariffUsd += parseFloat(rows[0].install_usd) || 0;
-      if (isMethodicalType(serviceTypeLabel)) tariffUsd += parseFloat(rows[0].methodical_usd) || 0;
+      tariffUsd += parseFloat(rows[0].methodical_usd) || 0; // both components apply by default — see note above
     }
     if (!tariffUsd) return { skipped: true, reason: `прибор "${priborLabel}" не сопоставлен с категорией тарифа` };
     grossUsd = tariffUsd;
-    basis = `Установка (тариф): ${[...matchedCats].join(', ')}`;
+    basis = `Тариф по прибору${isInstrumentSale===null?' (определено по тексту типа услуги — подтвердите ID "Процесс продажа инструментов")':''}: ${[...matchedCats].join(', ')}`;
   } else {
-    const sourceIds = Array.isArray(request[SOURCE_FIELD]) ? request[SOURCE_FIELD] : (request[SOURCE_FIELD] ? [request[SOURCE_FIELD]] : []);
-    if (!sourceIds.includes(SOURCE_SERVICE_SALE_ID)) {
-      return { skipped: true, reason: 'источник заявки — не "Процесс продажа сервиса", бонус не начисляется' };
+    if (!isServiceSale) {
+      return { skipped: true, reason: 'источник заявки — не "Процесс продажа сервиса" и не "Процесс продажа инструментов", бонус не начисляется' };
     }
-    const parent = await findParent(REQUEST_ENTITY, request);
-    if (!parent || parent.type !== 'deal') return { skipped: true, reason: 'не найдена родительская сделка' };
-    const deal = await getDeal(parent.id);
-    if (!deal || !deal.OPPORTUNITY) return { skipped: true, reason: 'у сделки не указана сумма' };
+    const { getRootDealManager } = require('./bitrix-lookups');
+    const dealInfo = await getRootDealManager(REQUEST_ENTITY, request);
+    if (!dealInfo || !dealInfo.deal) return { skipped: true, reason: 'не найдена родительская сделка' };
+    const deal = dealInfo.deal;
+    if (!deal.OPPORTUNITY) return { skipped: true, reason: 'у сделки не указана сумма' };
 
     const sum = parseFloat(deal.OPPORTUNITY);
     const currency = deal.CURRENCY_ID || 'KZT';
