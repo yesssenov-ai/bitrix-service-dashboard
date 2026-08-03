@@ -79,6 +79,7 @@ app.get('/admin.html', requirePageAuth(['admin']), (_, res) => res.sendFile(path
 app.get('/mail.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'mail.html')));
 app.get('/kp.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'kp.html')));
 app.get('/bonus.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'bonus.html')));
+app.get('/stats.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'stats.html')));
 app.get('/cup-admin.html', requirePageAuth(['admin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'cup-admin.html')));
 
 // `index:false` — without this, static would auto-serve public/index.html
@@ -95,6 +96,7 @@ app.use('/api/planner', require('./routes/planner-routes').router);
 app.use('/api/mail', require('./routes/mail-routes').router);
 app.use('/api/kp', require('./routes/kp-routes').router);
 app.use('/api/bonus', require('./routes/bonus-routes').router);
+app.use('/api/stats', require('./routes/stats-routes').router);
 const { router: relationsRouter, handleBitrixWebhook } = require('./routes/relations-routes');
 app.use('/relations', relationsRouter);
 app.post('/webhook/bitrix-update', express.urlencoded({ extended: true }), handleBitrixWebhook);

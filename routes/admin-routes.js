@@ -184,7 +184,7 @@ router.get('/notification-log', requireAuth(['admin']), async (req, res) => {
 
 // ── ЦУП module access (which portal modules each Bitrix employee can see) ──
 // Keep this list in sync with MODULES in public/portal.html and cup-admin.html.
-const MODULE_CODES = ['PLN', 'SVC', 'EQP', 'LIC', 'REL', 'MAIL', 'KP', 'BONUS', 'ADM'];
+const MODULE_CODES = ['PLN', 'SVC', 'EQP', 'LIC', 'REL', 'MAIL', 'KP', 'BONUS', 'STATS', 'ADM'];
 
 // GET /admin/bitrix-employees — every active Bitrix employee + their current module access
 router.get('/bitrix-employees', requireAuth(['admin']), async (req, res) => {
