@@ -41,7 +41,7 @@ async function main() {
     .forEach(([type, v]) => console.log(`  ${type.padEnd(35)} | ${v.count} сделок | ${Math.round(v.sumKzt).toLocaleString('ru-RU')} ₸`));
 
   console.log('\n=== Конкретные сделки без названия прибора (для строк Элементный/Хроматография/Электрохимия) ===\n');
-  const targetTypes = ['Элементный', 'Хроматография и клеточный анализ', 'Электрохимия'];
+  const targetTypes = ['Элементный', 'Хроматография и клеточный анализ', 'Электрохимия', 'Service'];
   for (const type of targetTypes) {
     const list = bySaleType[type]?.deals || [];
     if (!list.length) continue;
