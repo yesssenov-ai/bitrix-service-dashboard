@@ -8,10 +8,10 @@ const INSTRUMENT_FIELD = 'UF_CRM_NAME_PRIOBOR';
 const DEPARTMENT_FIELD = 'UF_CRM_DEPARTMENT';
 
 const PIPELINES = {
-  0: { name: 'Продажа инструментов', shortName: 'Inst', wonStage: 'WON' },
-  1: { name: 'Продажа расходных материалов', shortName: 'Spares', wonStage: 'C1:WON' },
-  2: { name: 'Продажа услуг тренинг-центра', shortName: 'Training', wonStage: 'C2:WON' },
-  3: { name: 'Продажа сервиса', shortName: 'Service', wonStage: 'C3:WON' },
+  0: { name: 'Продажа инструментов', shortName: 'Inst', completedStages: ['FINAL_INVOICE','1','UC_Q9J6VV','UC_9MBFR2','2','3','WON'] },
+  1: { name: 'Продажа расходных материалов', shortName: 'Spares', completedStages: ['C1:FINAL_INVOICE','C1:1','C1:UC_3MVK90','C1:UC_3SCB5K','C1:2','C1:3','C1:WON'] },
+  2: { name: 'Продажа услуг тренинг-центра', shortName: 'Training', completedStages: ['C2:FINAL_INVOICE','C2:1','C2:2','C2:WON'] },
+  3: { name: 'Продажа сервиса', shortName: 'Service', completedStages: ['C3:FINAL_INVOICE','C3:UC_YYTFYG','C3:2','C3:WON'] },
 };
 
 const SELECT_FIELDS = [
@@ -64,7 +64,7 @@ async function getWonDealsInRange(startDate, endDate) {
   for (const [categoryId, cfg] of Object.entries(PIPELINES)) {
     const filter = {
       CATEGORY_ID: categoryId,
-      STAGE_ID: cfg.wonStage,
+      '@STAGE_ID': cfg.completedStages,
       [`>=${REAL_CONTRACT_DATE_FIELD}`]: startDate,
       [`<=${REAL_CONTRACT_DATE_FIELD}`]: endDate,
     };
