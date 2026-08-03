@@ -80,4 +80,49 @@ router.get('/engineers', requireAuth(PM_ROLES), async (req, res) => {
   } catch (e) { console.error('GET /api/bonus/engineers error:', e.message); res.status(500).json({ error: 'Server error' }); }
 });
 
+// POST /api/bonus/export — takes the already-calculated result (same shape
+// GET /calculate returns) and turns it into an .xlsx matching the historical
+// per-engineer bonus file layout. Re-uses what was already fetched instead
+// of recalculating against Bitrix a second time.
+router.post('/export', requireAuth(PM_ROLES), async (req, res) => {
+  try {
+    const XLSX = require('xlsx');
+    const { engineers, year, quarter } = req.body;
+    if (!Array.isArray(engineers)) return res.status(400).json({ error: 'Нет данных для экспорта' });
+
+    const money = n => Math.round((n || 0) * 100) / 100;
+    const wb = XLSX.utils.book_new();
+
+    for (const eng of engineers) {
+      const rows = [[
+        '№', 'Период проведения работ', 'Клиент', 'Договор', 'Наименование и модель прибора',
+        'Основание расчёта', 'Курс доллара', 'Сумма (KZT экв.)', 'Доля инженера, KZT', 'Ссылка на заявку',
+      ]];
+      (eng.lines || []).forEach((li, i) => {
+        const period = li.workStart && li.workEnd && li.workStart.slice(0,10) !== li.workEnd.slice(0,10)
+          ? `${li.workStart.slice(0,10)} – ${li.workEnd.slice(0,10)}` : (li.workEnd || li.workStart || '').slice(0,10);
+        rows.push([
+          i + 1, period, li.companyName || '', li.contractLabel || '', li.instrument || li.serviceType || '',
+          li.basis || '', li.rate || '', money(li.totalKzt), money(li.shareKzt),
+          `https://crm.prolabsupport.kz/crm/type/1058/details/${li.requestId}/`,
+        ]);
+      });
+      rows.push(['', '', '', '', '', '', '', 'Итого, тенге (до налогов)', money(eng.totalKzt), '']);
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols'] = [{wch:5},{wch:22},{wch:28},{wch:22},{wch:26},{wch:34},{wch:10},{wch:16},{wch:16},{wch:40}];
+      const safeName = (eng.engineerName || `eng_${eng.engineerId}`).replace(/[\\/*?:[\]]/g, '').slice(0, 31);
+      XLSX.utils.book_append_sheet(wb, ws, safeName || `Инженер ${eng.engineerId}`);
+    }
+
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="Bonus_Q${quarter}_${year}.xlsx"`);
+    res.send(buffer);
+  } catch (e) {
+    console.error('POST /api/bonus/export error:', e.message);
+    res.status(500).json({ error: 'Не удалось сформировать файл' });
+  }
+});
+
 module.exports = { router };

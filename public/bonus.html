@@ -105,6 +105,23 @@ let me = null, isPm = false;
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function money(n){ return (n||0).toLocaleString('ru-RU', {maximumFractionDigits:0}); }
+
+function toast(msg, kind){
+  let el = document.getElementById('toastBox');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'toastBox';
+    el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;padding:12px 20px;border-radius:9px;font-size:13.5px;font-family:var(--font-body);box-shadow:0 8px 24px rgba(0,0,0,.4);max-width:80vw;text-align:center;transition:opacity .2s;opacity:0;';
+    document.body.appendChild(el);
+  }
+  el.style.background = kind === 'error' ? '#3a1a17' : '#16302c';
+  el.style.border = '1px solid ' + (kind === 'error' ? 'var(--brand)' : 'var(--signal)');
+  el.style.color = kind === 'error' ? '#ff8f85' : 'var(--signal)';
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.opacity = '0'; }, 3500);
+}
 function formatDate(iso){
   if (!iso) return '';
   const d = new Date(iso);
@@ -170,7 +187,9 @@ async function loadEngineerOptions(){
   } catch(e) { /* dropdown just stays hidden/empty on failure — not fatal */ }
 }
 
+let lastResult = null;
 function render(d){
+  lastResult = d;
   const wrap = document.getElementById('content');
   if (!d.engineers.length) {
     wrap.innerHTML = '<div class="card" style="text-align:center;color:var(--text-dim)">За этот период бонусов не найдено</div>';
@@ -208,9 +227,29 @@ function render(d){
       Период: ${d.period.start} — ${d.period.end} · отчётов: ${d.totalReports} (заявок: ${d.totalRequests}) · учтено в расчёте: ${d.totalRequests - d.skippedCount}
     </div>
     ${engHtml}
-    <div class="grand-total"><span class="label">Итого за квартал</span><span class="value">${money(d.grandTotalKzt)} ₸</span></div>
+    <div class="row" style="margin-top:6px">
+      ${isPm ? '<button class="btn btn-ghost" onclick="exportToExcel()">⬇ Экспорт в Excel</button>' : '<span></span>'}
+      <div class="grand-total" style="padding:0"><span class="label">Итого за квартал</span><span class="value">${money(d.grandTotalKzt)} ₸</span></div>
+    </div>
     ${skippedHtml}
   `;
+}
+
+async function exportToExcel(){
+  if (!lastResult) return;
+  try {
+    const r = await fetch('/api/bonus/export', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(lastResult),
+    });
+    if (!r.ok) { const d = await r.json(); toast(d.error || 'Ошибка экспорта', 'error'); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `Bonus_Q${lastResult.quarter}_${lastResult.year}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  } catch(e) { toast('Ошибка экспорта', 'error'); }
 }
 
 function toggleEng(i){

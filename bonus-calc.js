@@ -1,7 +1,7 @@
 const { b24call, getItem } = require('./relations');
 const { pool } = require('./auth');
 const { getTodayRate } = require('./nbrk-exchange-rate');
-const { SERVICE_TYPE_MAP, getPriborMap, getCompanyName } = require('./bitrix-lookups');
+const { SERVICE_TYPE_MAP, getPriborMap, getCompanyName, getContractFromChain } = require('./bitrix-lookups');
 
 const REPORT_ENTITY = 1046;
 const REQUEST_ENTITY = 1058;
@@ -115,6 +115,9 @@ async function resolveRequestBonus(requestId, reportsForRequest, priborMap) {
   if (!latestWorkEnd) latestWorkEnd = request.ufCrm8_1764742724958 || null;
 
   const companyName = request.companyId ? await getCompanyName(request.companyId) : '';
+  const location = request.ufCrm8_1732855494458 || '';
+  let contractLabel = '';
+  try { contractLabel = await getContractFromChain(REQUEST_ENTITY, request) || ''; } catch (e) { /* best-effort */ }
 
   const engineers = [...engineerSet];
   if (!engineers.length) return { skipped: true, reason: 'не указан сотрудник' };
@@ -181,6 +184,8 @@ async function resolveRequestBonus(requestId, reportsForRequest, priborMap) {
     workStart: earliestWorkStart,
     workEnd: latestWorkEnd,
     companyName,
+    location,
+    contractLabel,
   };
 }
 
