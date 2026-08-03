@@ -463,6 +463,10 @@ initDB().then(() => {
     const { refreshDailyRate } = require('./nbrk-exchange-rate');
     setTimeout(() => refreshDailyRate(), 5000);
     setInterval(() => refreshDailyRate(), 24 * 60 * 60 * 1000);
+    // Статистика deals cache — full reconciliation once a day, catches
+    // anything a missed webhook delivery would otherwise leave stale.
+    const { fullSync: fullSyncStatsDeals } = require('./stats-sync');
+    setInterval(() => fullSyncStatsDeals().catch(e => console.error('stats fullSync error:', e.message)), 24 * 60 * 60 * 1000);
     // Planner ↔ Bitrix reconciliation — webhooks are best-effort, this catches
     // anything a missed/failed webhook delivery would otherwise leave stale.
     const { reconcileAllPlannerEvents } = require('./routes/relations-routes');

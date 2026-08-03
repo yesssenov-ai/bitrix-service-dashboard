@@ -249,6 +249,30 @@ async function initDB() {
       manufacturer VARCHAR(200) NOT NULL,
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    -- Local mirror of relevant deal fields for the Статистика module. Kept
+    -- in sync via webhooks (ONCRMDEALADD/ONCRMDEALUPDATE) plus a periodic
+    -- full reconciliation as a safety net — avoids scanning all of Bitrix
+    -- live every time someone opens the dashboard.
+    CREATE TABLE IF NOT EXISTS ticketsmodule_stat_deals (
+      deal_id INTEGER PRIMARY KEY,
+      category_id INTEGER NOT NULL,
+      stage_id VARCHAR(60),
+      opportunity NUMERIC(16,2),
+      currency_id VARCHAR(10),
+      company_id INTEGER,
+      assigned_by_id INTEGER,
+      contract_date DATE,
+      instrument_name VARCHAR(300),
+      department_id VARCHAR(60),
+      manufacturer VARCHAR(200),
+      industry VARCHAR(200),
+      synced_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_stat_deals_category ON ticketsmodule_stat_deals(category_id);
+    CREATE INDEX IF NOT EXISTS idx_stat_deals_contract_date ON ticketsmodule_stat_deals(contract_date);
+    CREATE INDEX IF NOT EXISTS idx_stat_deals_stage ON ticketsmodule_stat_deals(stage_id);
+
     ALTER TABLE ticketsmodule_kp_items ALTER COLUMN item_no TYPE VARCHAR(500);
 
     -- ── Бонусы инженеров module ─────────────────────────────────────────────

@@ -335,6 +335,22 @@ async function handleBitrixWebhook(req, res) {
 
     const event = req.body?.event;
     const data = req.body?.data;
+
+    // ── Deal events (for the Статистика module's local cache) ──────────────
+    if (['ONCRMDEALADD', 'ONCRMDEALUPDATE'].includes(event) && data) {
+      const dealId = parseInt(data.FIELDS?.ID || data.ID);
+      if (dealId) {
+        res.status(200).send('ok');
+        try {
+          const { syncOneDeal } = require('../stats-sync');
+          await syncOneDeal(dealId);
+        } catch (e) {
+          console.error('stats-sync webhook error:', e.message);
+        }
+        return;
+      }
+    }
+
     if (!['ONCRMDYNAMICITEMUPDATE','ONCRMDYNAMICITEMADD'].includes(event) || !data) {
       return res.status(200).send('ok');
     }

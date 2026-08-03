@@ -1,11 +1,6 @@
-const { b24 } = require('./bitrix');
 const { pool } = require('./auth');
 const { getTodayRate } = require('./nbrk-exchange-rate');
 const { USERS } = require('./constants');
-
-const REAL_CONTRACT_DATE_FIELD = 'UF_CRM_1753708701368'; // Дата договора, confirmed via find-deal-fields.js
-const INSTRUMENT_FIELD = 'UF_CRM_NAME_PRIOBOR';
-const DEPARTMENT_FIELD = 'UF_CRM_DEPARTMENT';
 
 const PIPELINES = {
   0: { name: 'Продажа инструментов', shortName: 'Inst', completedStages: ['FINAL_INVOICE','1','UC_Q9J6VV','UC_9MBFR2','2','3','WON'] },
@@ -14,92 +9,43 @@ const PIPELINES = {
   3: { name: 'Продажа сервиса', shortName: 'Service', completedStages: ['C3:FINAL_INVOICE','C3:UC_YYTFYG','C3:2','C3:WON'] },
 };
 
-const SELECT_FIELDS = [
-  'ID', 'TITLE', 'CATEGORY_ID', 'STAGE_ID', 'OPPORTUNITY', 'CURRENCY_ID',
-  'COMPANY_ID', 'ASSIGNED_BY_ID', REAL_CONTRACT_DATE_FIELD, INSTRUMENT_FIELD, DEPARTMENT_FIELD,
-];
-
-async function paginatedDealList(filter) {
-  let items = [];
-  let start = 0;
-  while (true) {
-    const { result, next } = await b24('crm.deal.list', { filter, select: SELECT_FIELDS, start });
-    items = items.concat(result || []);
-    if (next === undefined || next === null) break;
-    start = next;
-  }
-  return items;
-}
-
-const companyIndustryCache = new Map();
-async function getCompanyIndustry(companyId) {
-  if (!companyId) return '';
-  if (companyIndustryCache.has(companyId)) return companyIndustryCache.get(companyId);
-  try {
-    const { result } = await b24('crm.company.get', { id: companyId });
-    const industry = result?.INDUSTRY || '';
-    companyIndustryCache.set(companyId, industry);
-    return industry;
-  } catch (e) {
-    companyIndustryCache.set(companyId, '');
-    return '';
-  }
-}
-
-async function getManufacturer(instrumentName) {
-  if (!instrumentName) return null;
-  const { rows } = await pool.query(
-    'SELECT manufacturer FROM ticketsmodule_stat_instrument_manufacturer WHERE instrument_name=$1',
-    [instrumentName]
-  );
-  return rows[0]?.manufacturer || null;
-}
-
-// Pulls every WON deal across all 4 pipelines whose Дата договора falls in
-// [startDate, endDate], with sums converted to KZT at today's rate.
+// Reads WON/completed deals for the given date range straight from our
+// local cache (ticketsmodule_stat_deals) — kept in sync via webhooks +
+// periodic reconciliation (see stats-sync.js) instead of scanning Bitrix
+// live on every dashboard load.
 async function getWonDealsInRange(startDate, endDate) {
   const rate = await getTodayRate();
-  const deals = [];
+  const allStages = Object.values(PIPELINES).flatMap(p => p.completedStages);
 
-  for (const [categoryId, cfg] of Object.entries(PIPELINES)) {
-    const filter = {
-      CATEGORY_ID: categoryId,
-      '@STAGE_ID': cfg.completedStages,
-      [`>=${REAL_CONTRACT_DATE_FIELD}`]: startDate,
-      [`<=${REAL_CONTRACT_DATE_FIELD}`]: endDate,
+  const { rows } = await pool.query(
+    `SELECT * FROM ticketsmodule_stat_deals
+     WHERE stage_id = ANY($1) AND contract_date BETWEEN $2 AND $3`,
+    [allStages, startDate, endDate]
+  );
+
+  return rows.map(d => {
+    const cfg = PIPELINES[d.category_id] || { name: 'Неизвестно', shortName: '?' };
+    const sum = parseFloat(d.opportunity) || 0;
+    const sumKzt = d.currency_id === 'USD' ? sum * rate : sum;
+    return {
+      id: d.deal_id,
+      pipelineId: d.category_id,
+      pipelineName: cfg.name,
+      saleType: cfg.shortName,
+      sumKzt,
+      managerId: d.assigned_by_id,
+      managerName: d.assigned_by_id ? (USERS[d.assigned_by_id] || `#${d.assigned_by_id}`) : '—',
+      departmentId: d.department_id,
+      companyId: d.company_id,
+      industry: d.industry || '',
+      instrumentName: d.instrument_name || '',
+      manufacturer: d.manufacturer || 'Не определено',
+      contractDate: d.contract_date,
+      year: d.contract_date ? new Date(d.contract_date).getFullYear() : null,
     };
-    const raw = await paginatedDealList(filter);
-    for (const d of raw) {
-      const sum = parseFloat(d.OPPORTUNITY) || 0;
-      const currency = d.CURRENCY_ID || 'KZT';
-      const sumKzt = currency === 'USD' ? sum * rate : sum;
-      const instrumentName = d[INSTRUMENT_FIELD] || '';
-      const manufacturer = await getManufacturer(instrumentName);
-      const industry = await getCompanyIndustry(d.COMPANY_ID);
-
-      deals.push({
-        id: d.ID,
-        pipelineId: Number(categoryId),
-        pipelineName: cfg.name,
-        saleType: cfg.shortName,
-        sumKzt,
-        managerId: d.ASSIGNED_BY_ID ? parseInt(d.ASSIGNED_BY_ID, 10) : null,
-        managerName: d.ASSIGNED_BY_ID ? (USERS[d.ASSIGNED_BY_ID] || `#${d.ASSIGNED_BY_ID}`) : '—',
-        departmentId: d[DEPARTMENT_FIELD] || null,
-        companyId: d.COMPANY_ID || null,
-        industry,
-        instrumentName,
-        manufacturer: manufacturer || 'Не определено',
-        contractDate: d[REAL_CONTRACT_DATE_FIELD],
-        year: d[REAL_CONTRACT_DATE_FIELD] ? new Date(d[REAL_CONTRACT_DATE_FIELD]).getFullYear() : null,
-      });
-    }
-  }
-  return deals;
+  });
 }
 
-// Manufacturer x sale-type summary table, matching the reference screenshot
-// (rows: Inst/Spares/Service sums+percentages, columns: Common + each manufacturer)
 function summarizeByManufacturerAndType(deals) {
   const manufacturers = [...new Set(deals.map(d => d.manufacturer))].filter(m => m !== 'Не определено').sort();
   const types = ['Inst', 'Spares', 'Training', 'Service'];
@@ -156,5 +102,5 @@ function summarizeByInstrument(deals) {
 
 module.exports = {
   getWonDealsInRange, summarizeByManufacturerAndType, summarizeByManager, summarizeByInstrument,
-  PIPELINES, REAL_CONTRACT_DATE_FIELD, INSTRUMENT_FIELD, DEPARTMENT_FIELD,
+  PIPELINES,
 };

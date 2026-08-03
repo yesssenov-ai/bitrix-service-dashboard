@@ -5,7 +5,8 @@
 // of undercounting, separate from the stage-range bug).
 
 const { b24 } = require('./bitrix');
-const { PIPELINES, REAL_CONTRACT_DATE_FIELD } = require('./stats-calc');
+const { PIPELINES } = require('./stats-calc');
+const REAL_CONTRACT_DATE_FIELD = 'UF_CRM_1753708701368';
 
 async function countDeals(filter) {
   let total = 0;
