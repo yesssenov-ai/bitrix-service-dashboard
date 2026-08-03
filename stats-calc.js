@@ -9,18 +9,19 @@ const PIPELINES = {
   3: { name: 'Продажа сервиса', shortName: 'Service', completedStages: ['C3:FINAL_INVOICE','C3:UC_YYTFYG','C3:2','C3:WON'] },
 };
 
-// Тип сделки within category 0 (Продажа инструментов) — confirmed directly
-// in Bitrix's own "Тип сделки" dropdown: only these 3 values exist for this
-// pipeline. Split out separately per the user's request, since lumping
-// General lab/Robots into "Instrument" overstated that category.
-const DEAL_TYPE_LABELS = { SALE: 'Instrument', UC_TA384N: 'General lab', SERVICE: 'Robots' };
+// Note: TYPE_ID (Тип сделки — Instrument/General lab/Robots) is no longer
+// used for row-splitting — Отдел turned out to be the dimension that
+// actually matches the reference reporting (Power BI's "Выполнение плана"
+// table), so DEPARTMENT_LABELS below drives sale-type grouping instead.
 
 // "Отдел" — confirmed via correlation across 93 deals (find-department-field.js).
 // Robots/Training/Материаловедение weren't in that sample yet — will show as
 // the raw ID until confirmed, same graceful-degradation pattern as elsewhere.
 const DEPARTMENT_LABELS = {
   '4857': 'Элементный', '4858': 'Хроматография', '4859': 'Электрохимия',
-  '4862': 'Spares', '4865': 'General Lab', '4866': 'Complex',
+  '4860': 'Клеточный анализ', '4862': 'Spares', '4863': 'Service',
+  '4864': 'Training', '4865': 'General Lab', '4866': 'Complex',
+  '8384': 'Материаловедение',
 };
 
 // Reads WON/completed deals for the given date range straight from our
@@ -41,9 +42,10 @@ async function getWonDealsInRange(startDate, endDate) {
     const cfg = PIPELINES[d.category_id] || { name: 'Неизвестно', shortName: '?' };
     const sum = parseFloat(d.opportunity) || 0;
     const sumKzt = d.currency_id === 'USD' ? sum * rate : sum;
-    const saleType = d.category_id === 0
-      ? (DEAL_TYPE_LABELS[d.deal_type_id] || d.deal_type_id || 'Instrument')
-      : cfg.shortName;
+    const departmentLabel = DEPARTMENT_LABELS[d.department_id] || d.department_id;
+    const mergedDepartmentLabel = (departmentLabel === 'Хроматография' || departmentLabel === 'Клеточный анализ')
+      ? 'Хроматография и клеточный анализ' : departmentLabel;
+    const saleType = mergedDepartmentLabel || cfg.shortName;
     return {
       id: d.deal_id,
       pipelineId: d.category_id,
@@ -52,7 +54,7 @@ async function getWonDealsInRange(startDate, endDate) {
       sumKzt,
       managerId: d.assigned_by_id,
       managerName: d.assigned_by_id ? (USERS[d.assigned_by_id] || `#${d.assigned_by_id}`) : '—',
-      departmentId: DEPARTMENT_LABELS[d.department_id] || d.department_id,
+      departmentId: departmentLabel,
       companyId: d.company_id,
       industry: d.industry || '',
       instrumentName: d.instrument_name || '',
@@ -65,11 +67,10 @@ async function getWonDealsInRange(startDate, endDate) {
 
 function summarizeByManufacturerAndType(deals) {
   const manufacturers = [...new Set(deals.map(d => d.manufacturer))].filter(m => m !== 'Не определено').sort();
-  const typeOrder = ['Instrument', 'General lab', 'Robots', 'Spares', 'Training', 'Service'];
-  const presentTypes = new Set(deals.map(d => d.saleType));
+  const typeOrder = ['Элементный', 'Хроматография и клеточный анализ', 'Электрохимия', 'Spares', 'Service', 'Training', 'General Lab', 'Complex', 'Материаловедение'];
+  const presentTypes = new Set(deals.map(d => d.saleType || 'Не указан'));
   const types = typeOrder.filter(t => presentTypes.has(t));
-  // Any type not in our known order (shouldn't normally happen) still shows up, appended at the end
-  [...presentTypes].forEach(t => { if (!types.includes(t)) types.push(t); });
+  [...presentTypes].forEach(t => { if (!types.includes(t)) types.push(t); }); // any unmapped raw value still shows up, appended at the end
 
   const table = {};
   for (const type of types) {
@@ -77,9 +78,10 @@ function summarizeByManufacturerAndType(deals) {
     manufacturers.forEach(m => { table[type][m] = 0; });
   }
   for (const d of deals) {
-    if (!table[d.saleType]) continue;
-    table[d.saleType].Common += d.sumKzt;
-    if (d.manufacturer !== 'Не определено') table[d.saleType][d.manufacturer] += d.sumKzt;
+    const key = d.saleType || 'Не указан';
+    if (!table[key]) continue;
+    table[key].Common += d.sumKzt;
+    if (d.manufacturer !== 'Не определено') table[key][d.manufacturer] += d.sumKzt;
   }
   return { manufacturers, types, table };
 }
