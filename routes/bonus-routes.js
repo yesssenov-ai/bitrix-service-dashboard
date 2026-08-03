@@ -35,7 +35,7 @@ router.get('/calculate', requireAuth(), async (req, res) => {
 
     const { start, end } = quarterRange(year, quarter);
     const { calculateQuarterBonuses } = require('../bonus-calc');
-    const { byEngineer, skippedItems, totalReports } = await calculateQuarterBonuses(start, end);
+    const { byEngineer, skippedItems, totalReports, totalRequests } = await calculateQuarterBonuses(start, end);
 
     let result = byEngineer;
     if (!isPm(req.user)) {
@@ -54,6 +54,7 @@ router.get('/calculate', requireAuth(), async (req, res) => {
       engineers: withNames,
       grandTotalKzt: withNames.reduce((s,e) => s + e.totalKzt, 0),
       totalReports,
+      totalRequests,
       skippedCount: skippedItems.length,
       skipped: isPm(req.user) ? skippedItems : undefined,
     });

@@ -49,22 +49,30 @@ async function getReportsInRange(startDate, endDate) {
 // intermittent failures that silently looked like "no data".
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// Resolves one Отчёт into zero or more bonus line items (one per co-executor).
-async function resolveReportBonus(report, priborMap) {
-  if (!report.parentId1058) return { skipped: true, reason: 'нет связанной заявки (1058)' };
-
-  const request = await getItem(REQUEST_ENTITY, report.parentId1058);
+// Resolves ONE Заявка (using its full set of Отчёты in-range) into a single
+// bonus line item — the request is the billing unit, not the individual
+// report. If several отчёты reference the same заявка (e.g. multiple visits
+// or a report per co-executor), the bonus is computed once and split across
+// the union of everyone who worked on it.
+async function resolveRequestBonus(requestId, reportsForRequest, priborMap) {
+  const request = await getItem(REQUEST_ENTITY, requestId);
   if (!request) return { skipped: true, reason: 'заявка не найдена' };
 
   const serviceTypeIds = Array.isArray(request.ufCrm8_1744300223) ? request.ufCrm8_1744300223 : (request.ufCrm8_1744300223 ? [request.ufCrm8_1744300223] : []);
   const serviceTypeLabel = serviceTypeIds.map(id => SERVICE_TYPE_MAP[id] || id).join(', ');
 
-  const rawPribor = request.ufCrmPribor || report.ufCrmPribor;
+  const rawPribor = request.ufCrmPribor || reportsForRequest.find(r => r.ufCrmPribor)?.ufCrmPribor;
   const priborIds = Array.isArray(rawPribor) ? rawPribor : (rawPribor ? [rawPribor] : []);
   const priborLabel = priborIds.map(id => priborMap[id] || `#${id}`).join(', ');
 
-  const engineers = [report.ufCrm5_1732872053, ...(Array.isArray(report.ufCrm5_1732872312) ? report.ufCrm5_1732872312 : (report.ufCrm5_1732872312 ? [report.ufCrm5_1732872312] : []))]
-    .filter(Boolean).map(id => parseInt(id, 10));
+  const engineerSet = new Set();
+  let latestWorkEnd = null;
+  for (const report of reportsForRequest) {
+    [report.ufCrm5_1732872053, ...(Array.isArray(report.ufCrm5_1732872312) ? report.ufCrm5_1732872312 : (report.ufCrm5_1732872312 ? [report.ufCrm5_1732872312] : []))]
+      .filter(Boolean).forEach(id => engineerSet.add(parseInt(id, 10)));
+    if (report.ufCrm5_1732872202457 && (!latestWorkEnd || report.ufCrm5_1732872202457 > latestWorkEnd)) latestWorkEnd = report.ufCrm5_1732872202457;
+  }
+  const engineers = [...engineerSet];
   if (!engineers.length) return { skipped: true, reason: 'не указан сотрудник' };
 
   const sourceIds = Array.isArray(request[SOURCE_FIELD]) ? request[SOURCE_FIELD] : (request[SOURCE_FIELD] ? [request[SOURCE_FIELD]] : []);
@@ -119,14 +127,14 @@ async function resolveReportBonus(report, priborMap) {
 
   return {
     skipped: false,
-    reportId: report.id,
-    requestId: report.parentId1058,
+    requestId,
+    reportIds: reportsForRequest.map(r => r.id),
     basis,
     serviceType: serviceTypeLabel,
     instrument: priborLabel,
     grossKzt, grossUsd, rate, totalKzt,
     engineers, perEngineerKzt,
-    workEnd: report.ufCrm5_1732872202457,
+    workEnd: latestWorkEnd,
   };
 }
 
@@ -135,11 +143,22 @@ async function calculateQuarterBonuses(startDate, endDate) {
   const priborMap = await getPriborMap();
   const reports = await getReportsInRange(startDate, endDate);
 
+  const reportsByRequest = new Map();
+  for (const report of reports) {
+    if (!report.parentId1058) continue;
+    const key = report.parentId1058;
+    if (!reportsByRequest.has(key)) reportsByRequest.set(key, []);
+    reportsByRequest.get(key).push(report);
+  }
+  const noRequestCount = reports.filter(r => !r.parentId1058).length;
+
   const lineItems = [];
   const skippedItems = [];
-  for (const report of reports) {
-    const resolved = await resolveReportBonus(report, priborMap);
-    if (resolved.skipped) skippedItems.push({ reportId: report.id, reason: resolved.reason });
+  if (noRequestCount) skippedItems.push({ reportId: null, reason: `${noRequestCount} отчёт(ов) без связанной заявки (1058)` });
+
+  for (const [requestId, reportsForRequest] of reportsByRequest) {
+    const resolved = await resolveRequestBonus(requestId, reportsForRequest, priborMap);
+    if (resolved.skipped) skippedItems.push({ reportId: requestId, reason: resolved.reason });
     else lineItems.push(resolved);
     await sleep(150); // stay under Bitrix's rate limit — see note above getReportsInRange
   }
@@ -153,7 +172,7 @@ async function calculateQuarterBonuses(startDate, endDate) {
     }
   }
 
-  return { byEngineer, skippedItems, totalReports: reports.length };
+  return { byEngineer, skippedItems, totalReports: reports.length, totalRequests: reportsByRequest.size };
 }
 
-module.exports = { calculateQuarterBonuses, resolveReportBonus, getReportsInRange, SOURCE_SERVICE_SALE_ID };
+module.exports = { calculateQuarterBonuses, resolveRequestBonus, getReportsInRange, SOURCE_SERVICE_SALE_ID };
