@@ -1,7 +1,7 @@
 const { b24call, getItem } = require('./relations');
 const { pool } = require('./auth');
 const { getTodayRate } = require('./nbrk-exchange-rate');
-const { SERVICE_TYPE_MAP, getPriborMap } = require('./bitrix-lookups');
+const { SERVICE_TYPE_MAP, getPriborMap, getCompanyName } = require('./bitrix-lookups');
 
 const REPORT_ENTITY = 1046;
 const REQUEST_ENTITY = 1058;
@@ -19,21 +19,14 @@ function isMethodicalType(serviceTypeLabel) {
   return /методич/i.test(serviceTypeLabel || '');
 }
 
-async function getReportsInRange(startDate, endDate) {
-  const filter = {
-    '>=ufCrm5_1732872202457': startDate, // Дата окончания работ/обучения
-    '<=ufCrm5_1732872202457': endDate,
-  };
-  const select = ['id','title','ufCrm5_1732872053','ufCrm5_1732872312','ufCrm5_1732872194569',
-                   'ufCrm5_1732872202457','parentId1058','ufCrmPribor'];
-
+async function paginatedList(entityTypeId, filter, select) {
   let items = [];
   let start = 0;
   let safety = 0;
-  while (safety++ < 50) { // hard ceiling — 50*50=2500 reports, far beyond any realistic quarter
-    const data = await b24call('crm.item.list', { entityTypeId: REPORT_ENTITY, filter, select, start });
+  while (safety++ < 50) { // hard ceiling — 50*50=2500 items, far beyond any realistic quarter
+    const data = await b24call('crm.item.list', { entityTypeId, filter, select, start });
     if (!data || data.error) {
-      throw new Error(`Bitrix crm.item.list ошибка: ${data?.error_description || data?.error || 'нет ответа'}`);
+      throw new Error(`Bitrix crm.item.list ошибка (тип ${entityTypeId}): ${data?.error_description || data?.error || 'нет ответа'}`);
     }
     const page = data.result?.items || [];
     items = items.concat(page);
@@ -41,6 +34,49 @@ async function getReportsInRange(startDate, endDate) {
     start = data.next;
   }
   return items;
+}
+
+const REPORT_SELECT = ['id','title','ufCrm5_1732872053','ufCrm5_1732872312','ufCrm5_1732872194569',
+                        'ufCrm5_1732872202457','parentId1058','ufCrmPribor'];
+
+// Pulls every Отчёт relevant to the quarter from TWO angles, then unions them
+// by id — a work item only counts once even if it matches both ways:
+//   (a) the Отчёт's own "Дата окончания работ" falls in range — the normal case;
+//   (b) the отчёт's date is missing/blank, but its parent Заявка's own
+//       scheduled work dates (ufCrm8_1764742554715/724958) fall in range —
+//       catches отчёты that were never dated, instead of silently dropping them.
+async function getReportsInRange(startDate, endDate) {
+  const byReportDate = await paginatedList(REPORT_ENTITY, {
+    '>=ufCrm5_1732872202457': startDate,
+    '<=ufCrm5_1732872202457': endDate,
+  }, REPORT_SELECT);
+
+  const requestsByOwnDate = await paginatedList(REQUEST_ENTITY, {
+    '>=ufCrm8_1764742554715': startDate,
+    '<=ufCrm8_1764742724958': endDate,
+  }, ['id']);
+
+  const alreadyCovered = new Set(byReportDate.map(r => r.parentId1058).filter(Boolean));
+  const extraRequestIds = requestsByOwnDate.map(r => r.id).filter(id => !alreadyCovered.has(id));
+
+  let extraReports = [];
+  for (const reqId of extraRequestIds) {
+    // Pull this request's own отчёты regardless of their date (we already
+    // know the request's scheduled dates fall in the quarter — that's what
+    // matters when the report itself was never dated).
+    const reports = await paginatedList(REPORT_ENTITY, { parentId1058: reqId }, REPORT_SELECT);
+    extraReports = extraReports.concat(reports);
+    await sleep(150);
+  }
+
+  const seen = new Set();
+  const merged = [];
+  for (const r of [...byReportDate, ...extraReports]) {
+    if (seen.has(r.id)) continue;
+    seen.add(r.id);
+    merged.push(r);
+  }
+  return merged;
 }
 
 // Small delay to stay comfortably under Bitrix's webhook rate limit (2 req/s) —
@@ -66,12 +102,20 @@ async function resolveRequestBonus(requestId, reportsForRequest, priborMap) {
   const priborLabel = priborIds.map(id => priborMap[id] || `#${id}`).join(', ');
 
   const engineerSet = new Set();
-  let latestWorkEnd = null;
+  let earliestWorkStart = null, latestWorkEnd = null;
   for (const report of reportsForRequest) {
     [report.ufCrm5_1732872053, ...(Array.isArray(report.ufCrm5_1732872312) ? report.ufCrm5_1732872312 : (report.ufCrm5_1732872312 ? [report.ufCrm5_1732872312] : []))]
       .filter(Boolean).forEach(id => engineerSet.add(parseInt(id, 10)));
+    if (report.ufCrm5_1732872194569 && (!earliestWorkStart || report.ufCrm5_1732872194569 < earliestWorkStart)) earliestWorkStart = report.ufCrm5_1732872194569;
     if (report.ufCrm5_1732872202457 && (!latestWorkEnd || report.ufCrm5_1732872202457 > latestWorkEnd)) latestWorkEnd = report.ufCrm5_1732872202457;
   }
+  // Fall back to the заявка's own scheduled work dates if none of its
+  // отчёты had one filled in — better than silently dropping the request.
+  if (!earliestWorkStart) earliestWorkStart = request.ufCrm8_1764742554715 || null;
+  if (!latestWorkEnd) latestWorkEnd = request.ufCrm8_1764742724958 || null;
+
+  const companyName = request.companyId ? await getCompanyName(request.companyId) : '';
+
   const engineers = [...engineerSet];
   if (!engineers.length) return { skipped: true, reason: 'не указан сотрудник' };
 
@@ -134,7 +178,9 @@ async function resolveRequestBonus(requestId, reportsForRequest, priborMap) {
     instrument: priborLabel,
     grossKzt, grossUsd, rate, totalKzt,
     engineers, perEngineerKzt,
+    workStart: earliestWorkStart,
     workEnd: latestWorkEnd,
+    companyName,
   };
 }
 
