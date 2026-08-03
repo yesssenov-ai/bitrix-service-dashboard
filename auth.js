@@ -235,6 +235,20 @@ async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_tm_kp_comments_req ON ticketsmodule_kp_comments(kp_request_id);
 
     ALTER TABLE ticketsmodule_users ADD COLUMN IF NOT EXISTS kp_categories JSONB DEFAULT '[]';
+
+    -- ── Статистика module ────────────────────────────────────────────────────
+    -- Bitrix's "Производитель" field on deals is an iblock_element field
+    -- that turned out unresolvable via REST (returns raw internal IDs that
+    -- don't correspond 1:1 with any single manufacturer — confirmed via
+    -- extensive testing). Instead, we key off UF_CRM_NAME_PRIOBOR (a plain
+    -- reliable text field with the specific instrument name) and look up
+    -- its manufacturer here — same pattern as the bonus module's tariff
+    -- category mapping, built from a verified Bitrix export.
+    CREATE TABLE IF NOT EXISTS ticketsmodule_stat_instrument_manufacturer (
+      instrument_name VARCHAR(300) PRIMARY KEY,
+      manufacturer VARCHAR(200) NOT NULL,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
     ALTER TABLE ticketsmodule_kp_items ALTER COLUMN item_no TYPE VARCHAR(500);
 
     -- ── Бонусы инженеров module ─────────────────────────────────────────────
