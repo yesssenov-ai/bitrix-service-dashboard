@@ -380,6 +380,7 @@ tr.tr:hover td { background:#fafbfd; }
       </div>
       <div id="mailThread" style="max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;margin-bottom:16px;padding-right:4px"></div>
       <div class="form-group"><label class="form-label">Кому</label><input class="form-input" type="email" id="mailTo" placeholder="client@example.com"></div>
+      <div class="form-group"><label class="form-label">Копия</label><input class="form-input" type="text" id="mailCc" placeholder="ещё-адрес@example.com, другой@example.com (через запятую)"></div>
       <div class="form-group"><label class="form-label">Тема</label><input class="form-input" type="text" id="mailSubject" placeholder="Тема письма"></div>
       <div class="form-group"><label class="form-label">Сообщение</label><textarea class="form-textarea" id="mailBody" placeholder="Текст письма…" style="min-height:100px"></textarea></div>
     </div>
@@ -688,6 +689,7 @@ async function openMail(id,title){
   curTicketId=id;
   document.getElementById('mailTicketTitle').textContent=`#${id} - ${title}`;
   document.getElementById('mailTo').value='';
+  document.getElementById('mailCc').value='';
   document.getElementById('mailSubject').value=title||'';
   document.getElementById('mailBody').value='';
   document.getElementById('mailNoPassword').style.display='none';
@@ -732,8 +734,10 @@ function renderMailThread(emails){
   wrap.innerHTML=emails.map(e=>{
     const sent=e.direction==='sent';
     const when=new Date(e.created_at).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const ccLine=e.cc_address?`<div style="font-size:11px;color:var(--text-3)">Копия: ${esc(e.cc_address)}</div>`:'';
     return `<div style="align-self:${sent?'flex-end':'flex-start'};max-width:85%;background:${sent?'var(--purple-light)':'var(--bg)'};border:1px solid ${sent?'rgba(124,58,237,.2)':'var(--border2)'};border-radius:10px;padding:10px 12px">
       <div style="font-size:11px;color:var(--text-3);margin-bottom:4px">${sent?'Вы → '+esc(e.to_address):esc(e.from_address)+' → вам'} · ${when}</div>
+      ${ccLine}
       <div style="font-size:12.5px;font-weight:600;margin-bottom:4px">${esc(e.subject||'')}</div>
       <div style="font-size:13px;white-space:pre-wrap">${esc(e.body_text||'')}</div>
     </div>`;
@@ -754,6 +758,7 @@ async function saveAppPassword(){
 
 async function submitMail(){
   const to=document.getElementById('mailTo').value.trim();
+  const cc=document.getElementById('mailCc').value.trim();
   const subject=document.getElementById('mailSubject').value.trim();
   const bodyHtml=document.getElementById('mailBody').value.trim();
   if(!to||!subject||!bodyHtml){toast('Заполните все поля','error');return;}
@@ -761,7 +766,7 @@ async function submitMail(){
   btn.disabled=true;
   try{
     const r=await fetch('/api/ticket-email/send',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ticketId:curTicketId,to,subject,bodyHtml})});
+      body:JSON.stringify({ticketId:curTicketId,to,cc,subject,bodyHtml})});
     const d=await r.json();
     if(!d.ok)throw new Error(d.error);
     toast('✅ Письмо отправлено','success');

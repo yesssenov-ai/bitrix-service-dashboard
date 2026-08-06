@@ -54,7 +54,7 @@ function generateMessageId(ticketId) {
 // received, by ANY engineer) and chains In-Reply-To/References to it, so
 // the client's own mail client (Outlook etc.) groups the whole exchange as
 // one conversation.
-async function sendTicketEmail({ ticketId, engineerUserId, engineerEmail, engineerName, to, subject, bodyHtml }) {
+async function sendTicketEmail({ ticketId, engineerUserId, engineerEmail, engineerName, to, cc, subject, bodyHtml }) {
   if (!RESEND_KEY) {
     const err = new Error('Отправка почты не настроена (нет RESEND_API_KEY)');
     err.code = 'NO_RESEND_KEY';
@@ -86,12 +86,15 @@ async function sendTicketEmail({ ticketId, engineerUserId, engineerEmail, engine
     headers['References'] = references;
   }
 
+  const ccList = Array.isArray(cc) ? cc.filter(Boolean) : (cc ? String(cc).split(',').map(s => s.trim()).filter(Boolean) : []);
+
   const resendRes = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       from: 'ProLabSupport Service <service@prolabsupport.kz>',
       to,
+      ...(ccList.length ? { cc: ccList } : {}),
       reply_to: replyToForTicket(ticketId),
       subject: threadedSubject,
       html: fullHtml,
@@ -105,9 +108,9 @@ async function sendTicketEmail({ ticketId, engineerUserId, engineerEmail, engine
 
   await pool.query(
     `INSERT INTO ticketsmodule_ticket_emails
-      (ticket_id, direction, from_address, to_address, subject, body_text, body_html, sender_user_id, message_id, references_header)
-     VALUES ($1,'sent',$2,$3,$4,$5,$6,$7,$8,$9)`,
-    [ticketId, engineerEmail, to, threadedSubject, bodyHtml, fullHtml, engineerUserId, messageId, references]
+      (ticket_id, direction, from_address, to_address, cc_address, subject, body_text, body_html, sender_user_id, message_id, references_header)
+     VALUES ($1,'sent',$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+    [ticketId, engineerEmail, to, ccList.length ? ccList.join(', ') : null, threadedSubject, bodyHtml, fullHtml, engineerUserId, messageId, references]
   );
 
   return { messageId };
