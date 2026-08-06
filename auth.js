@@ -259,6 +259,7 @@ async function initDB() {
       category_id INTEGER NOT NULL,
       stage_id VARCHAR(60),
       deal_type_id VARCHAR(60),
+      deal_title TEXT,
       opportunity NUMERIC(16,2),
       currency_id VARCHAR(10),
       company_id INTEGER,
@@ -271,6 +272,29 @@ async function initDB() {
       synced_at TIMESTAMPTZ DEFAULT NOW()
     );
     ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS deal_type_id VARCHAR(60);
+    ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS deal_title TEXT;
+
+    -- ── Переписка с клиентом по заявке (Написать клиенту) ───────────────────
+    -- Each engineer stores their own Yandex 360 app password (encrypted) so
+    -- outgoing mail can be sent as their real corporate address via SMTP.
+    ALTER TABLE ticketsmodule_users ADD COLUMN IF NOT EXISTS smtp_app_password_encrypted TEXT;
+
+    CREATE TABLE IF NOT EXISTS ticketsmodule_ticket_emails (
+      id SERIAL PRIMARY KEY,
+      ticket_id INTEGER NOT NULL,
+      direction VARCHAR(10) NOT NULL, -- 'sent' | 'received'
+      from_address VARCHAR(255),
+      to_address VARCHAR(255),
+      subject TEXT,
+      body_text TEXT,
+      body_html TEXT,
+      sender_user_id INTEGER REFERENCES ticketsmodule_users(id),
+      message_id VARCHAR(255),
+      references_header TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    ALTER TABLE ticketsmodule_ticket_emails ADD COLUMN IF NOT EXISTS references_header TEXT;
+    CREATE INDEX IF NOT EXISTS idx_ticket_emails_ticket ON ticketsmodule_ticket_emails(ticket_id);
     CREATE INDEX IF NOT EXISTS idx_stat_deals_category ON ticketsmodule_stat_deals(category_id);
     CREATE INDEX IF NOT EXISTS idx_stat_deals_contract_date ON ticketsmodule_stat_deals(contract_date);
     CREATE INDEX IF NOT EXISTS idx_stat_deals_stage ON ticketsmodule_stat_deals(stage_id);
