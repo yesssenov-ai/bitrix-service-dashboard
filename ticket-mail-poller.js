@@ -55,6 +55,36 @@ function joinReferences(parsed) {
   return Array.isArray(refs) ? refs.join(' ') : String(refs);
 }
 
+// Mail clients (Outlook, Gmail, etc.) auto-append the entire quoted
+// previous message when someone hits "Reply" — without this, a long-running
+// thread would show the full accumulated history inside every single
+// message bubble in the dashboard, since we already display history via
+// separate bubbles per message. This trims everything from the first
+// recognized quote marker onward, keeping just the new reply text.
+function stripQuotedReply(text) {
+  if (!text) return text;
+  const lines = text.split(/\r?\n/);
+  const markers = [
+    /^From:\s.+/i, /^От:\s.+/i,
+    /^-----Original Message-----/i, /^---------- Forwarded message/i,
+    /^On .+ wrote:$/i, /^В .+ (написал|написала|писал\(а\)):$/iu,
+    /^\d{1,2}[.,]\s?\w+[.,]?\s?\d{4}.*(писал|wrote)/iu,
+    /^(Пн|Вт|Ср|Чт|Пт|Сб|Вс),\s.+\d{4}.*(в|at)\s.*(писал|wrote)/iu,
+  ];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (markers.some(re => re.test(line))) {
+      const cleaned = lines.slice(0, i).join('\n').trim();
+      return cleaned || text.trim(); // fall back to full text if nothing but quote remains
+    }
+    if (line.startsWith('>') && i > 0) {
+      const cleaned = lines.slice(0, i).join('\n').trim();
+      return cleaned || text.trim();
+    }
+  }
+  return text.trim();
+}
+
 async function alreadyStored(messageId) {
   if (!messageId) return false;
   const { rows } = await pool.query('SELECT 1 FROM ticketsmodule_ticket_emails WHERE message_id=$1 LIMIT 1', [messageId]);
@@ -70,7 +100,7 @@ async function processMessage(parsed) {
 
   const fromAddr = parsed.from?.value?.[0]?.address || '';
   const subject = parsed.subject || '(без темы)';
-  const bodyText = parsed.text || '';
+  const bodyText = stripQuotedReply(parsed.text || '');
   const bodyHtml = parsed.html || parsed.textAsHtml || '';
   const references = joinReferences(parsed);
 
