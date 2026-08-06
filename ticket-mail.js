@@ -13,14 +13,20 @@ function replyToForTicket(ticketId) {
   return `svc-${ticketId}@${REPLY_TO_DOMAIN}`;
 }
 
-function buildSignatureHtml(engineerName) {
+function buildSignatureHtml(engineerName, jobTitle, mobilePhone) {
+  const titleLine = jobTitle ? `<div>${escapeHtml(jobTitle)}</div>` : '';
+  const mobileLine = mobilePhone ? `<div>m: ${escapeHtml(mobilePhone)}</div>` : '';
   return `
-    <div style="margin-top:24px;padding-top:16px;border-top:2px solid #C53B2F;font-family:Arial,sans-serif;font-size:13px;color:#333;">
-      <img src="${LOGO_URL}" alt="ProLabSupport" style="height:32px;margin-bottom:8px;display:block;">
+    <div style="margin-top:24px;padding-top:16px;border-top:1px solid #ccc;font-family:Arial,sans-serif;font-size:13px;color:#333;line-height:1.5;">
+      <div style="color:#666;margin-bottom:10px;">Құрметпен \\ с уважением \\ regards,</div>
       <div style="font-weight:600">${escapeHtml(engineerName)}</div>
-      <div style="color:#666">ProLabSupport · Quality, confidence, culture!</div>
-      <div style="color:#666;margin-top:4px">+7 7172 73 49 30 · sales@prolabsupport.kz</div>
-      <div style="color:#999;font-size:11px">Astana, 55\\22 Mangilik El ave, EXPO-2017</div>
+      ${titleLine}
+      <div style="margin-top:8px">Kazakhstan, Astana city,</div>
+      <div>55\\22 Mangilik El ave, EXPO-2017</div>
+      <div style="margin-top:8px">T: +7 7172 73 49 30</div>
+      ${mobileLine}
+      <div style="margin-top:8px"><a href="https://www.prolabsupport.kz" style="color:#C53B2F">www.prolabsupport.kz</a></div>
+      <img src="${LOGO_URL}" alt="ProLabSupport" style="height:40px;margin-top:14px;display:block;">
     </div>`;
 }
 
@@ -35,7 +41,7 @@ function escapeHtml(s) {
 // the client's own mail client (Outlook etc.) groups the whole exchange as
 // one conversation — independent of which engineer sends each message.
 async function sendTicketEmail({ ticketId, engineerUserId, engineerEmail, engineerName, to, subject, bodyHtml }) {
-  const { rows } = await pool.query('SELECT smtp_app_password_encrypted FROM ticketsmodule_users WHERE id=$1', [engineerUserId]);
+  const { rows } = await pool.query('SELECT smtp_app_password_encrypted, job_title, mobile_phone FROM ticketsmodule_users WHERE id=$1', [engineerUserId]);
   const encrypted = rows[0]?.smtp_app_password_encrypted;
   if (!encrypted) {
     const err = new Error('У вас не настроен пароль приложения для отправки почты — задайте его в настройках');
@@ -63,7 +69,7 @@ async function sendTicketEmail({ ticketId, engineerUserId, engineerEmail, engine
     auth: { user: engineerEmail, pass: appPassword },
   });
 
-  const fullHtml = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;white-space:pre-wrap">${escapeHtml(bodyHtml)}</div>${buildSignatureHtml(engineerName)}`;
+  const fullHtml = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;white-space:pre-wrap">${escapeHtml(bodyHtml)}</div>${buildSignatureHtml(engineerName, rows[0]?.job_title, rows[0]?.mobile_phone)}`;
 
   const mailOptions = {
     from: `"${engineerName}" <${engineerEmail}>`,

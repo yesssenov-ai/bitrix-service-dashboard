@@ -253,10 +253,21 @@ app.post('/api/settings/app-password', requireAuth(['admin','coordinator','engin
 
 app.get('/api/settings/app-password/status', requireAuth(['admin','coordinator','engineer']), async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT smtp_app_password_encrypted IS NOT NULL AS configured FROM ticketsmodule_users WHERE id=$1', [req.user.id]);
-    res.json({ configured: rows[0]?.configured || false });
+    const { rows } = await pool.query('SELECT smtp_app_password_encrypted IS NOT NULL AS configured, job_title, mobile_phone FROM ticketsmodule_users WHERE id=$1', [req.user.id]);
+    res.json({ configured: rows[0]?.configured || false, jobTitle: rows[0]?.job_title || '', mobilePhone: rows[0]?.mobile_phone || '' });
   } catch (e) {
     res.status(500).json({ configured: false });
+  }
+});
+
+app.post('/api/settings/signature', requireAuth(['admin','coordinator','engineer']), async (req, res) => {
+  try {
+    const { jobTitle, mobilePhone } = req.body;
+    await pool.query('UPDATE ticketsmodule_users SET job_title=$1, mobile_phone=$2 WHERE id=$3', [jobTitle || null, mobilePhone || null, req.user.id]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('/api/settings/signature error:', e.message);
+    res.status(500).json({ ok: false, error: 'Внутренняя ошибка сервера' });
   }
 });
 

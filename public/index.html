@@ -387,10 +387,13 @@ tr.tr:hover td { background:#fafbfd; }
       <button class="modal-close" onclick="closeMail()">✕</button>
     </div>
     <div class="modal-body">
+      <div style="margin-bottom:10px"><a href="javascript:void(0)" onclick="toggleMailSettings()" style="font-size:12.5px;color:var(--text-3)">⚙️ Настройки подписи и отправки</a></div>
       <div id="mailNoPassword" style="display:none;background:var(--orange-light);border:1px solid rgba(217,119,6,.25);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--orange)">
-        Для отправки писем нужно один раз указать пароль приложения от вашей корпоративной почты (Yandex 360).
-        <div style="margin-top:8px"><input class="form-input" type="password" id="mailAppPassword" placeholder="Пароль приложения" style="margin-bottom:8px">
-        <button class="btn btn-primary" onclick="saveAppPassword()">Сохранить пароль</button></div>
+        <div id="mailPasswordHint">Для отправки писем нужно один раз указать пароль приложения от вашей корпоративной почты (Yandex 360).</div>
+        <div style="margin-top:8px"><input class="form-input" type="password" id="mailAppPassword" placeholder="Пароль приложения (оставьте пустым, если уже настроен)" style="margin-bottom:8px"></div>
+        <div style="margin-top:8px"><input class="form-input" type="text" id="mailJobTitle" placeholder="Должность (например, Technical Director)" style="margin-bottom:8px"></div>
+        <div style="margin-top:8px"><input class="form-input" type="text" id="mailMobilePhone" placeholder="Мобильный (например, +7 708 7730190)" style="margin-bottom:8px"></div>
+        <button class="btn btn-primary" onclick="saveAppPassword()">Сохранить</button>
       </div>
       <div id="mailThread" style="max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;margin-bottom:16px;padding-right:4px"></div>
       <div class="form-group"><label class="form-label">Кому</label><input class="form-input" type="email" id="mailTo" placeholder="client@example.com"></div>
@@ -689,6 +692,8 @@ async function openMail(id,title){
   document.getElementById('mailTo').value='';
   document.getElementById('mailSubject').value=title||'';
   document.getElementById('mailBody').value='';
+  document.getElementById('mailAppPassword').value='';
+  document.getElementById('mailNoPassword').style.display='none';
   document.getElementById('mailThread').innerHTML='<div class="empty" style="padding:20px 0"><p>Загрузка…</p></div>';
   document.getElementById('mailOverlay').classList.add('show');
 
@@ -698,7 +703,12 @@ async function openMail(id,title){
       fetch(`/api/ticket-email/${id}`),
     ]);
     const status=await statusR.json();
-    document.getElementById('mailNoPassword').style.display=status.configured?'none':'block';
+    document.getElementById('mailJobTitle').value=status.jobTitle||'';
+    document.getElementById('mailMobilePhone').value=status.mobilePhone||'';
+    document.getElementById('mailPasswordHint').textContent=status.configured
+      ?'Пароль приложения уже настроен. Здесь также можно поменять должность и мобильный, которые выводятся в подписи.'
+      :'Для отправки писем нужно один раз указать пароль приложения от вашей корпоративной почты (Yandex 360).';
+    if(!status.configured) document.getElementById('mailNoPassword').style.display='block';
     const {emails}=await threadR.json();
     renderMailThread(emails||[]);
   }catch(e){
@@ -706,6 +716,10 @@ async function openMail(id,title){
   }
 }
 function closeMail(){document.getElementById('mailOverlay').classList.remove('show');}
+function toggleMailSettings(){
+  const el=document.getElementById('mailNoPassword');
+  el.style.display=el.style.display==='none'?'block':'none';
+}
 
 function renderMailThread(emails){
   const wrap=document.getElementById('mailThread');
@@ -724,14 +738,20 @@ function renderMailThread(emails){
 
 async function saveAppPassword(){
   const appPassword=document.getElementById('mailAppPassword').value.trim();
-  if(!appPassword){toast('Введите пароль приложения','error');return;}
+  const jobTitle=document.getElementById('mailJobTitle').value.trim();
+  const mobilePhone=document.getElementById('mailMobilePhone').value.trim();
   try{
-    const r=await fetch('/api/settings/app-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({appPassword})});
-    const d=await r.json();
-    if(!d.ok)throw new Error(d.error);
+    if(appPassword){
+      const r=await fetch('/api/settings/app-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({appPassword})});
+      const d=await r.json();
+      if(!d.ok)throw new Error(d.error);
+    }
+    const r2=await fetch('/api/settings/signature',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jobTitle,mobilePhone})});
+    const d2=await r2.json();
+    if(!d2.ok)throw new Error(d2.error);
     document.getElementById('mailNoPassword').style.display='none';
     document.getElementById('mailAppPassword').value='';
-    toast('✅ Пароль сохранён','success');
+    toast('✅ Сохранено','success');
   }catch(e){toast('Ошибка: '+e.message,'error');}
 }
 

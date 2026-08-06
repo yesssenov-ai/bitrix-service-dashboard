@@ -278,6 +278,10 @@ async function initDB() {
     -- Each engineer stores their own Yandex 360 app password (encrypted) so
     -- outgoing mail can be sent as their real corporate address via SMTP.
     ALTER TABLE ticketsmodule_users ADD COLUMN IF NOT EXISTS smtp_app_password_encrypted TEXT;
+    -- Per-employee signature fields (name comes from display_name; office
+    -- phone and address are fixed company-wide, set directly in the template).
+    ALTER TABLE ticketsmodule_users ADD COLUMN IF NOT EXISTS job_title VARCHAR(200);
+    ALTER TABLE ticketsmodule_users ADD COLUMN IF NOT EXISTS mobile_phone VARCHAR(50);
 
     CREATE TABLE IF NOT EXISTS ticketsmodule_ticket_emails (
       id SERIAL PRIMARY KEY,
