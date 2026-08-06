@@ -1,11 +1,18 @@
 // Handles sending client correspondence from a specific заявка (ticket),
-// as the assigned engineer's own corporate Yandex 360 mailbox — with a
-// company signature auto-appended, and a Reply-To alias so client replies
-// land in a ticket-specific tracking address we can poll and match back.
-const nodemailer = require('nodemailer');
+// as the assigned engineer's own corporate address — with a company
+// signature auto-appended, and a Reply-To alias so client replies land in
+// a ticket-specific tracking address we can poll and match back.
+//
+// Sends via Resend's HTTPS API rather than raw SMTP: Railway blocks
+// outbound SMTP ports (465/587/25) on all plans below Pro specifically to
+// prevent spam abuse (confirmed — this is why sends were hanging/timing
+// out). Resend goes over HTTPS (443), which is never blocked, and since
+// prolabsupport.kz is already a verified sending domain here (used
+// elsewhere in this project for reports), any @prolabsupport.kz address
+// can be used as the From — no per-engineer app password needed anymore.
 const { pool } = require('./auth');
-const { decrypt } = require('./crypto-helper');
 
+const RESEND_KEY = process.env.RESEND_API_KEY;
 const REPLY_TO_DOMAIN = 'prolabsupport.kz';
 const LOGO_URL = 'https://nms.prolabsupport.kz/assets/company-full-logo.png';
 
@@ -34,25 +41,31 @@ function escapeHtml(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// Sends an email as the given engineer (their own Yandex 360 mailbox,
-// via a stored app password) and returns the sent message details.
+function generateMessageId(ticketId) {
+  return `<ticket-${ticketId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}@${REPLY_TO_DOMAIN}>`;
+}
+
+// Sends an email as the given engineer (their real corporate address as
+// the visible From, via Resend on the verified prolabsupport.kz domain)
+// and returns the sent message details.
 // Threading: looks up the most recent message on this ticket (sent OR
 // received, by ANY engineer) and chains In-Reply-To/References to it, so
 // the client's own mail client (Outlook etc.) groups the whole exchange as
 // one conversation — independent of which engineer sends each message.
 async function sendTicketEmail({ ticketId, engineerUserId, engineerEmail, engineerName, to, subject, bodyHtml }) {
-  const { rows } = await pool.query('SELECT smtp_app_password_encrypted, job_title, mobile_phone FROM ticketsmodule_users WHERE id=$1', [engineerUserId]);
-  const encrypted = rows[0]?.smtp_app_password_encrypted;
-  if (!encrypted) {
-    const err = new Error('У вас не настроен пароль приложения для отправки почты — задайте его в настройках');
-    err.code = 'NO_APP_PASSWORD';
+  if (!RESEND_KEY) {
+    const err = new Error('Отправка почты не настроена (нет RESEND_API_KEY)');
+    err.code = 'NO_RESEND_KEY';
     throw err;
   }
-  const appPassword = decrypt(encrypted);
+
+  const { rows } = await pool.query('SELECT job_title, mobile_phone FROM ticketsmodule_users WHERE id=$1', [engineerUserId]);
+  const jobTitle = rows[0]?.job_title;
+  const mobilePhone = rows[0]?.mobile_phone;
 
   // Find the last message in this ticket's thread (whoever sent/received it)
   const { rows: lastRows } = await pool.query(
-    'SELECT message_id, references_header, subject FROM ticketsmodule_ticket_emails WHERE ticket_id=$1 ORDER BY created_at DESC LIMIT 1',
+    'SELECT message_id, references_header FROM ticketsmodule_ticket_emails WHERE ticket_id=$1 ORDER BY created_at DESC LIMIT 1',
     [ticketId]
   );
   const last = lastRows[0];
@@ -61,38 +74,41 @@ async function sendTicketEmail({ ticketId, engineerUserId, engineerEmail, engine
     ? [last.references_header, last.message_id].filter(Boolean).join(' ')
     : null;
   const threadedSubject = isFollowUp && !/^re:/i.test(subject) ? `Re: ${subject}` : subject;
+  const messageId = generateMessageId(ticketId);
 
-  const transporter = nodemailer.createTransport({
-    host: 'smtp.yandex.ru',
-    port: 465,
-    secure: true,
-    auth: { user: engineerEmail, pass: appPassword },
-  });
+  const fullHtml = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;white-space:pre-wrap">${escapeHtml(bodyHtml)}</div>${buildSignatureHtml(engineerName, jobTitle, mobilePhone)}`;
 
-  const fullHtml = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;white-space:pre-wrap">${escapeHtml(bodyHtml)}</div>${buildSignatureHtml(engineerName, rows[0]?.job_title, rows[0]?.mobile_phone)}`;
-
-  const mailOptions = {
-    from: `"${engineerName}" <${engineerEmail}>`,
-    to,
-    replyTo: replyToForTicket(ticketId),
-    subject: threadedSubject,
-    html: fullHtml,
-  };
+  const headers = { 'Message-ID': messageId };
   if (isFollowUp) {
-    mailOptions.inReplyTo = last.message_id;
-    mailOptions.references = references;
+    headers['In-Reply-To'] = last.message_id;
+    headers['References'] = references;
   }
 
-  const info = await transporter.sendMail(mailOptions);
+  const resendRes = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: `${engineerName} <${engineerEmail}>`,
+      to,
+      reply_to: replyToForTicket(ticketId),
+      subject: threadedSubject,
+      html: fullHtml,
+      headers,
+    }),
+  });
+  if (!resendRes.ok) {
+    const errText = await resendRes.text().catch(() => '');
+    throw new Error(`Не удалось отправить письмо: ${errText || resendRes.status}`);
+  }
 
   await pool.query(
     `INSERT INTO ticketsmodule_ticket_emails
       (ticket_id, direction, from_address, to_address, subject, body_text, body_html, sender_user_id, message_id, references_header)
      VALUES ($1,'sent',$2,$3,$4,$5,$6,$7,$8,$9)`,
-    [ticketId, engineerEmail, to, threadedSubject, bodyHtml, fullHtml, engineerUserId, info.messageId, references]
+    [ticketId, engineerEmail, to, threadedSubject, bodyHtml, fullHtml, engineerUserId, messageId, references]
   );
 
-  return { messageId: info.messageId };
+  return { messageId };
 }
 
 async function getTicketEmails(ticketId) {

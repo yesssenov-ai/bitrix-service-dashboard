@@ -291,8 +291,7 @@ app.post('/api/ticket-email/send', requireAuth(['admin','coordinator','engineer'
     res.json({ ok: true });
   } catch (e) {
     console.error('/api/ticket-email/send error:', e.message);
-    const status = e.code === 'NO_APP_PASSWORD' ? 400 : 500;
-    res.status(status).json({ ok: false, error: e.message || 'Не удалось отправить письмо' });
+    res.status(500).json({ ok: false, error: e.message || 'Не удалось отправить письмо' });
   }
 });
 
