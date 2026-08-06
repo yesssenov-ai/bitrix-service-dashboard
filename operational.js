@@ -19,17 +19,21 @@ const { SMART_TYPES, findChildrenOfDeal, resolveStageName, getStageSemantics } =
 // fields we still need to confirm via `node discover-deal-fields.js` — the
 // engine degrades gracefully (empty column) until a real code is set here.
 const F = {
-  contractDate:   'UF_CRM_1753708701368', // "Дата договора" — confirmed (stats module)
-  instrument:     'UF_CRM_NAME_PRIOBOR',  // instrument name — confirmed
-  department:     'UF_CRM_1758005356984', // "Отдел" — confirmed
-  contractNo:     null,  // "№ Договора"                 → fill after discovery
-  deliveryByDate: null,  // "Поставка по договору" (дата) → fill after discovery
-  factoryShip:    null,  // "Отгрузка от завода"   (дата) → fill after discovery
-  payTermsFactory:null,  // "Условие оплаты от завода"    → fill after discovery
-  payTermsClient: null,  // "Условие оплаты клиента"      → fill after discovery
-  engineerId:     null,  // "Инженер" (user field)        → fill after discovery
-  comment:        null,  // "Коммент." (last note field)  → optional, we also read timeline
+  contractDate:   'UF_CRM_1753708701368', // "Дата договора"
+  instrument:     'UF_CRM_NAME_PRIOBOR',  // instrument name
+  department:     'UF_CRM_1758005356984', // "Отдел" (enumeration)
+  contractNo:     'UF_CRM_1759391990160', // "Номер договора"
+  deliveryByDate: 'UF_CRM_1734607330937', // "Срок поставки по договору"
+  factoryShip:    'UF_CRM_1731864831522', // "Срок поставки от завода"
+  payTermsFactory:'UF_CRM_1744195326183', // "Условия оплаты поставщикам" (enumeration → resolved)
+  payTermsClient: 'UF_CRM_1731864478',    // "Условия оплаты от клиента" (iblock_element → resolved if items exposed)
+  engineerId:     'UF_CRM_1731864788',    // "Ответственный инженер" (employee → user id)
+  comment:        'UF_CRM_1752737600889', // "Статус сделки (комментарий)"
+  redFlag:        'UF_CRM_1752737638930', // "Красный флаг" (boolean)
 };
+
+// Enum-like deal fields whose stored value is an ID we must resolve to a label.
+const ENUM_FIELDS = ['UF_CRM_1744195326183', 'UF_CRM_1731864478'];
 
 // ── Department labels (shared with the stats module) ─────────────────────────
 const DEPARTMENT_LABELS = {
@@ -100,8 +104,30 @@ async function resolveCompanies(ids) {
   return map;
 }
 
+// ── Enum/iblock label resolver (id → human label), cached 1h ─────────────────
+let dealFieldsCache = null, dealFieldsAt = 0;
+async function getDealFields() {
+  if (dealFieldsCache && Date.now() - dealFieldsAt < 60 * 60 * 1000) return dealFieldsCache;
+  try {
+    const { result } = await b24('crm.deal.fields', {});
+    dealFieldsCache = result || {};
+    dealFieldsAt = Date.now();
+  } catch (e) {
+    console.error('getDealFields error:', e.message);
+    if (!dealFieldsCache) dealFieldsCache = {};
+  }
+  return dealFieldsCache;
+}
+async function buildEnumMap(code) {
+  const field = (await getDealFields())[code];
+  const map = {};
+  (field?.items || []).forEach(i => { map[String(i.ID)] = i.VALUE; });
+  return map;
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function get(deal, code) { return code ? (deal[code] ?? null) : null; }
+function truthyBool(v) { const s = String(firstOf(v)); return s === '1' || s === 'Y' || s === 'true'; }
 function dateOnly(v) { return v ? String(v).slice(0, 10) : null; }
 function firstOf(v) { return Array.isArray(v) ? (v[0] ?? null) : (v ?? null); }
 function daysBetween(a, b) {
@@ -171,7 +197,7 @@ async function fetchDeals(filters = {}) {
 }
 
 // ── Map one raw deal to a detail-table row + flags ───────────────────────────
-function buildRow(deal, stageMeta, companyMap) {
+function buildRow(deal, stageMeta, companyMap, enumMaps = {}) {
   const categoryId = Number(deal.__categoryId ?? deal.CATEGORY_ID);
   const stage = stageMeta[categoryId]?.byId?.[deal.STAGE_ID]
     || { name: deal.STAGE_ID, color: '#8a8886', semantics: 'P' };
@@ -192,8 +218,15 @@ function buildRow(deal, stageMeta, companyMap) {
   const departmentId = firstOf(deptRaw);
   const stale = daysSince(deal.DATE_MODIFY);
   const overdueDelivery = !!(deliveryBy && !isDone && !isLost && new Date(deliveryBy) < new Date());
+  const redFlag = truthyBool(get(deal, F.redFlag));
+
+  const payFactoryRaw = firstOf(get(deal, F.payTermsFactory));
+  const payClientRaw = firstOf(get(deal, F.payTermsClient));
+  const payFactory = (enumMaps[F.payTermsFactory]?.[String(payFactoryRaw)]) || (payFactoryRaw || '');
+  const payClient = (enumMaps[F.payTermsClient]?.[String(payClientRaw)]) || (payClientRaw || '');
 
   const flags = [];
+  if (redFlag) flags.push('red');                        // красный флаг (ручной)
   if (overdueDelivery) flags.push('overdue');            // просрочена поставка
   if (!isDone && !isLost && stale !== null && stale >= STALE_DAYS) flags.push('stale'); // завис
   if (onTime === false) flags.push('late-ship');         // отгрузка позже срока
@@ -213,9 +246,8 @@ function buildRow(deal, stageMeta, companyMap) {
     deliveryBy, factoryShip, diffDays, onTime,
     managerId, manager: managerId ? (USERS[managerId] || `#${managerId}`) : '',
     engineerId, engineer: engineerId ? (USERS[engineerId] || `#${engineerId}`) : '',
-    payFactory: firstOf(get(deal, F.payTermsFactory)) || '',
-    payClient: firstOf(get(deal, F.payTermsClient)) || '',
-    comment: get(deal, F.comment) || '',
+    payFactory, payClient, redFlag,
+    comment: firstOf(get(deal, F.comment)) || '',
     departmentId: departmentId || null,
     department: DEPARTMENT_LABELS[departmentId] || (departmentId || ''),
     opportunity: parseFloat(deal.OPPORTUNITY) || 0,
@@ -263,7 +295,9 @@ async function getBoard(filters = {}) {
 
   const deals = await fetchDeals({ ...filters, categoryIds: cats });
   const companyMap = await resolveCompanies(deals.map(d => d.COMPANY_ID));
-  let rows = deals.map(d => buildRow(d, stageMeta, companyMap));
+  const enumMaps = {};
+  for (const code of ENUM_FIELDS) enumMaps[code] = await buildEnumMap(code);
+  let rows = deals.map(d => buildRow(d, stageMeta, companyMap, enumMaps));
 
   // Client-side "Заказчик" search (by company name) — kept here so the UI can
   // pass a free-text query without needing a company id.
@@ -289,6 +323,7 @@ async function getBoard(filters = {}) {
     overdue: rows.filter(r => r.flags.includes('overdue')).length,
     stale: rows.filter(r => r.flags.includes('stale')).length,
     lateShip: rows.filter(r => r.flags.includes('late-ship')).length,
+    redFlag: rows.filter(r => r.redFlag).length,
   };
 
   return {

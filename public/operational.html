@@ -241,6 +241,7 @@ function renderChips(s){
   const el=document.getElementById('chips');
   const chips=[
     {key:null,label:'Все сделки',val:s.dealCount,dot:'var(--signal)'},
+    {key:'red',label:'Красный флаг',val:s.redFlag||0,dot:'var(--brand)'},
     {key:'overdue',label:'Просрочена поставка',val:s.overdue,dot:'var(--danger)'},
     {key:'stale',label:`Завис > 14 дн`,val:s.stale,dot:'var(--warn)'},
     {key:'late-ship',label:'Отгрузка позже срока',val:s.lateShip,dot:'#c98bff'},
@@ -271,6 +272,7 @@ function populateOptions(d){
 }
 
 function flagIcon(flags){
+  if(flags.includes('red'))return '<span class="flag" title="Красный флаг">🚩</span>';
   if(flags.includes('overdue'))return '<span class="flag" title="Просрочена поставка">🔴</span>';
   if(flags.includes('stale'))return '<span class="flag" title="Завис (нет движения)">🟠</span>';
   if(flags.includes('late-ship'))return '<span class="flag" title="Отгрузка позже срока">⚠️</span>';
