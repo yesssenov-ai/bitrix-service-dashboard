@@ -82,7 +82,7 @@ router.post('/users', requireAuth(['admin']), async (req, res) => {
 // PUT /admin/users/:id
 router.put('/users/:id', requireAuth(['admin']), async (req, res) => {
   try {
-    const { displayName, role, active, engineerName, mailMailbox, kpCategories, password } = req.body;
+    const { displayName, role, active, engineerName, mailMailbox, kpCategories, password, username } = req.body;
     const id = parseInt(req.params.id);
     if (!id) return res.status(400).json({ ok: false, error: 'Неверный ID' });
 
@@ -98,6 +98,12 @@ router.put('/users/:id', requireAuth(['admin']), async (req, res) => {
         return res.status(400).json({ ok: false, error: 'Нельзя убрать роль admin у последнего администратора' });
       }
     }
+    if (username?.trim()) {
+      const newUsername = username.trim();
+      const dupe = await pool.query('SELECT 1 FROM ticketsmodule_users WHERE username=$1 AND id!=$2', [newUsername, id]);
+      if (dupe.rows.length) return res.status(400).json({ ok: false, error: 'Такой логин уже занят' });
+      await pool.query('UPDATE ticketsmodule_users SET username=$1, updated_at=NOW() WHERE id=$2', [newUsername, id]);
+    }
     if (password?.trim()) {
       if (password.length < MIN_PASSWORD_LENGTH) {
         return res.status(400).json({ ok: false, error: `Пароль минимум ${MIN_PASSWORD_LENGTH} символов` });
@@ -110,7 +116,7 @@ router.put('/users/:id', requireAuth(['admin']), async (req, res) => {
       [(displayName||'').trim(), role, Boolean(active), engineerName||null, mailMailbox||null, JSON.stringify(kpCategories || []), id]
     );
     await auditLog(req.user.id, req.user.username, 'USER_UPDATED', null,
-      { targetId: id, role, active }, req.ip, req.headers['user-agent']);
+      { targetId: id, role, active, usernameChanged: !!username?.trim() }, req.ip, req.headers['user-agent']);
     res.json({ ok: true });
   } catch(e) { sanitizeError(e, res); }
 });

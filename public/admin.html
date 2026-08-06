@@ -252,7 +252,7 @@ tr:hover td{background:#fafbfd;}
       <div class="form-group">
         <label class="form-label">Логин</label>
         <input class="form-input" type="text" id="fUsername" placeholder="azamat.ann">
-        <div class="form-hint">Используется для входа в систему</div>
+        <div class="form-hint">Используется для входа. Для отправки писем клиентам логин должен быть в формате почты (например ivan@prolabsupport.kz) — смену логина можно делать спокойно, все связи в системе идут по внутреннему ID, а не по логину.</div>
       </div>
       <div class="form-group">
         <label class="form-label">Имя (отображается в системе)</label>
@@ -436,7 +436,7 @@ function openEdit(u) {
   document.getElementById('userModalTitle').textContent = 'Редактировать пользователя';
   document.getElementById('editId').value = u.id;
   document.getElementById('fUsername').value = u.username;
-  document.getElementById('fUsername').disabled = true;
+  document.getElementById('fUsername').disabled = false;
   document.getElementById('fDisplayName').value = u.display_name;
   document.getElementById('fPassword').value = '';
   document.getElementById('fRole').value = u.role;
