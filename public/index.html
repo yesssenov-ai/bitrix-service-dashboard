@@ -134,6 +134,7 @@ tr.tr:hover td { background:#fafbfd; }
 .act-btn.edit:hover{background:var(--blue-light);color:var(--blue);border-color:rgba(37,99,235,.25);}
 .act-btn.bell:hover{background:var(--orange-light);color:var(--orange);border-color:rgba(217,119,6,.25);}
 .act-btn.link:hover{background:var(--green-light);color:var(--green);border-color:rgba(5,150,105,.25);}
+.act-btn.mail:hover{background:var(--purple-light);color:var(--purple);border-color:rgba(124,58,237,.25);}
 
 /* MODAL */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px);}
@@ -378,6 +379,33 @@ tr.tr:hover td { background:#fafbfd; }
   </div>
 </div>
 
+<!-- MODAL: Mail -->
+<div class="overlay" id="mailOverlay" onclick="if(event.target===this)closeMail()">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-head">
+      <div><h2>✉️ Переписка с клиентом</h2><p id="mailTicketTitle" style="color:var(--text-3);font-size:12.5px;margin-top:3px"></p></div>
+      <button class="modal-close" onclick="closeMail()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="mailNoPassword" style="display:none;background:var(--orange-light);border:1px solid rgba(217,119,6,.25);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--orange)">
+        Для отправки писем нужно один раз указать пароль приложения от вашей корпоративной почты (Yandex 360).
+        <div style="margin-top:8px"><input class="form-input" type="password" id="mailAppPassword" placeholder="Пароль приложения" style="margin-bottom:8px">
+        <button class="btn btn-primary" onclick="saveAppPassword()">Сохранить пароль</button></div>
+      </div>
+      <div id="mailThread" style="max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;margin-bottom:16px;padding-right:4px"></div>
+      <div class="form-group"><label class="form-label">Кому</label><input class="form-input" type="email" id="mailTo" placeholder="client@example.com"></div>
+      <div class="form-group"><label class="form-label">Тема</label><input class="form-input" type="text" id="mailSubject" placeholder="Тема письма"></div>
+      <div class="form-group"><label class="form-label">Сообщение</label><textarea class="form-textarea" id="mailBody" placeholder="Текст письма…" style="min-height:100px"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeMail()">Закрыть</button>
+      <button class="btn btn-primary" onclick="submitMail()" id="btnMailSend">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>Отправить
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -582,6 +610,9 @@ function renderTable(items){
         <button class="act-btn bell" title="Напоминание / задача" data-id="${t.id}" data-title="${esc(title)}" onclick="openBellBtn(this)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
         </button>
+        <button class="act-btn mail" title="Переписка с клиентом" data-id="${t.id}" data-title="${esc(title)}" onclick="openMailBtn(this)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>
+        </button>
         <a href="${esc(t.bitrixUrl)}" target="_blank" class="act-btn link" title="Открыть в Б24">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
         </a>
@@ -650,6 +681,80 @@ function openBell(id,title){
   switchTab('remind');
 }
 function closeBell(){document.getElementById('bellOverlay').classList.remove('show');}
+
+function openMailBtn(btn){openMail(Number(btn.dataset.id),btn.dataset.title);}
+async function openMail(id,title){
+  curTicketId=id;
+  document.getElementById('mailTicketTitle').textContent=`#${id} - ${title}`;
+  document.getElementById('mailTo').value='';
+  document.getElementById('mailSubject').value=title||'';
+  document.getElementById('mailBody').value='';
+  document.getElementById('mailThread').innerHTML='<div class="empty" style="padding:20px 0"><p>Загрузка…</p></div>';
+  document.getElementById('mailOverlay').classList.add('show');
+
+  try{
+    const [statusR,threadR]=await Promise.all([
+      fetch('/api/settings/app-password/status'),
+      fetch(`/api/ticket-email/${id}`),
+    ]);
+    const status=await statusR.json();
+    document.getElementById('mailNoPassword').style.display=status.configured?'none':'block';
+    const {emails}=await threadR.json();
+    renderMailThread(emails||[]);
+  }catch(e){
+    document.getElementById('mailThread').innerHTML='<div class="empty" style="padding:20px 0"><p>Не удалось загрузить переписку</p></div>';
+  }
+}
+function closeMail(){document.getElementById('mailOverlay').classList.remove('show');}
+
+function renderMailThread(emails){
+  const wrap=document.getElementById('mailThread');
+  if(!emails.length){wrap.innerHTML='<div class="empty" style="padding:20px 0"><p>Переписки пока нет</p></div>';return;}
+  wrap.innerHTML=emails.map(e=>{
+    const sent=e.direction==='sent';
+    const when=new Date(e.created_at).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    return `<div style="align-self:${sent?'flex-end':'flex-start'};max-width:85%;background:${sent?'var(--purple-light)':'var(--bg)'};border:1px solid ${sent?'rgba(124,58,237,.2)':'var(--border2)'};border-radius:10px;padding:10px 12px">
+      <div style="font-size:11px;color:var(--text-3);margin-bottom:4px">${sent?'Вы → '+esc(e.to_address):esc(e.from_address)+' → вам'} · ${when}</div>
+      <div style="font-size:12.5px;font-weight:600;margin-bottom:4px">${esc(e.subject||'')}</div>
+      <div style="font-size:13px;white-space:pre-wrap">${esc(e.body_text||'')}</div>
+    </div>`;
+  }).join('');
+  wrap.scrollTop=wrap.scrollHeight;
+}
+
+async function saveAppPassword(){
+  const appPassword=document.getElementById('mailAppPassword').value.trim();
+  if(!appPassword){toast('Введите пароль приложения','error');return;}
+  try{
+    const r=await fetch('/api/settings/app-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({appPassword})});
+    const d=await r.json();
+    if(!d.ok)throw new Error(d.error);
+    document.getElementById('mailNoPassword').style.display='none';
+    document.getElementById('mailAppPassword').value='';
+    toast('✅ Пароль сохранён','success');
+  }catch(e){toast('Ошибка: '+e.message,'error');}
+}
+
+async function submitMail(){
+  const to=document.getElementById('mailTo').value.trim();
+  const subject=document.getElementById('mailSubject').value.trim();
+  const bodyHtml=document.getElementById('mailBody').value.trim();
+  if(!to||!subject||!bodyHtml){toast('Заполните все поля','error');return;}
+  const btn=document.getElementById('btnMailSend');
+  btn.disabled=true;
+  try{
+    const r=await fetch('/api/ticket-email/send',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ticketId:curTicketId,to,subject,bodyHtml})});
+    const d=await r.json();
+    if(!d.ok)throw new Error(d.error);
+    toast('✅ Письмо отправлено','success');
+    document.getElementById('mailBody').value='';
+    const threadR=await fetch(`/api/ticket-email/${curTicketId}`);
+    const {emails}=await threadR.json();
+    renderMailThread(emails||[]);
+  }catch(e){toast('Ошибка: '+e.message,'error');}
+  finally{btn.disabled=false;}
+}
 
 function switchTab(tab){
   curTab=tab;
@@ -730,7 +835,7 @@ async function checkAuth() {
     if (htime) htime.textContent = d.user.displayName + ' · ' + d.user.role;
     // Hide action buttons for viewer role
     if (d.user.role === 'viewer') {
-      document.querySelectorAll('.act-btn.edit, .act-btn.bell').forEach(b => b.style.display = 'none');
+      document.querySelectorAll('.act-btn.edit, .act-btn.bell, .act-btn.mail').forEach(b => b.style.display = 'none');
     }
     return true;
   } catch(e) {
