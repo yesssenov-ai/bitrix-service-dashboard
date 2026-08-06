@@ -237,6 +237,65 @@ app.get('/api/tickets', requireAuth(), async (req, res) => {
 });
 
 // ── POST /api/comment ─────────────────────────────────────────────────────────
+// ── Переписка с клиентом (Написать клиенту) ────────────────────────────────
+app.post('/api/settings/app-password', requireAuth(['admin','coordinator','engineer']), async (req, res) => {
+  try {
+    const { appPassword } = req.body;
+    if (!appPassword) return res.status(400).json({ ok: false, error: 'Пароль не указан' });
+    const { encrypt } = require('./crypto-helper');
+    await pool.query('UPDATE ticketsmodule_users SET smtp_app_password_encrypted=$1 WHERE id=$2', [encrypt(appPassword), req.user.id]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('/api/settings/app-password error:', e.message);
+    res.status(500).json({ ok: false, error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+app.get('/api/settings/app-password/status', requireAuth(['admin','coordinator','engineer']), async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT smtp_app_password_encrypted IS NOT NULL AS configured FROM ticketsmodule_users WHERE id=$1', [req.user.id]);
+    res.json({ configured: rows[0]?.configured || false });
+  } catch (e) {
+    res.status(500).json({ configured: false });
+  }
+});
+
+app.post('/api/ticket-email/send', requireAuth(['admin','coordinator','engineer']), async (req, res) => {
+  try {
+    const { ticketId, to, subject, bodyHtml } = req.body;
+    if (!ticketId || !to || !subject || !bodyHtml) return res.status(400).json({ ok: false, error: 'Заполните все поля' });
+    if (!req.user.username.includes('@')) return res.status(400).json({ ok: false, error: 'Ваш логин должен быть корпоративной почтой для отправки писем' });
+
+    const { sendTicketEmail } = require('./ticket-mail');
+    await sendTicketEmail({
+      ticketId, engineerUserId: req.user.id, engineerEmail: req.user.username,
+      engineerName: req.user.display_name, to, subject, bodyHtml,
+    });
+
+    await b24('crm.timeline.comment.add', {
+      fields: { ENTITY_ID: ticketId, ENTITY_TYPE: 'dynamic_1058', COMMENT: `📧 ${req.user.display_name} → ${to}\n${subject}\n\n${bodyHtml}` }
+    }).catch(() => {});
+
+    await auditLog(req.user.id, req.user.username, 'CLIENT_EMAIL_SENT', ticketId, { to, subject }, req.headers['x-forwarded-for'] || req.ip, req.headers['user-agent']);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('/api/ticket-email/send error:', e.message);
+    const status = e.code === 'NO_APP_PASSWORD' ? 400 : 500;
+    res.status(status).json({ ok: false, error: e.message || 'Не удалось отправить письмо' });
+  }
+});
+
+app.get('/api/ticket-email/:ticketId', requireAuth(['admin','coordinator','engineer']), async (req, res) => {
+  try {
+    const { getTicketEmails } = require('./ticket-mail');
+    const emails = await getTicketEmails(req.params.ticketId);
+    res.json({ emails });
+  } catch (e) {
+    console.error('/api/ticket-email/:ticketId error:', e.message);
+    res.status(500).json({ emails: [] });
+  }
+});
+
 app.post('/api/comment', requireAuth(['admin','coordinator','engineer']), async (req, res) => {
   try {
     const { ticketId, comment, stageId, engineerId, sendTg } = req.body;
@@ -487,6 +546,13 @@ initDB().then(() => {
 
     pollInbox().catch(e => console.error('mail pollInbox error:', e.message));
     setInterval(() => pollInbox().catch(e => console.error('mail pollInbox error:', e.message)), MAIL_POLL_INTERVAL * 60 * 1000);
+
+    // Client reply catcher for "Написать клиенту" — polls the Yandex 360
+    // lost-mail catch-all inbox for replies to svc-{ticketId}@ addresses.
+    const { pollTicketMailbox } = require('./ticket-mail-poller');
+    const TICKET_MAIL_POLL_INTERVAL = parseInt(process.env.TICKET_MAIL_POLL_INTERVAL_MINUTES || '3');
+    pollTicketMailbox().catch(e => console.error('ticket-mail pollTicketMailbox error:', e.message));
+    setInterval(() => pollTicketMailbox().catch(e => console.error('ticket-mail pollTicketMailbox error:', e.message)), TICKET_MAIL_POLL_INTERVAL * 60 * 1000);
 
     setInterval(async () => {
       try {
