@@ -575,7 +575,7 @@ function renderTable(items){
         <button class="act-btn bell" title="Напоминание / задача" data-id="${t.id}" data-title="${esc(title)}" onclick="openBellBtn(this)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
         </button>
-        <button class="act-btn mail" title="Переписка с клиентом" data-id="${t.id}" data-title="${esc(title)}" onclick="openMailBtn(this)">
+        <button class="act-btn mail" title="Переписка с клиентом" data-id="${t.id}" data-title="${esc(title)}" data-email="${esc(t.clientEmail||'')}" onclick="openMailBtn(this)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>
         </button>
         <a href="${esc(t.bitrixUrl)}" target="_blank" class="act-btn link" title="Открыть в Б24">
@@ -684,11 +684,11 @@ async function submitBell(sendTg=true){
   finally{btn.disabled=false;}
 }
 // ── Mail (Переписка с клиентом) ─────────────────────────────────────────────
-function openMailBtn(btn){openMail(Number(btn.dataset.id),btn.dataset.title);}
-async function openMail(id,title){
+function openMailBtn(btn){openMail(Number(btn.dataset.id),btn.dataset.title,btn.dataset.email);}
+async function openMail(id,title,clientEmail){
   curTicketId=id;
   document.getElementById('mailTicketTitle').textContent=`#${id} - ${title}`;
-  document.getElementById('mailTo').value='';
+  document.getElementById('mailTo').value=clientEmail||'';
   document.getElementById('mailCc').value='';
   document.getElementById('mailSubject').value=title||'';
   document.getElementById('mailBody').value='';
