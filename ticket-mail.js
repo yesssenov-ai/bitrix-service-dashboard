@@ -1,7 +1,8 @@
 // Handles sending client correspondence from a specific заявка (ticket),
-// as the assigned engineer's own corporate address — with a company
-// signature auto-appended, and a Reply-To alias so client replies land in
-// a ticket-specific tracking address we can poll and match back.
+// as a shared ProLabSupport service identity — with a company signature
+// (showing the individual engineer's name/title) auto-appended, and a
+// Reply-To alias so client replies land in a ticket-specific tracking
+// address we can poll and match back, regardless of which engineer sends.
 //
 // Sends via Resend's HTTPS API rather than raw SMTP: Railway blocks
 // outbound SMTP ports (465/587/25) on all plans below Pro specifically to
@@ -9,7 +10,7 @@
 // out). Resend goes over HTTPS (443), which is never blocked, and since
 // prolabsupport.kz is already a verified sending domain here (used
 // elsewhere in this project for reports), any @prolabsupport.kz address
-// can be used as the From — no per-engineer app password needed anymore.
+// can be used as the From — no per-engineer app password needed.
 const { pool } = require('./auth');
 
 const RESEND_KEY = process.env.RESEND_API_KEY;
@@ -45,13 +46,14 @@ function generateMessageId(ticketId) {
   return `<ticket-${ticketId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}@${REPLY_TO_DOMAIN}>`;
 }
 
-// Sends an email as the given engineer (their real corporate address as
-// the visible From, via Resend on the verified prolabsupport.kz domain)
-// and returns the sent message details.
+// Sends an email as a shared "ProLabSupport Service" identity (the client
+// always sees a consistent sender, regardless of which engineer replies),
+// while the signature shows the actual engineer's name so the client still
+// knows who's helping. Returns the sent message details.
 // Threading: looks up the most recent message on this ticket (sent OR
 // received, by ANY engineer) and chains In-Reply-To/References to it, so
 // the client's own mail client (Outlook etc.) groups the whole exchange as
-// one conversation — independent of which engineer sends each message.
+// one conversation.
 async function sendTicketEmail({ ticketId, engineerUserId, engineerEmail, engineerName, to, subject, bodyHtml }) {
   if (!RESEND_KEY) {
     const err = new Error('Отправка почты не настроена (нет RESEND_API_KEY)');
@@ -88,7 +90,7 @@ async function sendTicketEmail({ ticketId, engineerUserId, engineerEmail, engine
     method: 'POST',
     headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: `${engineerName} <${engineerEmail}>`,
+      from: 'ProLabSupport Service <service@prolabsupport.kz>',
       to,
       reply_to: replyToForTicket(ticketId),
       subject: threadedSubject,

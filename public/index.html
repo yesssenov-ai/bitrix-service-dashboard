@@ -5,7 +5,6 @@
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="apple-touch-icon" href="/favicon-180.png">
-
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ProLabSupport - Сервисные заявки</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -29,7 +28,6 @@
   --radius:10px; --font:'Inter',system-ui,sans-serif;
 }
 body { font-family:var(--font); background:var(--bg); color:var(--text); font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; }
-
 /* HEADER */
 .header { background:var(--white); border-bottom:1px solid var(--border); height:60px; display:flex; align-items:center; padding:0 28px; position:sticky; top:0; z-index:200; box-shadow:0 2px 8px rgba(0,0,0,.04); }
 .logo { display:flex; align-items:center; gap:11px; font-weight:700; font-size:15px; letter-spacing:-.3px; flex-shrink:0; }
@@ -45,18 +43,15 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); font-si
 .btn-primary:hover { background:var(--accent-h); }
 .btn.loading svg { animation:spin .7s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
-
 /* PAGE */
 .page { max-width:1640px; margin:0 auto; padding:24px 28px 60px; }
 .ph { margin-bottom:22px; }
 .ph h1 { font-size:21px; font-weight:700; letter-spacing:-.4px; margin-bottom:2px; }
 .ph p { font-size:13px; color:var(--text-3); }
-
 /* PRESET CARDS - replace KPI */
 .preset-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:12px; margin-bottom:20px; }
 @media(max-width:1200px){ .preset-grid { grid-template-columns:repeat(3,1fr); } }
 @media(max-width:700px){ .preset-grid { grid-template-columns:repeat(2,1fr); } }
-
 .preset-card {
   background:var(--white); border:2px solid var(--border); border-radius:var(--radius);
   padding:16px 18px; cursor:pointer; transition:all .15s; position:relative; overflow:hidden;
@@ -75,7 +70,6 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); font-si
 .preset-reset { background:var(--bg); border-color:var(--border); }
 .preset-reset:hover { background:var(--bg2); border-color:var(--border2); }
 .preset-reset .preset-count { font-size:20px; color:var(--text-3); }
-
 /* FILTER BAR */
 .fbar { background:var(--white); border:1px solid var(--border); border-radius:var(--radius); padding:12px 16px; margin-bottom:14px; box-shadow:var(--shadow-sm); display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 .sw { flex:1; min-width:220px; position:relative; }
@@ -86,7 +80,6 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); font-si
 .fsel { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:13px; color:var(--text); font-family:var(--font); outline:none; cursor:pointer; min-width:150px; }
 .fsel:focus { border-color:var(--accent); }
 .fdiv { width:1px; height:24px; background:var(--border); flex-shrink:0; }
-
 /* TABLE */
 .tcard { background:var(--white); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-sm); overflow:hidden; }
 .ttbar { display:flex; align-items:center; justify-content:space-between; padding:13px 18px; border-bottom:1px solid var(--border); }
@@ -97,13 +90,12 @@ table { width:100%; border-collapse:collapse; }
 col.c-id{width:60px} col.c-title{min-width:200px} col.c-svc{width:155px}
 col.c-stage{width:165px} col.c-days{width:65px} col.c-coord{width:125px}
 col.c-eng{width:135px} col.c-urg{width:115px} col.c-date{width:95px}
-col.c-ovd{width:85px} col.c-act{width:76px}
+col.c-ovd{width:85px} col.c-act{width:96px}
 thead tr { background:var(--bg); }
 th { padding:10px 14px; text-align:left; font-size:11px; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:.6px; border-bottom:1px solid var(--border); white-space:nowrap; }
 td { padding:11px 14px; border-bottom:1px solid var(--border); vertical-align:middle; font-size:13px; color:var(--text-2); }
 tr:last-child td { border-bottom:none; }
 tr.tr:hover td { background:#fafbfd; }
-
 /* Cells */
 .idbadge { font-size:11.5px; font-weight:600; color:var(--text-4); font-variant-numeric:tabular-nums; background:var(--bg); border-radius:5px; padding:2px 6px; border:1px solid var(--border); }
 .tname { font-weight:500; color:var(--text); line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; margin-bottom:2px; }
@@ -135,7 +127,6 @@ tr.tr:hover td { background:#fafbfd; }
 .act-btn.bell:hover{background:var(--orange-light);color:var(--orange);border-color:rgba(217,119,6,.25);}
 .act-btn.link:hover{background:var(--green-light);color:var(--green);border-color:rgba(5,150,105,.25);}
 .act-btn.mail:hover{background:var(--purple-light);color:var(--purple);border-color:rgba(124,58,237,.25);}
-
 /* MODAL */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px);}
 .overlay.show{display:flex;}
@@ -172,13 +163,12 @@ tr.tr:hover td { background:#fafbfd; }
 </style>
 </head>
 <body>
-
 <header class="header">
   <a href="/" class="logo" style="text-decoration:none;color:inherit;cursor:pointer" title="Вернуться в ЦУП">
     <img src="/assets/logo-icon.png" alt="" style="height:24px;width:auto;">
     ProLabSupport
   </a>
-  <a href="/" style="display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--text-3,#8b93a3);text-decoration:none;border:1px solid var(--line,#e3e6ef);padding:6px 12px;border-radius:7px;margin-left:10px;white-space:nowrap" onmouseover="this.style.borderColor='#C53B2F';this.style.color='#C53B2F'" onmouseout="this.style.borderColor='var(--line,#e3e6ef)';this.style.color='var(--text-3,#8b93a3)'">← Все модули</a>
+  <a href="/" style="display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--text-3,#8b93a3);text-decoration:none;border:1px solid var(--line,#e3e6ef);padding:6px 12px;border-radius:7px;margin-left:10px;white-space:nowrap" onmouseover="this.style.borderColor='#C53B2F';this.style.color='#C53B2F'" monmouseout="this.style.borderColor='var(--line,#e3e6ef)';this.style.color='var(--text-3,#8b93a3)'">← Все модули</a>
   <div class="hdiv"></div>
   <span class="h-sub">Сервисные заявки</span>
   <div class="h-right">
@@ -197,15 +187,12 @@ tr.tr:hover td { background:#fafbfd; }
     </button>
   </div>
 </header>
-
 <div class="page">
   <div class="ph">
     <h1>Сервисные заявки</h1>
     <p>Мониторинг входящих обращений из Bitrix24 CRM в реальном времени</p>
   </div>
-
   <div class="ebar" id="ebar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span id="emsg"></span></div>
-
   <!-- PRESET CARDS -->
   <div class="preset-grid">
     <div class="preset-card active" data-preset="tickets" style="--pc:#dc2626" onclick="selectPreset('tickets',this)">
@@ -244,7 +231,6 @@ tr.tr:hover td { background:#fafbfd; }
       <div class="preset-label">Сбросить<br><span style="font-weight:400;text-transform:none;font-size:10px;color:var(--text-4)">Все фильтры</span></div>
     </div>
   </div>
-
   <!-- FILTERS -->
   <div class="fbar">
     <div class="sw">
@@ -286,7 +272,6 @@ tr.tr:hover td { background:#fafbfd; }
       <option value="DT1058_11:4">🔴 Претензия</option>
     </select>
   </div>
-
   <!-- TABLE -->
   <div class="tcard">
     <div class="ttbar">
@@ -302,7 +287,6 @@ tr.tr:hover td { background:#fafbfd; }
     </div>
   </div>
 </div>
-
 <!-- MODAL: Edit -->
 <div class="overlay" id="editOverlay" onclick="if(event.target===this)closeEdit()">
   <div class="modal">
@@ -327,7 +311,6 @@ tr.tr:hover td { background:#fafbfd; }
     </div>
   </div>
 </div>
-
 <!-- MODAL: Bell -->
 <div class="overlay" id="bellOverlay" onclick="if(event.target===this)closeBell()">
   <div class="modal">
@@ -378,7 +361,6 @@ tr.tr:hover td { background:#fafbfd; }
     </div>
   </div>
 </div>
-
 <!-- MODAL: Mail -->
 <div class="overlay" id="mailOverlay" onclick="if(event.target===this)closeMail()">
   <div class="modal" style="max-width:640px">
@@ -387,7 +369,10 @@ tr.tr:hover td { background:#fafbfd; }
       <button class="modal-close" onclick="closeMail()">✕</button>
     </div>
     <div class="modal-body">
-      <div style="margin-bottom:10px"><a href="javascript:void(0)" onclick="toggleMailSettings()" style="font-size:12.5px;color:var(--text-3)">⚙️ Настройки подписи</a></div>
+      <div style="margin-bottom:10px;display:flex;justify-content:space-between">
+        <a href="javascript:void(0)" onclick="toggleMailSettings()" style="font-size:12.5px;color:var(--text-3)">⚙️ Настройки подписи</a>
+        <a href="javascript:void(0)" onclick="pollNow()" id="pollNowLink" style="font-size:12.5px;color:var(--text-3)">🔄 Проверить сейчас</a>
+      </div>
       <div id="mailNoPassword" style="display:none;background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px">
         <div style="margin-top:8px"><input class="form-input" type="text" id="mailJobTitle" placeholder="Должность (например, Technical Director)" style="margin-bottom:8px"></div>
         <div style="margin-top:8px"><input class="form-input" type="text" id="mailMobilePhone" placeholder="Мобильный (например, +7 708 7730190)" style="margin-bottom:8px"></div>
@@ -406,9 +391,7 @@ tr.tr:hover td { background:#fafbfd; }
     </div>
   </div>
 </div>
-
 <div class="toast" id="toast"></div>
-
 <script>
 const SSTYLE = {
   'DT1058_11:NEW':         {f:'#1d4ed8',b:'rgba(37,99,235,.09)',r:'rgba(37,99,235,.22)'},
@@ -421,7 +404,6 @@ const SSTYLE = {
   'DT1058_11:SUCCESS':     {f:'#065f46',b:'rgba(5,150,105,.09)',r:'rgba(5,150,105,.22)'},
   'DT1058_11:FAIL':        {f:'#7f1d1d',b:'rgba(220,38,38,.06)',r:'rgba(220,38,38,.15)'},
 };
-
 // Preset definitions - service type IDs to include
 const PRESETS = {
   tickets:     { svcTypes: new Set(['619']), label: '🎫 Tickets' },
@@ -430,11 +412,8 @@ const PRESETS = {
   overdue:     { overdueOnly: true, label: '⚠️ Просроченные' },
   all:         { label: '📋 Все заявки' },
 };
-
 let curPreset='tickets', dbt=null, allStages={}, allUsers=[], curTicketId=null, curTab='remind', curChat='ops';
-
 // ── Preset ────────────────────────────────────────────────────────────────────
-
 function onStageChange() {
   // Reset to "all" preset when filtering by stage
   curPreset = 'all';
@@ -442,7 +421,6 @@ function onStageChange() {
   document.querySelector('[data-preset="all"]')?.classList.add('active');
   load();
 }
-
 function selectPreset(preset, el) {
   if(preset==='reset'){resetFilters();return;}
   curPreset=preset;
@@ -458,13 +436,11 @@ function selectPreset(preset, el) {
   document.getElementById('fsearch').value='';
   load();
 }
-
 function clearPreset() {
   curPreset='all';
   document.querySelectorAll('.preset-card').forEach(c=>c.classList.remove('active'));
   document.querySelector('[data-preset="all"]')?.classList.add('active');
 }
-
 function resetFilters() {
   curPreset='tickets';
   document.querySelectorAll('.preset-card').forEach(c=>c.classList.remove('active'));
@@ -478,18 +454,13 @@ function resetFilters() {
   document.getElementById('fsearch').value='';
   load();
 }
-
 function debLoad(){clearTimeout(dbt);dbt=setTimeout(load,380);}
-
 // ── Load ──────────────────────────────────────────────────────────────────────
-
 async function load() {
   document.getElementById('btnRef').classList.add('loading');
   const def=PRESETS[curPreset]||{};
-
   // For overdue preset, set overdue filter
   const overdueVal = def.overdueOnly ? 'yes' : document.getElementById('fovd').value;
-
   const p=new URLSearchParams({
     search: document.getElementById('fsearch').value,
     urgent: document.getElementById('furg').value,
@@ -501,14 +472,12 @@ async function load() {
     // Pass preset svcTypes as comma-separated for server
     presetSvcTypes: def.svcTypes ? [...def.svcTypes].join(',') : '',
   });
-
   try {
     const r=await fetch('/api/tickets?'+p);
     const d=await r.json();
     if(!d.ok) throw new Error(d.error);
     document.getElementById('ebar').classList.remove('show');
     allStages=d.stages||{};
-
     // Update preset counts
     if(d.presetCounts){
       Object.entries(d.presetCounts).forEach(([k,v])=>{
@@ -516,10 +485,8 @@ async function load() {
         if(el) el.textContent=v;
       });
     }
-
     // Update table title
     document.getElementById('ttitle').textContent=(def.label||'Список заявок')+' - заявки';
-
     populateSvc(d.serviceTypes);
     populateEng(d.engineers);
     renderTable(d.items);
@@ -532,7 +499,6 @@ async function load() {
     document.getElementById('btnRef').classList.remove('loading');
   }
 }
-
 let svcDone=false;
 function populateSvc(types){
   if(svcDone)return;svcDone=true;
@@ -546,7 +512,6 @@ function populateEng(engineers){
   engineers.forEach(name=>sel.add(new Option(name,name)));
   if([...sel.options].some(o=>o.value===cur))sel.value=cur;else sel.value='all';
 }
-
 // Load users for modals
 async function loadUsers(){
   try{
@@ -559,9 +524,7 @@ async function loadUsers(){
     allUsers.forEach(u=>{esel.add(new Option(u.name,u.id));});
   }catch(e){}
 }
-
 // ── Render ────────────────────────────────────────────────────────────────────
-
 function renderTable(items){
   const wrap=document.getElementById('tw');
   if(!items.length){
@@ -629,18 +592,14 @@ function renderTable(items){
     <tbody>${rows}</tbody>
   </table>`;
 }
-
 // ── Modals ────────────────────────────────────────────────────────────────────
-
 function openEditBtn(btn){openEdit(Number(btn.dataset.id),btn.dataset.title);}
 function openBellBtn(btn){openBell(Number(btn.dataset.id),btn.dataset.title);}
-
 function populateEditStages(stages){
   const sel=document.getElementById('editStage');
   sel.innerHTML='<option value="">— не менять —</option>';
   Object.entries(stages).sort((a,b)=>a[1].order-b[1].order).forEach(([sid,cfg])=>sel.add(new Option(cfg.name,sid)));
 }
-
 function openEdit(id,title){
   curTicketId=id;
   document.getElementById('editTicketTitle').textContent=`#${id} - ${title}`;
@@ -652,7 +611,6 @@ function openEdit(id,title){
   setTimeout(()=>document.getElementById('editComment').focus(),100);
 }
 function closeEdit(){document.getElementById('editOverlay').classList.remove('show');}
-
 async function submitEdit(sendTg=true){
   const comment=document.getElementById('editComment').value.trim();
   const stageId=document.getElementById('editStage').value;
@@ -672,7 +630,6 @@ async function submitEdit(sendTg=true){
   }catch(e){toast('Ошибка: '+e.message,'error');}
   finally{btn.disabled=false;}
 }
-
 function openBell(id,title){
   curTicketId=id;
   document.getElementById('bellTicketTitle').textContent=`#${id} - ${title}`;
@@ -682,7 +639,50 @@ function openBell(id,title){
   switchTab('remind');
 }
 function closeBell(){document.getElementById('bellOverlay').classList.remove('show');}
-
+function switchTab(tab){
+  curTab=tab;
+  document.getElementById('paneRemind').style.display=tab==='remind'?'':'none';
+  document.getElementById('paneTask').style.display=tab==='task'?'':'none';
+  document.getElementById('tabRemind').style.background=tab==='remind'?'var(--white)':'transparent';
+  document.getElementById('tabRemind').style.borderColor=tab==='remind'?'var(--border2)':'transparent';
+  document.getElementById('tabTask').style.background=tab==='task'?'var(--white)':'transparent';
+  document.getElementById('tabTask').style.borderColor=tab==='task'?'var(--border2)':'transparent';
+  // Hide save-only for remind tab
+  document.getElementById('btnBellSaveOnly').style.display=tab==='remind'?'none':'';
+}
+function selectChat(el){
+  document.querySelectorAll('.tg-opt').forEach(o=>o.classList.remove('active'));
+  el.classList.add('active');curChat=el.dataset.chat;
+}
+async function submitBell(sendTg=true){
+  const btn=document.getElementById('btnBellSave');btn.disabled=true;
+  try{
+    if(curTab==='remind'){
+      const message=document.getElementById('remindMsg').value.trim();
+      const delayMinutes=parseInt(document.getElementById('remindDelay').value)||0;
+      const authorName=document.getElementById('remindAuthor').value.trim()||'Координатор';
+      const r=await fetch('/api/remind',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ticketId:curTicketId,message,delayMinutes,authorName,targetChat:curChat,sendTg})});
+      const d=await r.json();if(!d.ok)throw new Error(d.error);
+      closeBell();
+      const dt=delayMinutes>0?` через ${delayMinutes} мин.`:'';
+      toast(sendTg?`🔔 Напоминание запланировано${dt}`:'✅ Сохранено','success');
+    }else{
+      const taskTitle=document.getElementById('taskTitle').value.trim();
+      const taskDesc=document.getElementById('taskDesc').value.trim();
+      const responsibleId=parseInt(document.getElementById('taskResponsible').value)||26;
+      const deadline=document.getElementById('taskDeadline').value;
+      const authorName=document.getElementById('taskAuthor').value.trim()||'Координатор';
+      const r=await fetch('/api/task',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ticketId:curTicketId,taskTitle,taskDesc,responsibleId,deadline,authorName,sendTg})});
+      const d=await r.json();if(!d.ok)throw new Error(d.error);
+      closeBell();
+      toast(sendTg?'📋 Задача создана и отправлена в Telegram':'📋 Задача создана в Б24','success');
+    }
+  }catch(e){toast('Ошибка: '+e.message,'error');}
+  finally{btn.disabled=false;}
+}
+// ── Mail (Переписка с клиентом) ─────────────────────────────────────────────
 function openMailBtn(btn){openMail(Number(btn.dataset.id),btn.dataset.title);}
 async function openMail(id,title){
   curTicketId=id;
@@ -712,6 +712,18 @@ function closeMail(){document.getElementById('mailOverlay').classList.remove('sh
 function toggleMailSettings(){
   const el=document.getElementById('mailNoPassword');
   el.style.display=el.style.display==='none'?'block':'none';
+}
+async function pollNow(){
+  const link=document.getElementById('pollNowLink');
+  link.textContent='⏳ Проверяю…';
+  try{
+    await fetch('/api/ticket-email/poll-now',{method:'POST'});
+    const threadR=await fetch(`/api/ticket-email/${curTicketId}`);
+    const {emails}=await threadR.json();
+    renderMailThread(emails||[]);
+    toast('✅ Проверено','success');
+  }catch(e){toast('Ошибка проверки','error');}
+  finally{link.textContent='🔄 Проверить сейчас';}
 }
 
 function renderMailThread(emails){
@@ -761,59 +773,12 @@ async function submitMail(){
   finally{btn.disabled=false;}
 }
 
-function switchTab(tab){
-  curTab=tab;
-  document.getElementById('paneRemind').style.display=tab==='remind'?'':'none';
-  document.getElementById('paneTask').style.display=tab==='task'?'':'none';
-  document.getElementById('tabRemind').style.background=tab==='remind'?'var(--white)':'transparent';
-  document.getElementById('tabRemind').style.borderColor=tab==='remind'?'var(--border2)':'transparent';
-  document.getElementById('tabTask').style.background=tab==='task'?'var(--white)':'transparent';
-  document.getElementById('tabTask').style.borderColor=tab==='task'?'var(--border2)':'transparent';
-  // Hide save-only for remind tab
-  document.getElementById('btnBellSaveOnly').style.display=tab==='remind'?'none':'';
-}
-
-function selectChat(el){
-  document.querySelectorAll('.tg-opt').forEach(o=>o.classList.remove('active'));
-  el.classList.add('active');curChat=el.dataset.chat;
-}
-
-async function submitBell(sendTg=true){
-  const btn=document.getElementById('btnBellSave');btn.disabled=true;
-  try{
-    if(curTab==='remind'){
-      const message=document.getElementById('remindMsg').value.trim();
-      const delayMinutes=parseInt(document.getElementById('remindDelay').value)||0;
-      const authorName=document.getElementById('remindAuthor').value.trim()||'Координатор';
-      const r=await fetch('/api/remind',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({ticketId:curTicketId,message,delayMinutes,authorName,targetChat:curChat,sendTg})});
-      const d=await r.json();if(!d.ok)throw new Error(d.error);
-      closeBell();
-      const dt=delayMinutes>0?` через ${delayMinutes} мин.`:'';
-      toast(sendTg?`🔔 Напоминание запланировано${dt}`:'✅ Сохранено','success');
-    }else{
-      const taskTitle=document.getElementById('taskTitle').value.trim();
-      const taskDesc=document.getElementById('taskDesc').value.trim();
-      const responsibleId=parseInt(document.getElementById('taskResponsible').value)||26;
-      const deadline=document.getElementById('taskDeadline').value;
-      const authorName=document.getElementById('taskAuthor').value.trim()||'Координатор';
-      const r=await fetch('/api/task',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({ticketId:curTicketId,taskTitle,taskDesc,responsibleId,deadline,authorName,sendTg})});
-      const d=await r.json();if(!d.ok)throw new Error(d.error);
-      closeBell();
-      toast(sendTg?'📋 Задача создана и отправлена в Telegram':'📋 Задача создана в Б24','success');
-    }
-  }catch(e){toast('Ошибка: '+e.message,'error');}
-  finally{btn.disabled=false;}
-}
-
 function toast(msg,type='success'){
   const el=document.getElementById('toast');
   el.textContent=msg;el.className=`toast ${type} show`;
   setTimeout(()=>el.classList.remove('show'),3500);
 }
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-
 // Auth check on load
 async function checkAuth() {
   try {
@@ -848,12 +813,10 @@ async function checkAuth() {
     return false;
   }
 }
-
 async function logout() {
   await fetch('/auth/logout', { method: 'POST' });
   window.location.href = '/login.html';
 }
-
 setInterval(load,5*60*1000);
 checkAuth().then(ok => {
   if (ok) {
