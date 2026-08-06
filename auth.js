@@ -298,6 +298,7 @@ async function initDB() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
     ALTER TABLE ticketsmodule_ticket_emails ADD COLUMN IF NOT EXISTS references_header TEXT;
+    ALTER TABLE ticketsmodule_ticket_emails ADD COLUMN IF NOT EXISTS cc_address TEXT;
     CREATE INDEX IF NOT EXISTS idx_ticket_emails_ticket ON ticketsmodule_ticket_emails(ticket_id);
     CREATE INDEX IF NOT EXISTS idx_stat_deals_category ON ticketsmodule_stat_deals(category_id);
     CREATE INDEX IF NOT EXISTS idx_stat_deals_contract_date ON ticketsmodule_stat_deals(contract_date);

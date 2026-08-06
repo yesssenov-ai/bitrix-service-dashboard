@@ -1,0 +1,1007 @@
+diff --git a/discover-deal-fields.js b/discover-deal-fields.js
+new file mode 100644
+index 0000000..b3fca8b
+--- /dev/null
++++ b/discover-deal-fields.js
+@@ -0,0 +1,100 @@
++// Discovery helper for the Operational (Реализация) module.
++// Dumps every deal field (code | type | label) so we can map the detail-table
++// columns (Поставка по договору, Отгрузка от завода, Условия оплаты завод/клиент,
++// Инженер, Комментарий) to their real UF_CRM_* codes.
++//
++// Run locally (needs BITRIX_WEBHOOK in env, same as the rest of the app):
++//   node discover-deal-fields.js                 — dump ALL deal fields + highlight likely matches
++//   node discover-deal-fields.js sample 0        — also print a real deal from pipeline 0 in an execution stage
++//   node discover-deal-fields.js items UF_CRM_XXX — list the choices of one enum/list field
++//
++// Paste the output back into the chat and I'll wire the exact codes into operational.js.
++
++const { b24 } = require('./bitrix');
++
++// Keywords → which column each likely belongs to. Purely to help eyeball the dump.
++const HINTS = [
++  { col: 'Поставка по договору (дата)', re: /поставк|срок.*постав|договор.*дат|плагов|плановая дата/i },
++  { col: 'Отгрузка от завода (дата)',   re: /отгруз|завод|shipment|ship|отправк/i },
++  { col: 'Условие оплаты (завод)',      re: /оплат.*завод|услов.*завод|payment.*fact|завод.*оплат/i },
++  { col: 'Условие оплаты (клиент)',     re: /оплат.*клиент|услов.*оплат|payment.*client|клиент.*оплат/i },
++  { col: 'Инженер',                     re: /инженер|engineer|исполнител/i },
++  { col: '№ Договора / контракт',       re: /договор|контракт|contract|№/i },
++  { col: 'Комментарий',                 re: /коммент|примечан|comment|note/i },
++  { col: 'Дата договора (подписание)',  re: /дата.*договор|подписан|contract.*date/i },
++];
++
++function typeOf(f) {
++  return `${f.type}${f.isMultiple ? '[]' : ''}`;
++}
++
++async function dumpAllFields() {
++  const { result } = await b24('crm.deal.fields', {});
++  const fields = result || {};
++  const entries = Object.entries(fields);
++
++  console.log(`Всего полей сделки: ${entries.length}\n`);
++  console.log('='.repeat(90));
++  console.log('ВСЕ ПОЛЯ  (код | тип | название)');
++  console.log('='.repeat(90));
++  entries
++    .sort((a, b) => a[0].localeCompare(b[0]))
++    .forEach(([code, f]) => {
++      const label = f.formLabel || f.title || f.listLabel || '';
++      console.log(`${code.padEnd(30)} ${typeOf(f).padEnd(16)} ${label}`);
++    });
++
++  console.log('\n' + '='.repeat(90));
++  console.log('ВЕРОЯТНЫЕ СОВПАДЕНИЯ по колонкам таблицы «Реализация»');
++  console.log('='.repeat(90));
++  for (const hint of HINTS) {
++    const matches = entries.filter(([code, f]) => {
++      const label = `${f.formLabel || ''} ${f.title || ''} ${f.listLabel || ''}`;
++      return hint.re.test(label) || hint.re.test(code);
++    });
++    console.log(`\n▸ ${hint.col}`);
++    if (!matches.length) { console.log('    (кандидатов не найдено)'); continue; }
++    matches.forEach(([code, f]) => {
++      const label = f.formLabel || f.title || f.listLabel || '';
++      console.log(`    ${code.padEnd(28)} ${typeOf(f).padEnd(14)} ${label}`);
++    });
++  }
++}
++
++async function sampleDeal(categoryId) {
++  // Grab a couple of deals in this pipeline to see which fields are actually filled.
++  const { result } = await b24('crm.deal.list', {
++    filter: { CATEGORY_ID: String(categoryId) },
++    select: ['*', 'UF_*'],
++    order: { DATE_MODIFY: 'DESC' },
++  });
++  const deals = (result || []).slice(0, 3);
++  console.log(`\nПримеры сделок из воронки ${categoryId} (${deals.length}):\n`);
++  deals.forEach(d => {
++    console.log(`${'='.repeat(20)} #${d.ID} — ${d.TITLE} (STAGE ${d.STAGE_ID}) ${'='.repeat(20)}`);
++    Object.entries(d).forEach(([code, value]) => {
++      if (value === null || value === '' || value === undefined) return;
++      if (Array.isArray(value) && !value.length) return;
++      console.log(`  ${code.padEnd(28)} = ${JSON.stringify(value)}`);
++    });
++    console.log();
++  });
++}
++
++async function listItems(fieldCode) {
++  const { result } = await b24('crm.deal.fields', {});
++  const field = result?.[fieldCode];
++  if (!field) { console.log(`Поле ${fieldCode} не найдено`); return; }
++  console.log(`Поле ${fieldCode} — type=${field.type}, isMultiple=${field.isMultiple}, label="${field.formLabel || field.title || ''}"\n`);
++  (field.items || []).forEach(i => console.log(`  ${JSON.stringify(i)}`));
++  if (!field.items) console.log('(нет списка значений — не enum/iblock-поле)');
++}
++
++async function main() {
++  const [, , mode, arg] = process.argv;
++  if (mode === 'sample') { await sampleDeal(arg || 0); return; }
++  if (mode === 'items')  { await listItems(arg); return; }
++  await dumpAllFields();
++}
++
++main().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });
+diff --git a/operational.js b/operational.js
+new file mode 100644
+index 0000000..d224d6b
+--- /dev/null
++++ b/operational.js
+@@ -0,0 +1,399 @@
++// ─────────────────────────────────────────────────────────────────────────────
++// Operational module engine — "Реализация" (execution) view.
++//
++// Live rebuild of the Power BI «Реализация» tab straight from Bitrix REST:
++//   • the stage funnel (Contract → Logistics → … → Завершена) with Сумма|Количество
++//   • the detail table (company, contract/title, dates, manager, engineer, terms…)
++//   • per-deal drill-down: child smart processes (Закупки/Логистика/…), tasks, comments
++//   • meeting flags: overdue delivery, stalled deals, incomplete child processes
++//
++// Deals in scope = every deal from the contract stage up to завершена, in all
++// 4 sales pipelines (the execution phase, i.e. "after the contract is signed").
++// ─────────────────────────────────────────────────────────────────────────────
++const { b24 } = require('./bitrix');
++const { USERS } = require('./constants');
++const { SMART_TYPES, findChildrenOfDeal, resolveStageName, getStageSemantics } = require('./relations');
++
++// ── Field codes ──────────────────────────────────────────────────────────────
++// Known-good codes are filled in. The ones marked `null` are the custom deal
++// fields we still need to confirm via `node discover-deal-fields.js` — the
++// engine degrades gracefully (empty column) until a real code is set here.
++const F = {
++  contractDate:   'UF_CRM_1753708701368', // "Дата договора" — confirmed (stats module)
++  instrument:     'UF_CRM_NAME_PRIOBOR',  // instrument name — confirmed
++  department:     'UF_CRM_1758005356984', // "Отдел" — confirmed
++  contractNo:     null,  // "№ Договора"                 → fill after discovery
++  deliveryByDate: null,  // "Поставка по договору" (дата) → fill after discovery
++  factoryShip:    null,  // "Отгрузка от завода"   (дата) → fill after discovery
++  payTermsFactory:null,  // "Условие оплаты от завода"    → fill after discovery
++  payTermsClient: null,  // "Условие оплаты клиента"      → fill after discovery
++  engineerId:     null,  // "Инженер" (user field)        → fill after discovery
++  comment:        null,  // "Коммент." (last note field)  → optional, we also read timeline
++};
++
++// ── Department labels (shared with the stats module) ─────────────────────────
++const DEPARTMENT_LABELS = {
++  '4857':'Элементный','4858':'Хроматография','4859':'Электрохимия','4860':'Клеточный анализ',
++  '4862':'Spares','4863':'Service','4864':'Training','4865':'General Lab','4866':'Complex','8384':'Материаловедение',
++};
++
++// ── Pipelines & their execution stages (contract → завершена) ────────────────
++// stageEntityId is the crm.status.list ENTITY_ID that holds this pipeline's
++// stages; `stages` is the post-contract subset we treat as "operational".
++// Names + order + colour are pulled LIVE from Bitrix so the funnel always
++// matches the CRM, but this list defines the boundary of what counts.
++const PIPELINES = {
++  0: { name:'Инструменты',   stageEntityId:'DEAL_STAGE',   stages:['FINAL_INVOICE','1','UC_Q9J6VV','UC_9MBFR2','2','3','WON'] },
++  1: { name:'Расходка',      stageEntityId:'DEAL_STAGE_1', stages:['C1:FINAL_INVOICE','C1:1','C1:UC_3MVK90','C1:UC_3SCB5K','C1:2','C1:3','C1:WON'] },
++  2: { name:'Тренинг-центр', stageEntityId:'DEAL_STAGE_2', stages:['C2:FINAL_INVOICE','C2:1','C2:2','C2:WON'] },
++  3: { name:'Сервис',        stageEntityId:'DEAL_STAGE_3', stages:['C3:FINAL_INVOICE','C3:UC_YYTFYG','C3:2','C3:WON'] },
++};
++
++const STALE_DAYS = 14; // no movement for this many days → flagged as "завис"
++
++// ── Live stage metadata (name / colour / semantics / order), cached 1h ───────
++const stageMetaCache = new Map(); // categoryId -> { at, list:[{id,name,color,semantics,sort}], byId:{} }
++async function getPipelineStages(categoryId) {
++  const cached = stageMetaCache.get(categoryId);
++  if (cached && Date.now() - cached.at < 60 * 60 * 1000) return cached;
++  const cfg = PIPELINES[categoryId];
++  let byId = {};
++  try {
++    const { result } = await b24('crm.status.list', {
++      filter: { ENTITY_ID: cfg.stageEntityId },
++      select: ['STATUS_ID', 'NAME', 'COLOR', 'SEMANTICS', 'SORT'],
++    });
++    (result || []).forEach(s => {
++      byId[s.STATUS_ID] = { id: s.STATUS_ID, name: s.NAME, color: s.COLOR || '#8a8886', semantics: s.SEMANTICS, sort: parseInt(s.SORT, 10) || 0 };
++    });
++  } catch (e) {
++    console.error(`getPipelineStages(${categoryId}) error:`, e.message);
++  }
++  // Keep only the operational subset, in Bitrix sort order.
++  const list = cfg.stages
++    .map(id => byId[id] || { id, name: id, color: '#8a8886', semantics: 'P', sort: 9999 })
++    .sort((a, b) => a.sort - b.sort);
++  const entry = { at: Date.now(), list, byId };
++  stageMetaCache.set(categoryId, entry);
++  return entry;
++}
++
++// ── Batched company-name resolver (one call per ~50 ids, cached) ─────────────
++const companyNameCache = new Map();
++async function resolveCompanies(ids) {
++  const missing = [...new Set(ids.filter(Boolean).map(String))].filter(id => !companyNameCache.has(id));
++  for (let i = 0; i < missing.length; i += 50) {
++    const batch = missing.slice(i, i + 50);
++    try {
++      let start = 0;
++      while (true) {
++        const { result, next } = await b24('crm.company.list', { filter: { ID: batch }, select: ['ID', 'TITLE'], start });
++        (result || []).forEach(c => companyNameCache.set(String(c.ID), c.TITLE || ''));
++        if (next === undefined || next === null) break;
++        start = next;
++      }
++    } catch (e) { console.error('resolveCompanies error:', e.message); }
++    batch.forEach(id => { if (!companyNameCache.has(id)) companyNameCache.set(id, ''); });
++  }
++  const map = {};
++  ids.forEach(id => { if (id) map[String(id)] = companyNameCache.get(String(id)) || ''; });
++  return map;
++}
++
++// ── Helpers ──────────────────────────────────────────────────────────────────
++function get(deal, code) { return code ? (deal[code] ?? null) : null; }
++function dateOnly(v) { return v ? String(v).slice(0, 10) : null; }
++function firstOf(v) { return Array.isArray(v) ? (v[0] ?? null) : (v ?? null); }
++function daysBetween(a, b) {
++  if (!a || !b) return null;
++  return Math.round((new Date(a) - new Date(b)) / 86400000);
++}
++function daysSince(v) {
++  if (!v) return null;
++  return Math.floor((Date.now() - new Date(v)) / 86400000);
++}
++
++// The set of deal fields we ask Bitrix for (skip nulls).
++function selectFields() {
++  const base = ['ID', 'TITLE', 'CATEGORY_ID', 'STAGE_ID', 'OPPORTUNITY', 'CURRENCY_ID',
++    'COMPANY_ID', 'ASSIGNED_BY_ID', 'DATE_CREATE', 'DATE_MODIFY'];
++  const custom = Object.values(F).filter(Boolean);
++  return [...new Set([...base, ...custom])];
++}
++
++// ── Fetch execution-phase deals across the requested pipelines + filters ─────
++// filters: { categoryIds:[], departmentId, managerId, companyId, year, month, stageId }
++async function fetchDeals(filters = {}) {
++  const cats = (filters.categoryIds && filters.categoryIds.length)
++    ? filters.categoryIds.map(Number)
++    : Object.keys(PIPELINES).map(Number);
++
++  const all = [];
++  for (const categoryId of cats) {
++    const cfg = PIPELINES[categoryId];
++    if (!cfg) continue;
++    const stageFilter = filters.stageId ? [filters.stageId] : cfg.stages;
++    const filter = { CATEGORY_ID: String(categoryId), '@STAGE_ID': stageFilter };
++    if (filters.managerId)    filter.ASSIGNED_BY_ID = filters.managerId;
++    if (filters.companyId)    filter.COMPANY_ID = filters.companyId;
++    if (filters.departmentId && F.department) filter[F.department] = filters.departmentId;
++    // Year/month filter is applied on the contract date, when present.
++    if (filters.year && F.contractDate) {
++      const y = filters.year;
++      const m = filters.month;
++      if (m) {
++        const mm = String(m).padStart(2, '0');
++        const last = new Date(y, m, 0).getDate();
++        filter[`>=${F.contractDate}`] = `${y}-${mm}-01`;
++        filter[`<=${F.contractDate}`] = `${y}-${mm}-${last}`;
++      } else {
++        filter[`>=${F.contractDate}`] = `${y}-01-01`;
++        filter[`<=${F.contractDate}`] = `${y}-12-31`;
++      }
++    }
++
++    let start = 0;
++    while (true) {
++      let resp;
++      try {
++        resp = await b24('crm.deal.list', { filter, select: selectFields(), order: { DATE_MODIFY: 'DESC' }, start });
++      } catch (e) {
++        console.error(`fetchDeals(cat ${categoryId}) error:`, e.message);
++        break;
++      }
++      const items = resp.result || [];
++      all.push(...items.map(d => ({ ...d, __categoryId: categoryId })));
++      if (resp.next === undefined || resp.next === null) break;
++      start = resp.next;
++    }
++  }
++  return all;
++}
++
++// ── Map one raw deal to a detail-table row + flags ───────────────────────────
++function buildRow(deal, stageMeta, companyMap) {
++  const categoryId = Number(deal.__categoryId ?? deal.CATEGORY_ID);
++  const stage = stageMeta[categoryId]?.byId?.[deal.STAGE_ID]
++    || { name: deal.STAGE_ID, color: '#8a8886', semantics: 'P' };
++  const isDone = stage.semantics === 'S';
++  const isLost = stage.semantics === 'F';
++
++  const deliveryBy = dateOnly(get(deal, F.deliveryByDate));
++  const factoryShip = dateOnly(get(deal, F.factoryShip));
++  // "Разница": ship earlier than / on the contract delivery date = on time (✓).
++  const diffDays = (deliveryBy && factoryShip) ? daysBetween(deliveryBy, factoryShip) : null;
++  const onTime = diffDays === null ? null : diffDays >= 0;
++
++  const engId = get(deal, F.engineerId);
++  const engineerId = engId ? parseInt(firstOf(engId), 10) : null;
++  const managerId = deal.ASSIGNED_BY_ID ? parseInt(deal.ASSIGNED_BY_ID, 10) : null;
++
++  const deptRaw = get(deal, F.department);
++  const departmentId = firstOf(deptRaw);
++  const stale = daysSince(deal.DATE_MODIFY);
++  const overdueDelivery = !!(deliveryBy && !isDone && !isLost && new Date(deliveryBy) < new Date());
++
++  const flags = [];
++  if (overdueDelivery) flags.push('overdue');            // просрочена поставка
++  if (!isDone && !isLost && stale !== null && stale >= STALE_DAYS) flags.push('stale'); // завис
++  if (onTime === false) flags.push('late-ship');         // отгрузка позже срока
++
++  return {
++    id: deal.ID,
++    categoryId,
++    pipelineName: PIPELINES[categoryId]?.name || '—',
++    stageId: deal.STAGE_ID,
++    stageName: stage.name,
++    stageColor: stage.color,
++    isDone, isLost,
++    company: companyMap[String(deal.COMPANY_ID)] || '',
++    companyId: deal.COMPANY_ID || null,
++    title: deal.TITLE || '',
++    contractNo: get(deal, F.contractNo) || '',
++    deliveryBy, factoryShip, diffDays, onTime,
++    managerId, manager: managerId ? (USERS[managerId] || `#${managerId}`) : '',
++    engineerId, engineer: engineerId ? (USERS[engineerId] || `#${engineerId}`) : '',
++    payFactory: firstOf(get(deal, F.payTermsFactory)) || '',
++    payClient: firstOf(get(deal, F.payTermsClient)) || '',
++    comment: get(deal, F.comment) || '',
++    departmentId: departmentId || null,
++    department: DEPARTMENT_LABELS[departmentId] || (departmentId || ''),
++    opportunity: parseFloat(deal.OPPORTUNITY) || 0,
++    currency: deal.CURRENCY_ID || 'KZT',
++    dateModify: deal.DATE_MODIFY || null,
++    daysStale: stale,
++    flags,
++    url: `https://crm.prolabsupport.kz/crm/deal/details/${deal.ID}/`,
++  };
++}
++
++// ── Build the stage funnel (Сумма | Количество per stage) ────────────────────
++function buildFunnel(rows, stageMeta, categoryIds) {
++  // When exactly one pipeline is selected, show its real named stages in order.
++  // For a multi-pipeline view we fall back to a compact per-pipeline roll-up.
++  if (categoryIds && categoryIds.length === 1) {
++    const cat = categoryIds[0];
++    const stages = stageMeta[cat]?.list || [];
++    return {
++      mode: 'stages',
++      cells: stages.map(s => {
++        const inStage = rows.filter(r => r.stageId === s.id);
++        return { key: s.id, name: s.name, color: s.color, sum: inStage.reduce((a, r) => a + r.opportunity, 0), count: inStage.length };
++      }),
++    };
++  }
++  return {
++    mode: 'pipelines',
++    cells: (categoryIds && categoryIds.length ? categoryIds : Object.keys(PIPELINES).map(Number)).map(cat => {
++      const inCat = rows.filter(r => r.categoryId === cat);
++      return { key: cat, name: PIPELINES[cat]?.name || cat, color: '#35d0c0', sum: inCat.reduce((a, r) => a + r.opportunity, 0), count: inCat.length };
++    }),
++  };
++}
++
++// ── Top-level: the whole board for the given filters ─────────────────────────
++async function getBoard(filters = {}) {
++  const cats = (filters.categoryIds && filters.categoryIds.length)
++    ? filters.categoryIds.map(Number)
++    : Object.keys(PIPELINES).map(Number);
++
++  // Live stage metadata for each pipeline in view.
++  const stageMeta = {};
++  for (const cat of cats) stageMeta[cat] = await getPipelineStages(cat);
++
++  const deals = await fetchDeals({ ...filters, categoryIds: cats });
++  const companyMap = await resolveCompanies(deals.map(d => d.COMPANY_ID));
++  let rows = deals.map(d => buildRow(d, stageMeta, companyMap));
++
++  // Client-side "Заказчик" search (by company name) — kept here so the UI can
++  // pass a free-text query without needing a company id.
++  if (filters.customerQuery && filters.customerQuery.trim()) {
++    const q = filters.customerQuery.trim().toLowerCase();
++    rows = rows.filter(r => (r.company || '').toLowerCase().includes(q) || (r.title || '').toLowerCase().includes(q));
++  }
++
++  const funnel = buildFunnel(rows, stageMeta, cats);
++
++  // Filter option lists for the UI.
++  const managerSet = new Map(), deptSet = new Map(), companySet = new Map(), yearSet = new Set();
++  rows.forEach(r => {
++    if (r.managerId) managerSet.set(r.managerId, r.manager);
++    if (r.departmentId) deptSet.set(String(r.departmentId), r.department);
++    if (r.companyId) companySet.set(String(r.companyId), r.company);
++    // year taken from delivery / modify for the filter list
++  });
++
++  const summary = {
++    dealCount: rows.length,
++    totalSum: rows.reduce((a, r) => a + r.opportunity, 0),
++    overdue: rows.filter(r => r.flags.includes('overdue')).length,
++    stale: rows.filter(r => r.flags.includes('stale')).length,
++    lateShip: rows.filter(r => r.flags.includes('late-ship')).length,
++  };
++
++  return {
++    ok: true,
++    generatedAt: new Date().toISOString(),
++    filters: { categoryIds: cats },
++    pipelines: Object.fromEntries(Object.entries(PIPELINES).map(([id, p]) => [id, p.name])),
++    departments: DEPARTMENT_LABELS,
++    funnel,
++    rows,
++    summary,
++    options: {
++      managers: [...managerSet.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'ru')),
++      departments: [...deptSet.entries()].map(([id, name]) => ({ id, name })),
++      companies: [...companySet.entries()].map(([id, name]) => ({ id, name })).filter(c => c.name).sort((a, b) => a.name.localeCompare(b.name, 'ru')),
++    },
++    fieldsReady: Object.fromEntries(Object.entries(F).map(([k, v]) => [k, !!v])),
++  };
++}
++
++// ── Per-deal drill-down: child smart processes, tasks, timeline comments ─────
++async function getDealDetail(dealId) {
++  const [children, tasks, comments] = await Promise.all([
++    getChildProcesses(dealId),
++    getDealTasks(dealId),
++    getDealComments(dealId),
++  ]);
++  return { ok: true, dealId, children, tasks, comments };
++}
++
++async function getChildProcesses(dealId) {
++  const raw = await findChildrenOfDeal(dealId);
++  const out = [];
++  for (const c of raw) {
++    let stageName = c.stageId, semantics = 'P';
++    try {
++      const info = await resolveStageName(c.entityTypeId, c.categoryId, c.stageId);
++      stageName = info.name; semantics = info.semantics || 'P';
++    } catch (e) { /* keep raw */ }
++    out.push({
++      entityTypeId: c.entityTypeId,
++      entityName: SMART_TYPES[c.entityTypeId]?.name || c.entityName || `Тип ${c.entityTypeId}`,
++      id: c.id, title: c.title || `#${c.id}`,
++      stageId: c.stageId, stageName, semantics,
++      done: semantics === 'S', failed: semantics === 'F',
++      createdTime: c.createdTime || null,
++      url: `https://crm.prolabsupport.kz/crm/type/${c.entityTypeId}/details/${c.id}/`,
++    });
++  }
++  return out;
++}
++
++async function getDealTasks(dealId) {
++  try {
++    const { result } = await b24('tasks.task.list', {
++      filter: { UF_CRM_TASK: `D_${dealId}` },
++      select: ['ID', 'TITLE', 'STATUS', 'RESPONSIBLE_ID', 'DEADLINE', 'CLOSED_DATE', 'CREATED_DATE'],
++      order: { DEADLINE: 'ASC' },
++    });
++    const tasks = result?.tasks || result || [];
++    const now = Date.now();
++    return tasks.map(t => {
++      const status = parseInt(t.status ?? t.STATUS, 10); // 5 = completed, 4 = ready-to-review, 2/3 pending
++      const deadline = t.deadline ?? t.DEADLINE ?? null;
++      const done = status === 5;
++      const overdue = !done && deadline && new Date(deadline).getTime() < now;
++      const respId = parseInt(t.responsibleId ?? t.RESPONSIBLE_ID, 10);
++      return {
++        id: t.id ?? t.ID,
++        title: t.title ?? t.TITLE,
++        status, done, overdue, deadline,
++        responsibleId: respId, responsible: respId ? (USERS[respId] || `#${respId}`) : '',
++        url: `https://crm.prolabsupport.kz/company/personal/user/${respId}/tasks/task/view/${t.id ?? t.ID}/`,
++      };
++    });
++  } catch (e) {
++    console.error(`getDealTasks(${dealId}) error:`, e.message);
++    return [];
++  }
++}
++
++async function getDealComments(dealId, limit = 15) {
++  try {
++    const { result } = await b24('crm.timeline.comment.list', {
++      filter: { ENTITY_ID: dealId, ENTITY_TYPE: 'deal' },
++      order: { CREATED: 'DESC' },
++    });
++    const items = (result || []).slice(0, limit);
++    return items.map(c => {
++      const authorId = parseInt(c.AUTHOR_ID, 10);
++      return {
++        id: c.ID,
++        date: c.CREATED || null,
++        authorId, author: authorId ? (USERS[authorId] || `#${authorId}`) : '',
++        text: (c.COMMENT || '').replace(/\[[^\]]+\]/g, '').trim(),
++      };
++    }).filter(c => c.text);
++  } catch (e) {
++    console.error(`getDealComments(${dealId}) error:`, e.message);
++    return [];
++  }
++}
++
++module.exports = {
++  F, PIPELINES, DEPARTMENT_LABELS,
++  getBoard, getDealDetail, getChildProcesses, getDealTasks, getDealComments,
++  getPipelineStages, fetchDeals, buildRow,
++};
+diff --git a/public/cup-admin.html b/public/cup-admin.html
+index b00548f..40e2ed4 100644
+--- a/public/cup-admin.html
++++ b/public/cup-admin.html
+@@ -78,7 +78,7 @@ footer{text-align:center;color:var(--text-faint);font-size:11.5px;padding:24px;f
+ <script>
+ let EMPLOYEES = [];
+ let MODULE_CODES = [];
+-const MODULE_LABELS = { PLN:'Планировщик', SVC:'Заявки', EQP:'Оборуд.', LIC:'Лицензии', REL:'Связи', MAIL:'Почта', KP:'КП', BONUS:'Бонусы', STATS:'Статистика', ADM:'Управл.' };
++const MODULE_LABELS = { PLN:'Планировщик', SVC:'Заявки', EQP:'Оборуд.', LIC:'Лицензии', REL:'Связи', MAIL:'Почта', KP:'КП', BONUS:'Бонусы', STATS:'Статистика', OPS:'Реализация', ADM:'Управл.' };
+ 
+ function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+ 
+diff --git a/public/operational.html b/public/operational.html
+new file mode 100644
+index 0000000..36ebe71
+--- /dev/null
++++ b/public/operational.html
+@@ -0,0 +1,378 @@
++<!DOCTYPE html>
++<html lang="ru">
++<head>
++<meta charset="UTF-8">
++<link rel="icon" type="image/x-icon" href="/favicon.ico">
++<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
++<meta name="viewport" content="width=device-width, initial-scale=1.0">
++<title>Реализация — ProLabSupport</title>
++<link rel="preconnect" href="https://fonts.googleapis.com">
++<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
++<style>
++*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
++:root{
++  --bg:#14171d;--panel:#1b1f27;--panel-h:#20242e;--line:#2a2f3a;--line-2:#363c49;
++  --text:#eef0f3;--text-dim:#8b93a3;--text-faint:#565d6b;
++  --brand:#C53B2F;--brand-h:#d94737;--signal:#35d0c0;--signal-dim:rgba(53,208,192,.35);
++  --warn:#e0a940;--danger:#ff5752;--ok:#3fd07a;
++  --font-display:'Space Grotesk',sans-serif;--font-body:'Inter',system-ui,sans-serif;--font-mono:'IBM Plex Mono',monospace;
++  --radius:12px;
++}
++html,body{height:100%;}
++body{font-family:var(--font-body);background:
++  radial-gradient(ellipse 900px 500px at 15% -10%, rgba(197,59,47,.06), transparent 60%),
++  radial-gradient(ellipse 700px 500px at 100% 0%, rgba(53,208,192,.05), transparent 55%),
++  var(--bg);color:var(--text);min-height:100vh;}
++
++/* Topbar */
++.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 26px;border-bottom:1px solid var(--line);}
++.brand{display:flex;align-items:center;gap:12px;}
++.brand a{color:var(--text-dim);text-decoration:none;font-size:13px;border:1px solid var(--line-2);border-radius:8px;padding:6px 11px;transition:.15s;}
++.brand a:hover{border-color:var(--signal);color:var(--text);}
++.brand-name{font-family:var(--font-display);font-weight:600;font-size:15px;}
++.brand-name b{color:var(--brand);}
++.brand-name span{color:var(--text-dim);font-weight:500;}
++.right{display:flex;align-items:center;gap:14px;}
++.clock{font-family:var(--font-mono);font-size:12.5px;color:var(--text-dim);}
++.userName{font-size:12.5px;color:var(--text-dim);}
++.userName b{color:var(--text);}
++.logout-btn{border:1px solid var(--line-2);background:transparent;color:var(--text-dim);font-family:var(--font-body);font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;cursor:pointer;transition:.15s;}
++.logout-btn:hover{border-color:var(--brand);color:var(--text);}
++
++main{padding:20px 26px 60px;max-width:1560px;margin:0 auto;}
++.page-head{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;}
++h1{font-family:var(--font-display);font-size:22px;font-weight:600;}
++.asof{font-family:var(--font-mono);font-size:11.5px;color:var(--text-faint);}
++
++/* Filters */
++.filters{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px;}
++.filters label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-faint);margin-bottom:5px;font-weight:600;}
++.filters select,.filters input{width:100%;background:var(--bg);border:1px solid var(--line-2);color:var(--text);font-family:var(--font-body);font-size:13px;padding:8px 10px;border-radius:8px;outline:none;}
++.filters select:focus,.filters input:focus{border-color:var(--signal);}
++@media(max-width:1100px){.filters{grid-template-columns:repeat(3,1fr);}}
++@media(max-width:640px){.filters{grid-template-columns:repeat(2,1fr);}}
++
++/* Funnel */
++.funnel{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:12px;margin-bottom:14px;overflow-x:auto;}
++.fcell{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 15px 13px;min-width:150px;position:relative;overflow:hidden;}
++.fcell .fname{font-size:12.5px;color:var(--text-dim);font-weight:600;margin-bottom:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
++.fcell .fbar{position:absolute;left:0;right:0;top:38px;height:3px;}
++.fcell .fsum{font-family:var(--font-display);font-size:19px;font-weight:600;letter-spacing:-.3px;}
++.fcell .fcount{font-family:var(--font-mono);font-size:12px;color:var(--text-faint);margin-top:2px;}
++.funnel-legend{font-family:var(--font-mono);font-size:11px;color:var(--text-faint);margin-bottom:20px;}
++
++/* Summary chips */
++.chips{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;}
++.chip{display:flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:7px 14px;font-size:12.5px;color:var(--text-dim);cursor:pointer;transition:.15s;}
++.chip:hover{border-color:var(--line-2);}
++.chip.active{border-color:var(--signal);color:var(--text);}
++.chip b{color:var(--text);font-family:var(--font-mono);}
++.chip .dot{width:8px;height:8px;border-radius:50%;}
++
++/* Table */
++.tablewrap{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;}
++table{width:100%;border-collapse:collapse;font-size:12.5px;}
++thead th{text-align:left;padding:11px 12px;color:var(--text-faint);font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;background:var(--panel);z-index:1;}
++tbody td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top;}
++tbody tr.deal-row{cursor:pointer;transition:background .12s;}
++tbody tr.deal-row:hover{background:var(--panel-h);}
++.stage-pill{display:inline-block;padding:2px 9px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap;}
++.mono{font-family:var(--font-mono);}
++.num{font-family:var(--font-mono);text-align:right;white-space:nowrap;}
++.dim{color:var(--text-dim);}
++.faint{color:var(--text-faint);}
++.title-cell{max-width:280px;}
++.title-cell .t{color:var(--text);line-height:1.35;}
++.title-cell .c{font-size:11px;color:var(--text-dim);margin-top:2px;}
++.flag{font-size:14px;}
++.diff-ok{color:var(--ok);font-weight:600;}
++.diff-bad{color:var(--danger);font-weight:600;}
++a.deal-link{color:var(--signal);text-decoration:none;}
++a.deal-link:hover{text-decoration:underline;}
++
++/* Drill-down */
++tr.detail-row td{background:#171b22;padding:0;border-bottom:1px solid var(--line);}
++.detail-inner{padding:16px 18px;display:grid;grid-template-columns:1.1fr 1fr 1.2fr;gap:20px;}
++@media(max-width:1000px){.detail-inner{grid-template-columns:1fr;}}
++.detail-inner h4{font-family:var(--font-display);font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-dim);margin-bottom:10px;}
++.proc{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12.5px;border-bottom:1px dashed var(--line);}
++.proc:last-child{border-bottom:none;}
++.proc .pdot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
++.proc .ptype{color:var(--text-dim);min-width:120px;}
++.proc .pstage{margin-left:auto;font-size:11px;color:var(--text-faint);}
++.task{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12.5px;border-bottom:1px dashed var(--line);}
++.task:last-child{border-bottom:none;}
++.task .tt{flex:1;}
++.task .tmeta{font-size:11px;color:var(--text-faint);white-space:nowrap;}
++.task.overdue .tt{color:var(--danger);}
++.cmt{padding:7px 0;border-bottom:1px dashed var(--line);font-size:12.5px;}
++.cmt:last-child{border-bottom:none;}
++.cmt .cmeta{font-family:var(--font-mono);font-size:10.5px;color:var(--text-faint);margin-bottom:2px;}
++.empty{color:var(--text-faint);font-size:12px;font-style:italic;}
++.loading{padding:14px;color:var(--text-dim);font-size:12.5px;}
++
++.notice{background:rgba(224,169,64,.1);border:1px solid rgba(224,169,64,.35);color:#f0cf8f;font-size:12px;padding:10px 14px;border-radius:10px;margin-bottom:14px;}
++.spin{display:inline-block;width:13px;height:13px;border:2px solid var(--line-2);border-top-color:var(--signal);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:6px;}
++@keyframes sp{to{transform:rotate(360deg);}}
++</style>
++</head>
++<body>
++
++<div class="topbar">
++  <div class="brand">
++    <a href="/portal.html">← ЦУП</a>
++    <span class="brand-name"><b>Реализация</b> · <span>операционный контроль</span></span>
++  </div>
++  <div class="right">
++    <span class="clock" id="clock">—</span>
++    <span class="userName" id="userName"></span>
++    <button class="logout-btn" onclick="logout()">Выйти</button>
++  </div>
++</div>
++
++<main>
++  <div class="page-head">
++    <h1>Ход исполнения сделок</h1>
++    <span class="asof" id="asof"></span>
++  </div>
++
++  <div id="fieldsNotice"></div>
++
++  <div class="filters">
++    <div><label>Воронка</label><select id="fPipeline"></select></div>
++    <div><label>Стадия сделки</label><select id="fStage"><option value="all">Все</option></select></div>
++    <div><label>Отдел</label><select id="fDept"><option value="all">Все</option></select></div>
++    <div><label>Менеджер</label><select id="fManager"><option value="all">Все</option></select></div>
++    <div><label>Заказчик</label><input id="fCustomer" type="text" placeholder="поиск по названию…"></div>
++    <div><label>Год / Месяц</label>
++      <div style="display:flex;gap:6px;">
++        <select id="fYear" style="flex:1"></select>
++        <select id="fMonth" style="flex:1"><option value="all">Все</option></select>
++      </div>
++    </div>
++  </div>
++
++  <div class="funnel" id="funnel"></div>
++  <div class="funnel-legend">Сумма&nbsp;|&nbsp;Количество</div>
++
++  <div class="chips" id="chips"></div>
++
++  <div class="tablewrap">
++    <table>
++      <thead><tr>
++        <th></th><th>Стадия</th><th>Компания</th><th>№&nbsp;Договора&nbsp;|&nbsp;Название</th>
++        <th>Поставка<br>по договору</th><th>Отгрузка<br>от завода</th><th>Разн.</th>
++        <th>Менеджер</th><th>Инженер</th><th>Оплата<br>завод</th><th>Оплата<br>клиент</th>
++        <th class="num">Сумма</th>
++      </tr></thead>
++      <tbody id="tbody">
++        <tr><td colspan="12" class="loading"><span class="spin"></span>Загрузка…</td></tr>
++      </tbody>
++    </table>
++  </div>
++</main>
++
++<script>
++const MONTHS=['','Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
++let BOARD=null, activeFlag=null;
++
++function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
++function fmtSum(n){return Math.round(n||0).toLocaleString('ru-RU');}
++function fmtDate(d){if(!d)return '';const p=String(d).slice(0,10).split('-');return p.length===3?`${p[2]}.${p[1]}.${p[0]}`:String(d);}
++
++async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
++
++function tickClock(){const n=new Date();const p=x=>String(x).padStart(2,'0');document.getElementById('clock').textContent=`${p(n.getHours())}:${p(n.getMinutes())}:${p(n.getSeconds())}`;}
++setInterval(tickClock,1000);tickClock();
++
++function getFilters(){
++  const q=new URLSearchParams();
++  const pipe=document.getElementById('fPipeline').value;
++  if(pipe!=='all')q.set('categories',pipe);
++  const st=document.getElementById('fStage').value; if(st!=='all')q.set('stage',st);
++  const dp=document.getElementById('fDept').value; if(dp!=='all')q.set('department',dp);
++  const mg=document.getElementById('fManager').value; if(mg!=='all')q.set('manager',mg);
++  const cu=document.getElementById('fCustomer').value.trim(); if(cu)q.set('customer',cu);
++  const yr=document.getElementById('fYear').value; if(yr!=='all')q.set('year',yr);
++  const mo=document.getElementById('fMonth').value; if(mo!=='all')q.set('month',mo);
++  return q.toString();
++}
++
++async function loadBoard(){
++  document.getElementById('tbody').innerHTML=`<tr><td colspan="12" class="loading"><span class="spin"></span>Загрузка…</td></tr>`;
++  try{
++    const r=await fetch('/api/operational/board?'+getFilters());
++    if(r.status===401){location.href='/login.html';return;}
++    const data=await r.json();
++    if(!data.ok){throw new Error(data.error||'Ошибка');}
++    BOARD=data;
++    renderNotice(data);
++    renderFunnel(data.funnel);
++    renderChips(data.summary);
++    populateOptions(data);
++    renderRows(data.rows);
++    document.getElementById('asof').textContent='По состоянию на '+new Date(data.generatedAt).toLocaleString('ru-RU');
++  }catch(e){
++    document.getElementById('tbody').innerHTML=`<tr><td colspan="12" class="loading">Не удалось загрузить: ${esc(e.message)}</td></tr>`;
++  }
++}
++
++function renderNotice(d){
++  const missing=Object.entries(d.fieldsReady||{}).filter(([k,v])=>!v).map(([k])=>k);
++  const map={contractNo:'№ договора',deliveryByDate:'Поставка по договору',factoryShip:'Отгрузка от завода',payTermsFactory:'Оплата (завод)',payTermsClient:'Оплата (клиент)',engineerId:'Инженер',comment:'Коммент.'};
++  const rel=missing.filter(m=>map[m]);
++  document.getElementById('fieldsNotice').innerHTML = rel.length
++    ? `<div class="notice">Колонки пока пустые — не заданы коды полей Bitrix: ${rel.map(m=>esc(map[m])).join(', ')}. Запусти <b>discover-deal-fields.js</b> и пришли вывод, чтобы я их подключил.</div>` : '';
++}
++
++function renderFunnel(f){
++  const el=document.getElementById('funnel');
++  if(!f||!f.cells.length){el.innerHTML='';return;}
++  el.innerHTML=f.cells.map(c=>`
++    <div class="fcell">
++      <div class="fname" title="${esc(c.name)}">${esc(c.name)}</div>
++      <div class="fbar" style="background:${esc(c.color||'#35d0c0')}"></div>
++      <div class="fsum">${fmtSum(c.sum)}</div>
++      <div class="fcount">${c.count} шт.</div>
++    </div>`).join('');
++}
++
++function renderChips(s){
++  const el=document.getElementById('chips');
++  const chips=[
++    {key:null,label:'Все сделки',val:s.dealCount,dot:'var(--signal)'},
++    {key:'overdue',label:'Просрочена поставка',val:s.overdue,dot:'var(--danger)'},
++    {key:'stale',label:`Завис > 14 дн`,val:s.stale,dot:'var(--warn)'},
++    {key:'late-ship',label:'Отгрузка позже срока',val:s.lateShip,dot:'#c98bff'},
++  ];
++  el.innerHTML=chips.map(c=>`<div class="chip ${activeFlag===c.key?'active':''}" data-flag="${c.key||''}">
++    <span class="dot" style="background:${c.dot}"></span>${esc(c.label)} <b>${c.val}</b></div>`).join('');
++  el.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{
++    const f=ch.dataset.flag||null; activeFlag=(activeFlag===f)?null:f;
++    renderChips(BOARD.summary); renderRows(BOARD.rows);
++  });
++}
++
++function populateOptions(d){
++  const setOpts=(id,items,cur)=>{
++    const sel=document.getElementById(id);const v=cur??sel.value;
++    sel.innerHTML='<option value="all">Все</option>'+items.map(i=>`<option value="${esc(i.id)}">${esc(i.name)}</option>`).join('');
++    sel.value=v||'all';
++  };
++  // Departments & managers come from the current result set
++  setOpts('fDept',(d.options.departments||[]));
++  setOpts('fManager',(d.options.managers||[]));
++  // Stage list only meaningful when a single pipeline is chosen
++  const stageSel=document.getElementById('fStage');const curStage=stageSel.value;
++  if(d.funnel.mode==='stages'){
++    stageSel.innerHTML='<option value="all">Все</option>'+d.funnel.cells.map(c=>`<option value="${esc(c.key)}">${esc(c.name)}</option>`).join('');
++    stageSel.value=curStage||'all';stageSel.disabled=false;
++  }else{stageSel.innerHTML='<option value="all">Все</option>';stageSel.value='all';stageSel.disabled=true;}
++}
++
++function flagIcon(flags){
++  if(flags.includes('overdue'))return '<span class="flag" title="Просрочена поставка">🔴</span>';
++  if(flags.includes('stale'))return '<span class="flag" title="Завис (нет движения)">🟠</span>';
++  if(flags.includes('late-ship'))return '<span class="flag" title="Отгрузка позже срока">⚠️</span>';
++  return '';
++}
++
++function renderRows(rows){
++  let list=rows;
++  if(activeFlag)list=rows.filter(r=>r.flags.includes(activeFlag));
++  const tb=document.getElementById('tbody');
++  if(!list.length){tb.innerHTML=`<tr><td colspan="12" class="loading">Нет сделок по текущим фильтрам.</td></tr>`;return;}
++  tb.innerHTML=list.map(r=>{
++    const diff = r.diffDays==null?'' :
++      `<span class="${r.onTime?'diff-ok':'diff-bad'}">${r.onTime?'✓ ':''}${r.diffDays}</span>`;
++    return `<tr class="deal-row" data-id="${r.id}">
++      <td class="flag">${flagIcon(r.flags)}</td>
++      <td><span class="stage-pill" style="background:${esc(r.stageColor)}22;color:${esc(r.stageColor)};border:1px solid ${esc(r.stageColor)}55">${esc(r.stageName)}</span></td>
++      <td>${esc(r.company)||'<span class="faint">—</span>'}</td>
++      <td class="title-cell"><div class="t"><a class="deal-link" href="${r.url}" target="_blank" onclick="event.stopPropagation()">${esc(r.contractNo||('#'+r.id))}</a></div><div class="c">${esc(r.title)}</div></td>
++      <td class="mono ${r.flags.includes('overdue')?'diff-bad':'dim'}">${fmtDate(r.deliveryBy)}</td>
++      <td class="mono dim">${fmtDate(r.factoryShip)}</td>
++      <td class="num">${diff}</td>
++      <td>${esc(r.manager)||'<span class="faint">—</span>'}</td>
++      <td>${esc(r.engineer)||'<span class="faint">—</span>'}</td>
++      <td class="dim">${esc(r.payFactory)}</td>
++      <td class="dim">${esc(r.payClient)}</td>
++      <td class="num">${fmtSum(r.opportunity)}</td>
++    </tr>`;
++  }).join('');
++  tb.querySelectorAll('.deal-row').forEach(tr=>tr.onclick=()=>toggleDetail(tr,tr.dataset.id));
++}
++
++async function toggleDetail(tr,id){
++  const nxt=tr.nextElementSibling;
++  if(nxt&&nxt.classList.contains('detail-row')){nxt.remove();return;}
++  document.querySelectorAll('tr.detail-row').forEach(x=>x.remove());
++  const dr=document.createElement('tr');dr.className='detail-row';
++  dr.innerHTML=`<td colspan="12"><div class="loading"><span class="spin"></span>Загрузка деталей сделки #${id}…</div></td>`;
++  tr.after(dr);
++  try{
++    const r=await fetch('/api/operational/deal/'+id);
++    const d=await r.json();
++    if(!d.ok)throw new Error(d.error||'Ошибка');
++    dr.querySelector('td').innerHTML=renderDetail(d);
++  }catch(e){
++    dr.querySelector('td').innerHTML=`<div class="loading">Не удалось загрузить: ${esc(e.message)}</div>`;
++  }
++}
++
++function renderDetail(d){
++  const sem=s=>s==='S'?'var(--ok)':s==='F'?'var(--danger)':'var(--warn)';
++  const procs=d.children.length?d.children.map(c=>`
++    <div class="proc"><span class="pdot" style="background:${sem(c.semantics)}"></span>
++      <span class="ptype">${esc(c.entityName)}</span>
++      <a class="deal-link" href="${c.url}" target="_blank">#${esc(c.id)}</a>
++      <span class="pstage">${esc(c.stageName)}</span></div>`).join(''):'<div class="empty">Нет связанных процессов</div>';
++  const tasks=d.tasks.length?d.tasks.map(t=>`
++    <div class="task ${t.overdue?'overdue':''}"><span class="pdot" style="background:${t.done?'var(--ok)':t.overdue?'var(--danger)':'var(--warn)'}"></span>
++      <span class="tt">${esc(t.title)}</span>
++      <span class="tmeta">${esc(t.responsible)}${t.deadline?' · '+fmtDate(t.deadline):''}</span></div>`).join(''):'<div class="empty">Нет задач</div>';
++  const cmts=d.comments.length?d.comments.map(c=>`
++    <div class="cmt"><div class="cmeta">${fmtDate(c.date)} · ${esc(c.author)}</div>${esc(c.text)}</div>`).join(''):'<div class="empty">Нет комментариев</div>';
++  return `<div class="detail-inner">
++    <div><h4>Смарт-процессы</h4>${procs}</div>
++    <div><h4>Задачи</h4>${tasks}</div>
++    <div><h4>Комментарии</h4>${cmts}</div>
++  </div>`;
++}
++
++function initFilters(){
++  // Pipeline select
++  const pipe=document.getElementById('fPipeline');
++  pipe.innerHTML='<option value="all">Все воронки</option>';
++  // Years
++  const ys=document.getElementById('fYear');const now=new Date().getFullYear();
++  ys.innerHTML='<option value="all">Все</option>'+[now,now-1,now-2].map(y=>`<option value="${y}">${y}</option>`).join('');
++  const ms=document.getElementById('fMonth');
++  ms.innerHTML='<option value="all">Все</option>'+MONTHS.slice(1).map((m,i)=>`<option value="${i+1}">${m}</option>`).join('');
++  ['fPipeline','fStage','fDept','fManager','fYear','fMonth'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{if(id==='fPipeline')document.getElementById('fStage').value='all';loadBoard();}));
++  let t;document.getElementById('fCustomer').addEventListener('input',()=>{clearTimeout(t);t=setTimeout(loadBoard,350);});
++}
++
++async function init(){
++  try{
++    const r=await fetch('/auth/me');
++    if(!r.ok){location.href='/login.html';return;}
++    const {user}=await r.json();
++    document.getElementById('userName').innerHTML=`<b>${esc(user.displayName)}</b>`;
++  }catch(e){location.href='/login.html';return;}
++  initFilters();
++  // Fill pipeline options after first board load supplies names
++  const r=await fetch('/api/operational/board?');
++  if(r.status===401){location.href='/login.html';return;}
++  const d=await r.json();
++  if(d.ok&&d.pipelines){
++    const pipe=document.getElementById('fPipeline');
++    pipe.innerHTML='<option value="all">Все воронки</option>'+Object.entries(d.pipelines).map(([id,n])=>`<option value="${id}">${esc(n)}</option>`).join('');
++    BOARD=d;renderNotice(d);renderFunnel(d.funnel);renderChips(d.summary);populateOptions(d);renderRows(d.rows);
++    document.getElementById('asof').textContent='По состоянию на '+new Date(d.generatedAt).toLocaleString('ru-RU');
++  }
++}
++init();
++</script>
++</body>
++</html>
+diff --git a/public/portal.html b/public/portal.html
+index 5b16b7b..4f595ba 100644
+--- a/public/portal.html
++++ b/public/portal.html
+@@ -184,6 +184,7 @@ const MODULES = [
+   { code:'KP', name:'Коммерческие предложения', desc:'Каталог оборудования, сбор позиций от экспертов, формирование КП.', href:'/kp.html', roles:['admin','coordinator'] },
+   { code:'BONUS', name:'Бонусы инженеров', desc:'Квартальный расчёт бонусов по сервисным контрактам и установкам.', href:'/bonus.html', roles:['admin','coordinator','engineer'] },
+   { code:'STATS', name:'Статистика', desc:'Сводная статистика продаж по производителям, менеджерам, приборам.', href:'/stats.html', roles:['admin','coordinator'] },
++  { code:'OPS', name:'Реализация', desc:'Операционный контроль сделок после подписания: воронка исполнения, смарт-процессы, задачи и сроки.', href:'/operational.html', roles:['admin','coordinator'] },
+   { code:'ADM', name:'Управление', desc:'Пользователи, роли доступа и журнал действий в системе.', href:'/admin.html', roles:['admin'] },
+ ];
+ 
+diff --git a/routes/admin-routes.js b/routes/admin-routes.js
+index 10b1edf..1542f7a 100644
+--- a/routes/admin-routes.js
++++ b/routes/admin-routes.js
+@@ -190,7 +190,7 @@ router.get('/notification-log', requireAuth(['admin']), async (req, res) => {
+ 
+ // ── ЦУП module access (which portal modules each Bitrix employee can see) ──
+ // Keep this list in sync with MODULES in public/portal.html and cup-admin.html.
+-const MODULE_CODES = ['PLN', 'SVC', 'EQP', 'LIC', 'REL', 'MAIL', 'KP', 'BONUS', 'STATS', 'ADM'];
++const MODULE_CODES = ['PLN', 'SVC', 'EQP', 'LIC', 'REL', 'MAIL', 'KP', 'BONUS', 'STATS', 'OPS', 'ADM'];
+ 
+ // GET /admin/bitrix-employees — every active Bitrix employee + their current module access
+ router.get('/bitrix-employees', requireAuth(['admin']), async (req, res) => {
+diff --git a/routes/operational-routes.js b/routes/operational-routes.js
+new file mode 100644
+index 0000000..389b023
+--- /dev/null
++++ b/routes/operational-routes.js
+@@ -0,0 +1,48 @@
++const express = require('express');
++const router = express.Router();
++const { requireAuth } = require('../auth');
++const { getBoard, getDealDetail } = require('../operational');
++
++// Same access level as Статистика — this is a management / meeting view.
++const OPS_ROLES = ['admin', 'coordinator'];
++
++function parseFilters(q) {
++  const filters = {};
++  if (q.categories) {
++    filters.categoryIds = String(q.categories).split(',').map(s => parseInt(s, 10)).filter(n => !Number.isNaN(n));
++  }
++  if (q.department && q.department !== 'all') filters.departmentId = q.department;
++  if (q.manager && q.manager !== 'all')       filters.managerId = parseInt(q.manager, 10);
++  if (q.company && q.company !== 'all')        filters.companyId = parseInt(q.company, 10);
++  if (q.stage && q.stage !== 'all')            filters.stageId = q.stage;
++  if (q.customer)                              filters.customerQuery = String(q.customer);
++  if (q.year && q.year !== 'all')              filters.year = parseInt(q.year, 10);
++  if (q.month && q.month !== 'all')            filters.month = parseInt(q.month, 10);
++  return filters;
++}
++
++// GET /api/operational/board — funnel + detail rows + filter options
++router.get('/board', requireAuth(OPS_ROLES), async (req, res) => {
++  try {
++    const board = await getBoard(parseFilters(req.query));
++    res.json(board);
++  } catch (e) {
++    console.error('GET /api/operational/board error:', e.message);
++    res.status(500).json({ ok: false, error: 'Не удалось собрать операционную сводку: ' + e.message });
++  }
++});
++
++// GET /api/operational/deal/:id — drill-down (child processes, tasks, comments)
++router.get('/deal/:id', requireAuth(OPS_ROLES), async (req, res) => {
++  try {
++    const dealId = parseInt(req.params.id, 10);
++    if (!dealId) return res.status(400).json({ ok: false, error: 'Неверный ID сделки' });
++    const detail = await getDealDetail(dealId);
++    res.json(detail);
++  } catch (e) {
++    console.error('GET /api/operational/deal error:', e.message);
++    res.status(500).json({ ok: false, error: 'Не удалось загрузить детали сделки: ' + e.message });
++  }
++});
++
++module.exports = { router };
+diff --git a/server.js b/server.js
+index 9003f01..4cf4109 100644
+--- a/server.js
++++ b/server.js
+@@ -72,6 +72,7 @@ app.get('/mail.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__di
+ app.get('/kp.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'kp.html')));
+ app.get('/bonus.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'bonus.html')));
+ app.get('/stats.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'stats.html')));
++app.get('/operational.html', requirePageAuth(['admin','coordinator']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'operational.html')));
+ app.get('/cup-admin.html', requirePageAuth(['admin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'cup-admin.html')));
+ // `index:false` — without this, static would auto-serve public/index.html
+ // for "/" and silently undo everything above.
+@@ -87,6 +88,7 @@ app.use('/api/mail', require('./routes/mail-routes').router);
+ app.use('/api/kp', require('./routes/kp-routes').router);
+ app.use('/api/bonus', require('./routes/bonus-routes').router);
+ app.use('/api/stats', require('./routes/stats-routes').router);
++app.use('/api/operational', require('./routes/operational-routes').router);
+ const { router: relationsRouter, handleBitrixWebhook } = require('./routes/relations-routes');
+ app.use('/relations', relationsRouter);
+ app.post('/webhook/bitrix-update', express.urlencoded({ extended: true }), handleBitrixWebhook);
