@@ -298,11 +298,52 @@ async function initDB() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
     ALTER TABLE ticketsmodule_ticket_emails ADD COLUMN IF NOT EXISTS references_header TEXT;
-    ALTER TABLE ticketsmodule_ticket_emails ADD COLUMN IF NOT EXISTS cc_address TEXT;
     CREATE INDEX IF NOT EXISTS idx_ticket_emails_ticket ON ticketsmodule_ticket_emails(ticket_id);
     CREATE INDEX IF NOT EXISTS idx_stat_deals_category ON ticketsmodule_stat_deals(category_id);
     CREATE INDEX IF NOT EXISTS idx_stat_deals_contract_date ON ticketsmodule_stat_deals(contract_date);
     CREATE INDEX IF NOT EXISTS idx_stat_deals_stage ON ticketsmodule_stat_deals(stage_id);
+
+    -- ── Операционный модуль «Реализация» ──────────────────────────────────────
+    -- Local cache of execution-phase deals (contract → завершена, all 4
+    -- pipelines). Kept fresh three ways: the ONCRMDEALADD/UPDATE webhook
+    -- (per-deal), a nightly full sync, and a manual "Обновить" button — so the
+    -- board loads instantly from Postgres instead of scanning Bitrix live.
+    CREATE TABLE IF NOT EXISTS ticketsmodule_operational_deals (
+      deal_id INTEGER PRIMARY KEY,
+      category_id INTEGER NOT NULL,
+      stage_id VARCHAR(60),
+      stage_semantic VARCHAR(4),          -- P (в работе) / S (успех) / F (провал)
+      opportunity NUMERIC(16,2),
+      currency_id VARCHAR(10),
+      assigned_by_id INTEGER,             -- менеджер сделки
+      department_id VARCHAR(60),
+      deal_title TEXT,
+      company_id INTEGER,
+      company_name TEXT,
+      contract_no TEXT,
+      contract_date DATE,
+      delivery_by_date DATE,              -- Срок поставки по договору
+      factory_ship_date DATE,             -- Срок поставки от завода
+      pay_factory TEXT,                   -- Условия оплаты поставщикам (label)
+      pay_client TEXT,                    -- Условия оплаты от клиента (label)
+      engineer_id INTEGER,
+      comment TEXT,
+      red_flag BOOLEAN DEFAULT false,
+      open_processes INTEGER DEFAULT 0,   -- дочерние смарт-процессы не в финале
+      overdue_tasks INTEGER DEFAULT 0,
+      total_tasks INTEGER DEFAULT 0,
+      date_modify TIMESTAMPTZ,
+      synced_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_op_deals_category ON ticketsmodule_operational_deals(category_id);
+    CREATE INDEX IF NOT EXISTS idx_op_deals_stage ON ticketsmodule_operational_deals(stage_id);
+
+    CREATE TABLE IF NOT EXISTS ticketsmodule_operational_meta (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      last_full_sync TIMESTAMPTZ,
+      deal_count INTEGER DEFAULT 0,
+      last_source VARCHAR(20)
+    );
 
     ALTER TABLE ticketsmodule_kp_items ALTER COLUMN item_no TYPE VARCHAR(500);
 

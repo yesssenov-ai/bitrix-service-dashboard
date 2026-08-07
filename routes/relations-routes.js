@@ -347,6 +347,12 @@ async function handleBitrixWebhook(req, res) {
         } catch (e) {
           console.error('stats-sync webhook error:', e.message);
         }
+        try {
+          const { syncOneDeal: syncOneOperationalDeal } = require('../operational-sync');
+          await syncOneOperationalDeal(dealId);
+        } catch (e) {
+          console.error('operational-sync webhook error:', e.message);
+        }
         return;
       }
     }

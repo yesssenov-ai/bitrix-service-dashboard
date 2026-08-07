@@ -38,6 +38,9 @@ body{font-family:var(--font-body);background:
 .userName b{color:var(--text);}
 .logout-btn{border:1px solid var(--line-2);background:transparent;color:var(--text-dim);font-family:var(--font-body);font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;cursor:pointer;transition:.15s;}
 .logout-btn:hover{border-color:var(--brand);color:var(--text);}
+.refresh-btn{border:1px solid var(--signal-dim);background:rgba(53,208,192,.08);color:var(--signal);font-family:var(--font-body);font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;cursor:pointer;transition:.15s;}
+.refresh-btn:hover{background:rgba(53,208,192,.16);}
+.refresh-btn:disabled{opacity:.55;cursor:default;}
 
 main{padding:20px 26px 60px;max-width:1560px;margin:0 auto;}
 .page-head{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;}
@@ -125,6 +128,7 @@ tr.detail-row td{background:#171b22;padding:0;border-bottom:1px solid var(--line
   </div>
   <div class="right">
     <span class="clock" id="clock">—</span>
+    <button class="refresh-btn" id="refreshBtn" onclick="refreshData()">🔄 Обновить</button>
     <span class="userName" id="userName"></span>
     <button class="logout-btn" onclick="logout()">Выйти</button>
   </div>
@@ -211,10 +215,31 @@ async function loadBoard(){
     renderChips(data.summary);
     populateOptions(data);
     renderRows(data.rows);
-    document.getElementById('asof').textContent='По состоянию на '+new Date(data.generatedAt).toLocaleString('ru-RU');
+    renderAsOf(data);
   }catch(e){
     document.getElementById('tbody').innerHTML=`<tr><td colspan="12" class="loading">Не удалось загрузить: ${esc(e.message)}</td></tr>`;
   }
+}
+
+function renderAsOf(d){
+  const el=document.getElementById('asof');
+  const ls=d.lastSync||{};
+  const src={boot:'старт сервера',nightly:'ночная сверка',manual:'вручную'}[ls.source]||ls.source||'';
+  const when=ls.lastFullSync?new Date(ls.lastFullSync).toLocaleString('ru-RU'):'ещё не синхронизировано';
+  el.textContent=`Кэш обновлён: ${when}${src?' · '+src:''} · сделок в базе: ${ls.dealCount??(d.rows?d.rows.length:0)}`;
+}
+
+async function refreshData(){
+  const btn=document.getElementById('refreshBtn');
+  const old=btn.textContent; btn.disabled=true; btn.textContent='⏳ Обновляю…';
+  try{
+    const r=await fetch('/api/operational/refresh?'+getFilters(),{method:'POST'});
+    if(r.status===401){location.href='/login.html';return;}
+    const data=await r.json();
+    if(!data.ok)throw new Error(data.error||'Ошибка');
+    BOARD=data;renderNotice(data);renderFunnel(data.funnel);renderChips(data.summary);populateOptions(data);renderRows(data.rows);renderAsOf(data);
+  }catch(e){ alert('Не удалось обновить: '+e.message); }
+  finally{ btn.disabled=false; btn.textContent=old; }
 }
 
 function renderNotice(d){
@@ -243,6 +268,8 @@ function renderChips(s){
     {key:null,label:'Все сделки',val:s.dealCount,dot:'var(--signal)'},
     {key:'red',label:'Красный флаг',val:s.redFlag||0,dot:'var(--brand)'},
     {key:'overdue',label:'Просрочена поставка',val:s.overdue,dot:'var(--danger)'},
+    {key:'overdue-task',label:'Просроч. задачи',val:s.overdueTask||0,dot:'#ff8a3d'},
+    {key:'open-proc',label:'Открытые процессы',val:s.openProc||0,dot:'#5ac8fa'},
     {key:'stale',label:`Завис > 14 дн`,val:s.stale,dot:'var(--warn)'},
     {key:'late-ship',label:'Отгрузка позже срока',val:s.lateShip,dot:'#c98bff'},
   ];
@@ -274,8 +301,10 @@ function populateOptions(d){
 function flagIcon(flags){
   if(flags.includes('red'))return '<span class="flag" title="Красный флаг">🚩</span>';
   if(flags.includes('overdue'))return '<span class="flag" title="Просрочена поставка">🔴</span>';
+  if(flags.includes('overdue-task'))return '<span class="flag" title="Просроченные задачи">⏰</span>';
   if(flags.includes('stale'))return '<span class="flag" title="Завис (нет движения)">🟠</span>';
   if(flags.includes('late-ship'))return '<span class="flag" title="Отгрузка позже срока">⚠️</span>';
+  if(flags.includes('open-proc'))return '<span class="flag" title="Открытые смарт-процессы">🔧</span>';
   return '';
 }
 
@@ -370,8 +399,7 @@ async function init(){
   if(d.ok&&d.pipelines){
     const pipe=document.getElementById('fPipeline');
     pipe.innerHTML='<option value="all">Все воронки</option>'+Object.entries(d.pipelines).map(([id,n])=>`<option value="${id}">${esc(n)}</option>`).join('');
-    BOARD=d;renderNotice(d);renderFunnel(d.funnel);renderChips(d.summary);populateOptions(d);renderRows(d.rows);
-    document.getElementById('asof').textContent='По состоянию на '+new Date(d.generatedAt).toLocaleString('ru-RU');
+    BOARD=d;renderNotice(d);renderFunnel(d.funnel);renderChips(d.summary);populateOptions(d);renderRows(d.rows);renderAsOf(d);
   }
 }
 init();

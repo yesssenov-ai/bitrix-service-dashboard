@@ -11,6 +11,7 @@
 // 4 sales pipelines (the execution phase, i.e. "after the contract is signed").
 // ─────────────────────────────────────────────────────────────────────────────
 const { b24 } = require('./bitrix');
+const { pool } = require('./auth');
 const { USERS } = require('./constants');
 const { SMART_TYPES, findChildrenOfDeal, resolveStageName, getStageSemantics } = require('./relations');
 
@@ -283,38 +284,113 @@ function buildFunnel(rows, stageMeta, categoryIds) {
   };
 }
 
-// ── Top-level: the whole board for the given filters ─────────────────────────
+// ── Map a cached DB row → board row (+ computed flags) ───────────────────────
+function dbRowToBoard(r, stageMeta) {
+  const categoryId = Number(r.category_id);
+  const semantic = r.stage_semantic || stageMeta[categoryId]?.byId?.[r.stage_id]?.semantics || 'P';
+  const stage = stageMeta[categoryId]?.byId?.[r.stage_id] || { name: r.stage_id, color: '#8a8886' };
+  const isDone = semantic === 'S';
+  const isLost = semantic === 'F';
+
+  const deliveryBy = r.delivery_by_date ? String(r.delivery_by_date).slice(0, 10) : null;
+  const factoryShip = r.factory_ship_date ? String(r.factory_ship_date).slice(0, 10) : null;
+  const diffDays = (deliveryBy && factoryShip) ? daysBetween(deliveryBy, factoryShip) : null;
+  const onTime = diffDays === null ? null : diffDays >= 0;
+  const stale = daysSince(r.date_modify);
+  const overdueDelivery = !!(deliveryBy && !isDone && !isLost && new Date(deliveryBy) < new Date());
+
+  const flags = [];
+  if (r.red_flag) flags.push('red');
+  if (overdueDelivery) flags.push('overdue');
+  if (!isDone && !isLost && stale !== null && stale >= STALE_DAYS) flags.push('stale');
+  if (onTime === false) flags.push('late-ship');
+  if ((r.open_processes || 0) > 0) flags.push('open-proc');
+  if ((r.overdue_tasks || 0) > 0) flags.push('overdue-task');
+
+  const managerId = r.assigned_by_id || null;
+  const engineerId = r.engineer_id || null;
+  return {
+    id: r.deal_id, categoryId, pipelineName: PIPELINES[categoryId]?.name || '—',
+    stageId: r.stage_id, stageName: stage.name, stageColor: stage.color, isDone, isLost,
+    company: r.company_name || '', companyId: r.company_id || null,
+    title: r.deal_title || '', contractNo: r.contract_no || '',
+    deliveryBy, factoryShip, diffDays, onTime,
+    managerId, manager: managerId ? (USERS[managerId] || `#${managerId}`) : '',
+    engineerId, engineer: engineerId ? (USERS[engineerId] || `#${engineerId}`) : '',
+    payFactory: r.pay_factory || '', payClient: r.pay_client || '', redFlag: !!r.red_flag,
+    comment: r.comment || '',
+    departmentId: r.department_id || null,
+    department: DEPARTMENT_LABELS[r.department_id] || (r.department_id || ''),
+    opportunity: parseFloat(r.opportunity) || 0, currency: r.currency_id || 'KZT',
+    dateModify: r.date_modify || null, daysStale: stale,
+    openProcesses: r.open_processes || 0, overdueTasks: r.overdue_tasks || 0, totalTasks: r.total_tasks || 0,
+    flags,
+    url: `https://crm.prolabsupport.kz/crm/deal/details/${r.deal_id}/`,
+  };
+}
+
+async function getSyncMeta() {
+  try {
+    const { rows } = await pool.query('SELECT last_full_sync, deal_count, last_source FROM ticketsmodule_operational_meta WHERE id=1');
+    if (!rows.length) return { lastFullSync: null, dealCount: 0, source: null };
+    return { lastFullSync: rows[0].last_full_sync, dealCount: rows[0].deal_count, source: rows[0].last_source };
+  } catch (e) { return { lastFullSync: null, dealCount: 0, source: null }; }
+}
+
+// ── Top-level: the whole board, read from the Postgres cache (instant) ───────
 async function getBoard(filters = {}) {
   const cats = (filters.categoryIds && filters.categoryIds.length)
     ? filters.categoryIds.map(Number)
     : Object.keys(PIPELINES).map(Number);
 
-  // Live stage metadata for each pipeline in view.
+  // Live stage metadata for each pipeline in view (cached, cheap).
   const stageMeta = {};
   for (const cat of cats) stageMeta[cat] = await getPipelineStages(cat);
 
-  const deals = await fetchDeals({ ...filters, categoryIds: cats });
-  const companyMap = await resolveCompanies(deals.map(d => d.COMPANY_ID));
-  const enumMaps = {};
-  for (const code of ENUM_FIELDS) enumMaps[code] = await buildEnumMap(code);
-  let rows = deals.map(d => buildRow(d, stageMeta, companyMap, enumMaps));
-
-  // Client-side "Заказчик" search (by company name) — kept here so the UI can
-  // pass a free-text query without needing a company id.
+  const where = ['category_id = ANY($1)'];
+  const params = [cats];
+  if (filters.stageId)      { params.push(filters.stageId);            where.push(`stage_id = $${params.length}`); }
+  if (filters.managerId)    { params.push(filters.managerId);          where.push(`assigned_by_id = $${params.length}`); }
+  if (filters.companyId)    { params.push(filters.companyId);          where.push(`company_id = $${params.length}`); }
+  if (filters.departmentId) { params.push(String(filters.departmentId)); where.push(`department_id = $${params.length}`); }
+  if (filters.year) {
+    const y = filters.year, m = filters.month;
+    if (m) {
+      const mm = String(m).padStart(2, '0');
+      const last = new Date(y, m, 0).getDate();
+      params.push(`${y}-${mm}-01`); const a = params.length;
+      params.push(`${y}-${mm}-${last}`); const b = params.length;
+      where.push(`contract_date BETWEEN $${a} AND $${b}`);
+    } else {
+      params.push(`${y}-01-01`); const a = params.length;
+      params.push(`${y}-12-31`); const b = params.length;
+      where.push(`contract_date BETWEEN $${a} AND $${b}`);
+    }
+  }
   if (filters.customerQuery && filters.customerQuery.trim()) {
-    const q = filters.customerQuery.trim().toLowerCase();
-    rows = rows.filter(r => (r.company || '').toLowerCase().includes(q) || (r.title || '').toLowerCase().includes(q));
+    params.push('%' + filters.customerQuery.trim().toLowerCase() + '%');
+    where.push(`(LOWER(company_name) LIKE $${params.length} OR LOWER(deal_title) LIKE $${params.length})`);
   }
 
+  let dbRows = [];
+  try {
+    const res = await pool.query(
+      `SELECT * FROM ticketsmodule_operational_deals WHERE ${where.join(' AND ')} ORDER BY date_modify DESC NULLS LAST`,
+      params
+    );
+    dbRows = res.rows;
+  } catch (e) {
+    console.error('getBoard DB read error:', e.message);
+  }
+
+  const rows = dbRows.map(r => dbRowToBoard(r, stageMeta));
   const funnel = buildFunnel(rows, stageMeta, cats);
 
-  // Filter option lists for the UI.
-  const managerSet = new Map(), deptSet = new Map(), companySet = new Map(), yearSet = new Set();
+  const managerSet = new Map(), deptSet = new Map(), companySet = new Map();
   rows.forEach(r => {
     if (r.managerId) managerSet.set(r.managerId, r.manager);
     if (r.departmentId) deptSet.set(String(r.departmentId), r.department);
     if (r.companyId) companySet.set(String(r.companyId), r.company);
-    // year taken from delivery / modify for the filter list
   });
 
   const summary = {
@@ -324,11 +400,14 @@ async function getBoard(filters = {}) {
     stale: rows.filter(r => r.flags.includes('stale')).length,
     lateShip: rows.filter(r => r.flags.includes('late-ship')).length,
     redFlag: rows.filter(r => r.redFlag).length,
+    openProc: rows.filter(r => r.flags.includes('open-proc')).length,
+    overdueTask: rows.filter(r => r.flags.includes('overdue-task')).length,
   };
 
   return {
     ok: true,
     generatedAt: new Date().toISOString(),
+    lastSync: await getSyncMeta(),
     filters: { categoryIds: cats },
     pipelines: Object.fromEntries(Object.entries(PIPELINES).map(([id, p]) => [id, p.name])),
     departments: DEPARTMENT_LABELS,
@@ -428,7 +507,8 @@ async function getDealComments(dealId, limit = 15) {
 }
 
 module.exports = {
-  F, PIPELINES, DEPARTMENT_LABELS,
+  F, PIPELINES, DEPARTMENT_LABELS, ENUM_FIELDS, STALE_DAYS,
   getBoard, getDealDetail, getChildProcesses, getDealTasks, getDealComments,
-  getPipelineStages, fetchDeals, buildRow,
+  getPipelineStages, fetchDeals, buildRow, buildEnumMap, resolveCompanies,
+  getSyncMeta, dbRowToBoard,
 };

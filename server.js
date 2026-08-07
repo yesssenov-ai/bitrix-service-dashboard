@@ -507,6 +507,21 @@ initDB().then(() => {
     // anything a missed webhook delivery would otherwise leave stale.
     const { fullSync: fullSyncStatsDeals } = require('./stats-sync');
     setInterval(() => fullSyncStatsDeals().catch(e => console.error('stats fullSync error:', e.message)), 24 * 60 * 60 * 1000);
+    // Операционный модуль «Реализация»: кэш сделок исполнительной фазы. Один
+    // полный прогон при старте (наполнить кэш после деплоя), затем ночная
+    // сверка в 01:00 по Кызылорде (UTC+5) = 20:00 UTC. Живые точечные апдейты
+    // приходят через вебхук ONCRMDEALADD/UPDATE (см. relations-routes).
+    const { fullSync: operationalFullSync } = require('./operational-sync');
+    setTimeout(() => operationalFullSync({ source: 'boot' }).catch(e => console.error('operational boot sync error:', e.message)), 20000);
+    let lastOpSyncDate = null;
+    setInterval(() => {
+      const now = new Date();
+      const dateKey = now.toISOString().slice(0, 10);
+      if (now.getUTCHours() === 20 && lastOpSyncDate !== dateKey) {
+        lastOpSyncDate = dateKey;
+        operationalFullSync({ source: 'nightly' }).catch(e => console.error('operational nightly sync error:', e.message));
+      }
+    }, 5 * 60 * 1000);
     // Planner ↔ Bitrix reconciliation — webhooks are best-effort, this catches
     // anything a missed/failed webhook delivery would otherwise leave stale.
     const { reconcileAllPlannerEvents } = require('./routes/relations-routes');

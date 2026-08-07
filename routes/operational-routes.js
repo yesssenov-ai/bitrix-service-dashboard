@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../auth');
 const { getBoard, getDealDetail } = require('../operational');
+const { refresh: refreshOperationalCache } = require('../operational-sync');
 
 // Same access level as Статистика — this is a management / meeting view.
 const OPS_ROLES = ['admin', 'coordinator'];
@@ -42,6 +43,20 @@ router.get('/deal/:id', requireAuth(OPS_ROLES), async (req, res) => {
   } catch (e) {
     console.error('GET /api/operational/deal error:', e.message);
     res.status(500).json({ ok: false, error: 'Не удалось загрузить детали сделки: ' + e.message });
+  }
+});
+
+// POST /api/operational/refresh — manual full re-pull (button on the page).
+// Deal-level rows are refreshed synchronously (fast); automation counts
+// recompute in the background, so the response returns promptly.
+router.post('/refresh', requireAuth(OPS_ROLES), async (req, res) => {
+  try {
+    const result = await refreshOperationalCache();
+    const board = await getBoard(parseFilters(req.query));
+    res.json({ ok: true, refreshed: result, ...board });
+  } catch (e) {
+    console.error('POST /api/operational/refresh error:', e.message);
+    res.status(500).json({ ok: false, error: 'Не удалось обновить данные: ' + e.message });
   }
 });
 
