@@ -257,6 +257,17 @@ async function getBizprocTasksByWorkflow() {
   } catch (e) { console.error('getBizprocTasksByWorkflow error:', e.message); if (!bpTaskCache) bpTaskCache = map; }
   return bpTaskCache;
 }
+// Friendly names for bizproc templates that aren't returned by
+// bizproc.workflow.template.list (deleted/hidden) — fill in as needed.
+const BP_TEMPLATE_OVERRIDES = {
+  // '85': 'Гарантия по контракту',   // ← 451 экз. на Регистрации контрактов (1036); впиши точное имя, если знаешь
+};
+function bpDocTypeLabel(documentId) {
+  if (/^DEAL_\d+$/.test(String(documentId))) return 'Сделка';
+  const yn = String(documentId).match(/^DYNAMIC_(\d+)_(\d+)$/);
+  if (yn) return SMART_TYPES[Number(yn[1])]?.name || `Тип ${yn[1]}`;
+  return 'документ';
+}
 // Build a clickable link to the CRM entity a bizproc runs on.
 function bpDocUrl(documentId) {
   const dm = String(documentId).match(/^DEAL_(\d+)$/);
@@ -276,11 +287,12 @@ async function getActiveBpDetailed(dealId, children, userMap) {
     const tasks = taskMap[String(w.ID)] || [];
     const assignees = [...new Set(tasks.flatMap(t => t.users || []))].map(id => resolveUser(id, userMap)).filter(Boolean);
     const taskName = tasks.map(t => t.name).filter(Boolean)[0];
-    const templateName = tpl[String(w.TEMPLATE_ID)];
+    const templateName = tpl[String(w.TEMPLATE_ID)] || BP_TEMPLATE_OVERRIDES[String(w.TEMPLATE_ID)];
     return {
       id: w.ID,
-      name: taskName || templateName || `Шаблон #${w.TEMPLATE_ID}`,
-      template: templateName || `#${w.TEMPLATE_ID}`,
+      name: taskName || templateName || `Автоматизация · ${bpDocTypeLabel(w.DOCUMENT_ID)}`,
+      template: templateName || `Шаблон #${w.TEMPLATE_ID}`,
+      waiting: tasks.length > 0,               // требует действия (есть задание)
       assignees, started: w.STARTED || null,
       url: bpDocUrl(w.DOCUMENT_ID), documentId: w.DOCUMENT_ID,
     };
@@ -732,5 +744,5 @@ module.exports = {
   getPipelineStages, fetchDeals, buildRow, buildEnumMap, resolveCompanies,
   getSyncMeta, dbRowToBoard,
   getClientPayMap, getBizprocTemplates, getActiveBizproc, matchActiveBp, getActiveBpDetailed,
-  invalidateDealDetail,
+  getBizprocTasksByWorkflow, invalidateDealDetail,
 };

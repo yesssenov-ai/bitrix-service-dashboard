@@ -17,6 +17,7 @@ const {
   F, PIPELINES, ENUM_FIELDS, PAY_SUPPLIER_LABELS,
   getPipelineStages, buildEnumMap, resolveCompanies, fetchDeals,
   getClientPayMap, getBizprocTemplates, getActiveBizproc, matchActiveBp, invalidateDealDetail,
+  getBizprocTasksByWorkflow,
 } = require('./operational');
 const { findChildrenOfDeal, resolveStageName } = require('./relations');
 
@@ -128,7 +129,13 @@ async function computeAutomation(dealId, bp) {
   } catch (e) { console.error(`computeAutomation tasks (deal ${dealId}):`, e.message); }
 
   if (bp && bp.instances) {
-    openBp = matchActiveBp(bp.instances, dealId, children, bp.tpl).length;
+    const matched = matchActiveBp(bp.instances, dealId, children, bp.tpl);
+    // Count only BPs that WAIT ON A HUMAN (have a pending bizproc task) — perpetual
+    // auto-BPs (e.g. template 85 on Регистрация контрактов, 451 always-active
+    // instances) don't require action and would otherwise flag almost every deal.
+    openBp = bp.taskMap
+      ? matched.filter(m => (bp.taskMap[String(m.id)] || []).length > 0).length
+      : matched.length;
   }
 
   return { open, overdue, total, openBp };
@@ -200,7 +207,7 @@ async function fullSync(opts = {}) {
     if (withAutomation) {
       // Prefetch bizproc templates + all active instances once, then match per deal.
       let bp = null;
-      try { bp = { tpl: await getBizprocTemplates(), instances: await getActiveBizproc(true) }; }
+      try { bp = { tpl: await getBizprocTemplates(), instances: await getActiveBizproc(true), taskMap: await getBizprocTasksByWorkflow() }; }
       catch (e) { console.error('bizproc prefetch:', e.message); }
       for (const id of seen) {
         try { await updateAutomation(id, await computeAutomation(id, bp)); } catch (e) { /* best-effort */ }
@@ -228,7 +235,7 @@ async function fullSync(opts = {}) {
 async function runAutomationSweep() {
   const { rows } = await pool.query('SELECT deal_id FROM ticketsmodule_operational_deals');
   let bp = null;
-  try { bp = { tpl: await getBizprocTemplates(), instances: await getActiveBizproc(true) }; }
+  try { bp = { tpl: await getBizprocTemplates(), instances: await getActiveBizproc(true), taskMap: await getBizprocTasksByWorkflow() }; }
   catch (e) { console.error('bizproc prefetch:', e.message); }
   for (const { deal_id } of rows) {
     try { await updateAutomation(deal_id, await computeAutomation(deal_id, bp)); } catch (e) { /* best-effort */ }
