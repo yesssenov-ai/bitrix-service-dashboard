@@ -169,37 +169,19 @@ const PAY_SUPPLIER_LABELS = {
   '3585': '100% оплата', '3586': 'Частичная предоплата',
   '3587': 'Постоплата с отсрочкой', '3588': 'Нулевая стоимость',
 };
-// Client side (UF_CRM_1731864478) is an iblock_element whose values live in a
-// Bitrix universal list (IBLOCK_ID=21). crm.deal.fields doesn't expose them, so
-// resolve via lists.* (needs the «lists» webhook scope). Cached 6h.
-let clientPayCache = null, clientPayAt = 0;
-async function getClientPayMap() {
-  if (clientPayCache && Date.now() - clientPayAt < 6 * 60 * 60 * 1000) return clientPayCache;
-  const map = {};
-  try {
-    let typeId = null;
-    for (const t of ['lists', 'bitrix_processes']) {
-      try {
-        const r = await b24('lists.get', { IBLOCK_TYPE_ID: t });
-        if ((r.result || []).some(l => String(l.IBLOCK_ID) === '21')) { typeId = t; break; }
-      } catch (e) { /* try next type */ }
-    }
-    if (typeId) {
-      let start = 0;
-      for (let i = 0; i < 20; i++) {
-        const r = await b24('lists.element.get', { IBLOCK_TYPE_ID: typeId, IBLOCK_ID: 21, start });
-        (r.result || []).forEach(e => { map[String(e.ID)] = e.NAME; });
-        if (r.next === undefined || r.next === null) break;
-        start = r.next;
-      }
-    }
-    clientPayCache = map; clientPayAt = Date.now();
-  } catch (e) {
-    console.error('getClientPayMap error:', e.message);
-    if (!clientPayCache) clientPayCache = map;
-  }
-  return clientPayCache;
-}
+// Client side (UF_CRM_1731864478) is an iblock_element in IBLOCK_ID=21 — a plain
+// infoblock, NOT a lists-module list, so it can't be read via REST (confirmed
+// with probe-scan.js: lists.get doesn't see iblock 21). Only 4 element ids are
+// ever used (83/84/85/86), so hard-map them here.
+// ⚠️ ПРОВЕРЬ названия по примерам сделок и поправь строки при необходимости:
+//    85 → #105227, 83 → #106941, 84 → #97024, 86 → #107178
+const CLIENT_PAY_LABELS = {
+  '85': 'Постоплата с отсрочкой',   // 246 сделок
+  '83': 'Частичная предоплата',     // 137 сделок
+  '84': '100% оплата',              // 63 сделки
+  '86': 'Нулевая стоимость',        // 7 сделок
+};
+async function getClientPayMap() { return CLIENT_PAY_LABELS; }
 
 // ── Bizproc automations (only ACTIVE/running instances are exposed by REST) ───
 let bpTplCache = null, bpTplAt = 0;
@@ -718,7 +700,7 @@ async function getDealComments(dealId, limit = 15, userMap = {}) {
 }
 
 module.exports = {
-  F, PIPELINES, DEPARTMENT_LABELS, ENUM_FIELDS, STALE_DAYS, PAY_SUPPLIER_LABELS,
+  F, PIPELINES, DEPARTMENT_LABELS, ENUM_FIELDS, STALE_DAYS, PAY_SUPPLIER_LABELS, CLIENT_PAY_LABELS,
   getBoard, getDealDetail, getChildProcesses, getDealTasks, getDealComments,
   getPipelineStages, fetchDeals, buildRow, buildEnumMap, resolveCompanies,
   getSyncMeta, dbRowToBoard,
