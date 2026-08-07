@@ -288,12 +288,17 @@ async function getActiveBpDetailed(dealId, children, userMap) {
     const assignees = [...new Set(tasks.flatMap(t => t.users || []))].map(id => resolveUser(id, userMap)).filter(Boolean);
     const taskName = tasks.map(t => t.name).filter(Boolean)[0];
     const templateName = tpl[String(w.TEMPLATE_ID)] || BP_TEMPLATE_OVERRIDES[String(w.TEMPLATE_ID)];
+    // Current waiting step(s) — the mini-journal line «шаг → Выполняется → ждёт X».
+    const steps = tasks.map(t => ({
+      name: t.name || templateName || 'Шаг БП',
+      waitsFor: (t.users || []).map(id => resolveUser(id, userMap)).filter(Boolean),
+    }));
     return {
       id: w.ID,
       name: taskName || templateName || `Автоматизация · ${bpDocTypeLabel(w.DOCUMENT_ID)}`,
       template: templateName || `Шаблон #${w.TEMPLATE_ID}`,
       waiting: tasks.length > 0,               // требует действия (есть задание)
-      assignees, started: w.STARTED || null,
+      steps, assignees, started: w.STARTED || null,
       url: bpDocUrl(w.DOCUMENT_ID), documentId: w.DOCUMENT_ID,
     };
   });

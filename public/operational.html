@@ -110,6 +110,7 @@ tr.detail-row td{background:#171b22;padding:0;border-bottom:1px solid var(--line
 .proc .ladder{color:var(--text-faint);font-family:var(--font-mono);font-size:11px;margin-right:-2px;}
 .proc .svc-badge{font-size:10.5px;font-weight:600;color:var(--signal);background:rgba(53,208,192,.1);border:1px solid var(--signal-dim);border-radius:5px;padding:1px 7px;white-space:nowrap;}
 .proc .presp{font-size:11px;color:var(--text-dim);white-space:nowrap;}
+.proc .bp-arrow{font-size:10.5px;color:var(--text-faint);white-space:nowrap;font-family:var(--font-mono);}
 .task{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12.5px;border-bottom:1px dashed var(--line);}
 .task:last-child{border-bottom:none;}
 .task .tt{flex:1;}
@@ -400,11 +401,22 @@ function renderDetail(d){
       <span class="tmeta">${esc(t.responsible)}${t.deadline?' · '+fmtDate(t.deadline):''}</span></div>`).join(''):'<div class="empty">Нет задач</div>';
   const cmts=d.comments.length?d.comments.map(c=>`
     <div class="cmt"><div class="cmeta">${fmtDate(c.date)} · ${esc(c.author)}</div>${esc(c.text)}</div>`).join(''):'<div class="empty">Нет комментариев</div>';
-  const autos=(d.automations||[]).length?d.automations.map(a=>`
-    <div class="proc"><span class="pdot" style="background:var(--warn)"></span>
-      ${a.url?`<a class="ptype deal-link" href="${a.url}" target="_blank" title="Шаблон: ${esc(a.template)}">${esc(a.name)}</a>`:`<span class="ptype" title="Шаблон: ${esc(a.template)}">${esc(a.name)}</span>`}
-      ${a.assignees&&a.assignees.length?`<span class="presp">👤 ${esc(a.assignees.join(', '))}</span>`:'<span class="pstage">авто</span>'}
-      ${a.started?`<span class="pstage">${fmtDate(a.started)}</span>`:''}</div>`).join(''):'<div class="empty">Нет активных БП</div>';
+  const autos=(d.automations||[]).length?d.automations.map(a=>{
+    const href=a.url||'';
+    if(a.steps&&a.steps.length){
+      // Мини-журнал: «<шаг> → Выполняется → ждёт <ФИО>»
+      return a.steps.map(s=>`
+        <div class="proc"><span class="pdot" style="background:var(--warn)"></span>
+          ${href?`<a class="ptype deal-link" href="${href}" target="_blank" title="Шаблон: ${esc(a.template)}">${esc(s.name)}</a>`:`<span class="ptype">${esc(s.name)}</span>`}
+          <span class="bp-arrow">→ Выполняется →</span>
+          <span class="presp">${s.waitsFor&&s.waitsFor.length?'👤 ждёт '+esc(s.waitsFor.join(', ')):'—'}</span>
+        </div>`).join('');
+    }
+    return `<div class="proc"><span class="pdot" style="background:var(--warn)"></span>
+      ${href?`<a class="ptype deal-link" href="${href}" target="_blank" title="Шаблон: ${esc(a.template)}">${esc(a.name)}</a>`:`<span class="ptype">${esc(a.name)}</span>`}
+      <span class="bp-arrow">→ Выполняется</span>
+      <span class="pstage">авто</span></div>`;
+  }).join(''):'<div class="empty">Нет активных БП</div>';
   const bar=`<div class="detail-bar">
     <span class="detail-sync">${d.cached?'из кэша':'обновлено'}${d.syncedAt?' · '+fmtDateTime(d.syncedAt):''}</span>
     <button class="reset-btn" onclick="refreshDetail(${d.dealId},this)" title="Подтянуть свежие данные из Битрикса">↻ Обновить</button>
