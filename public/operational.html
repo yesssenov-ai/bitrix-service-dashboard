@@ -43,6 +43,12 @@ body{font-family:var(--font-body);background:
 .refresh-btn:disabled{opacity:.55;cursor:default;}
 .reset-btn{border:1px solid var(--line-2);background:transparent;color:var(--text-dim);font-family:var(--font-body);font-size:11.5px;font-weight:600;padding:5px 11px;border-radius:8px;cursor:pointer;transition:.15s;white-space:nowrap;}
 .reset-btn:hover{border-color:var(--signal);color:var(--text);}
+.export-wrap{position:relative;display:inline-block;}
+.export-menu{display:none;position:absolute;right:0;top:calc(100% + 6px);background:var(--panel);border:1px solid var(--line-2);border-radius:10px;padding:6px;min-width:210px;z-index:20;box-shadow:0 10px 30px rgba(0,0,0,.4);}
+.export-menu.open{display:block;}
+.export-menu a{display:block;padding:8px 10px;border-radius:7px;color:var(--text);text-decoration:none;font-size:12.5px;}
+.export-menu a:hover{background:var(--panel-h);color:var(--signal);}
+.export-grp{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-faint);padding:8px 10px 4px;font-weight:600;}
 
 main{padding:20px 26px 60px;max-width:1560px;margin:0 auto;}
 .page-head{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;}
@@ -163,6 +169,17 @@ tr.detail-row td{background:#171b22;padding:0;border-bottom:1px solid var(--line
     <div style="display:flex;align-items:center;gap:12px;">
       <span class="asof" id="asof"></span>
       <button class="reset-btn" id="resetBtn" onclick="resetFilters()" title="Сбросить все фильтры">↺ Сброс</button>
+      <div class="export-wrap">
+        <button class="reset-btn" id="exportBtn" onclick="toggleExportMenu(event)" title="Экспорт отфильтрованных данных">⬇ Экспорт</button>
+        <div class="export-menu" id="exportMenu">
+          <div class="export-grp">PDF · как дашборд</div>
+          <a href="#" onclick="return doExport('pdf','simple')">Простой (таблица)</a>
+          <a href="#" onclick="return doExport('pdf','detailed')">Детальный (со сделками)</a>
+          <div class="export-grp">Excel · данные</div>
+          <a href="#" onclick="return doExport('xlsx','simple')">Простой (таблица)</a>
+          <a href="#" onclick="return doExport('xlsx','detailed')">Детальный (листы)</a>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -254,6 +271,19 @@ function renderAsOf(d){
   const src={boot:'старт сервера',nightly:'ночная сверка',manual:'вручную'}[ls.source]||ls.source||'';
   const when=ls.lastFullSync?new Date(ls.lastFullSync).toLocaleString('ru-RU'):'ещё не синхронизировано';
   el.textContent=`Кэш обновлён: ${when}${src?' · '+src:''} · сделок в базе: ${ls.dealCount??(d.rows?d.rows.length:0)}`;
+}
+
+function toggleExportMenu(e){ if(e)e.stopPropagation(); document.getElementById('exportMenu').classList.toggle('open'); }
+document.addEventListener('click',e=>{ const w=document.querySelector('.export-wrap'); if(w&&!w.contains(e.target)) document.getElementById('exportMenu').classList.remove('open'); });
+function doExport(format,type){
+  document.getElementById('exportMenu').classList.remove('open');
+  const q=getFilters();
+  let url='/api/operational/export?format='+format+'&type='+type+(q?'&'+q:'');
+  if(activeFlag) url+='&flag='+encodeURIComponent(activeFlag);
+  const btn=document.getElementById('exportBtn'); const old=btn.textContent; btn.textContent='⏳ Готовлю…'; btn.disabled=true;
+  const a=document.createElement('a'); a.href=url; a.download=''; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>{ btn.textContent=old; btn.disabled=false; }, 4000);
+  return false;
 }
 
 function resetFilters(){

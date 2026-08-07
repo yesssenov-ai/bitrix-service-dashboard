@@ -4,6 +4,7 @@ const { b24 } = require('../bitrix');
 const { requireAuth, auditLog } = require('../auth');
 const { getBoard, getDealDetail, getEditMeta, invalidateDealDetail, F } = require('../operational');
 const { refresh: refreshOperationalCache, syncOneDeal } = require('../operational-sync');
+const { buildPdf, buildXlsx } = require('../operational-export');
 
 // Same access level as Статистика — this is a management / meeting view.
 const OPS_ROLES = ['admin', 'coordinator'];
@@ -73,6 +74,46 @@ router.post('/refresh', requireAuth(OPS_ROLES), async (req, res) => {
   } catch (e) {
     console.error('POST /api/operational/refresh error:', e.message);
     res.status(500).json({ ok: false, error: 'Не удалось обновить данные: ' + e.message });
+  }
+});
+
+// ── Export (PDF / XLSX, simple / detailed) — respects current filters ────────
+function buildFilterText(q, board) {
+  const parts = [];
+  if (q.categories) parts.push('Воронка: ' + String(q.categories).split(',').map(c => (board.pipelines && board.pipelines[c]) || c).join(', '));
+  if (q.stage && q.stage !== 'all') parts.push('Стадия: ' + q.stage);
+  if (q.department && q.department !== 'all') parts.push('Отдел: ' + ((board.departments && board.departments[q.department]) || q.department));
+  if (q.manager && q.manager !== 'all') { const m = (board.options && board.options.managers || []).find(x => String(x.id) === String(q.manager)); parts.push('Менеджер: ' + (m ? m.name : q.manager)); }
+  if (q.customer) parts.push('Заказчик: ' + q.customer);
+  if (q.year && q.year !== 'all') parts.push('Период: ' + q.year + (q.month && q.month !== 'all' ? '/' + q.month : ''));
+  if (q.flag) parts.push('Признак: ' + q.flag);
+  return parts.join('   ·   ');
+}
+
+router.get('/export', requireAuth(OPS_ROLES), async (req, res) => {
+  try {
+    const format = req.query.format === 'xlsx' ? 'xlsx' : 'pdf';
+    const type = req.query.type === 'detailed' ? 'detailed' : 'simple';
+    const board = await getBoard(parseFilters(req.query));
+    let rows = board.rows || [];
+    if (req.query.flag) rows = rows.filter(r => (r.flags || []).includes(req.query.flag));
+
+    const meta = { date: new Date().toLocaleString('ru-RU'), filterText: buildFilterText(req.query, board), detailsMap: {} };
+    if (type === 'detailed') {
+      for (const r of rows.slice(0, 300)) { try { meta.detailsMap[r.id] = await getDealDetail(r.id, false); } catch (e) { /* skip one */ } }
+    }
+
+    let buf, ct, ext;
+    if (format === 'xlsx') { buf = buildXlsx({ board, rows, type, meta }); ct = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'; ext = 'xlsx'; }
+    else { buf = await buildPdf({ board, rows, type, meta }); ct = 'application/pdf'; ext = 'pdf'; }
+
+    const fname = `Реализация_${type === 'detailed' ? 'детальный' : 'простой'}_${new Date().toISOString().slice(0, 10)}.${ext}`;
+    res.setHeader('Content-Type', ct);
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fname)}`);
+    res.send(buf);
+  } catch (e) {
+    console.error('GET /api/operational/export error:', e.message);
+    res.status(500).json({ ok: false, error: 'Не удалось сформировать экспорт: ' + e.message });
   }
 });
 
