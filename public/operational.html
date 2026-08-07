@@ -308,7 +308,9 @@ async function refreshData(){
 
 function renderNotice(d){
   const missing=Object.entries(d.fieldsReady||{}).filter(([k,v])=>!v).map(([k])=>k);
-  const map={contractNo:'№ договора',deliveryByDate:'Поставка по договору',factoryShip:'Отгрузка от завода',payTermsFactory:'Оплата (завод)',payTermsClient:'Оплата (клиент)',engineerId:'Инженер',comment:'Коммент.'};
+  // Отгрузка/оплаты/инженер тянутся из смартов (Закупки/Заявка на сервис), а не
+  // с полей сделки — их в этой проверке не учитываем.
+  const map={contractNo:'№ договора',deliveryByDate:'Поставка по договору',comment:'Коммент.'};
   const rel=missing.filter(m=>map[m]);
   document.getElementById('fieldsNotice').innerHTML = rel.length
     ? `<div class="notice">Колонки пока пустые — не заданы коды полей Bitrix: ${rel.map(m=>esc(map[m])).join(', ')}. Запусти <b>discover-deal-fields.js</b> и пришли вывод, чтобы я их подключил.</div>` : '';
