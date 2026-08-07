@@ -743,8 +743,26 @@ async function getDealComments(dealId, limit = 15, userMap = {}) {
   }
 }
 
+// ── Edit metadata for the admin panel (all stages per pipeline + user list) ──
+async function getAllStages(categoryId) {
+  const meta = await getPipelineStages(categoryId);
+  return Object.values(meta.byId || {})
+    .sort((a, b) => a.sort - b.sort)
+    .map(s => ({ id: s.id, name: s.name, color: s.color, semantics: s.semantics }));
+}
+async function getEditMeta() {
+  const userMap = await getUserMap();
+  const users = Object.entries(userMap)
+    .map(([id, name]) => ({ id: Number(id), name }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  const stages = {};
+  for (const cat of Object.keys(PIPELINES).map(Number)) stages[cat] = await getAllStages(cat);
+  return { users, stages };
+}
+
 module.exports = {
   F, PIPELINES, DEPARTMENT_LABELS, ENUM_FIELDS, STALE_DAYS, PAY_SUPPLIER_LABELS, CLIENT_PAY_LABELS,
+  getEditMeta, getAllStages,
   getBoard, getDealDetail, getChildProcesses, getDealTasks, getDealComments,
   getPipelineStages, fetchDeals, buildRow, buildEnumMap, resolveCompanies,
   getSyncMeta, dbRowToBoard,

@@ -99,6 +99,19 @@ a.deal-link:hover{text-decoration:underline;}
 tr.detail-row td{background:#171b22;padding:0;border-bottom:1px solid var(--line);}
 .detail-bar{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:10px 18px 0;}
 .detail-sync{font-size:11px;color:var(--text-faint);font-family:var(--font-mono);}
+.admin-panel{margin:10px 18px 0;padding:12px 14px;background:#171b22;border:1px solid var(--line-2);border-radius:10px;}
+.admin-panel h4{font-family:var(--font-display);font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--warn);margin-bottom:10px;}
+.apw{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;}
+.apf.apf-wide{grid-column:1 / -1;}
+.apf label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-faint);margin-bottom:4px;font-weight:600;}
+.apr{display:flex;gap:6px;}
+.apr.apr-task{flex-wrap:wrap;}
+.apr select,.apr input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line-2);color:var(--text);font-family:var(--font-body);font-size:12.5px;padding:7px 9px;border-radius:7px;outline:none;}
+.apr select:focus,.apr input:focus{border-color:var(--signal);}
+.apr input[type=date]{flex:0 0 150px;}
+.ap-btn{flex:0 0 auto;border:1px solid var(--signal-dim);background:rgba(53,208,192,.1);color:var(--signal);font-family:var(--font-body);font-size:12px;font-weight:600;padding:7px 12px;border-radius:7px;cursor:pointer;white-space:nowrap;transition:.15s;}
+.ap-btn:hover{background:rgba(53,208,192,.2);}
+.ap-btn:disabled{opacity:.55;cursor:default;}
 .detail-inner{padding:14px 18px 16px;display:grid;grid-template-columns:1.1fr 1fr 1.2fr;gap:20px;}
 @media(max-width:1000px){.detail-inner{grid-template-columns:1fr;}}
 .detail-inner h4{font-family:var(--font-display);font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-dim);margin-bottom:10px;}
@@ -372,6 +385,49 @@ async function toggleDetail(tr,id){
   }
 }
 
+// ── Admin edit panel (only for role=admin) ──────────────────────────────────
+function adminPanel(d){
+  if(!window.IS_ADMIN||!window.EDIT_META) return '';
+  const row=(BOARD&&BOARD.rows||[]).find(r=>String(r.id)===String(d.dealId));
+  const cat=row?row.categoryId:null;
+  const stages=(window.EDIT_META.stages&&cat!=null)?(window.EDIT_META.stages[cat]||[]):[];
+  const users=window.EDIT_META.users||[];
+  const stageOpts=stages.map(s=>`<option value="${esc(s.id)}" ${row&&row.stageId===s.id?'selected':''}>${esc(s.name)}</option>`).join('');
+  const respOpts=users.map(u=>`<option value="${u.id}" ${row&&row.managerId===u.id?'selected':''}>${esc(u.name)}</option>`).join('');
+  const taskRespOpts=users.map(u=>`<option value="${u.id}">${esc(u.name)}</option>`).join('');
+  return `<div class="admin-panel">
+    <h4>Управление · только админ</h4>
+    <div class="apw">
+      <div class="apf"><label>Стадия</label><div class="apr"><select id="edStage-${d.dealId}">${stageOpts}</select><button class="ap-btn" onclick="editStage(${d.dealId},this)">Сменить</button></div></div>
+      <div class="apf"><label>Ответственный</label><div class="apr"><select id="edResp-${d.dealId}">${respOpts}</select><button class="ap-btn" onclick="editResp(${d.dealId},this)">Назначить</button></div></div>
+      <div class="apf apf-wide"><label>Комментарий</label><div class="apr"><input id="edCmt-${d.dealId}" type="text" placeholder="текст комментария…"><button class="ap-btn" onclick="editComment(${d.dealId},this)">Добавить</button></div></div>
+      <div class="apf apf-wide"><label>Новая задача</label><div class="apr apr-task">
+        <input id="edTaskTitle-${d.dealId}" type="text" placeholder="название задачи…">
+        <select id="edTaskResp-${d.dealId}">${taskRespOpts}</select>
+        <input id="edTaskDl-${d.dealId}" type="date" title="дедлайн">
+        <button class="ap-btn" onclick="editTask(${d.dealId},this)">Поставить</button>
+      </div></div>
+    </div>
+  </div>`;
+}
+async function apiPost(url,body){
+  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
+  if(r.status===401){location.href='/login.html';return null;}
+  const d=await r.json(); if(!d.ok) throw new Error(d.error||'Ошибка'); return d;
+}
+function withBtn(btn,fn){ const old=btn.textContent; btn.disabled=true; btn.textContent='⏳'; return fn().catch(e=>alert(e.message)).finally(()=>{btn.disabled=false;btn.textContent=old;}); }
+function editStage(id,btn){ return withBtn(btn,async()=>{ const v=document.getElementById('edStage-'+id).value; await apiPost('/api/operational/deal/'+id+'/stage',{stageId:v}); await loadBoard(); }); }
+function editResp(id,btn){ return withBtn(btn,async()=>{ const v=document.getElementById('edResp-'+id).value; await apiPost('/api/operational/deal/'+id+'/responsible',{userId:v}); await loadBoard(); }); }
+function editComment(id,btn){ return withBtn(btn,async()=>{ const el=document.getElementById('edCmt-'+id); const t=el.value.trim(); if(!t)return; await apiPost('/api/operational/deal/'+id+'/comment',{text:t}); el.value=''; await refreshDetailInline(id); }); }
+function editTask(id,btn){ return withBtn(btn,async()=>{ const title=document.getElementById('edTaskTitle-'+id).value.trim(); if(!title){alert('Укажите название задачи');return;} const responsibleId=document.getElementById('edTaskResp-'+id).value; const deadline=document.getElementById('edTaskDl-'+id).value; await apiPost('/api/operational/deal/'+id+'/task',{title,responsibleId,deadline}); document.getElementById('edTaskTitle-'+id).value=''; await refreshDetailInline(id); }); }
+async function refreshDetailInline(id){
+  const r=await fetch('/api/operational/deal/'+id+'/refresh',{method:'POST'});
+  if(r.status===401){location.href='/login.html';return;}
+  const d=await r.json();
+  const tr=document.querySelector('tr.deal-row[data-id="'+id+'"]');
+  if(tr&&tr.nextElementSibling&&tr.nextElementSibling.classList.contains('detail-row')) tr.nextElementSibling.querySelector('td').innerHTML=renderDetail(d);
+}
+
 async function refreshDetail(dealId,btn){
   const old=btn.textContent; btn.disabled=true; btn.textContent='⏳ Обновляю…';
   try{
@@ -421,7 +477,7 @@ function renderDetail(d){
     <span class="detail-sync">${d.cached?'из кэша':'обновлено'}${d.syncedAt?' · '+fmtDateTime(d.syncedAt):''}</span>
     <button class="reset-btn" onclick="refreshDetail(${d.dealId},this)" title="Подтянуть свежие данные из Битрикса">↻ Обновить</button>
   </div>`;
-  return `${bar}<div class="detail-inner">
+  return `${bar}${adminPanel(d)}<div class="detail-inner">
     <div><h4>Смарт-процессы</h4>${procs}
       <h4 style="margin-top:16px">Автоматизации · активные БП</h4>${autos}</div>
     <div><h4>Задачи</h4>${tasks}</div>
@@ -448,6 +504,10 @@ async function init(){
     if(!r.ok){location.href='/login.html';return;}
     const {user}=await r.json();
     document.getElementById('userName').innerHTML=`<b>${esc(user.displayName)}</b>`;
+    window.IS_ADMIN = user.role==='admin';
+    if(window.IS_ADMIN){
+      try{ const mr=await fetch('/api/operational/meta'); if(mr.ok){ const md=await mr.json(); if(md.ok) window.EDIT_META=md; } }catch(e){/* edit UI just won't show */}
+    }
   }catch(e){location.href='/login.html';return;}
   initFilters();
   // Fill pipeline options after first board load supplies names
