@@ -469,26 +469,31 @@ async function getDealDetail(dealId) {
     getDealTasks(dealId, userMap),
     getDealComments(dealId, 15, userMap),
   ]);
-  const processes = tree ? flattenProcessTree(tree.children || [], 0) : [];
+  const processes = tree ? flattenProcessTree(tree.children || [], 0, userMap) : [];
   return { ok: true, dealId, processes, tasks, comments };
 }
 
 // Flatten the buildTree hierarchy into a depth-tagged list so the UI can render
 // the ladder (Запланированные работы → Заявка на сервис, Закупки → Логистика …).
-function flattenProcessTree(nodes, depth) {
+// serviceBadge distinguishes the two deal-level «Заявка на сервис» items
+// (Подготовка документов vs Подбор допов); responsible shows who's assigned.
+function flattenProcessTree(nodes, depth, userMap = {}) {
   const out = [];
   for (const n of nodes) {
     const sem = n.stageSemantics || 'P';
+    const respId = n.assignedById ? parseInt(n.assignedById, 10) : null;
     out.push({
       entityTypeId: n.entityTypeId,
       entityName: n.entityName || SMART_TYPES[n.entityTypeId]?.name || `Тип ${n.entityTypeId}`,
       id: n.id, title: n.title || `#${n.id}`,
       stageName: n.stageName || n.stageId, semantics: sem,
       done: sem === 'S', failed: sem === 'F',
+      serviceBadge: Array.isArray(n.serviceBadge) ? n.serviceBadge : (n.serviceBadge ? [n.serviceBadge] : null),
+      responsibleId: respId, responsible: respId ? resolveUser(respId, userMap) : '',
       url: n.url || `https://crm.prolabsupport.kz/crm/type/${n.entityTypeId}/details/${n.id}/`,
       depth,
     });
-    if (n.children && n.children.length) out.push(...flattenProcessTree(n.children, depth + 1));
+    if (n.children && n.children.length) out.push(...flattenProcessTree(n.children, depth + 1, userMap));
   }
   return out;
 }

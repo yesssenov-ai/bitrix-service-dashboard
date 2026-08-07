@@ -104,6 +104,8 @@ tr.detail-row td{background:#171b22;padding:0;border-bottom:1px solid var(--line
 .proc .ptype{color:var(--text-dim);min-width:120px;}
 .proc .pstage{margin-left:auto;font-size:11px;color:var(--text-faint);}
 .proc .ladder{color:var(--text-faint);font-family:var(--font-mono);font-size:11px;margin-right:-2px;}
+.proc .svc-badge{font-size:10.5px;font-weight:600;color:var(--signal);background:rgba(53,208,192,.1);border:1px solid var(--signal-dim);border-radius:5px;padding:1px 7px;white-space:nowrap;}
+.proc .presp{font-size:11px;color:var(--text-dim);white-space:nowrap;}
 .task{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12.5px;border-bottom:1px dashed var(--line);}
 .task:last-child{border-bottom:none;}
 .task .tt{flex:1;}
@@ -360,7 +362,9 @@ function renderDetail(d){
       ${(c.depth||0)>0?'<span class="ladder">└─</span>':''}
       <span class="pdot" style="background:${sem(c.semantics)}"></span>
       <span class="ptype">${esc(c.entityName)}</span>
+      ${(c.serviceBadge||[]).map(b=>`<span class="svc-badge">${esc(b)}</span>`).join('')}
       <a class="deal-link" href="${c.url}" target="_blank">#${esc(c.id)}</a>
+      ${c.responsible?`<span class="presp">👤 ${esc(c.responsible)}</span>`:''}
       <span class="pstage">${esc(c.stageName)}</span></div>`).join(''):'<div class="empty">Нет связанных процессов</div>';
   const tasks=d.tasks.length?d.tasks.map(t=>`
     <div class="task ${t.overdue?'overdue':''}"><span class="pdot" style="background:${t.done?'var(--ok)':t.overdue?'var(--danger)':'var(--warn)'}"></span>

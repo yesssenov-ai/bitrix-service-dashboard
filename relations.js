@@ -196,6 +196,7 @@ async function buildTree(rootType, rootId, depth = 0, maxDepth = 6, visited = ne
       stageSemantics: stageInfo.semantics,
       categoryId: item.categoryId,
       serviceBadge,
+      assignedById: item.assignedById || null,
       url: `https://crm.prolabsupport.kz/crm/type/${rootType}/details/${rootId}/`,
       children: [],
     };
