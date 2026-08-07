@@ -426,7 +426,7 @@ function adminPanel(d){
   const users=window.EDIT_META.users||[];
   const stageOpts=stages.map(s=>`<option value="${esc(s.id)}" ${row&&row.stageId===s.id?'selected':''}>${esc(s.name)}</option>`).join('');
   const respOpts=users.map(u=>`<option value="${u.id}" ${row&&row.managerId===u.id?'selected':''}>${esc(u.name)}</option>`).join('');
-  const taskRespOpts=users.map(u=>`<option value="${u.id}">${esc(u.name)}</option>`).join('');
+  const taskRespOpts=users.map(u=>`<option value="${u.id}" ${row&&row.managerId===u.id?'selected':''}>${esc(u.name)}</option>`).join('');
   return `<div class="admin-panel" id="adminPanel-${d.dealId}" style="display:none">
     <div class="apw">
       <div class="apf"><label>Стадия</label><div class="apr"><select id="edStage-${d.dealId}">${stageOpts}</select><button class="ap-btn" onclick="editStage(${d.dealId},this)">Сменить</button></div></div>
@@ -503,7 +503,7 @@ function renderDetail(d){
       <span class="tt">${esc(t.title)}</span>
       <span class="tmeta">${esc(t.responsible)}${t.deadline?' · '+fmtDate(t.deadline):''}</span></div>`).join(''):'<div class="empty">Нет задач</div>';
   const cmts=d.comments.length?d.comments.map(c=>`
-    <div class="cmt"><div class="cmeta">${fmtDate(c.date)} · ${esc(c.author)}</div>${esc(c.text)}</div>`).join(''):'<div class="empty">Нет комментариев</div>';
+    <div class="cmt"><div class="cmeta">${fmtDateTime(c.date)} · ${esc(c.author)}</div>${esc(c.text)}</div>`).join(''):'<div class="empty">Нет комментариев</div>';
   const autos=(d.automations||[]).length?d.automations.map(a=>{
     const href=a.url||'';
     if(a.steps&&a.steps.length){

@@ -27,6 +27,8 @@ const DIMTXT = '#6b7280';
 
 const money = n => Math.round(Number(n) || 0).toLocaleString('ru-RU');
 const fmtDate = d => { if (!d) return ''; const p = String(d).slice(0, 10).split('-'); return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : String(d); };
+// Keep the time as stored by Bitrix (its local offset), no timezone math.
+const fmtDateTime = v => { if (!v) return ''; const m = String(v).match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/); return m ? `${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]}` : fmtDate(v); };
 
 const FLAG_ORDER = ['red', 'overdue', 'overdue-task', 'open-bp', 'late-ship', 'stale'];
 const FLAG_LABEL = { red: 'Красный флаг', overdue: 'Просрочена поставка', 'overdue-task': 'Просроч. задачи', 'open-bp': 'Незаверш. БП', 'late-ship': 'Отгрузка позже срока', stale: 'Завис >14 дн' };
@@ -96,7 +98,7 @@ function detailedBlocks(rows, detailsMap) {
     ];
     const procs = (d.processes || []).map(p => ({ text: `${'    '.repeat(p.depth || 0)}• ${p.entityName}: ${p.title} — ${p.stageName}${p.responsible ? ' (' + p.responsible + ')' : ''}`, fontSize: 8, margin: [0, 0, 0, 1] }));
     const tasks = (d.tasks || []).map(t => ({ text: `• ${t.title}${t.responsible ? ' — ' + t.responsible : ''}${t.deadline ? ' · до ' + fmtDate(t.deadline) : ''}${t.overdue ? ' ⚠' : ''}`, fontSize: 8, margin: [0, 0, 0, 1] }));
-    const cmts = (d.comments || []).map(c => ({ text: `${fmtDate(c.date)} · ${c.author}: ${c.text}`, fontSize: 8, color: '#333', margin: [0, 0, 0, 1] }));
+    const cmts = (d.comments || []).map(c => ({ text: `${fmtDateTime(c.date)} · ${c.author}: ${c.text}`, fontSize: 8, color: '#333', margin: [0, 0, 0, 1] }));
     const autos = (d.automations || []).flatMap(a => (a.steps && a.steps.length ? a.steps.map(s => ({ text: `• ${s.name} → Выполняется${s.waitsFor && s.waitsFor.length ? ' → ждёт ' + s.waitsFor.join(', ') : ''}`, fontSize: 8, margin: [0, 0, 0, 1] })) : [{ text: `• ${a.name} → выполняется (авто)`, fontSize: 8, margin: [0, 0, 0, 1] }]));
     const section = (title, arr) => arr.length ? [{ text: title, bold: true, fontSize: 8.5, color: BRAND, margin: [0, 4, 0, 2] }, ...arr] : [];
     out.push({
@@ -201,7 +203,7 @@ function buildXlsx({ board, rows, type, meta }) {
       const label = r.contractNo || ('#' + r.id);
       (d.processes || []).forEach(p => procRows.push([label, r.company || '', p.entityName, p.title, p.stageName, p.responsible || '']));
       (d.tasks || []).forEach(t => taskRows.push([label, r.company || '', t.title, t.responsible || '', fmtDate(t.deadline), t.overdue ? 'да' : '']));
-      (d.comments || []).forEach(c => cmtRows.push([label, r.company || '', fmtDate(c.date), c.author, c.text]));
+      (d.comments || []).forEach(c => cmtRows.push([label, r.company || '', fmtDateTime(c.date), c.author, c.text]));
       (d.automations || []).forEach(a => {
         if (a.steps && a.steps.length) a.steps.forEach(s => autoRows.push([label, r.company || '', s.name, 'Выполняется', (s.waitsFor || []).join(', ')]));
         else autoRows.push([label, r.company || '', a.name, 'Выполняется (авто)', '']);
