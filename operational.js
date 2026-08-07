@@ -222,9 +222,11 @@ function bpDocIds(dealId, children) {
   (children || []).forEach(c => { if (c.entityTypeId && c.id) set.add(`DYNAMIC_${c.entityTypeId}_${c.id}`); });
   return set;
 }
+// Шаблоны БП, которые вообще не показываем и не считаем (фоновые/шумные).
+const BP_TEMPLATE_HIDE = new Set(['85']); // «Регистрация контрактов» — вечный авто-БП, 451 экз.
 function matchActiveBp(instances, dealId, children, tplMap) {
   const wanted = bpDocIds(dealId, children);
-  return (instances || []).filter(w => wanted.has(String(w.DOCUMENT_ID))).map(w => ({
+  return (instances || []).filter(w => wanted.has(String(w.DOCUMENT_ID)) && !BP_TEMPLATE_HIDE.has(String(w.TEMPLATE_ID))).map(w => ({
     id: w.ID, name: (tplMap && tplMap[String(w.TEMPLATE_ID)]) || `Шаблон #${w.TEMPLATE_ID}`,
     documentId: w.DOCUMENT_ID, started: w.STARTED || null,
   }));
@@ -283,7 +285,7 @@ async function getActiveBpDetailed(dealId, children, userMap) {
     getBizprocTemplates(), getActiveBizproc(), getBizprocTasksByWorkflow(),
   ]);
   const wanted = bpDocIds(dealId, children);
-  return (inst || []).filter(w => wanted.has(String(w.DOCUMENT_ID))).map(w => {
+  return (inst || []).filter(w => wanted.has(String(w.DOCUMENT_ID)) && !BP_TEMPLATE_HIDE.has(String(w.TEMPLATE_ID))).map(w => {
     const tasks = taskMap[String(w.ID)] || [];
     const assignees = [...new Set(tasks.flatMap(t => t.users || []))].map(id => resolveUser(id, userMap)).filter(Boolean);
     const taskName = tasks.map(t => t.name).filter(Boolean)[0];
