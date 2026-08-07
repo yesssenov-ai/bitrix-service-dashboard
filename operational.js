@@ -13,7 +13,7 @@
 const { b24 } = require('./bitrix');
 const { pool } = require('./auth');
 const { USERS } = require('./constants');
-const { SMART_TYPES, findChildrenOfDeal, resolveStageName, getStageSemantics } = require('./relations');
+const { SMART_TYPES, findChildrenOfDeal, resolveStageName, getStageSemantics, buildTree } = require('./relations');
 
 // ── Field codes ──────────────────────────────────────────────────────────────
 // Known-good codes are filled in. The ones marked `null` are the custom deal
@@ -129,6 +129,38 @@ async function buildEnumMap(code) {
   const map = {};
   (field?.items || []).forEach(i => { map[String(i.ID)] = i.VALUE; });
   return map;
+}
+
+// ── Bitrix user map (id → ФИО), cached 6h ────────────────────────────────────
+// The hardcoded USERS dict in constants.js is incomplete (stops around id 90),
+// so managers/engineers with newer Bitrix ids showed as "#92". Pull the full
+// live directory instead — resolves everyone, including future hires.
+let userMapCache = null, userMapAt = 0;
+async function getUserMap() {
+  if (userMapCache && Date.now() - userMapAt < 6 * 60 * 60 * 1000) return userMapCache;
+  const map = {};
+  try {
+    let start = 0;
+    for (let i = 0; i < 200; i++) {
+      const resp = await b24('user.get', { start });
+      const users = resp.result || [];
+      users.forEach(u => {
+        const name = `${u.NAME || ''} ${u.LAST_NAME || ''}`.trim();
+        if (name) map[String(u.ID)] = name;
+      });
+      if (resp.next === undefined || resp.next === null) break;
+      start = resp.next;
+    }
+    userMapCache = map; userMapAt = Date.now();
+  } catch (e) {
+    console.error('getUserMap error:', e.message);
+    if (!userMapCache) userMapCache = map;
+  }
+  return userMapCache;
+}
+function resolveUser(id, userMap) {
+  if (!id) return '';
+  return (userMap && userMap[String(id)]) || USERS[id] || `#${id}`;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -290,7 +322,7 @@ function buildFunnel(rows, stageMeta, categoryIds) {
 }
 
 // ── Map a cached DB row → board row (+ computed flags) ───────────────────────
-function dbRowToBoard(r, stageMeta) {
+function dbRowToBoard(r, stageMeta, userMap = {}) {
   const categoryId = Number(r.category_id);
   const semantic = r.stage_semantic || stageMeta[categoryId]?.byId?.[r.stage_id]?.semantics || 'P';
   const stage = stageMeta[categoryId]?.byId?.[r.stage_id] || { name: r.stage_id, color: '#8a8886' };
@@ -320,8 +352,8 @@ function dbRowToBoard(r, stageMeta) {
     company: r.company_name || '', companyId: r.company_id || null,
     title: r.deal_title || '', contractNo: r.contract_no || '',
     deliveryBy, factoryShip, diffDays, onTime,
-    managerId, manager: managerId ? (USERS[managerId] || `#${managerId}`) : '',
-    engineerId, engineer: engineerId ? (USERS[engineerId] || `#${engineerId}`) : '',
+    managerId, manager: resolveUser(managerId, userMap),
+    engineerId, engineer: resolveUser(engineerId, userMap),
     payFactory: r.pay_factory || '', payClient: r.pay_client || '', redFlag: !!r.red_flag,
     comment: r.comment || '',
     departmentId: r.department_id || null,
@@ -388,7 +420,8 @@ async function getBoard(filters = {}) {
     console.error('getBoard DB read error:', e.message);
   }
 
-  const rows = dbRows.map(r => dbRowToBoard(r, stageMeta));
+  const userMap = await getUserMap();
+  const rows = dbRows.map(r => dbRowToBoard(r, stageMeta, userMap));
   const funnel = buildFunnel(rows, stageMeta, cats);
 
   const managerSet = new Map(), deptSet = new Map(), companySet = new Map();
@@ -428,14 +461,36 @@ async function getBoard(filters = {}) {
   };
 }
 
-// ── Per-deal drill-down: child smart processes, tasks, timeline comments ─────
+// ── Per-deal drill-down: child smart processes (nested ladder), tasks, comments ─
 async function getDealDetail(dealId) {
-  const [children, tasks, comments] = await Promise.all([
-    getChildProcesses(dealId),
-    getDealTasks(dealId),
-    getDealComments(dealId),
+  const userMap = await getUserMap();
+  const [tree, tasks, comments] = await Promise.all([
+    buildTree('deal', dealId),                 // resolves real stage names + parent-child nesting
+    getDealTasks(dealId, userMap),
+    getDealComments(dealId, 15, userMap),
   ]);
-  return { ok: true, dealId, children, tasks, comments };
+  const processes = tree ? flattenProcessTree(tree.children || [], 0) : [];
+  return { ok: true, dealId, processes, tasks, comments };
+}
+
+// Flatten the buildTree hierarchy into a depth-tagged list so the UI can render
+// the ladder (Запланированные работы → Заявка на сервис, Закупки → Логистика …).
+function flattenProcessTree(nodes, depth) {
+  const out = [];
+  for (const n of nodes) {
+    const sem = n.stageSemantics || 'P';
+    out.push({
+      entityTypeId: n.entityTypeId,
+      entityName: n.entityName || SMART_TYPES[n.entityTypeId]?.name || `Тип ${n.entityTypeId}`,
+      id: n.id, title: n.title || `#${n.id}`,
+      stageName: n.stageName || n.stageId, semantics: sem,
+      done: sem === 'S', failed: sem === 'F',
+      url: n.url || `https://crm.prolabsupport.kz/crm/type/${n.entityTypeId}/details/${n.id}/`,
+      depth,
+    });
+    if (n.children && n.children.length) out.push(...flattenProcessTree(n.children, depth + 1));
+  }
+  return out;
 }
 
 async function getChildProcesses(dealId) {
@@ -460,7 +515,7 @@ async function getChildProcesses(dealId) {
   return out;
 }
 
-async function getDealTasks(dealId) {
+async function getDealTasks(dealId, userMap = {}) {
   try {
     const { result } = await b24('tasks.task.list', {
       filter: { UF_CRM_TASK: `D_${dealId}` },
@@ -479,7 +534,7 @@ async function getDealTasks(dealId) {
         id: t.id ?? t.ID,
         title: t.title ?? t.TITLE,
         status, done, overdue, deadline,
-        responsibleId: respId, responsible: respId ? (USERS[respId] || `#${respId}`) : '',
+        responsibleId: respId, responsible: resolveUser(respId, userMap),
         url: `https://crm.prolabsupport.kz/company/personal/user/${respId}/tasks/task/view/${t.id ?? t.ID}/`,
       };
     });
@@ -489,7 +544,7 @@ async function getDealTasks(dealId) {
   }
 }
 
-async function getDealComments(dealId, limit = 15) {
+async function getDealComments(dealId, limit = 15, userMap = {}) {
   try {
     const { result } = await b24('crm.timeline.comment.list', {
       filter: { ENTITY_ID: dealId, ENTITY_TYPE: 'deal' },
@@ -501,7 +556,7 @@ async function getDealComments(dealId, limit = 15) {
       return {
         id: c.ID,
         date: c.CREATED || null,
-        authorId, author: authorId ? (USERS[authorId] || `#${authorId}`) : '',
+        authorId, author: resolveUser(authorId, userMap),
         text: (c.COMMENT || '').replace(/\[[^\]]+\]/g, '').trim(),
       };
     }).filter(c => c.text);

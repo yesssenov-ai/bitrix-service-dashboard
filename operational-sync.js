@@ -89,8 +89,13 @@ async function computeAutomation(dealId) {
   try {
     const children = await findChildrenOfDeal(dealId);
     for (const c of children) {
+      // findChildrenOfDeal doesn't select categoryId — recover it from the
+      // stage code prefix ("DT1058_11:SUCCESS" → category 11) so the stage
+      // semantics resolve; otherwise every child defaulted to open ('P').
+      const m = String(c.stageId).match(/^DT\d+_(\d+):/);
+      const catId = c.categoryId ?? (m ? m[1] : null);
       let sem = 'P';
-      try { sem = (await resolveStageName(c.entityTypeId, c.categoryId, c.stageId)).semantics || 'P'; } catch (e) { /* keep P */ }
+      try { sem = (await resolveStageName(c.entityTypeId, catId, c.stageId)).semantics || 'P'; } catch (e) { /* keep P */ }
       if (sem === 'P') open++;
     }
   } catch (e) { console.error(`computeAutomation children (deal ${dealId}):`, e.message); }

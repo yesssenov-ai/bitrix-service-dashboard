@@ -103,6 +103,7 @@ tr.detail-row td{background:#171b22;padding:0;border-bottom:1px solid var(--line
 .proc .pdot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
 .proc .ptype{color:var(--text-dim);min-width:120px;}
 .proc .pstage{margin-left:auto;font-size:11px;color:var(--text-faint);}
+.proc .ladder{color:var(--text-faint);font-family:var(--font-mono);font-size:11px;margin-right:-2px;}
 .task{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12.5px;border-bottom:1px dashed var(--line);}
 .task:last-child{border-bottom:none;}
 .task .tt{flex:1;}
@@ -353,8 +354,11 @@ async function toggleDetail(tr,id){
 
 function renderDetail(d){
   const sem=s=>s==='S'?'var(--ok)':s==='F'?'var(--danger)':'var(--warn)';
-  const procs=d.children.length?d.children.map(c=>`
-    <div class="proc"><span class="pdot" style="background:${sem(c.semantics)}"></span>
+  const procList=d.processes||d.children||[];
+  const procs=procList.length?procList.map(c=>`
+    <div class="proc" style="padding-left:${(c.depth||0)*20}px">
+      ${(c.depth||0)>0?'<span class="ladder">└─</span>':''}
+      <span class="pdot" style="background:${sem(c.semantics)}"></span>
       <span class="ptype">${esc(c.entityName)}</span>
       <a class="deal-link" href="${c.url}" target="_blank">#${esc(c.id)}</a>
       <span class="pstage">${esc(c.stageName)}</span></div>`).join(''):'<div class="empty">Нет связанных процессов</div>';
