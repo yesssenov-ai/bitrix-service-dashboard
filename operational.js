@@ -47,11 +47,14 @@ const DEPARTMENT_LABELS = {
 // stages; `stages` is the post-contract subset we treat as "operational".
 // Names + order + colour are pulled LIVE from Bitrix so the funnel always
 // matches the CRM, but this list defines the boundary of what counts.
+// Execution stages ONLY — from the contract stage up to (but NOT including)
+// the final "Завершена"/WON stage. Completed deals are intentionally excluded
+// from the operational module: they aren't fetched, shown, or cached.
 const PIPELINES = {
-  0: { name:'Инструменты',   stageEntityId:'DEAL_STAGE',   stages:['FINAL_INVOICE','1','UC_Q9J6VV','UC_9MBFR2','2','3','WON'] },
-  1: { name:'Расходка',      stageEntityId:'DEAL_STAGE_1', stages:['C1:FINAL_INVOICE','C1:1','C1:UC_3MVK90','C1:UC_3SCB5K','C1:2','C1:3','C1:WON'] },
-  2: { name:'Тренинг-центр', stageEntityId:'DEAL_STAGE_2', stages:['C2:FINAL_INVOICE','C2:1','C2:2','C2:WON'] },
-  3: { name:'Сервис',        stageEntityId:'DEAL_STAGE_3', stages:['C3:FINAL_INVOICE','C3:UC_YYTFYG','C3:2','C3:WON'] },
+  0: { name:'Инструменты',   stageEntityId:'DEAL_STAGE',   stages:['FINAL_INVOICE','1','UC_Q9J6VV','UC_9MBFR2','2','3'] },
+  1: { name:'Расходка',      stageEntityId:'DEAL_STAGE_1', stages:['C1:FINAL_INVOICE','C1:1','C1:UC_3MVK90','C1:UC_3SCB5K','C1:2','C1:3'] },
+  2: { name:'Тренинг-центр', stageEntityId:'DEAL_STAGE_2', stages:['C2:FINAL_INVOICE','C2:1','C2:2'] },
+  3: { name:'Сервис',        stageEntityId:'DEAL_STAGE_3', stages:['C3:FINAL_INVOICE','C3:UC_YYTFYG','C3:2'] },
 };
 
 const STALE_DAYS = 14; // no movement for this many days → flagged as "завис"
@@ -74,9 +77,11 @@ async function getPipelineStages(categoryId) {
   } catch (e) {
     console.error(`getPipelineStages(${categoryId}) error:`, e.message);
   }
-  // Keep only the operational subset, in Bitrix sort order.
+  // Keep only the operational subset, in Bitrix sort order — and defensively
+  // drop any success/fail (завершённая/провальная) stage that might slip in.
   const list = cfg.stages
     .map(id => byId[id] || { id, name: id, color: '#8a8886', semantics: 'P', sort: 9999 })
+    .filter(s => s.semantics !== 'S' && s.semantics !== 'F')
     .sort((a, b) => a.sort - b.sort);
   const entry = { at: Date.now(), list, byId };
   stageMetaCache.set(categoryId, entry);
