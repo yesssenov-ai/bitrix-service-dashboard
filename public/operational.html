@@ -376,8 +376,9 @@ function renderDetail(d){
     <div class="cmt"><div class="cmeta">${fmtDate(c.date)} · ${esc(c.author)}</div>${esc(c.text)}</div>`).join(''):'<div class="empty">Нет комментариев</div>';
   const autos=(d.automations||[]).length?d.automations.map(a=>`
     <div class="proc"><span class="pdot" style="background:var(--warn)"></span>
-      <span class="ptype">${esc(a.name)}</span>
-      <span class="pstage">${a.started?fmtDate(a.started):''}</span></div>`).join(''):'<div class="empty">Нет активных БП</div>';
+      ${a.url?`<a class="ptype deal-link" href="${a.url}" target="_blank" title="Шаблон: ${esc(a.template)}">${esc(a.name)}</a>`:`<span class="ptype" title="Шаблон: ${esc(a.template)}">${esc(a.name)}</span>`}
+      ${a.assignees&&a.assignees.length?`<span class="presp">👤 ${esc(a.assignees.join(', '))}</span>`:'<span class="pstage">авто</span>'}
+      ${a.started?`<span class="pstage">${fmtDate(a.started)}</span>`:''}</div>`).join(''):'<div class="empty">Нет активных БП</div>';
   return `<div class="detail-inner">
     <div><h4>Смарт-процессы</h4>${procs}
       <h4 style="margin-top:16px">Автоматизации · активные БП</h4>${autos}</div>

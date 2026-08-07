@@ -247,9 +247,62 @@ function matchActiveBp(instances, dealId, children, tplMap) {
     documentId: w.DOCUMENT_ID, started: w.STARTED || null,
   }));
 }
-async function getActiveBpForDeal(dealId, children) {
-  const [tpl, inst] = await Promise.all([getBizprocTemplates(), getActiveBizproc()]);
+async function getActiveBpForDeal(dealId, children, tpl, inst) {
   return matchActiveBp(inst, dealId, children, tpl);
+}
+
+// Pending bizproc tasks (approval/review steps) grouped by workflow — this is
+// what tells us WHO an active BP is currently waiting on, and its human name.
+let bpTaskCache = null, bpTaskAt = 0;
+async function getBizprocTasksByWorkflow() {
+  if (bpTaskCache && Date.now() - bpTaskAt < 2 * 60 * 1000) return bpTaskCache;
+  const map = {};
+  try {
+    let start = 0;
+    for (let i = 0; i < 200; i++) {
+      const r = await b24('bizproc.task.list', { select: ['ID', 'WORKFLOW_ID', 'NAME', 'USERS', 'MODIFIED'], start });
+      (r.result || []).forEach(t => {
+        const wf = String(t.WORKFLOW_ID);
+        if (!map[wf]) map[wf] = [];
+        const users = (Array.isArray(t.USERS) ? t.USERS : [])
+          .map(u => parseInt(String(u).replace(/\D/g, ''), 10)).filter(Boolean);
+        map[wf].push({ taskId: t.ID, name: t.NAME || '', users });
+      });
+      if (r.next === undefined || r.next === null) break;
+      start = r.next;
+    }
+    bpTaskCache = map; bpTaskAt = Date.now();
+  } catch (e) { console.error('getBizprocTasksByWorkflow error:', e.message); if (!bpTaskCache) bpTaskCache = map; }
+  return bpTaskCache;
+}
+// Build a clickable link to the CRM entity a bizproc runs on.
+function bpDocUrl(documentId) {
+  const dm = String(documentId).match(/^DEAL_(\d+)$/);
+  if (dm) return `https://crm.prolabsupport.kz/crm/deal/details/${dm[1]}/`;
+  const yn = String(documentId).match(/^DYNAMIC_(\d+)_(\d+)$/);
+  if (yn) return `https://crm.prolabsupport.kz/crm/type/${yn[1]}/details/${yn[2]}/`;
+  return null;
+}
+// Rich active-BP list for the drill-down: real name (task step > template),
+// who it's waiting on, and a link into the entity where it runs.
+async function getActiveBpDetailed(dealId, children, userMap) {
+  const [tpl, inst, taskMap] = await Promise.all([
+    getBizprocTemplates(), getActiveBizproc(), getBizprocTasksByWorkflow(),
+  ]);
+  const wanted = bpDocIds(dealId, children);
+  return (inst || []).filter(w => wanted.has(String(w.DOCUMENT_ID))).map(w => {
+    const tasks = taskMap[String(w.ID)] || [];
+    const assignees = [...new Set(tasks.flatMap(t => t.users || []))].map(id => resolveUser(id, userMap)).filter(Boolean);
+    const taskName = tasks.map(t => t.name).filter(Boolean)[0];
+    const templateName = tpl[String(w.TEMPLATE_ID)];
+    return {
+      id: w.ID,
+      name: taskName || templateName || `Шаблон #${w.TEMPLATE_ID}`,
+      template: templateName || `#${w.TEMPLATE_ID}`,
+      assignees, started: w.STARTED || null,
+      url: bpDocUrl(w.DOCUMENT_ID), documentId: w.DOCUMENT_ID,
+    };
+  });
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -562,7 +615,7 @@ async function getDealDetail(dealId) {
     getDealComments(dealId, 15, userMap),
   ]);
   const processes = tree ? flattenProcessTree(tree.children || [], 0, userMap) : [];
-  const automations = await getActiveBpForDeal(dealId, processes).catch(() => []);
+  const automations = await getActiveBpDetailed(dealId, processes, userMap).catch(() => []);
   return { ok: true, dealId, processes, tasks, comments, automations };
 }
 
@@ -669,5 +722,5 @@ module.exports = {
   getBoard, getDealDetail, getChildProcesses, getDealTasks, getDealComments,
   getPipelineStages, fetchDeals, buildRow, buildEnumMap, resolveCompanies,
   getSyncMeta, dbRowToBoard,
-  getClientPayMap, getBizprocTemplates, getActiveBizproc, matchActiveBp, getActiveBpForDeal,
+  getClientPayMap, getBizprocTemplates, getActiveBizproc, matchActiveBp, getActiveBpDetailed,
 };
