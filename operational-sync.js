@@ -16,7 +16,7 @@ const { pool } = require('./auth');
 const {
   F, PIPELINES, ENUM_FIELDS, PAY_SUPPLIER_LABELS,
   getPipelineStages, buildEnumMap, resolveCompanies, fetchDeals,
-  getClientPayMap, getBizprocTemplates, getActiveBizproc, matchActiveBp,
+  getClientPayMap, getBizprocTemplates, getActiveBizproc, matchActiveBp, invalidateDealDetail,
 } = require('./operational');
 const { findChildrenOfDeal, resolveStageName } = require('./relations');
 
@@ -144,6 +144,7 @@ async function syncOneDeal(dealId) {
   const inScope = cfg && cfg.stages.includes(d.STAGE_ID);
   if (!inScope) {
     await pool.query('DELETE FROM ticketsmodule_operational_deals WHERE deal_id=$1', [dealId]).catch(() => {});
+    await invalidateDealDetail(dealId);
     return;
   }
   const stageMeta = { [categoryId]: await getPipelineStages(categoryId) };
@@ -156,6 +157,8 @@ async function syncOneDeal(dealId) {
   // Webhook path: recompute processes/tasks (cheap); leave open_bp to the
   // fuller nightly/manual sync so we don't pull all BP instances per event.
   try { await updateAutomation(dealId, await computeAutomation(dealId)); } catch (e) { /* best-effort */ }
+  // Deal changed → drop its cached drill-down so the next open rebuilds fresh.
+  await invalidateDealDetail(dealId);
 }
 
 // ── Full reconciliation (nightly / boot / manual button) ─────────────────────

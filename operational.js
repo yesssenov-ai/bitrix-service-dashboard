@@ -589,7 +589,8 @@ async function getBoard(filters = {}) {
 }
 
 // ── Per-deal drill-down: child smart processes (nested ladder), tasks, comments ─
-async function getDealDetail(dealId) {
+// Live build (hits Bitrix). Wrapped by getDealDetail's cache below.
+async function buildDealDetailLive(dealId) {
   const userMap = await getUserMap();
   const [tree, tasks, comments] = await Promise.all([
     buildTree('deal', dealId),                 // resolves real stage names + parent-child nesting
@@ -598,7 +599,33 @@ async function getDealDetail(dealId) {
   ]);
   const processes = tree ? flattenProcessTree(tree.children || [], 0, userMap) : [];
   const automations = await getActiveBpDetailed(dealId, processes, userMap).catch(() => []);
-  return { ok: true, dealId, processes, tasks, comments, automations };
+  return { dealId, processes, tasks, comments, automations };
+}
+
+// Cached drill-down: served instantly from Postgres. Built lazily on first open,
+// rebuilt on force (the «↻ Обновить» button), invalidated by the deal webhook.
+async function getDealDetail(dealId, force = false) {
+  if (!force) {
+    try {
+      const { rows } = await pool.query('SELECT detail, synced_at FROM ticketsmodule_operational_detail WHERE deal_id=$1', [dealId]);
+      if (rows.length) return { ok: true, cached: true, syncedAt: rows[0].synced_at, ...rows[0].detail };
+    } catch (e) { console.error('getDealDetail cache read:', e.message); }
+  }
+  const detail = await buildDealDetailLive(dealId);
+  try {
+    await pool.query(
+      `INSERT INTO ticketsmodule_operational_detail (deal_id, detail, synced_at) VALUES ($1,$2,NOW())
+       ON CONFLICT (deal_id) DO UPDATE SET detail=$2, synced_at=NOW()`,
+      [dealId, JSON.stringify(detail)]
+    );
+  } catch (e) { console.error('getDealDetail cache write:', e.message); }
+  return { ok: true, cached: false, syncedAt: new Date().toISOString(), ...detail };
+}
+
+// Drop the cached drill-down for a deal (called from the webhook on change).
+async function invalidateDealDetail(dealId) {
+  try { await pool.query('DELETE FROM ticketsmodule_operational_detail WHERE deal_id=$1', [dealId]); }
+  catch (e) { console.error('invalidateDealDetail:', e.message); }
 }
 
 // Flatten the buildTree hierarchy into a depth-tagged list so the UI can render
@@ -705,4 +732,5 @@ module.exports = {
   getPipelineStages, fetchDeals, buildRow, buildEnumMap, resolveCompanies,
   getSyncMeta, dbRowToBoard,
   getClientPayMap, getBizprocTemplates, getActiveBizproc, matchActiveBp, getActiveBpDetailed,
+  invalidateDealDetail,
 };

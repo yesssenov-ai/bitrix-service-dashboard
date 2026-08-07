@@ -340,6 +340,15 @@ async function initDB() {
     -- Активные (незавершённые) бизнес-процессы автоматизации на сделке + её смартах.
     ALTER TABLE ticketsmodule_operational_deals ADD COLUMN IF NOT EXISTS open_bp INTEGER DEFAULT 0;
 
+    -- Кэш раскрытия сделки (смарт-процессы/задачи/комментарии/БП). Строится
+    -- лениво при первом открытии, отдаётся мгновенно из БД, обновляется по
+    -- кнопке «↻ Обновить» и сбрасывается вебхуком при изменении сделки.
+    CREATE TABLE IF NOT EXISTS ticketsmodule_operational_detail (
+      deal_id INTEGER PRIMARY KEY,
+      detail JSONB NOT NULL,
+      synced_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS ticketsmodule_operational_meta (
       id INTEGER PRIMARY KEY DEFAULT 1,
       last_full_sync TIMESTAMPTZ,

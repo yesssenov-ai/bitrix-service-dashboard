@@ -33,16 +33,29 @@ router.get('/board', requireAuth(OPS_ROLES), async (req, res) => {
   }
 });
 
-// GET /api/operational/deal/:id — drill-down (child processes, tasks, comments)
+// GET /api/operational/deal/:id — drill-down, served from cache (built lazily).
 router.get('/deal/:id', requireAuth(OPS_ROLES), async (req, res) => {
   try {
     const dealId = parseInt(req.params.id, 10);
     if (!dealId) return res.status(400).json({ ok: false, error: 'Неверный ID сделки' });
-    const detail = await getDealDetail(dealId);
+    const detail = await getDealDetail(dealId, false);
     res.json(detail);
   } catch (e) {
     console.error('GET /api/operational/deal error:', e.message);
     res.status(500).json({ ok: false, error: 'Не удалось загрузить детали сделки: ' + e.message });
+  }
+});
+
+// POST /api/operational/deal/:id/refresh — force a live rebuild of the drill-down.
+router.post('/deal/:id/refresh', requireAuth(OPS_ROLES), async (req, res) => {
+  try {
+    const dealId = parseInt(req.params.id, 10);
+    if (!dealId) return res.status(400).json({ ok: false, error: 'Неверный ID сделки' });
+    const detail = await getDealDetail(dealId, true);
+    res.json(detail);
+  } catch (e) {
+    console.error('POST /api/operational/deal/:id/refresh error:', e.message);
+    res.status(500).json({ ok: false, error: 'Не удалось обновить детали сделки: ' + e.message });
   }
 });
 

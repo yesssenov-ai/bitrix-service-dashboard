@@ -97,7 +97,9 @@ a.deal-link:hover{text-decoration:underline;}
 
 /* Drill-down */
 tr.detail-row td{background:#171b22;padding:0;border-bottom:1px solid var(--line);}
-.detail-inner{padding:16px 18px;display:grid;grid-template-columns:1.1fr 1fr 1.2fr;gap:20px;}
+.detail-bar{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:10px 18px 0;}
+.detail-sync{font-size:11px;color:var(--text-faint);font-family:var(--font-mono);}
+.detail-inner{padding:14px 18px 16px;display:grid;grid-template-columns:1.1fr 1fr 1.2fr;gap:20px;}
 @media(max-width:1000px){.detail-inner{grid-template-columns:1fr;}}
 .detail-inner h4{font-family:var(--font-display);font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-dim);margin-bottom:10px;}
 .proc{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12.5px;border-bottom:1px dashed var(--line);}
@@ -191,6 +193,7 @@ let BOARD=null, activeFlag=null;
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function fmtSum(n){return Math.round(n||0).toLocaleString('ru-RU');}
 function fmtDate(d){if(!d)return '';const p=String(d).slice(0,10).split('-');return p.length===3?`${p[2]}.${p[1]}.${p[0]}`:String(d);}
+function fmtDateTime(d){if(!d)return '';return new Date(d).toLocaleString('ru-RU');}
 
 async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
 
@@ -368,6 +371,17 @@ async function toggleDetail(tr,id){
   }
 }
 
+async function refreshDetail(dealId,btn){
+  const old=btn.textContent; btn.disabled=true; btn.textContent='⏳ Обновляю…';
+  try{
+    const r=await fetch('/api/operational/deal/'+dealId+'/refresh',{method:'POST'});
+    if(r.status===401){location.href='/login.html';return;}
+    const d=await r.json();
+    if(!d.ok)throw new Error(d.error||'Ошибка');
+    const td=btn.closest('td'); if(td) td.innerHTML=renderDetail(d);
+  }catch(e){ alert('Не удалось обновить: '+e.message); btn.disabled=false; btn.textContent=old; }
+}
+
 function renderDetail(d){
   const sem=s=>s==='S'?'var(--ok)':s==='F'?'var(--danger)':'var(--warn)';
   const procList=d.processes||d.children||[];
@@ -391,7 +405,11 @@ function renderDetail(d){
       ${a.url?`<a class="ptype deal-link" href="${a.url}" target="_blank" title="Шаблон: ${esc(a.template)}">${esc(a.name)}</a>`:`<span class="ptype" title="Шаблон: ${esc(a.template)}">${esc(a.name)}</span>`}
       ${a.assignees&&a.assignees.length?`<span class="presp">👤 ${esc(a.assignees.join(', '))}</span>`:'<span class="pstage">авто</span>'}
       ${a.started?`<span class="pstage">${fmtDate(a.started)}</span>`:''}</div>`).join(''):'<div class="empty">Нет активных БП</div>';
-  return `<div class="detail-inner">
+  const bar=`<div class="detail-bar">
+    <span class="detail-sync">${d.cached?'из кэша':'обновлено'}${d.syncedAt?' · '+fmtDateTime(d.syncedAt):''}</span>
+    <button class="reset-btn" onclick="refreshDetail(${d.dealId},this)" title="Подтянуть свежие данные из Битрикса">↻ Обновить</button>
+  </div>`;
+  return `${bar}<div class="detail-inner">
     <div><h4>Смарт-процессы</h4>${procs}
       <h4 style="margin-top:16px">Автоматизации · активные БП</h4>${autos}</div>
     <div><h4>Задачи</h4>${tasks}</div>
