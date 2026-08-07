@@ -14,8 +14,9 @@
 const { b24 } = require('./bitrix');
 const { pool } = require('./auth');
 const {
-  F, PIPELINES, ENUM_FIELDS,
+  F, PIPELINES, ENUM_FIELDS, PAY_SUPPLIER_LABELS,
   getPipelineStages, buildEnumMap, resolveCompanies, fetchDeals,
+  getClientPayMap, getBizprocTemplates, getActiveBizproc, matchActiveBp,
 } = require('./operational');
 const { findChildrenOfDeal, resolveStageName } = require('./relations');
 
@@ -48,8 +49,8 @@ async function buildDealRecord(d, ctx) {
     contract_date: dateOnly(d[F.contractDate]),
     delivery_by_date: dateOnly(d[F.deliveryByDate]),
     factory_ship_date: dateOnly(d[F.factoryShip]),
-    pay_factory: ctx.enumMaps[F.payTermsFactory]?.[String(payFactoryRaw)] || (payFactoryRaw || ''),
-    pay_client: ctx.enumMaps[F.payTermsClient]?.[String(payClientRaw)] || (payClientRaw || ''),
+    pay_factory: ctx.enumMaps[F.payTermsFactory]?.[String(payFactoryRaw)] || PAY_SUPPLIER_LABELS[String(payFactoryRaw)] || (payFactoryRaw || ''),
+    pay_client: (ctx.clientPayMap && ctx.clientPayMap[String(payClientRaw)]) || (payClientRaw || ''),
     engineer_id: engId ? parseInt(engId, 10) : null,
     comment: firstOf(d[F.comment]) || '',
     red_flag: truthyBool(d[F.redFlag]),
@@ -77,17 +78,27 @@ async function upsertDealLevel(r) {
 }
 
 async function updateAutomation(dealId, a) {
-  await pool.query(
-    `UPDATE ticketsmodule_operational_deals SET open_processes=$2, overdue_tasks=$3, total_tasks=$4 WHERE deal_id=$1`,
-    [dealId, a.open, a.overdue, a.total]
-  );
+  if (a.openBp === undefined) {
+    await pool.query(
+      `UPDATE ticketsmodule_operational_deals SET open_processes=$2, overdue_tasks=$3, total_tasks=$4 WHERE deal_id=$1`,
+      [dealId, a.open, a.overdue, a.total]
+    );
+  } else {
+    await pool.query(
+      `UPDATE ticketsmodule_operational_deals SET open_processes=$2, overdue_tasks=$3, total_tasks=$4, open_bp=$5 WHERE deal_id=$1`,
+      [dealId, a.open, a.overdue, a.total, a.openBp]
+    );
+  }
 }
 
-// ── Per-deal automation snapshot: open child processes + overdue tasks ───────
-async function computeAutomation(dealId) {
-  let open = 0;
+// ── Per-deal automation snapshot: open child processes + overdue tasks + БП ───
+// Pass bp={instances, tpl} to also count active business processes on the deal
+// and its smart children; omit it (webhook path) to leave open_bp untouched.
+async function computeAutomation(dealId, bp) {
+  let open = 0, openBp;
+  let children = [];
   try {
-    const children = await findChildrenOfDeal(dealId);
+    children = await findChildrenOfDeal(dealId);
     for (const c of children) {
       // findChildrenOfDeal doesn't select categoryId — recover it from the
       // stage code prefix ("DT1058_11:SUCCESS" → category 11) so the stage
@@ -116,7 +127,11 @@ async function computeAutomation(dealId) {
     }
   } catch (e) { console.error(`computeAutomation tasks (deal ${dealId}):`, e.message); }
 
-  return { open, overdue, total };
+  if (bp && bp.instances) {
+    openBp = matchActiveBp(bp.instances, dealId, children, bp.tpl).length;
+  }
+
+  return { open, overdue, total, openBp };
 }
 
 // ── Webhook path: sync exactly one deal (or drop it if it left the scope) ────
@@ -135,8 +150,11 @@ async function syncOneDeal(dealId) {
   const enumMaps = {};
   for (const code of ENUM_FIELDS) enumMaps[code] = await buildEnumMap(code);
   const companyMap = await resolveCompanies([d.COMPANY_ID]);
-  const rec = await buildDealRecord({ ...d, __categoryId: categoryId }, { stageMeta, enumMaps, companyMap });
+  const clientPayMap = await getClientPayMap();
+  const rec = await buildDealRecord({ ...d, __categoryId: categoryId }, { stageMeta, enumMaps, companyMap, clientPayMap });
   await upsertDealLevel(rec);
+  // Webhook path: recompute processes/tasks (cheap); leave open_bp to the
+  // fuller nightly/manual sync so we don't pull all BP instances per event.
   try { await updateAutomation(dealId, await computeAutomation(dealId)); } catch (e) { /* best-effort */ }
 }
 
@@ -157,7 +175,8 @@ async function fullSync(opts = {}) {
 
     const allDeals = await fetchDeals({ categoryIds: cats }); // execution stages only
     const companyMap = await resolveCompanies(allDeals.map(d => d.COMPANY_ID));
-    const ctx = { stageMeta, enumMaps, companyMap };
+    const clientPayMap = await getClientPayMap();
+    const ctx = { stageMeta, enumMaps, companyMap, clientPayMap };
 
     const seen = [];
     for (const d of allDeals) {
@@ -176,8 +195,12 @@ async function fullSync(opts = {}) {
     }
 
     if (withAutomation) {
+      // Prefetch bizproc templates + all active instances once, then match per deal.
+      let bp = null;
+      try { bp = { tpl: await getBizprocTemplates(), instances: await getActiveBizproc(true) }; }
+      catch (e) { console.error('bizproc prefetch:', e.message); }
       for (const id of seen) {
-        try { await updateAutomation(id, await computeAutomation(id)); } catch (e) { /* best-effort */ }
+        try { await updateAutomation(id, await computeAutomation(id, bp)); } catch (e) { /* best-effort */ }
         await sleep(80);
       }
     }
@@ -201,8 +224,11 @@ async function fullSync(opts = {}) {
 // fast manual refresh, so the button returns quickly but counts still update).
 async function runAutomationSweep() {
   const { rows } = await pool.query('SELECT deal_id FROM ticketsmodule_operational_deals');
+  let bp = null;
+  try { bp = { tpl: await getBizprocTemplates(), instances: await getActiveBizproc(true) }; }
+  catch (e) { console.error('bizproc prefetch:', e.message); }
   for (const { deal_id } of rows) {
-    try { await updateAutomation(deal_id, await computeAutomation(deal_id)); } catch (e) { /* best-effort */ }
+    try { await updateAutomation(deal_id, await computeAutomation(deal_id, bp)); } catch (e) { /* best-effort */ }
     await sleep(80);
   }
   console.log(`✅ operational automation sweep: ${rows.length} сделок`);

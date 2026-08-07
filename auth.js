@@ -337,6 +337,8 @@ async function initDB() {
     );
     CREATE INDEX IF NOT EXISTS idx_op_deals_category ON ticketsmodule_operational_deals(category_id);
     CREATE INDEX IF NOT EXISTS idx_op_deals_stage ON ticketsmodule_operational_deals(stage_id);
+    -- Активные (незавершённые) бизнес-процессы автоматизации на сделке + её смартах.
+    ALTER TABLE ticketsmodule_operational_deals ADD COLUMN IF NOT EXISTS open_bp INTEGER DEFAULT 0;
 
     CREATE TABLE IF NOT EXISTS ticketsmodule_operational_meta (
       id INTEGER PRIMARY KEY DEFAULT 1,

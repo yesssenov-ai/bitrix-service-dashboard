@@ -163,6 +163,95 @@ function resolveUser(id, userMap) {
   return (userMap && userMap[String(id)]) || USERS[id] || `#${id}`;
 }
 
+// ── Payment-terms resolution ─────────────────────────────────────────────────
+// Supplier side is a plain enumeration (confirmed via discover-deal-fields.js).
+const PAY_SUPPLIER_LABELS = {
+  '3585': '100% оплата', '3586': 'Частичная предоплата',
+  '3587': 'Постоплата с отсрочкой', '3588': 'Нулевая стоимость',
+};
+// Client side (UF_CRM_1731864478) is an iblock_element whose values live in a
+// Bitrix universal list (IBLOCK_ID=21). crm.deal.fields doesn't expose them, so
+// resolve via lists.* (needs the «lists» webhook scope). Cached 6h.
+let clientPayCache = null, clientPayAt = 0;
+async function getClientPayMap() {
+  if (clientPayCache && Date.now() - clientPayAt < 6 * 60 * 60 * 1000) return clientPayCache;
+  const map = {};
+  try {
+    let typeId = null;
+    for (const t of ['lists', 'bitrix_processes']) {
+      try {
+        const r = await b24('lists.get', { IBLOCK_TYPE_ID: t });
+        if ((r.result || []).some(l => String(l.IBLOCK_ID) === '21')) { typeId = t; break; }
+      } catch (e) { /* try next type */ }
+    }
+    if (typeId) {
+      let start = 0;
+      for (let i = 0; i < 20; i++) {
+        const r = await b24('lists.element.get', { IBLOCK_TYPE_ID: typeId, IBLOCK_ID: 21, start });
+        (r.result || []).forEach(e => { map[String(e.ID)] = e.NAME; });
+        if (r.next === undefined || r.next === null) break;
+        start = r.next;
+      }
+    }
+    clientPayCache = map; clientPayAt = Date.now();
+  } catch (e) {
+    console.error('getClientPayMap error:', e.message);
+    if (!clientPayCache) clientPayCache = map;
+  }
+  return clientPayCache;
+}
+
+// ── Bizproc automations (only ACTIVE/running instances are exposed by REST) ───
+let bpTplCache = null, bpTplAt = 0;
+async function getBizprocTemplates() {
+  if (bpTplCache && Date.now() - bpTplAt < 6 * 60 * 60 * 1000) return bpTplCache;
+  const map = {};
+  try {
+    let start = 0;
+    for (let i = 0; i < 50; i++) {
+      const r = await b24('bizproc.workflow.template.list', { select: ['ID', 'NAME'], start });
+      (r.result || []).forEach(t => { map[String(t.ID)] = t.NAME; });
+      if (r.next === undefined || r.next === null) break;
+      start = r.next;
+    }
+    bpTplCache = map; bpTplAt = Date.now();
+  } catch (e) { console.error('getBizprocTemplates error:', e.message); if (!bpTplCache) bpTplCache = map; }
+  return bpTplCache;
+}
+let bpInstCache = null, bpInstAt = 0;
+async function getActiveBizproc(force = false) {
+  if (!force && bpInstCache && Date.now() - bpInstAt < 2 * 60 * 1000) return bpInstCache;
+  const list = [];
+  try {
+    let start = 0;
+    for (let i = 0; i < 200; i++) {
+      const r = await b24('bizproc.workflow.instances', { select: ['ID', 'DOCUMENT_ID', 'TEMPLATE_ID', 'STARTED', 'MODIFIED'], start });
+      list.push(...(r.result || []));
+      if (r.next === undefined || r.next === null) break;
+      start = r.next;
+    }
+    bpInstCache = list; bpInstAt = Date.now();
+  } catch (e) { console.error('getActiveBizproc error:', e.message); if (!bpInstCache) bpInstCache = list; }
+  return bpInstCache;
+}
+// The set of bizproc DOCUMENT_IDs that belong to a deal + its child smart items.
+function bpDocIds(dealId, children) {
+  const set = new Set([`DEAL_${dealId}`]);
+  (children || []).forEach(c => { if (c.entityTypeId && c.id) set.add(`DYNAMIC_${c.entityTypeId}_${c.id}`); });
+  return set;
+}
+function matchActiveBp(instances, dealId, children, tplMap) {
+  const wanted = bpDocIds(dealId, children);
+  return (instances || []).filter(w => wanted.has(String(w.DOCUMENT_ID))).map(w => ({
+    id: w.ID, name: (tplMap && tplMap[String(w.TEMPLATE_ID)]) || `Шаблон #${w.TEMPLATE_ID}`,
+    documentId: w.DOCUMENT_ID, started: w.STARTED || null,
+  }));
+}
+async function getActiveBpForDeal(dealId, children) {
+  const [tpl, inst] = await Promise.all([getBizprocTemplates(), getActiveBizproc()]);
+  return matchActiveBp(inst, dealId, children, tpl);
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function get(deal, code) { return code ? (deal[code] ?? null) : null; }
 function truthyBool(v) { const s = String(firstOf(v)); return s === '1' || s === 'Y' || s === 'true'; }
@@ -343,6 +432,7 @@ function dbRowToBoard(r, stageMeta, userMap = {}) {
   if (onTime === false) flags.push('late-ship');
   if ((r.open_processes || 0) > 0) flags.push('open-proc');
   if ((r.overdue_tasks || 0) > 0) flags.push('overdue-task');
+  if ((r.open_bp || 0) > 0) flags.push('open-bp');
 
   const managerId = r.assigned_by_id || null;
   const engineerId = r.engineer_id || null;
@@ -361,6 +451,7 @@ function dbRowToBoard(r, stageMeta, userMap = {}) {
     opportunity: parseFloat(r.opportunity) || 0, currency: r.currency_id || 'KZT',
     dateModify: r.date_modify || null, daysStale: stale,
     openProcesses: r.open_processes || 0, overdueTasks: r.overdue_tasks || 0, totalTasks: r.total_tasks || 0,
+    openBp: r.open_bp || 0,
     flags,
     url: `https://crm.prolabsupport.kz/crm/deal/details/${r.deal_id}/`,
   };
@@ -440,6 +531,7 @@ async function getBoard(filters = {}) {
     redFlag: rows.filter(r => r.redFlag).length,
     openProc: rows.filter(r => r.flags.includes('open-proc')).length,
     overdueTask: rows.filter(r => r.flags.includes('overdue-task')).length,
+    openBp: rows.filter(r => r.flags.includes('open-bp')).length,
   };
 
   return {
@@ -470,7 +562,8 @@ async function getDealDetail(dealId) {
     getDealComments(dealId, 15, userMap),
   ]);
   const processes = tree ? flattenProcessTree(tree.children || [], 0, userMap) : [];
-  return { ok: true, dealId, processes, tasks, comments };
+  const automations = await getActiveBpForDeal(dealId, processes).catch(() => []);
+  return { ok: true, dealId, processes, tasks, comments, automations };
 }
 
 // Flatten the buildTree hierarchy into a depth-tagged list so the UI can render
@@ -572,8 +665,9 @@ async function getDealComments(dealId, limit = 15, userMap = {}) {
 }
 
 module.exports = {
-  F, PIPELINES, DEPARTMENT_LABELS, ENUM_FIELDS, STALE_DAYS,
+  F, PIPELINES, DEPARTMENT_LABELS, ENUM_FIELDS, STALE_DAYS, PAY_SUPPLIER_LABELS,
   getBoard, getDealDetail, getChildProcesses, getDealTasks, getDealComments,
   getPipelineStages, fetchDeals, buildRow, buildEnumMap, resolveCompanies,
   getSyncMeta, dbRowToBoard,
+  getClientPayMap, getBizprocTemplates, getActiveBizproc, matchActiveBp, getActiveBpForDeal,
 };

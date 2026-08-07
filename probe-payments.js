@@ -42,18 +42,26 @@ async function main() {
   const uf = (ufs.result || [])[0];
   console.log(JSON.stringify(uf?.SETTINGS || uf || ufs, null, 2));
 
-  const s = uf?.SETTINGS || {};
-  if (s.IBLOCK_ID) {
-    console.log(`\n=== Элементы справочника «Оплата клиент» (IBLOCK_ID=${s.IBLOCK_ID}) ===`);
-    const els = await call('lists.element.get', { IBLOCK_TYPE_ID: s.IBLOCK_TYPE_ID || 'bitrix_processes', IBLOCK_ID: s.IBLOCK_ID });
-    if (els.__error) {
-      console.log('  ошибка:', els.__error, '\n  → похоже, нет права «lists» в вебхуке. Либо включи его, либо пришли 4 значения оплаты клиента с их id из Битрикса.');
-    } else {
+  const iblockId = (uf?.SETTINGS || {}).IBLOCK_ID || 21;
+  console.log(`\n=== Подбор типа списка для IBLOCK_ID=${iblockId} (lists.get) ===`);
+  let typeId = null;
+  for (const t of ['lists', 'bitrix_processes', 'bitrix_catalog']) {
+    const lg = await call('lists.get', { IBLOCK_TYPE_ID: t });
+    if (lg.__error) { console.log(`  lists.get(${t}) → ошибка: ${lg.__error}`); continue; }
+    const found = (lg.result || []).find(l => String(l.IBLOCK_ID) === String(iblockId));
+    console.log(`  lists.get(${t}) → списков: ${(lg.result || []).length}${found ? `  ← НАЙДЕН (name="${found.NAME}")` : ''}`);
+    if (found) { typeId = t; break; }
+  }
+  if (typeId) {
+    console.log(`\n=== Значения справочника «Оплата клиент» (type=${typeId}, IBLOCK_ID=${iblockId}) ===`);
+    const els = await call('lists.element.get', { IBLOCK_TYPE_ID: typeId, IBLOCK_ID: iblockId });
+    if (els.__error) console.log('  ошибка:', els.__error);
+    else {
       (els.result || []).forEach(e => console.log(`  ${e.ID} = ${e.NAME}`));
       if (!(els.result || []).length) console.log('  (пусто)');
     }
   } else {
-    console.log('\n(IBLOCK_ID в настройках поля не пришёл — пришли пару сделок с заполненной оплатой клиента, гляну сырые значения)');
+    console.log(`\nНе нашёл список с IBLOCK_ID=${iblockId}. Пришли 4 значения оплаты клиента с их id из карточки сделки вручную — захардкожу.`);
   }
 }
 main().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });

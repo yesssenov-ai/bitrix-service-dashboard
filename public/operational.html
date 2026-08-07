@@ -272,6 +272,7 @@ function renderChips(s){
     {key:'red',label:'Красный флаг',val:s.redFlag||0,dot:'var(--brand)'},
     {key:'overdue',label:'Просрочена поставка',val:s.overdue,dot:'var(--danger)'},
     {key:'overdue-task',label:'Просроч. задачи',val:s.overdueTask||0,dot:'#ff8a3d'},
+    {key:'open-bp',label:'Незаверш. автоматизации',val:s.openBp||0,dot:'#b57bff'},
     {key:'open-proc',label:'Открытые процессы',val:s.openProc||0,dot:'#5ac8fa'},
     {key:'stale',label:`Завис > 14 дн`,val:s.stale,dot:'var(--warn)'},
     {key:'late-ship',label:'Отгрузка позже срока',val:s.lateShip,dot:'#c98bff'},
@@ -305,6 +306,7 @@ function flagIcon(flags){
   if(flags.includes('red'))return '<span class="flag" title="Красный флаг">🚩</span>';
   if(flags.includes('overdue'))return '<span class="flag" title="Просрочена поставка">🔴</span>';
   if(flags.includes('overdue-task'))return '<span class="flag" title="Просроченные задачи">⏰</span>';
+  if(flags.includes('open-bp'))return '<span class="flag" title="Незавершённые автоматизации (БП)">⚙️</span>';
   if(flags.includes('stale'))return '<span class="flag" title="Завис (нет движения)">🟠</span>';
   if(flags.includes('late-ship'))return '<span class="flag" title="Отгрузка позже срока">⚠️</span>';
   if(flags.includes('open-proc'))return '<span class="flag" title="Открытые смарт-процессы">🔧</span>';
@@ -372,8 +374,13 @@ function renderDetail(d){
       <span class="tmeta">${esc(t.responsible)}${t.deadline?' · '+fmtDate(t.deadline):''}</span></div>`).join(''):'<div class="empty">Нет задач</div>';
   const cmts=d.comments.length?d.comments.map(c=>`
     <div class="cmt"><div class="cmeta">${fmtDate(c.date)} · ${esc(c.author)}</div>${esc(c.text)}</div>`).join(''):'<div class="empty">Нет комментариев</div>';
+  const autos=(d.automations||[]).length?d.automations.map(a=>`
+    <div class="proc"><span class="pdot" style="background:var(--warn)"></span>
+      <span class="ptype">${esc(a.name)}</span>
+      <span class="pstage">${a.started?fmtDate(a.started):''}</span></div>`).join(''):'<div class="empty">Нет активных БП</div>';
   return `<div class="detail-inner">
-    <div><h4>Смарт-процессы</h4>${procs}</div>
+    <div><h4>Смарт-процессы</h4>${procs}
+      <h4 style="margin-top:16px">Автоматизации · активные БП</h4>${autos}</div>
     <div><h4>Задачи</h4>${tasks}</div>
     <div><h4>Комментарии</h4>${cmts}</div>
   </div>`;
