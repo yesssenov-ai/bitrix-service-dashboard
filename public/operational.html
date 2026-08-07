@@ -112,6 +112,8 @@ tr.detail-row td{background:#171b22;padding:0;border-bottom:1px solid var(--line
 .ap-btn{flex:0 0 auto;border:1px solid var(--signal-dim);background:rgba(53,208,192,.1);color:var(--signal);font-family:var(--font-body);font-size:12px;font-weight:600;padding:7px 12px;border-radius:7px;cursor:pointer;white-space:nowrap;transition:.15s;}
 .ap-btn:hover{background:rgba(53,208,192,.2);}
 .ap-btn:disabled{opacity:.55;cursor:default;}
+.chk-label{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text);cursor:pointer;}
+.chk-label input{width:16px;height:16px;accent-color:var(--brand);cursor:pointer;}
 .detail-inner{padding:14px 18px 16px;display:grid;grid-template-columns:1.1fr 1fr 1.2fr;gap:20px;}
 @media(max-width:1000px){.detail-inner{grid-template-columns:1fr;}}
 .detail-inner h4{font-family:var(--font-display);font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-dim);margin-bottom:10px;}
@@ -395,11 +397,11 @@ function adminPanel(d){
   const stageOpts=stages.map(s=>`<option value="${esc(s.id)}" ${row&&row.stageId===s.id?'selected':''}>${esc(s.name)}</option>`).join('');
   const respOpts=users.map(u=>`<option value="${u.id}" ${row&&row.managerId===u.id?'selected':''}>${esc(u.name)}</option>`).join('');
   const taskRespOpts=users.map(u=>`<option value="${u.id}">${esc(u.name)}</option>`).join('');
-  return `<div class="admin-panel">
-    <h4>Управление · только админ</h4>
+  return `<div class="admin-panel" id="adminPanel-${d.dealId}" style="display:none">
     <div class="apw">
       <div class="apf"><label>Стадия</label><div class="apr"><select id="edStage-${d.dealId}">${stageOpts}</select><button class="ap-btn" onclick="editStage(${d.dealId},this)">Сменить</button></div></div>
       <div class="apf"><label>Ответственный</label><div class="apr"><select id="edResp-${d.dealId}">${respOpts}</select><button class="ap-btn" onclick="editResp(${d.dealId},this)">Назначить</button></div></div>
+      <div class="apf apf-wide"><label>Красный флаг</label><div class="apr"><label class="chk-label"><input type="checkbox" id="edFlag-${d.dealId}" ${row&&row.redFlag?'checked':''} onchange="editRedFlag(${d.dealId},this)"> 🚩 отметить сделку красным флагом</label></div></div>
       <div class="apf apf-wide"><label>Комментарий</label><div class="apr"><input id="edCmt-${d.dealId}" type="text" placeholder="текст комментария…"><button class="ap-btn" onclick="editComment(${d.dealId},this)">Добавить</button></div></div>
       <div class="apf apf-wide"><label>Новая задача</label><div class="apr apr-task">
         <input id="edTaskTitle-${d.dealId}" type="text" placeholder="название задачи…">
@@ -409,6 +411,21 @@ function adminPanel(d){
       </div></div>
     </div>
   </div>`;
+}
+function toggleAdmin(id){ const el=document.getElementById('adminPanel-'+id); if(el) el.style.display = el.style.display==='none' ? '' : 'none'; }
+async function editRedFlag(id,cb){
+  cb.disabled=true;
+  try{
+    await apiPost('/api/operational/deal/'+id+'/redflag',{value:cb.checked});
+    const row=(BOARD&&BOARD.rows||[]).find(r=>String(r.id)===String(id));
+    if(row){
+      row.redFlag=cb.checked;
+      row.flags=(row.flags||[]).filter(f=>f!=='red'); if(cb.checked) row.flags.unshift('red');
+      const tr=document.querySelector('tr.deal-row[data-id="'+id+'"]'); const cell=tr&&tr.querySelector('td.flag'); if(cell) cell.innerHTML=flagIcon(row.flags);
+      if(BOARD.summary){ BOARD.summary.redFlag=BOARD.rows.filter(r=>r.redFlag).length; renderChips(BOARD.summary); }
+    }
+  }catch(e){ alert(e.message); cb.checked=!cb.checked; }
+  finally{ cb.disabled=false; }
 }
 async function apiPost(url,body){
   const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
@@ -475,6 +492,7 @@ function renderDetail(d){
   }).join(''):'<div class="empty">Нет активных БП</div>';
   const bar=`<div class="detail-bar">
     <span class="detail-sync">${d.cached?'из кэша':'обновлено'}${d.syncedAt?' · '+fmtDateTime(d.syncedAt):''}</span>
+    ${window.IS_ADMIN&&window.EDIT_META?`<button class="reset-btn" onclick="toggleAdmin(${d.dealId})" title="Управление сделкой">✏️ Управление</button>`:''}
     <button class="reset-btn" onclick="refreshDetail(${d.dealId},this)" title="Подтянуть свежие данные из Битрикса">↻ Обновить</button>
   </div>`;
   return `${bar}${adminPanel(d)}<div class="detail-inner">

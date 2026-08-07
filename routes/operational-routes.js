@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { b24 } = require('../bitrix');
 const { requireAuth, auditLog } = require('../auth');
-const { getBoard, getDealDetail, getEditMeta, invalidateDealDetail } = require('../operational');
+const { getBoard, getDealDetail, getEditMeta, invalidateDealDetail, F } = require('../operational');
 const { refresh: refreshOperationalCache, syncOneDeal } = require('../operational-sync');
 
 // Same access level as Статистика — this is a management / meeting view.
@@ -111,6 +111,20 @@ router.post('/deal/:id/responsible', requireAuth(ADMIN_ONLY), async (req, res) =
     await resyncDeal(id);
     res.json({ ok: true });
   } catch (e) { console.error('responsible edit error:', e.message); res.status(500).json({ ok: false, error: 'Не удалось сменить ответственного: ' + e.message }); }
+});
+
+// POST /deal/:id/redflag — toggle the «Красный флаг» boolean field
+router.post('/deal/:id/redflag', requireAuth(ADMIN_ONLY), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ ok: false, error: 'Неверный ID' });
+    if (!F.redFlag) return res.status(400).json({ ok: false, error: 'Поле красного флага не настроено' });
+    const value = req.body.value === true || req.body.value === 'true' || req.body.value === 1 || req.body.value === '1';
+    await b24('crm.deal.update', { id, fields: { [F.redFlag]: value ? '1' : '0' } });
+    await auditLog(req.user.id, req.user.username, 'OP_DEAL_REDFLAG', id, { value }, req.headers['x-forwarded-for'] || req.ip, req.headers['user-agent']);
+    await resyncDeal(id);
+    res.json({ ok: true, value });
+  } catch (e) { console.error('redflag error:', e.message); res.status(500).json({ ok: false, error: 'Не удалось изменить красный флаг: ' + e.message }); }
 });
 
 // POST /deal/:id/comment — add a timeline comment
