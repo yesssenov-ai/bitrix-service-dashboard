@@ -24,11 +24,13 @@ const F = {
   instrument:     'UF_CRM_NAME_PRIOBOR',  // instrument name
   department:     'UF_CRM_1758005356984', // "Отдел" (enumeration)
   contractNo:     'UF_CRM_1759391990160', // "Номер договора"
-  deliveryByDate: 'UF_CRM_1734607330937', // "Срок поставки по договору"
-  factoryShip:    'UF_CRM_1731864831522', // "Срок поставки от завода"
-  payTermsFactory:'UF_CRM_1744195326183', // "Условия оплаты поставщикам" (enumeration → resolved)
-  payTermsClient: 'UF_CRM_1731864478',    // "Условия оплаты от клиента" (iblock_element → resolved if items exposed)
-  engineerId:     'UF_CRM_1731864788',    // "Ответственный инженер" (employee → user id)
+  deliveryByDate: 'UF_CRM_1731864823359', // "Срок поставки заказа по договору"
+  // Отгрузка/оплаты/инженер больше НЕ берутся с полей сделки — они тянутся из
+  // дочерних смартов Закупки(1066)/Заявка на сервис(1058) в operational-sync.
+  factoryShip:    null,
+  payTermsFactory:null,
+  payTermsClient: null,
+  engineerId:     null,
   comment:        'UF_CRM_1752737600889', // "Статус сделки (комментарий)"
   redFlag:        'UF_CRM_1752737638930', // "Красный флаг" (boolean)
 };
@@ -474,7 +476,8 @@ function dbRowToBoard(r, stageMeta, userMap = {}) {
 
   const deliveryBy = r.delivery_by_date ? String(r.delivery_by_date).slice(0, 10) : null;
   const factoryShip = r.factory_ship_date ? String(r.factory_ship_date).slice(0, 10) : null;
-  const diffDays = (deliveryBy && factoryShip) ? daysBetween(deliveryBy, factoryShip) : null;
+  // Разница = (Поставка по договору − Отгрузка от завода) − 15 дней.
+  const diffDays = (deliveryBy && factoryShip) ? (daysBetween(deliveryBy, factoryShip) - 15) : null;
   const onTime = diffDays === null ? null : diffDays >= 0;
   const stale = daysSince(r.date_modify);
   const overdueDelivery = !!(deliveryBy && !isDone && !isLost && new Date(deliveryBy) < new Date());

@@ -14,7 +14,7 @@
 const { b24 } = require('./bitrix');
 const { pool } = require('./auth');
 const {
-  F, PIPELINES, ENUM_FIELDS, PAY_SUPPLIER_LABELS,
+  F, PIPELINES, ENUM_FIELDS, PAY_SUPPLIER_LABELS, CLIENT_PAY_LABELS,
   getPipelineStages, buildEnumMap, resolveCompanies, fetchDeals,
   getClientPayMap, getBizprocTemplates, getActiveBizproc, matchActiveBp, invalidateDealDetail,
   getBizprocTasksByWorkflow,
@@ -26,14 +26,47 @@ const firstOf = v => Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
 const dateOnly = v => v ? String(v).slice(0, 10) : null;
 const truthyBool = v => { const s = String(firstOf(v)); return s === '1' || s === 'Y' || s === 'true'; };
 
+// ── Fields sourced from CHILD smart processes (not the deal itself) ──────────
+// Закупки (1066): дата отгрузки от завода + условия оплаты (УС, iblock 21 → 83-86).
+const PURCHASE_FIELDS = {
+  factoryShip: 'ufCrm10_1732858508586', // Дата отгрузки от завода
+  payClient:   'ufCrm10_1732858644',    // Условия оплаты для клиента (УС)
+  payFactory:  'ufCrm10_1746431292',    // Условия оплаты поставщикам (УС)
+};
+// Заявка на сервис (1058): ответственный инженер. Берём с той 1058, что создана
+// из «Запланированных работ» (parentId1050). Не назначен → пусто.
+const SERVICE_ENGINEER_FIELD = 'ufCrm8_1732856367';
+
+// Pull the child-sourced fields for one deal (uses the already-fetched children).
+async function computeEnrichment(dealId, children) {
+  const out = { factory_ship_date: null, pay_client: '', pay_factory: '', engineer_id: null };
+  const purchase = children.find(c => Number(c.entityTypeId) === 1066);
+  if (purchase) {
+    try {
+      const { result } = await b24('crm.item.get', { entityTypeId: 1066, id: purchase.id });
+      const it = result?.item || {};
+      out.factory_ship_date = dateOnly(it[PURCHASE_FIELDS.factoryShip]);
+      const pc = firstOf(it[PURCHASE_FIELDS.payClient]);
+      const pf = firstOf(it[PURCHASE_FIELDS.payFactory]);
+      out.pay_client = (pc != null && pc !== '') ? (CLIENT_PAY_LABELS[String(pc)] || String(pc)) : '';
+      out.pay_factory = (pf != null && pf !== '') ? (CLIENT_PAY_LABELS[String(pf)] || String(pf)) : '';
+    } catch (e) { console.error(`enrichment 1066 (deal ${dealId}):`, e.message); }
+  }
+  const planned = children.find(c => Number(c.entityTypeId) === 1050);
+  if (planned) {
+    try {
+      const { result } = await b24('crm.item.list', { entityTypeId: 1058, filter: { parentId1050: planned.id }, select: ['id', SERVICE_ENGINEER_FIELD] });
+      for (const it of (result?.items || [])) { const eng = firstOf(it[SERVICE_ENGINEER_FIELD]); if (eng) { out.engineer_id = parseInt(eng, 10); break; } }
+    } catch (e) { console.error(`enrichment 1058 (deal ${dealId}):`, e.message); }
+  }
+  return out;
+}
+
 // ── Build the deal-level DB record from a raw Bitrix deal ────────────────────
 async function buildDealRecord(d, ctx) {
   const categoryId = Number(d.__categoryId ?? d.CATEGORY_ID);
   const stageMeta = ctx.stageMeta[categoryId] || await getPipelineStages(categoryId);
   const semantic = stageMeta.byId?.[d.STAGE_ID]?.semantics || 'P';
-  const payFactoryRaw = firstOf(d[F.payTermsFactory]);
-  const payClientRaw = firstOf(d[F.payTermsClient]);
-  const engId = firstOf(d[F.engineerId]);
   return {
     deal_id: parseInt(d.ID, 10),
     category_id: categoryId,
@@ -48,48 +81,45 @@ async function buildDealRecord(d, ctx) {
     company_name: d.COMPANY_ID ? (ctx.companyMap[String(d.COMPANY_ID)] || '') : '',
     contract_no: firstOf(d[F.contractNo]) || '',
     contract_date: dateOnly(d[F.contractDate]),
-    delivery_by_date: dateOnly(d[F.deliveryByDate]),
-    factory_ship_date: dateOnly(d[F.factoryShip]),
-    pay_factory: ctx.enumMaps[F.payTermsFactory]?.[String(payFactoryRaw)] || PAY_SUPPLIER_LABELS[String(payFactoryRaw)] || (payFactoryRaw || ''),
-    pay_client: (ctx.clientPayMap && ctx.clientPayMap[String(payClientRaw)]) || (payClientRaw || ''),
-    engineer_id: engId ? parseInt(engId, 10) : null,
+    delivery_by_date: dateOnly(d[F.deliveryByDate]), // "Срок поставки заказа по договору"
     comment: firstOf(d[F.comment]) || '',
     red_flag: truthyBool(d[F.redFlag]),
     date_modify: d.DATE_MODIFY || null,
   };
 }
 
-// Upsert deal-level columns only — leaves the automation counts untouched so a
-// fast (deal-level) sync doesn't wipe the numbers a slower pass computed.
+// Upsert deal-level columns only. Child-sourced fields (factory_ship_date,
+// pay_client, pay_factory, engineer_id) and automation counts are written
+// separately by updateAutomation, so a fast deal-level sync doesn't wipe them.
 async function upsertDealLevel(r) {
   await pool.query(
     `INSERT INTO ticketsmodule_operational_deals
       (deal_id, category_id, stage_id, stage_semantic, opportunity, currency_id, assigned_by_id, department_id,
-       deal_title, company_id, company_name, contract_no, contract_date, delivery_by_date, factory_ship_date,
-       pay_factory, pay_client, engineer_id, comment, red_flag, date_modify, synced_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,NOW())
+       deal_title, company_id, company_name, contract_no, contract_date, delivery_by_date, comment, red_flag, date_modify, synced_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW())
      ON CONFLICT (deal_id) DO UPDATE SET
        category_id=$2, stage_id=$3, stage_semantic=$4, opportunity=$5, currency_id=$6, assigned_by_id=$7, department_id=$8,
-       deal_title=$9, company_id=$10, company_name=$11, contract_no=$12, contract_date=$13, delivery_by_date=$14, factory_ship_date=$15,
-       pay_factory=$16, pay_client=$17, engineer_id=$18, comment=$19, red_flag=$20, date_modify=$21, synced_at=NOW()`,
+       deal_title=$9, company_id=$10, company_name=$11, contract_no=$12, contract_date=$13, delivery_by_date=$14,
+       comment=$15, red_flag=$16, date_modify=$17, synced_at=NOW()`,
     [r.deal_id, r.category_id, r.stage_id, r.stage_semantic, r.opportunity, r.currency_id, r.assigned_by_id, r.department_id,
-     r.deal_title, r.company_id, r.company_name, r.contract_no, r.contract_date, r.delivery_by_date, r.factory_ship_date,
-     r.pay_factory, r.pay_client, r.engineer_id, r.comment, r.red_flag, r.date_modify]
+     r.deal_title, r.company_id, r.company_name, r.contract_no, r.contract_date, r.delivery_by_date, r.comment, r.red_flag, r.date_modify]
   );
 }
 
+// Writes automation counts + the child-sourced enrichment fields.
 async function updateAutomation(dealId, a) {
-  if (a.openBp === undefined) {
-    await pool.query(
-      `UPDATE ticketsmodule_operational_deals SET open_processes=$2, overdue_tasks=$3, total_tasks=$4 WHERE deal_id=$1`,
-      [dealId, a.open, a.overdue, a.total]
-    );
-  } else {
-    await pool.query(
-      `UPDATE ticketsmodule_operational_deals SET open_processes=$2, overdue_tasks=$3, total_tasks=$4, open_bp=$5 WHERE deal_id=$1`,
-      [dealId, a.open, a.overdue, a.total, a.openBp]
-    );
-  }
+  const e = a.enrichment || {};
+  const bpCols = a.openBp === undefined ? '' : ', open_bp=$9';
+  const params = [dealId, a.open, a.overdue, a.total,
+    e.factory_ship_date || null, e.pay_client || '', e.pay_factory || '', e.engineer_id || null];
+  if (a.openBp !== undefined) params.push(a.openBp);
+  await pool.query(
+    `UPDATE ticketsmodule_operational_deals
+       SET open_processes=$2, overdue_tasks=$3, total_tasks=$4,
+           factory_ship_date=$5, pay_client=$6, pay_factory=$7, engineer_id=$8${bpCols}
+     WHERE deal_id=$1`,
+    params
+  );
 }
 
 // ── Per-deal automation snapshot: open child processes + overdue tasks + БП ───
@@ -138,7 +168,8 @@ async function computeAutomation(dealId, bp) {
       : matched.length;
   }
 
-  return { open, overdue, total, openBp };
+  const enrichment = await computeEnrichment(dealId, children);
+  return { open, overdue, total, openBp, enrichment };
 }
 
 // ── Webhook path: sync exactly one deal (or drop it if it left the scope) ────
