@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { requireAuth, pool } = require('../auth');
+const { requireAuth, pool, auditLog } = require('../auth');
 const { USERS } = require('../constants');
 
 const PM_ROLES = ['admin', 'coordinator'];
+const TARIFF_ADMIN = ['admin']; // редактирование сумм тарифа — только админ
 function isPm(user) { return PM_ROLES.includes(user.role); }
 
 // Resolves the current ЦУП account's Bitrix employee ID, the same way the
@@ -123,6 +124,79 @@ router.post('/export', requireAuth(PM_ROLES), async (req, res) => {
     console.error('POST /api/bonus/export error:', e.message);
     res.status(500).json({ error: 'Не удалось сформировать файл' });
   }
+});
+
+// ── Тарифы приборов (админ) ─────────────────────────────────────────────────
+// GET /api/bonus/tariffs — список всех приборов с суммами тарифа
+// (установка+обучение / методическое обучение, USD). Только админ.
+router.get('/tariffs', requireAuth(TARIFF_ADMIN), async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT bitrix_pribor_id AS id, pribor_name AS name,
+              install_usd, methodical_usd
+         FROM ticketsmodule_instrument_category_map
+        ORDER BY pribor_name COLLATE "C"`
+    );
+    res.json({
+      tariffs: rows.map(r => ({
+        id: r.id,
+        name: r.name,
+        install_usd: r.install_usd == null ? null : parseFloat(r.install_usd),
+        methodical_usd: r.methodical_usd == null ? null : parseFloat(r.methodical_usd),
+      })),
+    });
+  } catch (e) {
+    console.error('GET /api/bonus/tariffs error:', e.message);
+    res.status(500).json({ error: 'Не удалось загрузить тарифы' });
+  }
+});
+
+// PUT /api/bonus/tariffs — массовое сохранение изменённых сумм. Только админ.
+// body: { updates: [{ id, install_usd, methodical_usd }] }
+router.put('/tariffs', requireAuth(TARIFF_ADMIN), async (req, res) => {
+  const updates = Array.isArray(req.body?.updates) ? req.body.updates : null;
+  if (!updates) return res.status(400).json({ error: 'Нет изменений для сохранения' });
+
+  const norm = v => {
+    if (v === '' || v == null) return null;
+    const n = parseFloat(String(v).replace(',', '.'));
+    if (!Number.isFinite(n) || n < 0) return undefined; // недопустимое значение
+    return Math.round(n * 100) / 100;
+  };
+
+  const client = await pool.connect();
+  let saved = 0;
+  try {
+    await client.query('BEGIN');
+    for (const u of updates) {
+      const id = parseInt(u.id, 10);
+      if (!id) continue;
+      const install = norm(u.install_usd);
+      const method = norm(u.methodical_usd);
+      if (install === undefined || method === undefined) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `Недопустимая сумма у прибора #${id}` });
+      }
+      const r = await client.query(
+        `UPDATE ticketsmodule_instrument_category_map
+            SET install_usd = $2, methodical_usd = $3
+          WHERE bitrix_pribor_id = $1`,
+        [id, install, method]
+      );
+      saved += r.rowCount;
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('PUT /api/bonus/tariffs error:', e.message);
+    return res.status(500).json({ error: 'Не удалось сохранить: ' + e.message });
+  } finally {
+    client.release();
+  }
+
+  auditLog(req.user.id, req.user.username, 'bonus_tariff_update', null,
+    { count: saved }, req.ip, req.get('user-agent'));
+  res.json({ saved });
 });
 
 module.exports = { router };

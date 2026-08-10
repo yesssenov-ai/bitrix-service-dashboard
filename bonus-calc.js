@@ -136,21 +136,32 @@ async function resolveRequestBonus(requestId, reportsForRequest, priborMap) {
 
   if (useTariff) {
     let tariffUsd = 0;
-    const matchedCats = new Set();
+    const matchedNames = new Set();
     for (const pid of priborIds) {
+      // Per-instrument amounts (from instrumentsexport.xlsx) take precedence;
+      // fall back to the category-level tariff if a pribor has no own amounts.
       const { rows } = await pool.query(
-        `SELECT c.install_usd, c.methodical_usd, c.name FROM ticketsmodule_instrument_category_map m
-         JOIN ticketsmodule_bonus_tariff_categories c ON c.id=m.category_id
-         WHERE m.bitrix_pribor_id=$1`, [pid]
+        `SELECT m.pribor_name,
+                m.install_usd     AS m_install,
+                m.methodical_usd  AS m_method,
+                c.name            AS cat_name,
+                c.install_usd     AS c_install,
+                c.methodical_usd  AS c_method
+           FROM ticketsmodule_instrument_category_map m
+           LEFT JOIN ticketsmodule_bonus_tariff_categories c ON c.id = m.category_id
+          WHERE m.bitrix_pribor_id = $1`, [pid]
       );
       if (!rows.length) continue;
-      matchedCats.add(rows[0].name);
-      tariffUsd += parseFloat(rows[0].install_usd) || 0;
-      tariffUsd += parseFloat(rows[0].methodical_usd) || 0; // both components apply by default — see note above
+      const r = rows[0];
+      const hasOwn = r.m_install != null || r.m_method != null;
+      const install = hasOwn ? (parseFloat(r.m_install) || 0) : (parseFloat(r.c_install) || 0);
+      const method  = hasOwn ? (parseFloat(r.m_method)  || 0) : (parseFloat(r.c_method)  || 0);
+      matchedNames.add(r.pribor_name || r.cat_name || String(pid));
+      tariffUsd += install + method; // both components (установка+обучение + методическое) apply
     }
-    if (!tariffUsd) return { skipped: true, reason: `прибор "${priborLabel}" не сопоставлен с категорией тарифа` };
+    if (!tariffUsd) return { skipped: true, reason: `прибор "${priborLabel}" не сопоставлен с тарифом (нет суммы установки/обучения)` };
     grossUsd = tariffUsd;
-    basis = `Тариф по прибору${isInstrumentSale===null?' (определено по тексту типа услуги — подтвердите ID "Процесс продажа инструментов")':''}: ${[...matchedCats].join(', ')}`;
+    basis = `Тариф по прибору${isInstrumentSale===null?' (определено по тексту типа услуги — подтвердите ID "Процесс продажа инструментов")':''}: ${[...matchedNames].join(', ')}`;
   } else {
     if (!isServiceSale) {
       return { skipped: true, reason: 'источник заявки — не "Процесс продажа сервиса" и не "Процесс продажа инструментов", бонус не начисляется' };

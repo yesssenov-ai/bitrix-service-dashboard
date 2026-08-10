@@ -377,8 +377,14 @@ async function initDB() {
       id SERIAL PRIMARY KEY,
       bitrix_pribor_id INTEGER UNIQUE NOT NULL,
       pribor_name TEXT NOT NULL,
-      category_id INTEGER REFERENCES ticketsmodule_bonus_tariff_categories(id)
+      category_id INTEGER REFERENCES ticketsmodule_bonus_tariff_categories(id),
+      install_usd NUMERIC(10,2),
+      methodical_usd NUMERIC(10,2)
     );
+    -- Per-instrument tariff amounts (filled from instrumentsexport.xlsx). These
+    -- take precedence over the category-level amounts when present.
+    ALTER TABLE ticketsmodule_instrument_category_map ADD COLUMN IF NOT EXISTS install_usd NUMERIC(10,2);
+    ALTER TABLE ticketsmodule_instrument_category_map ADD COLUMN IF NOT EXISTS methodical_usd NUMERIC(10,2);
     CREATE INDEX IF NOT EXISTS idx_tm_instr_cat_map_pribor ON ticketsmodule_instrument_category_map(bitrix_pribor_id);
 
     CREATE TABLE IF NOT EXISTS ticketsmodule_mail_emails (

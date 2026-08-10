@@ -60,6 +60,30 @@ h1{font-family:var(--font-display);font-size:24px;font-weight:600;margin-bottom:
 .grand-total{display:flex;justify-content:flex-end;gap:14px;align-items:baseline;padding:16px 0 4px;font-family:var(--font-mono);}
 .grand-total .label{color:var(--text-dim);font-size:13px;}
 .grand-total .value{font-size:22px;font-weight:600;color:var(--signal);}
+
+/* ── Модалка редактирования тарифов ── */
+.modal-ov{position:fixed;inset:0;background:rgba(6,8,11,.72);z-index:100;display:none;align-items:center;justify-content:center;padding:24px;}
+.modal-ov.open{display:flex;}
+.modal{background:var(--panel);border:1px solid var(--line-2);border-radius:14px;width:min(760px,100%);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.5);}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--line);}
+.modal-head h2{font-family:var(--font-display);font-size:17px;font-weight:600;}
+.modal-close{background:transparent;border:none;color:var(--text-dim);font-size:22px;line-height:1;cursor:pointer;padding:0 4px;}
+.modal-close:hover{color:var(--text);}
+.modal-tools{padding:14px 22px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center;}
+.modal-tools .finput{flex:1;}
+.tariff-scroll{overflow-y:auto;padding:6px 22px 8px;}
+.thead,.trow{display:grid;grid-template-columns:1fr 130px 130px;gap:12px;align-items:center;}
+.thead{position:sticky;top:0;background:var(--panel);padding:8px 0;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-faint);border-bottom:1px solid var(--line);z-index:1;}
+.thead .num,.trow .num{text-align:right;}
+.trow{padding:7px 0;border-bottom:1px solid var(--line);font-size:13px;}
+.trow:last-child{border-bottom:none;}
+.trow .pname{color:var(--text);}
+.trow .pid{color:var(--text-faint);font-family:var(--font-mono);font-size:11px;}
+.tinput{width:110px;margin-left:auto;padding:7px 9px;border-radius:7px;border:1px solid var(--line-2);background:var(--bg);color:var(--text);font-family:var(--font-mono);font-size:13px;text-align:right;}
+.tinput:focus{outline:none;border-color:var(--signal);}
+.trow.dirty .tinput{border-color:var(--warn);}
+.modal-foot{padding:14px 22px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.modal-foot .hint{font-size:12px;color:var(--text-dim);}
 </style>
 </head>
 <body>
@@ -93,12 +117,40 @@ h1{font-family:var(--font-display);font-size:24px;font-weight:600;margin-bottom:
           <option value="">Все инженеры</option>
         </select>
       </div>
-      <button class="btn btn-brand" onclick="calculate()">Рассчитать</button>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="btn btn-ghost" id="tariffBtn" style="display:none" onclick="openTariffs()">⚙ Тарифы приборов</button>
+        <button class="btn btn-brand" onclick="calculate()">Рассчитать</button>
+      </div>
     </div>
   </div>
 
   <div id="content"></div>
 </main>
+
+<!-- Модалка тарифов (только админ) -->
+<div class="modal-ov" id="tariffModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Тарифы приборов · USD</h2>
+      <button class="modal-close" onclick="closeTariffs()">×</button>
+    </div>
+    <div class="modal-tools">
+      <input class="finput" id="tariffSearch" placeholder="Поиск по названию или ID прибора…" oninput="filterTariffs()">
+    </div>
+    <div class="thead" style="padding-left:22px;padding-right:22px">
+      <div>Прибор</div>
+      <div class="num">Установка+обуч.</div>
+      <div class="num">Методич. обуч.</div>
+    </div>
+    <div class="tariff-scroll" id="tariffList">
+      <div style="color:var(--text-dim);padding:16px 0;text-align:center">Загрузка…</div>
+    </div>
+    <div class="modal-foot">
+      <span class="hint" id="tariffHint">Суммы применяются к расчёту сразу после сохранения. Пересчёт в тенге — по курсу НБ РК на момент расчёта.</span>
+      <button class="btn btn-brand" id="tariffSave" onclick="saveTariffs()" disabled>Сохранить</button>
+    </div>
+  </div>
+</div>
 
 <script>
 let me = null, isPm = false;
@@ -152,6 +204,7 @@ async function init(){
   document.getElementById('fQuarter').value = String(nowQuarter > 1 ? nowQuarter - 1 : 4);
 
   if (isPm) await loadEngineerOptions();
+  if (me.role === 'admin') document.getElementById('tariffBtn').style.display = '';
 
   document.getElementById('content').innerHTML = '<div class="card" style="text-align:center;color:var(--text-dim)">Выберите период и нажмите «Рассчитать»</div>';
 }
@@ -254,6 +307,95 @@ async function exportToExcel(){
 
 function toggleEng(i){
   document.getElementById('engLines'+i).classList.toggle('open');
+}
+
+// ── Тарифы приборов (админ) ──────────────────────────────────────────────
+let tariffs = [];          // [{id,name,install_usd,methodical_usd}]
+const tariffDirty = new Map(); // id -> {install_usd, methodical_usd}
+
+async function openTariffs(){
+  document.getElementById('tariffModal').classList.add('open');
+  tariffDirty.clear();
+  updateSaveState();
+  const list = document.getElementById('tariffList');
+  list.innerHTML = '<div style="color:var(--text-dim);padding:16px 0;text-align:center">Загрузка…</div>';
+  try {
+    const r = await fetch('/api/bonus/tariffs');
+    const d = await r.json();
+    if (!r.ok) { list.innerHTML = `<div style="color:var(--brand-h);padding:16px 0">${esc(d.error||'Ошибка')}</div>`; return; }
+    tariffs = d.tariffs || [];
+    renderTariffs();
+  } catch(e) {
+    list.innerHTML = '<div style="color:var(--brand-h);padding:16px 0">Ошибка соединения</div>';
+  }
+}
+function closeTariffs(){
+  if (tariffDirty.size && !confirm('Есть несохранённые изменения. Закрыть без сохранения?')) return;
+  document.getElementById('tariffModal').classList.remove('open');
+}
+function numOrEmpty(v){ return (v==null || v==='') ? '' : v; }
+function renderTariffs(){
+  const q = (document.getElementById('tariffSearch').value || '').toLowerCase().trim();
+  const list = document.getElementById('tariffList');
+  const shown = tariffs.filter(t => !q || (t.name||'').toLowerCase().includes(q) || String(t.id).includes(q));
+  if (!shown.length) { list.innerHTML = '<div style="color:var(--text-dim);padding:16px 0;text-align:center">Ничего не найдено</div>'; return; }
+  list.innerHTML = shown.map(t => {
+    const d = tariffDirty.get(t.id);
+    const inst = d ? d.install_usd : numOrEmpty(t.install_usd);
+    const meth = d ? d.methodical_usd : numOrEmpty(t.methodical_usd);
+    return `<div class="trow${d?' dirty':''}" data-id="${t.id}">
+      <div><div class="pname">${esc(t.name)}</div><div class="pid">#${t.id}</div></div>
+      <input class="tinput" type="number" min="0" step="1" value="${esc(inst)}" oninput="markTariff(${t.id},'install_usd',this.value)">
+      <input class="tinput" type="number" min="0" step="1" value="${esc(meth)}" oninput="markTariff(${t.id},'methodical_usd',this.value)">
+    </div>`;
+  }).join('');
+}
+function filterTariffs(){ renderTariffs(); }
+function markTariff(id, field, value){
+  const t = tariffs.find(x => x.id === id);
+  if (!t) return;
+  const cur = tariffDirty.get(id) || { install_usd: numOrEmpty(t.install_usd), methodical_usd: numOrEmpty(t.methodical_usd) };
+  cur[field] = value;
+  // если совпало с исходным по обоим полям — снимаем пометку «изменено»
+  const same = String(cur.install_usd) === String(numOrEmpty(t.install_usd))
+            && String(cur.methodical_usd) === String(numOrEmpty(t.methodical_usd));
+  if (same) tariffDirty.delete(id); else tariffDirty.set(id, cur);
+  const row = document.querySelector(`.trow[data-id="${id}"]`);
+  if (row) row.classList.toggle('dirty', tariffDirty.has(id));
+  updateSaveState();
+}
+function updateSaveState(){
+  const btn = document.getElementById('tariffSave');
+  btn.disabled = tariffDirty.size === 0;
+  btn.textContent = tariffDirty.size ? `Сохранить (${tariffDirty.size})` : 'Сохранить';
+}
+async function saveTariffs(){
+  if (!tariffDirty.size) return;
+  const updates = [...tariffDirty.entries()].map(([id, v]) => ({
+    id, install_usd: v.install_usd, methodical_usd: v.methodical_usd,
+  }));
+  const btn = document.getElementById('tariffSave');
+  btn.disabled = true; btn.textContent = 'Сохраняю…';
+  try {
+    const r = await fetch('/api/bonus/tariffs', {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ updates }),
+    });
+    const d = await r.json();
+    if (!r.ok) { toast(d.error || 'Ошибка сохранения', 'error'); updateSaveState(); return; }
+    // применяем к локальной копии
+    for (const [id, v] of tariffDirty.entries()) {
+      const t = tariffs.find(x => x.id === id);
+      if (t) { t.install_usd = v.install_usd===''?null:parseFloat(v.install_usd); t.methodical_usd = v.methodical_usd===''?null:parseFloat(v.methodical_usd); }
+    }
+    tariffDirty.clear();
+    renderTariffs();
+    updateSaveState();
+    toast(`Сохранено: ${d.saved} приборов`);
+  } catch(e) {
+    toast('Ошибка соединения', 'error');
+    updateSaveState();
+  }
 }
 
 init();
