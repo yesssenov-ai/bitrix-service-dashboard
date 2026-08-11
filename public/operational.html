@@ -81,12 +81,12 @@ h1{font-family:var(--font-display);font-size:22px;font-weight:600;}
 .ms-panel::-webkit-scrollbar-track{background:transparent;}
 .ms-search{width:100%;background:var(--bg);border:1px solid var(--line-2);color:var(--text);font-size:12.5px;padding:7px 10px;border-radius:8px;margin-bottom:6px;outline:none;text-transform:none;letter-spacing:normal;}
 .ms-search:focus{border-color:var(--signal);}
-.ms-opt{display:flex;align-items:flex-start;gap:9px;padding:7px 9px;border-radius:8px;font-size:12.5px;font-weight:500;line-height:1.3;color:var(--text-dim);cursor:pointer;white-space:normal;text-transform:none;letter-spacing:normal;transition:background .12s,color .12s;}
+.ms-opt{display:flex;align-items:center;gap:11px;padding:8px 12px;border-radius:8px;font-size:12.5px;font-weight:500;line-height:1.3;color:var(--text-dim);cursor:pointer;white-space:normal;text-transform:none;letter-spacing:normal;transition:background .12s,color .12s;}
 .ms-opt:hover{background:rgba(255,255,255,.045);color:var(--text);}
-.ms-opt input{appearance:none;-webkit-appearance:none;width:17px;height:17px;margin:0;border:1.5px solid var(--line-2);border-radius:5px;background:var(--bg);cursor:pointer;flex:0 0 auto;margin-top:.5px;position:relative;transition:.12s;}
+.ms-opt input{appearance:none;-webkit-appearance:none;width:16px;height:16px;margin:0;border:1.5px solid var(--line-2);border-radius:5px;background:var(--bg);cursor:pointer;flex:0 0 auto;position:relative;transition:.12s;}
 .ms-opt input:hover{border-color:var(--signal);}
 .ms-opt input:checked{background:var(--signal);border-color:var(--signal);}
-.ms-opt input:checked::after{content:'';position:absolute;left:5px;top:2px;width:4px;height:8px;border:solid #0d1013;border-width:0 2px 2px 0;transform:rotate(43deg);}
+.ms-opt input:checked::after{content:'';position:absolute;left:4.5px;top:1.5px;width:4px;height:8px;border:solid #0d1013;border-width:0 2px 2px 0;transform:rotate(43deg);}
 .ms-opt:has(input:checked){color:var(--text);}
 /* Перебиваем глобальный .filters label{text-transform:uppercase} — пункты списка в нормальном регистре */
 .filters .ms-opt,.filters .ms-empty,.filters .ms-search{text-transform:none;letter-spacing:normal;}
