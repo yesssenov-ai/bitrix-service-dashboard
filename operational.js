@@ -317,6 +317,36 @@ function daysBetween(a, b) {
   if (!a || !b) return null;
   return Math.round((new Date(a) - new Date(b)) / 86400000);
 }
+// Postgres DATE columns come back from node-pg as JS Date objects, so
+// String(v).slice(0,10) yields "Tue Sep 22" (year dropped) and any date math
+// silently collapses to a single year. Normalise to 'YYYY-MM-DD' first so the
+// year is preserved across year boundaries.
+function toYMD(v) {
+  if (!v) return null;
+  if (v instanceof Date) {
+    if (isNaN(v)) return null;
+    const y = v.getFullYear(), m = String(v.getMonth() + 1).padStart(2, '0'), d = String(v.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return String(v).slice(0, 10);
+}
+// Bitrix returns emoji inside timeline comments as ":<utf8-hex-bytes>:" tokens
+// (e.g. 💬 → ":f09f92ac:"). Decode those back to the actual character; leave
+// ordinary ":word:" text untouched (letters aren't valid hex, odd-length or
+// non-UTF8 byte runs fail the round-trip check and are kept as-is).
+function decodeBitrixEmoji(s) {
+  // Emoji encode as 4-byte UTF-8 (≥8 hex chars); requiring 8+ avoids decoding
+  // short accidental hex words like ":dead:" that happen to be valid UTF-8.
+  return String(s || '').replace(/:([0-9a-fA-F]{8,32}):/g, (m, hex) => {
+    if (hex.length % 2) return m;
+    try {
+      const buf = Buffer.from(hex, 'hex');
+      const dec = buf.toString('utf8');
+      if (Buffer.from(dec, 'utf8').toString('hex') === hex.toLowerCase() && /[^\x00-\x7F]/.test(dec)) return dec;
+    } catch (e) { /* not an emoji token */ }
+    return m;
+  });
+}
 function daysSince(v) {
   if (!v) return null;
   return Math.floor((Date.now() - new Date(v)) / 86400000);
@@ -474,8 +504,8 @@ function dbRowToBoard(r, stageMeta, userMap = {}) {
   const isDone = semantic === 'S';
   const isLost = semantic === 'F';
 
-  const deliveryBy = r.delivery_by_date ? String(r.delivery_by_date).slice(0, 10) : null;
-  const factoryShip = r.factory_ship_date ? String(r.factory_ship_date).slice(0, 10) : null;
+  const deliveryBy = toYMD(r.delivery_by_date);
+  const factoryShip = toYMD(r.factory_ship_date);
   // Разница = (Поставка по договору − Отгрузка от завода) − 15 дней.
   const diffDays = (deliveryBy && factoryShip) ? (daysBetween(deliveryBy, factoryShip) - 15) : null;
   const onTime = diffDays === null ? null : diffDays >= 0;
@@ -554,7 +584,8 @@ async function getBoard(filters = {}) {
   }
   if (filters.customerQuery && filters.customerQuery.trim()) {
     params.push('%' + filters.customerQuery.trim().toLowerCase() + '%');
-    where.push(`(LOWER(company_name) LIKE $${params.length} OR LOWER(deal_title) LIKE $${params.length})`);
+    const n = params.length;
+    where.push(`(LOWER(company_name) LIKE $${n} OR LOWER(deal_title) LIKE $${n} OR LOWER(COALESCE(contract_no,'')) LIKE $${n})`);
   }
 
   let dbRows = [];
@@ -572,12 +603,29 @@ async function getBoard(filters = {}) {
   const rows = dbRows.map(r => dbRowToBoard(r, stageMeta, userMap));
   const funnel = buildFunnel(rows, stageMeta, cats);
 
+  // Filter dropdown options are built from the WHOLE pipeline scope (only the
+  // selected воронки), NOT from the already-filtered rows — otherwise choosing a
+  // stage with 0 matches would empty the Отдел/Менеджер lists and silently drop
+  // those selections. Now picking an empty stage just shows «0 сделок».
   const managerSet = new Map(), deptSet = new Map(), companySet = new Map();
-  rows.forEach(r => {
-    if (r.managerId) managerSet.set(r.managerId, r.manager);
-    if (r.departmentId) deptSet.set(String(r.departmentId), r.department);
-    if (r.companyId) companySet.set(String(r.companyId), r.company);
-  });
+  try {
+    const opt = await pool.query(
+      `SELECT DISTINCT assigned_by_id, department_id, company_id, company_name
+         FROM ticketsmodule_operational_deals WHERE category_id = ANY($1)`, [cats]);
+    opt.rows.forEach(o => {
+      if (o.assigned_by_id) managerSet.set(o.assigned_by_id, resolveUser(o.assigned_by_id, userMap));
+      if (o.department_id) deptSet.set(String(o.department_id), DEPARTMENT_LABELS[o.department_id] || String(o.department_id));
+      if (o.company_id) companySet.set(String(o.company_id), o.company_name || '');
+    });
+  } catch (e) {
+    console.error('getBoard options query error:', e.message);
+    // Fallback to row-derived options so the dropdowns aren't empty on error.
+    rows.forEach(r => {
+      if (r.managerId) managerSet.set(r.managerId, r.manager);
+      if (r.departmentId) deptSet.set(String(r.departmentId), r.department);
+      if (r.companyId) companySet.set(String(r.companyId), r.company);
+    });
+  }
 
   const summary = {
     dealCount: rows.length,
@@ -739,7 +787,7 @@ async function getDealComments(dealId, limit = 15, userMap = {}) {
         id: c.ID,
         date: c.CREATED || null,
         authorId, author: resolveUser(authorId, userMap),
-        text: (c.COMMENT || '').replace(/\[[^\]]+\]/g, '').trim(),
+        text: decodeBitrixEmoji((c.COMMENT || '').replace(/\[[^\]]+\]/g, '')).trim(),
       };
     }).filter(c => c.text);
   } catch (e) {

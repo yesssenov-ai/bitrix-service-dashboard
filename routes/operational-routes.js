@@ -1,15 +1,51 @@
 const express = require('express');
 const router = express.Router();
 const { b24 } = require('../bitrix');
-const { requireAuth, auditLog } = require('../auth');
+const { requireAuth, auditLog, pool } = require('../auth');
 const { getBoard, getDealDetail, getEditMeta, invalidateDealDetail, F } = require('../operational');
 const { refresh: refreshOperationalCache, syncOneDeal } = require('../operational-sync');
 const { buildPdf, buildXlsx } = require('../operational-export');
 
-// Same access level as Статистика — this is a management / meeting view.
-const OPS_ROLES = ['admin', 'coordinator'];
-// Editing deals (stage/responsible/comment/task) is admin-only.
-const ADMIN_ONLY = ['admin'];
+// ── Role capabilities inside this module ─────────────────────────────────────
+// admin always has everything (never stored). Every other role's access is
+// configured in the module's internal admin panel and lives in
+// ticketsmodule_operational_perms. Capabilities: view (open the module) + the
+// five edit actions.
+const EDIT_CAPS = ['stage', 'responsible', 'redflag', 'comment', 'task'];
+const ALL_CAPS = ['view', ...EDIT_CAPS];
+const EDITABLE_ROLES = ['coordinator', 'engineer', 'viewer']; // admin excluded (implicit full)
+const ROLE_LABELS = { coordinator: 'Координатор', engineer: 'Инженер', viewer: 'Наблюдатель' };
+const CAP_LABELS = { view: 'Просмотр', stage: 'Стадия', responsible: 'Ответств.', redflag: 'Кр. флаг', comment: 'Коммент.', task: 'Задачи' };
+
+let _permCache = null, _permCacheAt = 0;
+async function getPermsMap() {
+  if (_permCache && Date.now() - _permCacheAt < 15000) return _permCache;
+  const map = {};
+  try {
+    const { rows } = await pool.query('SELECT * FROM ticketsmodule_operational_perms');
+    rows.forEach(r => { map[r.role] = { view: r.can_view, stage: r.can_stage, responsible: r.can_responsible, redflag: r.can_redflag, comment: r.can_comment, task: r.can_task }; });
+  } catch (e) { console.error('getPermsMap error:', e.message); }
+  _permCache = map; _permCacheAt = Date.now();
+  return map;
+}
+function invalidatePerms() { _permCache = null; }
+
+async function userCan(user, cap) {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  const map = await getPermsMap();
+  return !!(map[user.role] && map[user.role][cap]);
+}
+
+// Middleware: authenticate, then require a module capability.
+function requireCap(cap) {
+  return [requireAuth(), async (req, res, next) => {
+    try {
+      if (await userCan(req.user, cap)) return next();
+      return res.status(403).json({ ok: false, error: 'Недостаточно прав для этого действия' });
+    } catch (e) { return res.status(500).json({ ok: false, error: e.message }); }
+  }];
+}
 
 function parseFilters(q) {
   const filters = {};
@@ -27,7 +63,7 @@ function parseFilters(q) {
 }
 
 // GET /api/operational/board — funnel + detail rows + filter options
-router.get('/board', requireAuth(OPS_ROLES), async (req, res) => {
+router.get('/board', requireCap('view'), async (req, res) => {
   try {
     const board = await getBoard(parseFilters(req.query));
     res.json(board);
@@ -38,7 +74,7 @@ router.get('/board', requireAuth(OPS_ROLES), async (req, res) => {
 });
 
 // GET /api/operational/deal/:id — drill-down, served from cache (built lazily).
-router.get('/deal/:id', requireAuth(OPS_ROLES), async (req, res) => {
+router.get('/deal/:id', requireCap('view'), async (req, res) => {
   try {
     const dealId = parseInt(req.params.id, 10);
     if (!dealId) return res.status(400).json({ ok: false, error: 'Неверный ID сделки' });
@@ -51,7 +87,7 @@ router.get('/deal/:id', requireAuth(OPS_ROLES), async (req, res) => {
 });
 
 // POST /api/operational/deal/:id/refresh — force a live rebuild of the drill-down.
-router.post('/deal/:id/refresh', requireAuth(OPS_ROLES), async (req, res) => {
+router.post('/deal/:id/refresh', requireCap('view'), async (req, res) => {
   try {
     const dealId = parseInt(req.params.id, 10);
     if (!dealId) return res.status(400).json({ ok: false, error: 'Неверный ID сделки' });
@@ -66,7 +102,7 @@ router.post('/deal/:id/refresh', requireAuth(OPS_ROLES), async (req, res) => {
 // POST /api/operational/refresh — manual full re-pull (button on the page).
 // Deal-level rows are refreshed synchronously (fast); automation counts
 // recompute in the background, so the response returns promptly.
-router.post('/refresh', requireAuth(OPS_ROLES), async (req, res) => {
+router.post('/refresh', requireCap('view'), async (req, res) => {
   try {
     const result = await refreshOperationalCache();
     const board = await getBoard(parseFilters(req.query));
@@ -90,7 +126,7 @@ function buildFilterText(q, board) {
   return parts.join('   ·   ');
 }
 
-router.get('/export', requireAuth(OPS_ROLES), async (req, res) => {
+router.get('/export', requireCap('view'), async (req, res) => {
   try {
     const format = req.query.format === 'xlsx' ? 'xlsx' : 'pdf';
     const type = req.query.type === 'detailed' ? 'detailed' : 'simple';
@@ -119,9 +155,50 @@ router.get('/export', requireAuth(OPS_ROLES), async (req, res) => {
 
 // ── Admin edit actions ───────────────────────────────────────────────────────
 // GET /api/operational/meta — stage + user options for the admin edit forms.
-router.get('/meta', requireAuth(ADMIN_ONLY), async (req, res) => {
+router.get('/meta', requireCap('view'), async (req, res) => {
   try { res.json({ ok: true, ...(await getEditMeta()) }); }
   catch (e) { console.error('GET /api/operational/meta error:', e.message); res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// GET /api/operational/my-access — what the CURRENT user may do here. Drives the
+// frontend (whether to show the pencil / which edit controls to render).
+router.get('/my-access', requireAuth(), async (req, res) => {
+  try {
+    const caps = {};
+    for (const c of ALL_CAPS) caps[c] = await userCan(req.user, c);
+    res.json({ ok: true, role: req.user.role, isAdmin: req.user.role === 'admin', caps });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// GET /api/operational/permissions — role→capability matrix (admin only).
+router.get('/permissions', requireAuth(['admin']), async (req, res) => {
+  try {
+    const map = await getPermsMap();
+    const empty = { view: false, stage: false, responsible: false, redflag: false, comment: false, task: false };
+    const roles = EDITABLE_ROLES.map(role => ({ role, label: ROLE_LABELS[role] || role, caps: map[role] || { ...empty } }));
+    res.json({ ok: true, capsOrder: ALL_CAPS, capLabels: CAP_LABELS, roles });
+  } catch (e) { console.error('GET /permissions error:', e.message); res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// PUT /api/operational/permissions — save the matrix (admin only).
+router.put('/permissions', requireAuth(['admin']), async (req, res) => {
+  const updates = Array.isArray(req.body?.roles) ? req.body.roles : null;
+  if (!updates) return res.status(400).json({ ok: false, error: 'Нет данных для сохранения' });
+  try {
+    for (const u of updates) {
+      if (!EDITABLE_ROLES.includes(u.role)) continue;
+      const c = u.caps || {};
+      await pool.query(
+        `INSERT INTO ticketsmodule_operational_perms (role, can_view, can_stage, can_responsible, can_redflag, can_comment, can_task)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)
+         ON CONFLICT (role) DO UPDATE SET can_view=$2, can_stage=$3, can_responsible=$4, can_redflag=$5, can_comment=$6, can_task=$7`,
+        [u.role, !!c.view, !!c.stage, !!c.responsible, !!c.redflag, !!c.comment, !!c.task]
+      );
+    }
+    invalidatePerms();
+    await auditLog(req.user.id, req.user.username, 'OP_PERMS_UPDATE', null, { roles: updates.map(u => u.role) }, req.headers['x-forwarded-for'] || req.ip, req.headers['user-agent']);
+    res.json({ ok: true });
+  } catch (e) { console.error('PUT /permissions error:', e.message); res.status(500).json({ ok: false, error: e.message }); }
 });
 
 async function resyncDeal(dealId) {
@@ -129,7 +206,7 @@ async function resyncDeal(dealId) {
 }
 
 // POST /deal/:id/stage — change deal stage
-router.post('/deal/:id/stage', requireAuth(ADMIN_ONLY), async (req, res) => {
+router.post('/deal/:id/stage', requireCap('stage'), async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const stageId = req.body.stageId;
@@ -142,7 +219,7 @@ router.post('/deal/:id/stage', requireAuth(ADMIN_ONLY), async (req, res) => {
 });
 
 // POST /deal/:id/responsible — change responsible (ASSIGNED_BY_ID)
-router.post('/deal/:id/responsible', requireAuth(ADMIN_ONLY), async (req, res) => {
+router.post('/deal/:id/responsible', requireCap('responsible'), async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const userId = parseInt(req.body.userId, 10);
@@ -155,7 +232,7 @@ router.post('/deal/:id/responsible', requireAuth(ADMIN_ONLY), async (req, res) =
 });
 
 // POST /deal/:id/redflag — toggle the «Красный флаг» boolean field
-router.post('/deal/:id/redflag', requireAuth(ADMIN_ONLY), async (req, res) => {
+router.post('/deal/:id/redflag', requireCap('redflag'), async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (!id) return res.status(400).json({ ok: false, error: 'Неверный ID' });
@@ -169,7 +246,7 @@ router.post('/deal/:id/redflag', requireAuth(ADMIN_ONLY), async (req, res) => {
 });
 
 // POST /deal/:id/comment — add a timeline comment
-router.post('/deal/:id/comment', requireAuth(ADMIN_ONLY), async (req, res) => {
+router.post('/deal/:id/comment', requireCap('comment'), async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const text = (req.body.text || '').trim();
@@ -182,7 +259,7 @@ router.post('/deal/:id/comment', requireAuth(ADMIN_ONLY), async (req, res) => {
 });
 
 // POST /deal/:id/task — create a Bitrix task bound to the deal
-router.post('/deal/:id/task', requireAuth(ADMIN_ONLY), async (req, res) => {
+router.post('/deal/:id/task', requireCap('task'), async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const { title, responsibleId, deadline, description } = req.body;

@@ -147,6 +147,33 @@ tr.detail-row td{background:#171b22;padding:0;border-bottom:1px solid var(--line
 .spin{display:inline-block;width:13px;height:13px;border:2px solid var(--line-2);border-top-color:var(--signal);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:6px;}
 @keyframes sp{to{transform:rotate(360deg);}}
 
+/* Поле даты: календарь заметен на тёмном фоне и явно выглядит кликабельным */
+input[type=date]{color-scheme:dark;}
+input[type=date]::-webkit-calendar-picker-indicator{
+  opacity:1;cursor:pointer;margin-left:6px;padding:4px;border-radius:6px;
+  background:rgba(53,208,192,.22);border:1px solid var(--signal-dim);transition:.15s;
+}
+input[type=date]::-webkit-calendar-picker-indicator:hover{background:rgba(53,208,192,.45);}
+
+/* Модалка (внутренняя админка модуля) */
+.modal-ov{position:fixed;inset:0;background:rgba(6,8,11,.72);z-index:100;display:none;align-items:center;justify-content:center;padding:24px;}
+.modal-ov.open{display:flex;}
+.modal{background:var(--panel);border:1px solid var(--line-2);border-radius:14px;width:min(860px,100%);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.5);}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--line);}
+.modal-head h2{font-family:var(--font-display);font-size:17px;font-weight:600;}
+.modal-close{background:transparent;border:none;color:var(--text-dim);font-size:22px;line-height:1;cursor:pointer;}
+.modal-close:hover{color:var(--text);}
+.modal-body{overflow:auto;padding:14px 22px 4px;}
+.modal-foot{padding:14px 22px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.modal-foot .hint{font-size:12px;color:var(--text-dim);max-width:70%;}
+.perm-table{width:100%;border-collapse:collapse;font-size:13px;}
+.perm-table th,.perm-table td{padding:9px 6px;border-bottom:1px solid var(--line);text-align:center;}
+.perm-table th:first-child,.perm-table td:first-child{text-align:left;}
+.perm-table thead th{color:var(--text-faint);font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;font-weight:600;}
+.perm-table input{width:17px;height:17px;accent-color:var(--brand);cursor:pointer;}
+.perm-role{font-weight:600;color:var(--text);}
+.perm-admin td{color:var(--text-faint);}
+
 /* ─── Кнопка режима «Митинг» ─────────────────────────────────────────── */
 .meeting-btn{border:1px solid var(--line-2);background:transparent;color:var(--text-dim);font-family:var(--font-body);font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;cursor:pointer;transition:.15s;white-space:nowrap;}
 .meeting-btn:hover{border-color:var(--signal);color:var(--text);}
@@ -236,6 +263,7 @@ body.meeting .chk-label{font-size:15px;}
     <h1>Ход исполнения сделок</h1>
     <div style="display:flex;align-items:center;gap:12px;">
       <span class="asof" id="asof"></span>
+      <button class="reset-btn" id="accessBtn" onclick="openAccess()" title="Права ролей в модуле" style="display:none">⚙ Доступ</button>
       <button class="reset-btn" id="resetBtn" onclick="resetFilters()" title="Сбросить все фильтры">↺ Сброс</button>
       <div class="export-wrap">
         <button class="reset-btn" id="exportBtn" onclick="toggleExportMenu(event)" title="Экспорт отфильтрованных данных">⬇ Экспорт</button>
@@ -258,7 +286,7 @@ body.meeting .chk-label{font-size:15px;}
     <div><label>Стадия сделки</label><select id="fStage"><option value="all">Все</option></select></div>
     <div><label>Отдел</label><select id="fDept"><option value="all">Все</option></select></div>
     <div><label>Менеджер</label><select id="fManager"><option value="all">Все</option></select></div>
-    <div><label>Заказчик</label><input id="fCustomer" type="text" placeholder="поиск по названию…"></div>
+    <div><label>Поиск сделки</label><input id="fCustomer" type="text" placeholder="🔍 название, № договора, компания…"></div>
     <div><label>Год / Месяц</label>
       <div style="display:flex;gap:6px;">
         <select id="fYear" style="flex:1"></select>
@@ -287,9 +315,28 @@ body.meeting .chk-label{font-size:15px;}
   </div>
 </main>
 
+<!-- Внутренняя админка модуля: права ролей (только админ) -->
+<div class="modal-ov" id="accessModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Права ролей · модуль «Реализация»</h2>
+      <button class="modal-close" onclick="closeAccess()">×</button>
+    </div>
+    <div class="modal-body" id="accessBody">
+      <div class="loading">Загрузка…</div>
+    </div>
+    <div class="modal-foot">
+      <span class="hint">Администратор всегда имеет полный доступ. «Просмотр» открывает модуль; остальные права разрешают соответствующие действия по сделкам.</span>
+      <button class="ap-btn" id="accessSave" onclick="saveAccess()" disabled>Сохранить</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const MONTHS=['','Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const EDIT_CAPS=['stage','responsible','redflag','comment','task'];
 let BOARD=null, activeFlag=null;
+function can(cap){ return !!(window.ACCESS && (window.ACCESS.isAdmin || (window.ACCESS.caps && window.ACCESS.caps[cap]))); }
 
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function fmtSum(n){return Math.round(n||0).toLocaleString('ru-RU');}
@@ -489,7 +536,7 @@ async function toggleDetail(tr,id){
 
 // ── Admin edit panel (only for role=admin) ──────────────────────────────────
 function adminPanel(d){
-  if(!window.IS_ADMIN||!window.EDIT_META) return '';
+  if(!window.CAN_MANAGE||!window.EDIT_META) return '';
   const row=(BOARD&&BOARD.rows||[]).find(r=>String(r.id)===String(d.dealId));
   const cat=row?row.categoryId:null;
   const stages=(window.EDIT_META.stages&&cat!=null)?(window.EDIT_META.stages[cat]||[]):[];
@@ -497,20 +544,20 @@ function adminPanel(d){
   const stageOpts=stages.map(s=>`<option value="${esc(s.id)}" ${row&&row.stageId===s.id?'selected':''}>${esc(s.name)}</option>`).join('');
   const respOpts=users.map(u=>`<option value="${u.id}" ${row&&row.managerId===u.id?'selected':''}>${esc(u.name)}</option>`).join('');
   const taskRespOpts=users.map(u=>`<option value="${u.id}" ${row&&row.managerId===u.id?'selected':''}>${esc(u.name)}</option>`).join('');
-  return `<div class="admin-panel" id="adminPanel-${d.dealId}" style="display:none">
-    <div class="apw">
-      <div class="apf"><label>Стадия</label><div class="apr"><select id="edStage-${d.dealId}">${stageOpts}</select><button class="ap-btn" onclick="editStage(${d.dealId},this)">Сменить</button></div></div>
-      <div class="apf"><label>Ответственный</label><div class="apr"><select id="edResp-${d.dealId}">${respOpts}</select><button class="ap-btn" onclick="editResp(${d.dealId},this)">Назначить</button></div></div>
-      <div class="apf apf-wide"><label>Красный флаг</label><div class="apr"><label class="chk-label"><input type="checkbox" id="edFlag-${d.dealId}" ${row&&row.redFlag?'checked':''} onchange="editRedFlag(${d.dealId},this)"> 🚩 отметить сделку красным флагом</label></div></div>
-      <div class="apf apf-wide"><label>Комментарий</label><div class="apr"><input id="edCmt-${d.dealId}" type="text" placeholder="текст комментария…"><button class="ap-btn" onclick="editComment(${d.dealId},this)">Добавить</button></div></div>
-      <div class="apf apf-wide"><label>Новая задача</label><div class="apr apr-task">
+  // Каждый блок показывается только если у пользователя есть соответствующее право.
+  const blocks=[];
+  if(can('stage')) blocks.push(`<div class="apf"><label>Стадия</label><div class="apr"><select id="edStage-${d.dealId}">${stageOpts}</select><button class="ap-btn" onclick="editStage(${d.dealId},this)">Сменить</button></div></div>`);
+  if(can('responsible')) blocks.push(`<div class="apf"><label>Ответственный</label><div class="apr"><select id="edResp-${d.dealId}">${respOpts}</select><button class="ap-btn" onclick="editResp(${d.dealId},this)">Назначить</button></div></div>`);
+  if(can('redflag')) blocks.push(`<div class="apf apf-wide"><label>Красный флаг</label><div class="apr"><label class="chk-label"><input type="checkbox" id="edFlag-${d.dealId}" ${row&&row.redFlag?'checked':''} onchange="editRedFlag(${d.dealId},this)"> 🚩 отметить сделку красным флагом</label></div></div>`);
+  if(can('comment')) blocks.push(`<div class="apf apf-wide"><label>Комментарий</label><div class="apr"><input id="edCmt-${d.dealId}" type="text" placeholder="текст комментария…"><button class="ap-btn" onclick="editComment(${d.dealId},this)">Добавить</button></div></div>`);
+  if(can('task')) blocks.push(`<div class="apf apf-wide"><label>Новая задача</label><div class="apr apr-task">
         <input id="edTaskTitle-${d.dealId}" type="text" placeholder="название задачи…">
         <select id="edTaskResp-${d.dealId}">${taskRespOpts}</select>
         <input id="edTaskDl-${d.dealId}" type="date" title="дедлайн">
         <button class="ap-btn" onclick="editTask(${d.dealId},this)">Поставить</button>
-      </div></div>
-    </div>
-  </div>`;
+      </div></div>`);
+  if(!blocks.length) return '';
+  return `<div class="admin-panel" id="adminPanel-${d.dealId}" style="display:none"><div class="apw">${blocks.join('')}</div></div>`;
 }
 function toggleAdmin(id){ const el=document.getElementById('adminPanel-'+id); if(el) el.style.display = el.style.display==='none' ? '' : 'none'; }
 async function editRedFlag(id,cb){
@@ -592,7 +639,7 @@ function renderDetail(d){
   }).join(''):'<div class="empty">Нет активных БП</div>';
   const bar=`<div class="detail-bar">
     <span class="detail-sync">${d.cached?'из кэша':'обновлено'}${d.syncedAt?' · '+fmtDateTime(d.syncedAt):''}</span>
-    ${window.IS_ADMIN&&window.EDIT_META?`<button class="reset-btn" onclick="toggleAdmin(${d.dealId})" title="Управление сделкой">✏️ Управление</button>`:''}
+    ${window.CAN_MANAGE&&window.EDIT_META?`<button class="reset-btn" onclick="toggleAdmin(${d.dealId})" title="Управление сделкой">✏️ Управление</button>`:''}
     <button class="reset-btn" onclick="refreshDetail(${d.dealId},this)" title="Подтянуть свежие данные из Битрикса">↻ Обновить</button>
   </div>`;
   return `${bar}${adminPanel(d)}<div class="detail-inner">
@@ -623,7 +670,11 @@ async function init(){
     const {user}=await r.json();
     document.getElementById('userName').innerHTML=`<b>${esc(user.displayName)}</b>`;
     window.IS_ADMIN = user.role==='admin';
-    if(window.IS_ADMIN){
+    // What can THIS user do here (view/edit каждого типа)? Drives the pencil + which controls show.
+    try{ const ar=await fetch('/api/operational/my-access'); if(ar.ok){ const ad=await ar.json(); if(ad.ok) window.ACCESS=ad; } }catch(e){/* falls back to view-only */}
+    window.CAN_MANAGE = EDIT_CAPS.some(c=>can(c));
+    if(window.IS_ADMIN) document.getElementById('accessBtn').style.display='';
+    if(window.CAN_MANAGE){
       try{ const mr=await fetch('/api/operational/meta'); if(mr.ok){ const md=await mr.json(); if(md.ok) window.EDIT_META=md; } }catch(e){/* edit UI just won't show */}
     }
   }catch(e){location.href='/login.html';return;}
@@ -638,6 +689,48 @@ async function init(){
     BOARD=d;renderNotice(d);renderFunnel(d.funnel);renderChips(d.summary);populateOptions(d);renderRows(d.rows);renderAsOf(d);
   }
 }
+// ─── Внутренняя админка модуля: права ролей (только админ) ────────────────
+let _accessData=null, _accessDirty=false;
+async function openAccess(){
+  document.getElementById('accessModal').classList.add('open');
+  _accessDirty=false; document.getElementById('accessSave').disabled=true;
+  const body=document.getElementById('accessBody');
+  body.innerHTML='<div class="loading"><span class="spin"></span>Загрузка…</div>';
+  try{
+    const r=await fetch('/api/operational/permissions');
+    const d=await r.json();
+    if(!r.ok||!d.ok) throw new Error(d.error||'Ошибка');
+    _accessData=d; renderAccess();
+  }catch(e){ body.innerHTML='<div class="loading">Не удалось загрузить: '+esc(e.message)+'</div>'; }
+}
+function closeAccess(){
+  if(_accessDirty && !confirm('Есть несохранённые изменения. Закрыть без сохранения?')) return;
+  document.getElementById('accessModal').classList.remove('open');
+}
+function renderAccess(){
+  const d=_accessData, caps=d.capsOrder;
+  const head=`<tr><th>Роль</th>${caps.map(c=>`<th>${esc(d.capLabels[c]||c)}</th>`).join('')}</tr>`;
+  const adminRow=`<tr class="perm-admin"><td class="perm-role">Администратор</td>${caps.map(()=>`<td title="у админа всегда полный доступ">✓</td>`).join('')}</tr>`;
+  const rows=d.roles.map(r=>`<tr><td class="perm-role">${esc(r.label)}</td>${caps.map(c=>`<td><input type="checkbox" data-role="${esc(r.role)}" data-cap="${esc(c)}" ${r.caps[c]?'checked':''} onchange="markAccess()"></td>`).join('')}</tr>`).join('');
+  document.getElementById('accessBody').innerHTML=`<table class="perm-table"><thead>${head}</thead><tbody>${adminRow}${rows}</tbody></table>`;
+}
+function markAccess(){ _accessDirty=true; document.getElementById('accessSave').disabled=false; }
+async function saveAccess(){
+  const boxes=document.querySelectorAll('#accessBody input[type=checkbox]');
+  const byRole={};
+  boxes.forEach(b=>{ (byRole[b.dataset.role]=byRole[b.dataset.role]||{})[b.dataset.cap]=b.checked; });
+  const roles=Object.entries(byRole).map(([role,caps])=>({role,caps}));
+  const btn=document.getElementById('accessSave'); const old=btn.textContent; btn.disabled=true; btn.textContent='Сохраняю…';
+  try{
+    const r=await fetch('/api/operational/permissions',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({roles})});
+    const d=await r.json();
+    if(!r.ok||!d.ok) throw new Error(d.error||'Ошибка');
+    _accessDirty=false; btn.textContent=old;
+    document.getElementById('accessModal').classList.remove('open');
+    alert('Права сохранены. Пользователям нужно обновить страницу, чтобы изменения вступили в силу.');
+  }catch(e){ alert('Не удалось сохранить: '+e.message); btn.textContent=old; btn.disabled=false; }
+}
+
 // ─── Режим «Митинг» ─────────────────────────────────────────────────────
 function applyMeeting(on){
   document.body.classList.toggle('meeting', on);
