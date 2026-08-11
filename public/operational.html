@@ -137,6 +137,12 @@ tr.detail-row td{background:#171b22;padding:0;border-bottom:1px solid var(--line
 .task .tt{flex:1;}
 .task .tmeta{font-size:11px;color:var(--text-faint);white-space:nowrap;}
 .task.overdue .tt{color:var(--danger);}
+.task .tt{color:var(--text);text-decoration:none;}
+.task .tt:hover{text-decoration:underline;}
+.task.done .tt{text-decoration:line-through;color:var(--text-faint);}
+.task.done.overdue .tt{color:var(--text-faint);}
+.task .tstatus{font-size:10px;font-weight:600;border:1px solid;border-radius:5px;padding:1px 6px;white-space:nowrap;flex:0 0 auto;}
+.tcount{font-family:var(--font-mono);font-size:11px;color:var(--ok);font-weight:600;text-transform:none;letter-spacing:0;margin-left:8px;}
 .cmt{padding:7px 0;border-bottom:1px dashed var(--line);font-size:12.5px;}
 .cmt:last-child{border-bottom:none;}
 .cmt .cmeta{font-family:var(--font-mono);font-size:10.5px;color:var(--text-faint);margin-bottom:2px;}
@@ -230,6 +236,8 @@ body.meeting .proc .svc-badge{font-size:13px;padding:2px 9px;}
 body.meeting .proc .pdot{width:10px;height:10px;}
 body.meeting .task{font-size:16px;padding:9px 0;}
 body.meeting .task .tmeta{font-size:14px;}
+body.meeting .task .tstatus{font-size:12.5px;padding:2px 8px;}
+body.meeting .tcount{font-size:13.5px;}
 body.meeting .cmt{font-size:16px;padding:9px 0;}
 body.meeting .cmt .cmeta{font-size:13px;}
 body.meeting .empty,body.meeting .loading{font-size:15px;}
@@ -615,10 +623,17 @@ function renderDetail(d){
       <a class="deal-link" href="${c.url}" target="_blank">#${esc(c.id)}</a>
       ${c.responsible?`<span class="presp">👤 ${esc(c.responsible)}</span>`:''}
       <span class="pstage">${esc(c.stageName)}</span></div>`).join(''):'<div class="empty">Нет связанных процессов</div>';
-  const tasks=d.tasks.length?d.tasks.map(t=>`
-    <div class="task ${t.overdue?'overdue':''}"><span class="pdot" style="background:${t.done?'var(--ok)':t.overdue?'var(--danger)':'var(--warn)'}"></span>
-      <span class="tt">${esc(t.title)}</span>
-      <span class="tmeta">${esc(t.responsible)}${t.deadline?' · '+fmtDate(t.deadline):''}</span></div>`).join(''):'<div class="empty">Нет задач</div>';
+  const tasks=d.tasks.length?d.tasks.map(t=>{
+    const col=t.done?'var(--ok)':t.overdue?'var(--danger)':(t.status===4?'var(--signal)':'var(--warn)');
+    const metaRight=t.done?(t.closedDate?'закрыта '+fmtDate(t.closedDate):''):(t.deadline?'до '+fmtDate(t.deadline):'');
+    return `<div class="task ${t.overdue?'overdue':''} ${t.done?'done':''}">
+      <span class="pdot" style="background:${col}"></span>
+      <a class="tt deal-link" href="${t.url}" target="_blank" onclick="event.stopPropagation()">${esc(t.title)}</a>
+      <span class="tstatus" style="color:${col};border-color:${col}66">${t.done?'✓ ':''}${esc(t.statusLabel||'')}</span>
+      <span class="tmeta">${esc(t.responsible)}${metaRight?' · '+metaRight:''}</span></div>`;
+  }).join(''):'<div class="empty">Нет задач</div>';
+  const doneCount=(d.tasks||[]).filter(t=>t.done).length;
+  const tasksHead=d.tasks.length?`Задачи <span class="tcount">${doneCount} из ${d.tasks.length} выполнено</span>`:'Задачи';
   const cmts=d.comments.length?d.comments.map(c=>`
     <div class="cmt"><div class="cmeta">${fmtDateTime(c.date)} · ${esc(c.author)}</div>${esc(c.text)}</div>`).join(''):'<div class="empty">Нет комментариев</div>';
   const autos=(d.automations||[]).length?d.automations.map(a=>{
@@ -645,7 +660,7 @@ function renderDetail(d){
   return `${bar}${adminPanel(d)}<div class="detail-inner">
     <div><h4>Смарт-процессы</h4>${procs}
       <h4 style="margin-top:16px">Автоматизации · активные БП</h4>${autos}</div>
-    <div><h4>Задачи</h4>${tasks}</div>
+    <div><h4>${tasksHead}</h4>${tasks}</div>
     <div><h4>Комментарии</h4>${cmts}</div>
   </div>`;
 }

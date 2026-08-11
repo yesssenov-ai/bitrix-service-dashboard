@@ -745,6 +745,10 @@ async function getChildProcesses(dealId) {
   return out;
 }
 
+// Bitrix task statuses: 2 ждёт, 3 выполняется, 4 ждёт контроля, 5 завершена,
+// 6 отложена, 7 отклонена (1 «новая» встречается редко).
+const TASK_STATUS_LABELS = { 1: 'Новая', 2: 'Ждёт выполнения', 3: 'Выполняется', 4: 'Ждёт контроля', 5: 'Завершена', 6: 'Отложена', 7: 'Отклонена' };
+
 async function getDealTasks(dealId, userMap = {}) {
   try {
     const { result } = await b24('tasks.task.list', {
@@ -763,7 +767,9 @@ async function getDealTasks(dealId, userMap = {}) {
       return {
         id: t.id ?? t.ID,
         title: t.title ?? t.TITLE,
-        status, done, overdue, deadline,
+        status, statusLabel: TASK_STATUS_LABELS[status] || ('статус ' + status),
+        done, overdue, deadline,
+        closedDate: t.closedDate ?? t.CLOSED_DATE ?? null,
         responsibleId: respId, responsible: resolveUser(respId, userMap),
         url: `https://crm.prolabsupport.kz/company/personal/user/${respId}/tasks/task/view/${t.id ?? t.ID}/`,
       };
