@@ -63,6 +63,24 @@ h1{font-family:var(--font-display);font-size:22px;font-weight:600;}
 @media(max-width:1100px){.filters{grid-template-columns:repeat(3,1fr);}}
 @media(max-width:640px){.filters{grid-template-columns:repeat(2,1fr);}}
 
+/* Мультивыбор (фильтры) */
+.ms{position:relative;}
+.ms-btn{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg);border:1px solid var(--line-2);color:var(--text);font-family:var(--font-body);font-size:13px;padding:8px 10px;border-radius:8px;cursor:pointer;text-align:left;}
+.ms.ms-open .ms-btn{border-color:var(--signal);}
+.ms-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ms-label.ms-some{color:var(--signal);font-weight:600;}
+.ms-caret{color:var(--text-faint);font-size:10px;flex:0 0 auto;}
+.ms-disabled{opacity:.45;pointer-events:none;}
+.ms-panel{display:none;position:absolute;left:0;right:0;top:calc(100% + 5px);background:var(--panel);border:1px solid var(--line-2);border-radius:9px;box-shadow:0 12px 30px rgba(0,0,0,.45);z-index:30;padding:6px;max-height:320px;overflow:auto;min-width:210px;}
+.ms-panel.open{display:block;}
+.ms-search{width:100%;background:var(--bg);border:1px solid var(--line-2);color:var(--text);font-size:12.5px;padding:6px 8px;border-radius:6px;margin-bottom:6px;outline:none;}
+.ms-search:focus{border-color:var(--signal);}
+.ms-opt{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;font-size:12.5px;color:var(--text);cursor:pointer;white-space:nowrap;}
+.ms-opt:hover{background:var(--panel-h);}
+.ms-opt input{width:15px;height:15px;accent-color:var(--brand);cursor:pointer;flex:0 0 auto;}
+.ms-all{border-bottom:1px solid var(--line);border-radius:0;margin-bottom:4px;color:var(--text-dim);}
+.ms-empty{padding:8px;color:var(--text-faint);font-size:12px;}
+
 /* Funnel */
 .funnel{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:12px;margin-bottom:14px;overflow-x:auto;}
 .fcell{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 15px 13px;min-width:150px;position:relative;overflow:hidden;}
@@ -118,6 +136,7 @@ tr.detail-row td{background:#171b22;padding:0;border-bottom:1px solid var(--line
 .ap-btn{flex:0 0 auto;border:1px solid var(--signal-dim);background:rgba(53,208,192,.1);color:var(--signal);font-family:var(--font-body);font-size:12px;font-weight:600;padding:7px 12px;border-radius:7px;cursor:pointer;white-space:nowrap;transition:.15s;}
 .ap-btn:hover{background:rgba(53,208,192,.2);}
 .ap-btn:disabled{opacity:.55;cursor:default;}
+.dlabel{font-size:11.5px;color:var(--text-dim);align-self:center;white-space:nowrap;}
 .chk-label{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text);cursor:pointer;}
 .chk-label input{width:16px;height:16px;accent-color:var(--brand);cursor:pointer;}
 .detail-inner{padding:14px 18px 16px;display:grid;grid-template-columns:1.1fr 1fr 1.2fr;gap:20px;}
@@ -196,6 +215,8 @@ body.meeting .page-head{margin-bottom:22px;}
 body.meeting .filters{gap:16px;padding:18px 20px;margin-bottom:22px;}
 body.meeting .filters label{font-size:13px;margin-bottom:7px;}
 body.meeting .filters select,body.meeting .filters input{font-size:16px;padding:11px 13px;}
+body.meeting .ms-btn{font-size:16px;padding:11px 13px;}
+body.meeting .ms-opt{font-size:15px;}
 
 body.meeting .funnel{gap:16px;margin-bottom:18px;}
 body.meeting .fcell{padding:18px 20px 17px;min-width:190px;}
@@ -290,15 +311,15 @@ body.meeting .chk-label{font-size:15px;}
   <div id="fieldsNotice"></div>
 
   <div class="filters">
-    <div><label>Воронка</label><select id="fPipeline"></select></div>
-    <div><label>Стадия сделки</label><select id="fStage"><option value="all">Все</option></select></div>
-    <div><label>Отдел</label><select id="fDept"><option value="all">Все</option></select></div>
-    <div><label>Менеджер</label><select id="fManager"><option value="all">Все</option></select></div>
+    <div><label>Воронка</label><div id="msPipeline"></div></div>
+    <div><label>Стадия сделки</label><div id="msStage"></div></div>
+    <div><label>Отдел</label><div id="msDept"></div></div>
+    <div><label>Менеджер</label><div id="msManager"></div></div>
     <div><label>Поиск сделки</label><input id="fCustomer" type="text" placeholder="🔍 название, № договора, компания…"></div>
     <div><label>Год / Месяц</label>
       <div style="display:flex;gap:6px;">
-        <select id="fYear" style="flex:1"></select>
-        <select id="fMonth" style="flex:1"><option value="all">Все</option></select>
+        <div id="msYear" style="flex:1"></div>
+        <div id="msMonth" style="flex:1"></div>
       </div>
     </div>
   </div>
@@ -342,9 +363,59 @@ body.meeting .chk-label{font-size:15px;}
 
 <script>
 const MONTHS=['','Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
-const EDIT_CAPS=['stage','responsible','redflag','comment','task'];
+const EDIT_CAPS=['stage','responsible','redflag','comment','task','dates'];
 let BOARD=null, activeFlag=null;
+const MS={};
 function can(cap){ return !!(window.ACCESS && (window.ACCESS.isAdmin || (window.ACCESS.caps && window.ACCESS.caps[cap]))); }
+function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);};}
+
+// Компактный мультивыбор с чекбоксами (используется для всех списочных фильтров).
+function makeMS(id,{allLabel='Все',searchable=false}={}){
+  const root=document.getElementById(id); if(!root) return null;
+  root.classList.add('ms');
+  root.innerHTML=`<button type="button" class="ms-btn"><span class="ms-label"></span><span class="ms-caret">▾</span></button>`+
+    `<div class="ms-panel">${searchable?'<input class="ms-search" placeholder="поиск…">':''}<div class="ms-list"></div></div>`;
+  const label=root.querySelector('.ms-label'), panel=root.querySelector('.ms-panel'),
+        listEl=root.querySelector('.ms-list'), search=root.querySelector('.ms-search'),
+        btn=root.querySelector('.ms-btn');
+  let items=[], selected=new Set(), disabled=false, onChangeFn=()=>{};
+  function summary(){
+    if(!selected.size) return allLabel;
+    if(selected.size===1){ const it=items.find(i=>String(i.id)===[...selected][0]); return it?it.name:'1 выбрано'; }
+    return selected.size+' выбрано';
+  }
+  function renderLabel(){ label.textContent=summary(); label.classList.toggle('ms-some',selected.size>0); }
+  function renderList(){
+    const q=(search&&search.value||'').toLowerCase();
+    const vis=items.filter(i=>!q||String(i.name).toLowerCase().includes(q));
+    let html=`<label class="ms-opt ms-all"><input type="checkbox" data-all="1" ${selected.size===0?'checked':''}>${esc(allLabel)}</label>`;
+    html+=vis.length?vis.map(i=>`<label class="ms-opt"><input type="checkbox" value="${esc(String(i.id))}" ${selected.has(String(i.id))?'checked':''}>${esc(i.name)}</label>`).join(''):'<div class="ms-empty">Нет вариантов</div>';
+    listEl.innerHTML=html;
+    listEl.querySelectorAll('input').forEach(inp=>inp.onchange=()=>{
+      if(inp.dataset.all){ selected.clear(); }
+      else { if(inp.checked) selected.add(inp.value); else selected.delete(inp.value); }
+      renderLabel(); renderList(); onChangeFn();
+    });
+  }
+  btn.onclick=e=>{ e.stopPropagation(); if(disabled) return;
+    const willOpen=!panel.classList.contains('open');
+    document.querySelectorAll('.ms-panel.open').forEach(p=>{p.classList.remove('open');p.closest('.ms').classList.remove('ms-open');});
+    panel.classList.toggle('open',willOpen); root.classList.toggle('ms-open',willOpen);
+    if(willOpen&&search){ search.value=''; renderList(); search.focus(); }
+  };
+  panel.onclick=e=>e.stopPropagation();
+  if(search) search.oninput=renderList;
+  renderLabel(); renderList();
+  return {
+    setItems(v){ items=v||[]; renderList(); renderLabel(); },
+    setSelected(a){ selected=new Set((a||[]).map(String)); renderList(); renderLabel(); },
+    getValues(){ return [...selected]; },
+    clear(){ selected.clear(); renderList(); renderLabel(); },
+    setDisabled(d){ disabled=d; root.classList.toggle('ms-disabled',d); if(d){panel.classList.remove('open');root.classList.remove('ms-open');} },
+    onChange(fn){ onChangeFn=fn; },
+  };
+}
+document.addEventListener('click',e=>{ if(!e.target.closest('.ms')) document.querySelectorAll('.ms-panel.open').forEach(p=>{p.classList.remove('open');p.closest('.ms').classList.remove('ms-open');}); });
 
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function fmtSum(n){return Math.round(n||0).toLocaleString('ru-RU');}
@@ -358,14 +429,14 @@ setInterval(tickClock,1000);tickClock();
 
 function getFilters(){
   const q=new URLSearchParams();
-  const pipe=document.getElementById('fPipeline').value;
-  if(pipe!=='all')q.set('categories',pipe);
-  const st=document.getElementById('fStage').value; if(st!=='all')q.set('stage',st);
-  const dp=document.getElementById('fDept').value; if(dp!=='all')q.set('department',dp);
-  const mg=document.getElementById('fManager').value; if(mg!=='all')q.set('manager',mg);
+  const set=(key,vals)=>{ if(vals&&vals.length) q.set(key,vals.join(',')); };
+  set('categories',MS.pipeline&&MS.pipeline.getValues());
+  set('stage',MS.stage&&MS.stage.getValues());
+  set('department',MS.dept&&MS.dept.getValues());
+  set('manager',MS.manager&&MS.manager.getValues());
   const cu=document.getElementById('fCustomer').value.trim(); if(cu)q.set('customer',cu);
-  const yr=document.getElementById('fYear').value; if(yr!=='all')q.set('year',yr);
-  const mo=document.getElementById('fMonth').value; if(mo!=='all')q.set('month',mo);
+  set('year',MS.year&&MS.year.getValues());
+  set('month',MS.month&&MS.month.getValues());
   return q.toString();
 }
 
@@ -410,7 +481,7 @@ function doExport(format,type){
 }
 
 function resetFilters(){
-  ['fPipeline','fStage','fDept','fManager','fYear','fMonth'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='all';});
+  ['pipeline','stage','dept','manager','year','month'].forEach(k=>{ if(MS[k]) MS[k].clear(); });
   const cu=document.getElementById('fCustomer'); if(cu) cu.value='';
   activeFlag=null;
   loadBoard();
@@ -472,20 +543,18 @@ function renderChips(s){
 }
 
 function populateOptions(d){
-  const setOpts=(id,items,cur)=>{
-    const sel=document.getElementById(id);const v=cur??sel.value;
-    sel.innerHTML='<option value="all">Все</option>'+items.map(i=>`<option value="${esc(i.id)}">${esc(i.name)}</option>`).join('');
-    sel.value=v||'all';
-  };
-  // Departments & managers come from the current result set
-  setOpts('fDept',(d.options.departments||[]));
-  setOpts('fManager',(d.options.managers||[]));
-  // Stage list only meaningful when a single pipeline is chosen
-  const stageSel=document.getElementById('fStage');const curStage=stageSel.value;
-  if(d.funnel.mode==='stages'){
-    stageSel.innerHTML='<option value="all">Все</option>'+d.funnel.cells.map(c=>`<option value="${esc(c.key)}">${esc(c.name)}</option>`).join('');
-    stageSel.value=curStage||'all';stageSel.disabled=false;
-  }else{stageSel.innerHTML='<option value="all">Все</option>';stageSel.value='all';stageSel.disabled=true;}
+  // Отдел/Менеджер приходят из полного набора по воронке (стабильны при фильтрации).
+  if(MS.dept)    MS.dept.setItems(d.options.departments||[]);
+  if(MS.manager) MS.manager.setItems(d.options.managers||[]);
+  // Стадии имеют смысл только когда выбрана ровно одна воронка.
+  if(MS.stage){
+    if(d.funnel.mode==='stages'){
+      MS.stage.setItems(d.funnel.cells.map(c=>({id:c.key,name:c.name})));
+      MS.stage.setDisabled(false);
+    }else{
+      MS.stage.clear(); MS.stage.setItems([]); MS.stage.setDisabled(true);
+    }
+  }
 }
 
 function flagIcon(flags){
@@ -564,6 +633,18 @@ function adminPanel(d){
         <input id="edTaskDl-${d.dealId}" type="date" title="дедлайн">
         <button class="ap-btn" onclick="editTask(${d.dealId},this)">Поставить</button>
       </div></div>`);
+  if(can('dates')){
+    const dv=row&&row.deliveryBy?esc(String(row.deliveryBy).slice(0,10)):'';
+    const fs=row&&row.factoryShip?esc(String(row.factoryShip).slice(0,10)):'';
+    blocks.push(`<div class="apf apf-wide"><label>Даты (пишутся в Bitrix)</label><div class="apr apr-task">
+        <span class="dlabel">Поставка по договору</span>
+        <input id="edDeliv-${d.dealId}" type="date" value="${dv}">
+        <button class="ap-btn" onclick="editDeliv(${d.dealId},this)">Сохранить</button>
+        <span class="dlabel">Отгрузка от завода</span>
+        <input id="edShip-${d.dealId}" type="date" value="${fs}">
+        <button class="ap-btn" onclick="editShip(${d.dealId},this)">Сохранить</button>
+      </div></div>`);
+  }
   if(!blocks.length) return '';
   return `<div class="admin-panel" id="adminPanel-${d.dealId}" style="display:none"><div class="apw">${blocks.join('')}</div></div>`;
 }
@@ -592,6 +673,8 @@ function editStage(id,btn){ return withBtn(btn,async()=>{ const v=document.getEl
 function editResp(id,btn){ return withBtn(btn,async()=>{ const v=document.getElementById('edResp-'+id).value; await apiPost('/api/operational/deal/'+id+'/responsible',{userId:v}); await loadBoard(); }); }
 function editComment(id,btn){ return withBtn(btn,async()=>{ const el=document.getElementById('edCmt-'+id); const t=el.value.trim(); if(!t)return; await apiPost('/api/operational/deal/'+id+'/comment',{text:t}); el.value=''; await refreshDetailInline(id); }); }
 function editTask(id,btn){ return withBtn(btn,async()=>{ const title=document.getElementById('edTaskTitle-'+id).value.trim(); if(!title){alert('Укажите название задачи');return;} const responsibleId=document.getElementById('edTaskResp-'+id).value; const deadline=document.getElementById('edTaskDl-'+id).value; await apiPost('/api/operational/deal/'+id+'/task',{title,responsibleId,deadline}); document.getElementById('edTaskTitle-'+id).value=''; await refreshDetailInline(id); }); }
+function editDeliv(id,btn){ return withBtn(btn,async()=>{ const v=document.getElementById('edDeliv-'+id).value; await apiPost('/api/operational/deal/'+id+'/delivery-date',{date:v}); await loadBoard(); }); }
+function editShip(id,btn){ return withBtn(btn,async()=>{ const v=document.getElementById('edShip-'+id).value; await apiPost('/api/operational/deal/'+id+'/factory-ship',{date:v}); await loadBoard(); }); }
 async function refreshDetailInline(id){
   const r=await fetch('/api/operational/deal/'+id+'/refresh',{method:'POST'});
   if(r.status===401){location.href='/login.html';return;}
@@ -666,15 +749,19 @@ function renderDetail(d){
 }
 
 function initFilters(){
-  // Pipeline select
-  const pipe=document.getElementById('fPipeline');
-  pipe.innerHTML='<option value="all">Все воронки</option>';
-  // Years
-  const ys=document.getElementById('fYear');const now=new Date().getFullYear();
-  ys.innerHTML='<option value="all">Все</option>'+[now,now-1,now-2].map(y=>`<option value="${y}">${y}</option>`).join('');
-  const ms=document.getElementById('fMonth');
-  ms.innerHTML='<option value="all">Все</option>'+MONTHS.slice(1).map((m,i)=>`<option value="${i+1}">${m}</option>`).join('');
-  ['fPipeline','fStage','fDept','fManager','fYear','fMonth'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{if(id==='fPipeline')document.getElementById('fStage').value='all';loadBoard();}));
+  const now=new Date().getFullYear();
+  MS.pipeline=makeMS('msPipeline',{allLabel:'Все воронки'});
+  MS.stage=makeMS('msStage',{allLabel:'Все',searchable:true});
+  MS.dept=makeMS('msDept',{allLabel:'Все'});
+  MS.manager=makeMS('msManager',{allLabel:'Все',searchable:true});
+  MS.year=makeMS('msYear',{allLabel:'Все'});
+  MS.month=makeMS('msMonth',{allLabel:'Все'});
+  MS.year.setItems([now,now-1,now-2].map(y=>({id:y,name:String(y)})));
+  MS.month.setItems(MONTHS.slice(1).map((m,i)=>({id:i+1,name:m})));
+  const load=debounce(loadBoard,300);
+  // Смена воронки сбрасывает выбранные стадии (коды стадий у воронок разные).
+  MS.pipeline.onChange(()=>{ MS.stage.clear(); load(); });
+  [MS.stage,MS.dept,MS.manager,MS.year,MS.month].forEach(ms=>ms.onChange(load));
   let t;document.getElementById('fCustomer').addEventListener('input',()=>{clearTimeout(t);t=setTimeout(loadBoard,350);});
 }
 
@@ -699,8 +786,7 @@ async function init(){
   if(r.status===401){location.href='/login.html';return;}
   const d=await r.json();
   if(d.ok&&d.pipelines){
-    const pipe=document.getElementById('fPipeline');
-    pipe.innerHTML='<option value="all">Все воронки</option>'+Object.entries(d.pipelines).map(([id,n])=>`<option value="${id}">${esc(n)}</option>`).join('');
+    if(MS.pipeline) MS.pipeline.setItems(Object.entries(d.pipelines).map(([id,n])=>({id,name:n})));
     BOARD=d;renderNotice(d);renderFunnel(d.funnel);renderChips(d.summary);populateOptions(d);renderRows(d.rows);renderAsOf(d);
   }
 }

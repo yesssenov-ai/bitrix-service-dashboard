@@ -365,13 +365,15 @@ async function initDB() {
       can_responsible BOOLEAN DEFAULT false,
       can_redflag     BOOLEAN DEFAULT false,
       can_comment     BOOLEAN DEFAULT false,
-      can_task        BOOLEAN DEFAULT false
+      can_task        BOOLEAN DEFAULT false,
+      can_dates       BOOLEAN DEFAULT false
     );
+    ALTER TABLE ticketsmodule_operational_perms ADD COLUMN IF NOT EXISTS can_dates BOOLEAN DEFAULT false;
     -- Значения по умолчанию: координатор — полное управление (как просили),
     -- инженер/наблюдатель — без доступа. INSERT только если строки ещё нет,
     -- чтобы не затирать настройки, сделанные админом позже.
-    INSERT INTO ticketsmodule_operational_perms (role, can_view, can_stage, can_responsible, can_redflag, can_comment, can_task)
-      VALUES ('coordinator', true, true, true, true, true, true)
+    INSERT INTO ticketsmodule_operational_perms (role, can_view, can_stage, can_responsible, can_redflag, can_comment, can_task, can_dates)
+      VALUES ('coordinator', true, true, true, true, true, true, true)
       ON CONFLICT (role) DO NOTHING;
     INSERT INTO ticketsmodule_operational_perms (role, can_view) VALUES ('engineer', false) ON CONFLICT (role) DO NOTHING;
     INSERT INTO ticketsmodule_operational_perms (role, can_view) VALUES ('viewer', false) ON CONFLICT (role) DO NOTHING;

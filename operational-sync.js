@@ -282,4 +282,17 @@ async function refresh() {
   return res;
 }
 
-module.exports = { syncOneDeal, fullSync, refresh, runAutomationSweep, computeAutomation };
+// Write "Дата отгрузки от завода" back to the deal's Закупки (1066) smart item.
+// The factory-ship date physically lives on the child Закупки process, not the
+// deal, so we locate it and update it there. Returns {ok} or throws with a clear
+// message when the deal has no Закупки to write to.
+async function updateFactoryShipDate(dealId, ymd) {
+  const children = await findChildrenOfDeal(dealId);
+  const purchase = children.find(c => Number(c.entityTypeId) === 1066);
+  if (!purchase) { const e = new Error('у сделки нет связанной «Закупки» — некуда записать дату отгрузки'); e.userFacing = true; throw e; }
+  await b24('crm.item.update', { entityTypeId: 1066, id: purchase.id, fields: { [PURCHASE_FIELDS.factoryShip]: ymd || '' } });
+  await syncOneDeal(dealId); // recompute enrichment → refresh factory_ship_date in cache
+  return { ok: true, itemId: purchase.id };
+}
+
+module.exports = { syncOneDeal, fullSync, refresh, runAutomationSweep, computeAutomation, updateFactoryShipDate };

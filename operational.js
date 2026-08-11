@@ -564,24 +564,13 @@ async function getBoard(filters = {}) {
 
   const where = ['category_id = ANY($1)'];
   const params = [cats];
-  if (filters.stageId)      { params.push(filters.stageId);            where.push(`stage_id = $${params.length}`); }
-  if (filters.managerId)    { params.push(filters.managerId);          where.push(`assigned_by_id = $${params.length}`); }
-  if (filters.companyId)    { params.push(filters.companyId);          where.push(`company_id = $${params.length}`); }
-  if (filters.departmentId) { params.push(String(filters.departmentId)); where.push(`department_id = $${params.length}`); }
-  if (filters.year) {
-    const y = filters.year, m = filters.month;
-    if (m) {
-      const mm = String(m).padStart(2, '0');
-      const last = new Date(y, m, 0).getDate();
-      params.push(`${y}-${mm}-01`); const a = params.length;
-      params.push(`${y}-${mm}-${last}`); const b = params.length;
-      where.push(`contract_date BETWEEN $${a} AND $${b}`);
-    } else {
-      params.push(`${y}-01-01`); const a = params.length;
-      params.push(`${y}-12-31`); const b = params.length;
-      where.push(`contract_date BETWEEN $${a} AND $${b}`);
-    }
-  }
+  // Все списочные фильтры — множественный выбор (массив значений → ANY / IN).
+  if (filters.stageIds && filters.stageIds.length)      { params.push(filters.stageIds);            where.push(`stage_id = ANY($${params.length})`); }
+  if (filters.managerIds && filters.managerIds.length)  { params.push(filters.managerIds);          where.push(`assigned_by_id = ANY($${params.length})`); }
+  if (filters.companyId)                                { params.push(filters.companyId);           where.push(`company_id = $${params.length}`); }
+  if (filters.departmentIds && filters.departmentIds.length) { params.push(filters.departmentIds.map(String)); where.push(`department_id = ANY($${params.length})`); }
+  if (filters.years && filters.years.length)   { params.push(filters.years);  where.push(`EXTRACT(YEAR FROM contract_date)::int = ANY($${params.length}::int[])`); }
+  if (filters.months && filters.months.length) { params.push(filters.months); where.push(`EXTRACT(MONTH FROM contract_date)::int = ANY($${params.length}::int[])`); }
   if (filters.customerQuery && filters.customerQuery.trim()) {
     params.push('%' + filters.customerQuery.trim().toLowerCase() + '%');
     const n = params.length;
