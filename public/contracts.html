@@ -125,8 +125,9 @@
   .bcol{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end;cursor:default;position:relative}
   .bcol .bval{font-size:10.5px;font-weight:700;color:var(--dim);opacity:0;transition:.2s}
   .bcol:hover .bval{opacity:1;color:#fff}
-  .bcol .bwrap{width:100%;border-radius:6px 6px 0 0;overflow:hidden;transition:height 1s cubic-bezier(.2,.8,.2,1),filter .2s;background:linear-gradient(180deg,#5b8cff,#3a63d6)}
-  .bcol:hover .bwrap{filter:brightness(1.18)}
+  .bcol .bwrap{width:100%;border-radius:6px 6px 0 0;overflow:hidden;transition:height 1s cubic-bezier(.2,.8,.2,1),filter .2s;display:flex;flex-direction:column-reverse}
+  .bcol:hover .bwrap{filter:brightness(1.16)}
+  .bseg{width:100%;flex-shrink:0}
   .bcol .bm{font-size:10px;color:var(--dim2)}
 
   .area-legend{display:flex;gap:14px;margin-bottom:6px;flex-wrap:wrap}
@@ -192,6 +193,15 @@
   @keyframes loadpulse{0%,100%{opacity:.5;transform:scale(.92)}50%{opacity:1;transform:scale(1.08)}}
   @keyframes barsheen{0%,100%{opacity:0}50%{opacity:.45}}
   @media(prefers-reduced-motion:reduce){#aurora span,.card,.kpi,.bcol .bwrap::after,.kpi.accent::after,.loader-logo,.logo-emblem,.card::after{animation:none!important}#spotlight{display:none}.card,.kpi{opacity:1;transform:none}}
+
+  /* news toggle + area hover */
+  .newstoggle{margin-left:auto;display:flex;gap:0;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:9px;padding:2px}
+  .newstoggle button{background:transparent;border:0;color:var(--dim);font:inherit;font-size:11.5px;font-weight:600;padding:5px 11px;border-radius:7px;cursor:pointer;transition:.15s}
+  .newstoggle button.on{background:linear-gradient(135deg,var(--brand),#e01e45);color:#fff}
+  .newstoggle button:hover:not(.on){color:var(--text)}
+  #areaWrap{position:relative}
+  #areaGuide{position:absolute;top:0;bottom:20px;width:1px;background:rgba(255,255,255,.28);display:none;pointer-events:none;box-shadow:0 0 8px rgba(91,140,255,.4)}
+  #areaDot{position:absolute;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;border-radius:50%;background:#5b8cff;box-shadow:0 0 0 4px rgba(91,140,255,.22),0 0 14px rgba(91,140,255,.7);display:none;pointer-events:none;transition:top .06s,left .06s}
 </style>
 </head>
 <body>
@@ -257,12 +267,15 @@
       <h3><span class="ic">◹</span> Накопительная динамика</h3>
       <div class="sub">Нарастающим итогом, млрд ₸</div>
       <div class="area-legend" id="areaLegend"></div>
-      <svg width="100%" height="200" viewBox="0 0 520 200" preserveAspectRatio="none" id="areaSvg" style="overflow:visible"></svg>
+      <div id="areaWrap">
+        <svg width="100%" height="200" viewBox="0 0 520 200" preserveAspectRatio="none" id="areaSvg" style="overflow:visible;display:block"></svg>
+        <div id="areaGuide"></div><div id="areaDot"></div>
+      </div>
     </div>
   </div>
 
   <div class="card">
-    <h3><span class="ic">📰</span> Новости <span class="hint" id="newsHint">сделки, зашедшие в «Контракт» и «Завершена» за 3 дня</span></h3>
+    <h3><span class="ic">📰</span> Новости <div class="newstoggle" id="newsToggle"><button data-m="latest" class="on">Последние 3 контракта</button><button data-m="window">За 3 дня</button></div></h3>
     <div class="sub" id="newsSub">&nbsp;</div>
     <div class="newslist" id="news"><div class="news-empty">Загрузка…</div></div>
   </div>
@@ -468,11 +481,21 @@ function tGrp(i){openGrp.has(i)?openGrp.delete(i):openGrp.add(i);renderAll();}
 function tStage(id){openStage.has(id)?openStage.delete(id):openStage.add(id);renderAll();}
 
 function renderBars(deals){
-  const mln=Array(12).fill(0);deals.forEach(d=>{if(d.month!=null)mln[d.month]+=d.sumKzt/1e6;});
-  const maxM=Math.max(1,...mln);
-  document.getElementById('bars').innerHTML=MONTHS.map((m,i)=>`<div class="bcol" data-i="${i}"><span class="bval">${mln[i]?fmt(mln[i]):''}</span><div class="bwrap" data-h="${mln[i]/maxM*100}" style="height:0"></div><span class="bm">${m}</span></div>`).join('');
+  // помесячно, с разбивкой по отделам (стек в цветах отделов)
+  const byMonth=Array.from({length:12},()=>({}));
+  deals.forEach(d=>{if(d.month!=null){const o=byMonth[d.month];o[d.saleType]=(o[d.saleType]||0)+d.sumKzt/1e6;}});
+  const totals=byMonth.map(o=>Object.values(o).reduce((a,v)=>a+v,0));
+  const maxM=Math.max(1,...totals);
+  const depts=orderDepts([...new Set(deals.map(d=>d.saleType))]);
+  document.getElementById('bars').innerHTML=MONTHS.map((m,i)=>{
+    const o=byMonth[i],tot=totals[i],h=tot/maxM*100;
+    const segs=tot?depts.filter(dp=>o[dp]).map(dp=>`<div class="bseg" style="background:${stColor(dp,DEPT_ORDER.indexOf(dp))};height:${o[dp]/tot*100}%"></div>`).join(''):'';
+    return `<div class="bcol" data-i="${i}"><span class="bval">${tot?fmt(tot):''}</span><div class="bwrap" data-h="${h}" style="height:0">${segs}</div><span class="bm">${m}</span></div>`;
+  }).join('');
   setTimeout(()=>document.querySelectorAll('#bars .bwrap').forEach((b,i)=>setTimeout(()=>b.style.height=b.dataset.h+'%',i*20)),200);
-  document.querySelectorAll('#bars .bcol').forEach(c=>{const i=+c.dataset.i;c.addEventListener('mousemove',e=>showTip(`<b>${MONTHS[i]} ${YEAR}</b><br>${fmt(mln[i])} млн ₸`,e.clientX,e.clientY));c.addEventListener('mouseleave',hideTip);});
+  document.querySelectorAll('#bars .bcol').forEach(c=>{const i=+c.dataset.i,o=byMonth[i];
+    c.addEventListener('mousemove',e=>{const rows=Object.keys(o).sort((a,b)=>o[b]-o[a]).map(dp=>`<span style="color:${stColor(dp,DEPT_ORDER.indexOf(dp))}">■</span> ${esc(dp)}: ${fmt(o[dp])} млн`).join('<br>');showTip(`<b>${MONTHS[i]} ${YEAR} · ${fmt(totals[i])} млн ₸</b>${rows?'<br>'+rows:''}`,e.clientX,e.clientY);});
+    c.addEventListener('mouseleave',hideTip);});
 }
 
 function renderArea(deals){
@@ -495,17 +518,49 @@ function renderArea(deals){
   let labels='';MONTHS.forEach((m,i)=>labels+=`<text x="${X(i)}" y="${H+2}" fill="#5c6884" font-size="9" text-anchor="middle">${m}</text>`);
   svg.innerHTML=defs+g+paths+labels;
   document.getElementById('areaLegend').innerHTML=`<span class="al"><i style="background:transparent;border-top:2px dashed #8592ad;height:2px"></i>План${FILTER?' ('+esc(FILTER)+')':''}</span><span class="al"><i style="background:#5b8cff"></i>Bitrix (факт)</span>`;
+  AREA={bit,planTotal,maxV,W,H,pad};
 }
+// Наведение на «Накопительную»: направляющая + точка + цифра на дате под курсором
+let AREA=null;
+(function(){
+  const wrap=document.getElementById('areaWrap'),guide=document.getElementById('areaGuide'),dot=document.getElementById('areaDot');
+  wrap.addEventListener('mousemove',e=>{
+    if(!AREA)return;const {bit,planTotal,maxV,W,H,pad}=AREA;const r=wrap.getBoundingClientRect();
+    let i=Math.round(((e.clientX-r.left)/r.width*W-pad)/((W-2*pad)/11));i=Math.max(0,Math.min(11,i));
+    const xData=pad+i*(W-2*pad)/11,yData=H-pad-(bit[i]/maxV)*(H-2*pad);
+    const svgH=document.getElementById('areaSvg').getBoundingClientRect().height;
+    const xPx=r.width*xData/W,yPx=svgH*yData/H;
+    guide.style.left=xPx+'px';guide.style.display='block';
+    dot.style.left=xPx+'px';dot.style.top=yPx+'px';dot.style.display='block';
+    const planB=planTotal*(i+1)/12;
+    showTip(`<b>${MONTHS[i]} ${YEAR}</b><br><span style="color:#5b8cff">■</span> Bitrix: ${fmt1(bit[i])} млрд ₸${planTotal>0?`<br><span style="color:#8592ad">■</span> План: ${fmt1(planB)} млрд ₸`:''}`,e.clientX,e.clientY);
+  });
+  wrap.addEventListener('mouseleave',()=>{guide.style.display='none';dot.style.display='none';hideTip();});
+})();
 
+let NEWSMODE='latest';
+document.getElementById('newsToggle').addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.classList.contains('on'))return;NEWSMODE=b.dataset.m;document.querySelectorAll('#newsToggle button').forEach(x=>x.classList.toggle('on',x===b));loadNews();});
+const relTime=at=>{if(!at)return'';const t=new Date(String(at).replace(' ','T'));const h=Math.round((Date.now()-t)/3600000);return isNaN(h)?'':h<1?'только что':h<24?h+' ч назад':Math.round(h/24)+' дн назад';};
+function renderNews(items){
+  const box=document.getElementById('news');
+  if(!items.length){box.innerHTML=`<div class="news-empty">${NEWSMODE==='latest'?'Пока нет заключённых контрактов':'За последние 3 дня новых контрактов и завершений нет'}</div>`;return;}
+  box.innerHTML=items.map(n=>`<div class="newsit"><span class="nb ${n.sem==='S'?'s':'c'}">${esc(n.kind)}</span><div class="ni"><div class="nt">${esc(n.title)}</div><div class="nm">${esc(n.stageName||'')} · ${relTime(n.at)}</div></div><span class="nv tabular">${fmt(n.sumKzt/1e6)} млн</span>${n.url&&n.url!=='#'?`<a class="dl" href="${n.url}" target="_blank" style="color:var(--dim2)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M17 7H8M17 7v9"/></svg></a>`:''}</div>`).join('');
+}
 async function loadNews(){
+  const sub=document.getElementById('newsSub'),box=document.getElementById('news');
+  if(NEWSMODE==='latest'){
+    // 3 последних заключённых контракта — из уже загруженных сделок, по дате договора
+    const items=ALL.filter(d=>d.date).slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,3)
+      .map(d=>({title:d.title||('Сделка #'+d.id),kind:d.sem==='S'?'Завершена':'Контракт',sem:d.sem,stageName:d.stageName,sumKzt:d.sumKzt,at:d.date,url:d.url}));
+    sub.textContent='3 последних заключённых контракта';
+    renderNews(items);return;
+  }
+  sub.textContent='';box.innerHTML='<div class="news-empty">Загрузка…</div>';
   try{
     const r=await fetch('/api/contracts/news?days=3');const {items,days}=await r.json();
-    const box=document.getElementById('news');
-    if(!items||!items.length){box.innerHTML='<div class="news-empty">За последние 3 дня новых контрактов и завершений нет</div>';document.getElementById('newsSub').textContent='';return;}
-    document.getElementById('newsSub').textContent=`${items.length} обновлений за последние ${days} дн.`;
-    const rel=at=>{if(!at)return'';const t=new Date(at.replace(' ','T'));const h=Math.round((Date.now()-t)/3600000);return h<1?'только что':h<24?h+' ч назад':Math.round(h/24)+' дн назад';};
-    box.innerHTML=items.map(n=>`<div class="newsit"><span class="nb ${n.sem==='S'?'s':'c'}">${n.kind}</span><div class="ni"><div class="nt">${esc(n.title)}</div><div class="nm">${esc(n.stageName)} · ${rel(n.at)}</div></div><span class="nv tabular">${fmt(n.sumKzt/1e6)} млн</span>${n.url?`<a class="dl" href="${n.url}" target="_blank" style="color:var(--dim2)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M17 7H8M17 7v9"/></svg></a>`:''}</div>`).join('');
-  }catch(e){document.getElementById('news').innerHTML='<div class="news-empty">Не удалось загрузить новости</div>';}
+    sub.textContent=(items&&items.length)?`${items.length} обновлений за последние ${days} дн.`:'';
+    renderNews(items||[]);
+  }catch(e){box.innerHTML='<div class="news-empty">Не удалось загрузить новости</div>';}
 }
 
 init();
