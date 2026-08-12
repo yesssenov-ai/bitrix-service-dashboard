@@ -51,4 +51,23 @@ router.get('/instruments', requireAuth(PM_ROLES), async (req, res) => {
   }
 });
 
+// POST /api/stats/resync — запускает полный пересинк В СЕРВЕРНОМ ПРОЦЕССЕ
+// (не в консоли — потому переживает отключение консоли/сессии). Fire-and-forget:
+// сразу возвращает started:true, а синк крутится в фоне до конца. Прогресс —
+// в логах деплоя Railway (Deployments → Logs), там же финальное «✅ Синхронизировано».
+let statsResyncRunning = false;
+router.post('/resync', requireAuth(['admin']), async (req, res) => {
+  if (statsResyncRunning) return res.json({ ok: true, started: false, note: 'Пересинк уже идёт' });
+  statsResyncRunning = true;
+  const { fullSync } = require('../stats-sync');
+  fullSync()
+    .then(n => console.log(`✅ stats resync (эндпоинт) завершён: ${n} сделок`))
+    .catch(e => console.error('stats resync error:', e.message))
+    .finally(() => { statsResyncRunning = false; });
+  res.json({ ok: true, started: true, note: 'Пересинк запущен в фоне сервера — прогресс в логах деплоя Railway' });
+});
+
+// GET /api/stats/resync-status — идёт ли пересинк прямо сейчас.
+router.get('/resync-status', requireAuth(['admin']), (req, res) => res.json({ ok: true, running: statsResyncRunning }));
+
 module.exports = { router };
