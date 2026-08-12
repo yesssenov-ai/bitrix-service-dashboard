@@ -66,6 +66,9 @@
   .grouptoggle{display:flex;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:11px;padding:2px;height:40px}
   .grouptoggle button{background:transparent;border:0;color:var(--dim);font:inherit;font-size:12.5px;font-weight:600;padding:0 14px;border-radius:9px;cursor:pointer;transition:.15s}
   .grouptoggle button.on{background:linear-gradient(135deg,var(--brand),#e01e45);color:#fff}
+  .freset{height:40px;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:11px;padding:0 14px;font:inherit;font-size:12.5px;font-weight:600;color:var(--dim);cursor:pointer;transition:.15s}
+  .freset:hover{color:var(--text);border-color:rgba(255,255,255,.25)}
+  .freset.act{color:#fff;background:linear-gradient(135deg,rgba(255,45,85,.9),#e01e45);border-color:transparent;box-shadow:0 3px 12px rgba(255,45,85,.35)}
   .viewtabs{display:flex;gap:8px;margin-bottom:14px}
   .viewtabs button{background:var(--panel);border:1px solid var(--border);color:var(--dim);font:inherit;font-size:13.5px;font-weight:700;padding:9px 18px;border-radius:12px;cursor:pointer;transition:.2s}
   .viewtabs button:hover{color:var(--text);border-color:rgba(255,255,255,.16)}
@@ -124,18 +127,24 @@
   .wp-icon{position:absolute;top:24px;transform:translateX(-50%);font-size:13px;line-height:1;z-index:3;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
   .wp-icon.dim{opacity:.28;filter:grayscale(1)}
   .dur-label{position:absolute;top:56px;transform:translateX(-50%);font-size:9px;color:var(--dim2);white-space:nowrap;pointer-events:none}
-  .dur-label.cur{top:33px;color:var(--warn);font-weight:700;font-size:9.5px;background:rgba(7,11,22,.82);padding:1px 5px;border-radius:6px;z-index:5}
+  .dur-label.cur{top:23px;color:var(--warn);font-weight:800;font-size:9.5px;background:rgba(7,11,22,.92);padding:2px 6px;border-radius:7px;z-index:7;box-shadow:0 2px 8px rgba(0,0,0,.5);border:1px solid rgba(255,176,32,.45)}
   .wp-cap{position:absolute;top:67px;transform:translateX(-50%);font-size:8.5px;font-weight:600;white-space:nowrap}
   .wp-cap.dim{opacity:.35;color:var(--dim2)}
   .wp-date{position:absolute;top:79px;transform:translateX(-50%);font-size:7.5px;color:var(--dim2);white-space:nowrap;font-variant-numeric:tabular-nums}
-  .route-line{position:absolute;top:48px;left:12px;right:12px;height:3px;background:rgba(255,255,255,.09);border-radius:3px}
+  /* не пройденный путь — пунктиром; пройденный перекрывается сплошной .route-fill */
+  .route-line{position:absolute;top:48px;left:12px;right:12px;height:3px;border-radius:3px;background:repeating-linear-gradient(90deg,rgba(255,255,255,.28) 0 7px,transparent 7px 15px)}
   .route-fill{position:absolute;top:48px;left:12px;height:3px;border-radius:3px;transition:width 1s cubic-bezier(.2,.8,.2,1)}
   .wp{position:absolute;top:48px;width:11px;height:11px;border-radius:50%;transform:translate(-50%,-50%);background:#1a2338;border:2px solid rgba(255,255,255,.18);z-index:2;cursor:default;transition:.2s}
   .wp.passed{border-color:transparent}
   .wp.current{width:15px;height:15px;box-shadow:0 0 0 4px rgba(255,255,255,.08)}
   .wp.current::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid currentColor;opacity:.5;animation:ping 1.8s ease-out infinite}
   @keyframes ping{0%{transform:scale(.7);opacity:.6}100%{transform:scale(1.8);opacity:0}}
-  .plane{position:absolute;top:48px;transform:translate(-50%,-50%) rotate(45deg);font-size:19px;color:#fff;z-index:4;filter:drop-shadow(0 0 8px rgba(91,140,255,.9));transition:left 1.1s cubic-bezier(.2,.8,.2,1);animation:bob 2.4s ease-in-out infinite}
+  /* Транспорт-бейдж: непрозрачный кружок, чтобы не сливался с линией и подписями */
+  .veh{position:absolute;top:48px;transform:translate(-50%,-50%);width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 50% 36%,#16203a,#0a0f1e);border:1.7px solid #5b8cff;z-index:6;transition:left 1.1s cubic-bezier(.2,.8,.2,1);animation:bob 2.6s ease-in-out infinite}
+  .veh .veh-i{font-size:16px;line-height:1;display:block}
+  .veh.plane-v .veh-i{transform:rotate(45deg)}
+  .veh.truck-v .veh-i{transform:scaleX(-1)}
+  .veh.done-v{animation:none}
   @keyframes bob{0%,100%{margin-top:0}50%{margin-top:-3px}}
   .plane-trail{position:absolute;top:48px;height:2px;transform:translateY(-50%);background:linear-gradient(90deg,transparent,rgba(91,140,255,.55));z-index:1;border-radius:2px}
 
@@ -164,7 +173,7 @@
   .empty,.err{text-align:center;color:var(--dim2);padding:50px;font-size:14px}
   .err{color:var(--bad)}
   ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:8px}
-  @media(prefers-reduced-motion:reduce){#aurora span,.plane,.wp.current::after,.order,.loader-logo{animation:none!important}#spotlight{display:none}.order{opacity:1;transform:none}}
+  @media(prefers-reduced-motion:reduce){#aurora span,.veh,.wp.current::after,.order,.loader-logo{animation:none!important}#spotlight{display:none}.order{opacity:1;transform:none}}
 </style>
 </head>
 <body>
@@ -197,6 +206,7 @@
     <div class="fsel"><label>Менеджер</label><div class="ms" data-k="manager"><div class="ms-btn" onclick="toggleMS('manager')"><span class="ms-lab">Все</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div><div class="ms-panel"><input class="ms-search" placeholder="Поиск…" oninput="msSearch('manager',this.value)"><div class="ms-opts"></div></div></div></div>
     <div class="fsel"><label>Статус</label><div class="ms" data-k="status"><div class="ms-btn" onclick="toggleMS('status')"><span class="ms-lab">Все</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div><div class="ms-panel"><div class="ms-opts"></div></div></div></div>
     <div class="grouptoggle" id="groupToggle"><button data-g="flat" class="on">По заказам</button><button data-g="deal">По сделкам</button></div>
+    <button class="freset" id="fresetBtn" onclick="resetFilters()" title="Сбросить все фильтры, поиск и быстрые плашки"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M18 6L6 18M6 6l12 12"/></svg> Сбросить</button>
   </div>
 
   <div class="chipbar" id="chipbar"></div>
@@ -210,6 +220,7 @@ const fmt=n=>Math.round(n).toLocaleString('ru-RU').replace(/,/g,' ');
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const dfmt=s=>{if(!s)return'—';const[y,m,d]=s.split('-');return `${d}.${m}.${y}`;};
 const ddmm=s=>{if(!s)return'';const[y,m,d]=s.split('-');return `${d}.${m}`;};
+const ddmmyy=s=>{if(!s)return'';const[y,m,d]=s.split('-');return `${d}.${m}.${y.slice(2)}`;};
 const tip=document.getElementById('tip');
 const showTip=(h,x,y)=>{tip.innerHTML=h;tip.style.left=(x+14)+'px';tip.style.top=(y+14)+'px';tip.style.opacity=1;};
 const hideTip=()=>tip.style.opacity=0;
@@ -293,6 +304,8 @@ function toggleMS(k){const box=document.querySelector(`.ms[data-k="${k}"]`);cons
 function msSearch(k,q){q=(q||'').toLowerCase();document.querySelectorAll(`.ms[data-k="${k}"] .ms-opt`).forEach(o=>o.style.display=o.textContent.toLowerCase().includes(q)?'':'none');}
 document.addEventListener('click',e=>{if(!e.target.closest('.ms'))document.querySelectorAll('.ms.open').forEach(b=>b.classList.remove('open'));});
 function clearFilter(k){FILT[k]=[];renderMS(k);renderChip();renderMain();}
+function resetFilters(){Object.keys(FILT).forEach(k=>{FILT[k]=[];});QUICK=null;SEARCH='';const s=document.getElementById('search');if(s)s.value='';['year','manuf','dept','manager','status'].forEach(renderMS);renderKpis();renderChip();renderMain();}
+function anyFilter(){return QUICK||SEARCH||Object.keys(FILT).some(k=>FILT[k].length);}
 
 document.getElementById('groupToggle').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;GROUP=b.dataset.g;document.querySelectorAll('#groupToggle button').forEach(x=>x.classList.toggle('on',x===b));renderList();});
 
@@ -325,6 +338,7 @@ function renderChip(){
   if(FILT.manager.length)chips.push(`<span class="chip">Менеджер: ${esc(FILT.manager.join(', '))} <span class="x" onclick="clearFilter('manager')">✕</span></span>`);
   if(FILT.status.length)chips.push(`<span class="chip">Статус: ${FILT.status.length} <span class="x" onclick="clearFilter('status')">✕</span></span>`);
   c.innerHTML=chips.length?chips.join('')+`<span class="chiphint">показано: ${getFiltered().length}</span>`:`<span class="chiphint">Фильтры вверху и клик по плашкам · всего заказов: ${ORDERS.length}</span>`;
+  const rb=document.getElementById('fresetBtn');if(rb)rb.classList.toggle('act',!!anyFilter());
 }
 
 function planePos(o){const base=(o.milestone-1);const extra=(o.milestone===5&&o.shipDate)?o.progress:0;return Math.max(0,Math.min(1,(base+extra)/10));}
@@ -351,9 +365,13 @@ function orderCard(o){
     return `<div class="wp-icon${reached?'':' dim'}" style="left:${lf}">${m.icon}</div>`+
       `<div class="${cls}" style="left:${lf};background:${bg};color:${col}" data-ml="${esc(m.label)}" data-info="${info.replace(/"/g,'&quot;')}" onmousemove="wpTip(event,this)" onmouseleave="hideTipG()"></div>`+
       `<div class="wp-cap${reached?'':' dim'}" style="left:${lf};color:${cur?col:(reached?'var(--dim)':'var(--dim2)')}">${esc(m.short)}</div>`+
-      `<div class="wp-date" style="left:${lf}">${dt?ddmm(dt):''}</div>`;
+      `<div class="wp-date" style="left:${lf}">${dt?ddmmyy(dt):''}</div>`;
   }).join('');
   const flyingCol=PHC[o.phase];
+  // Транспорт по фазе: до склада — самолёт, к клиенту — грузовик, доставлено — дом
+  const veh=o.done?{g:'🏠',cls:'done-v',col:'#22c9a3'}
+    :o.phase==='import'?{g:'✈︎',cls:'plane-v',col:flyingCol}
+    :{g:'🚚',cls:'truck-v',col:flyingCol};
   // фаза/транзит (самолёт ~15 дн от отгрузки)
   let phaseTxt='';
   if(o.milestone===5&&o.shipDate){phaseTxt=o.arrivingSoon?`<span class="soon">подлетает · ~${o.transitLeft} дн</span>`:`в пути ~${o.transitElapsed}/${o.transitDays} дн`;}
@@ -390,7 +408,7 @@ function orderCard(o){
       <div class="plane-trail" style="left:calc(12px + ${Math.max(0,f-0.12)} * (100% - 24px));width:calc(${Math.min(f,0.12)} * (100% - 24px));background:linear-gradient(90deg,transparent,${flyingCol}88)"></div>
       ${wps}
       ${durHtml}
-      <div class="plane" style="left:calc(12px + ${f} * (100% - 24px));color:${o.done?'#22c9a3':'#fff'}">✈︎</div>
+      <div class="veh ${veh.cls}" style="left:calc(12px + ${f} * (100% - 24px));border-color:${veh.col};box-shadow:0 3px 12px rgba(0,0,0,.6),0 0 18px ${veh.col}aa"><span class="veh-i" style="color:${veh.col}">${veh.g}</span></div>
     </div>
     <div class="o-foot">
       <span class="status-badge phase-${o.phase}">${o.milestone}/11 · ${esc(o.milestoneLabel)}</span>
