@@ -14,12 +14,24 @@ const DEPARTMENT_FIELD = 'UF_CRM_1758005356984'; // "Отдел" — confirmed v
 // достаётся из определения поля. ПОДТВЕРЖДЕНО probe-manufacturer.js (резолв 20/20).
 // Раньше грешили на UF_CRM_1731862648 — а это оказался РЕГИОН (инфоблок 17).
 const MANUF_FIELD = 'UF_CRM_1733300779';
+// Модель прибора — тоже поле-СПИСОК (enumeration), 331 значение, чистые имена
+// моделей (в отличие от текстового UF_CRM_NAME_PRIOBOR, где встречается склейка-мусор).
+// Подтверждено probe-manufacturer.js. Читаем enum как основной источник, текст — фолбэк.
+const MODEL_FIELD = 'UF_CRM_1733300721';
 const CATEGORY_IDS = ['0', '1', '2', '3'];
 
 const SELECT_FIELDS = [
   'ID', 'CATEGORY_ID', 'STAGE_ID', 'TYPE_ID', 'OPPORTUNITY', 'CURRENCY_ID',
-  'COMPANY_ID', 'ASSIGNED_BY_ID', REAL_CONTRACT_DATE_FIELD, INSTRUMENT_FIELD, DEPARTMENT_FIELD, MANUF_FIELD,
+  'COMPANY_ID', 'ASSIGNED_BY_ID', REAL_CONTRACT_DATE_FIELD, INSTRUMENT_FIELD, DEPARTMENT_FIELD, MANUF_FIELD, MODEL_FIELD,
 ];
+
+// Резолв значения поля-списка (ID→имя); поддерживает и множественный выбор.
+function resolveEnum(raw, map) {
+  if (raw == null || raw === '') return null;
+  const arr = Array.isArray(raw) ? raw : [raw];
+  const names = arr.map(v => map[String(v)]).filter(Boolean);
+  return names.length ? names.join(', ') : null;
+}
 
 // Вшитый резерв ID→бренд (на случай, если userfield.list недоступен). Основной
 // источник — динамический fetch ниже, чтобы новые бренды подхватывались сами.
@@ -55,6 +67,20 @@ async function getManufacturerMap() {
   return MANUF_FALLBACK;
 }
 
+// Карта ID→модель прибора (331 значение) из определения поля, кэш 6ч.
+let modelMapCache = null, modelMapAt = 0;
+async function getModelMap() {
+  if (modelMapCache && Date.now() - modelMapAt < 6 * 3600 * 1000) return modelMapCache;
+  try {
+    const { result } = await b24('crm.deal.userfield.list', { filter: { FIELD_NAME: MODEL_FIELD } });
+    const f = (result || [])[0];
+    const map = {};
+    (f?.LIST || []).forEach(it => { map[String(it.ID)] = it.VALUE; });
+    modelMapCache = map; modelMapAt = Date.now();
+    return map;
+  } catch (e) { console.error('getModelMap error:', e.message); return modelMapCache || {}; }
+}
+
 const companyIndustryCache = new Map();
 async function getCompanyIndustry(companyId) {
   if (!companyId) return '';
@@ -80,7 +106,10 @@ async function getManufacturer(instrumentName) {
 }
 
 async function upsertDeal(d) {
-  const instrumentName = d[INSTRUMENT_FIELD] || null;
+  // Модель прибора: основной источник — поле-список (чистые имена), фолбэк —
+  // старое текстовое поле (шире покрытие старых сделок, но бывает склейка-мусор).
+  const modelMap = await getModelMap();
+  const instrumentName = resolveEnum(d[MODEL_FIELD], modelMap) || d[INSTRUMENT_FIELD] || null;
   // Производитель — напрямую из поля-списка (ID→бренд). Если поле пустое —
   // фолбэк на старую карту «прибор→производитель» ради покрытия старых сделок.
   const manufMap = await getManufacturerMap();
