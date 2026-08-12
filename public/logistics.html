@@ -368,9 +368,10 @@ function orderCard(o){
       `<div class="wp-date" style="left:${lf}">${dt?ddmmyy(dt):''}</div>`;
   }).join('');
   const flyingCol=PHC[o.phase];
-  // Транспорт по фазе: до склада — самолёт, к клиенту — грузовик, доставлено — дом
+  // Транспорт: по таможню включительно (этапы 1–6) — самолёт; со склада и далее
+  // к клиенту (этапы 7–11) — грузовик; доставлено — дом.
   const veh=o.done?{g:'🏠',cls:'done-v',col:'#22c9a3'}
-    :o.phase==='import'?{g:'✈︎',cls:'plane-v',col:flyingCol}
+    :o.milestone<=6?{g:'✈︎',cls:'plane-v',col:flyingCol}
     :{g:'🚚',cls:'truck-v',col:flyingCol};
   // фаза/транзит (самолёт ~15 дн от отгрузки)
   let phaseTxt='';
