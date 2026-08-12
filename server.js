@@ -499,6 +499,10 @@ async function checkNewAndOverdue() {
 initDB().then(() => {
   app.listen(PORT, () => {
     console.log(`✅ Dashboard running on port ${PORT}`);
+    // Глобально дозагружаем справочник сотрудников из Bitrix (чинит «#49/#66/#92»
+    // во ВСЕХ модулях сразу — Логистика, Контракты, Реализация и т.д.).
+    const { hydrateUsers } = require('./constants');
+    setTimeout(() => hydrateUsers().catch(e => console.error('hydrateUsers boot error:', e.message)), 3000);
     // Single interval: check new tickets every 30 min + overdue every run
     checkNewAndOverdue();
     setInterval(checkNewAndOverdue, 30 * 60 * 1000);
@@ -522,8 +526,12 @@ initDB().then(() => {
     // в фоне — прогрев кэша на старте + освежение раз в час. Страница отдаёт кэш
     // мгновенно; кнопка «Обновить» пересчитывает по требованию.
     const { refreshBoard: refreshLogistics } = require('./logistics-calc');
-    setTimeout(() => refreshLogistics().catch(e => console.error('logistics boot refresh error:', e.message)), 25000);
-    setInterval(() => refreshLogistics().catch(e => console.error('logistics hourly refresh error:', e.message)), 60 * 60 * 1000);
+    const { runLogisticsAlerts } = require('./logistics-notify');
+    const refreshAndAlert = tag => refreshLogistics()
+      .then(() => runLogisticsAlerts())
+      .catch(e => console.error(`logistics ${tag} refresh/alert error:`, e.message));
+    setTimeout(() => refreshAndAlert('boot'), 25000);
+    setInterval(() => refreshAndAlert('hourly'), 60 * 60 * 1000);
     let lastOpSyncDate = null;
     setInterval(() => {
       const now = new Date();
@@ -535,7 +543,7 @@ initDB().then(() => {
         operationalFullSync({ source: 'nightly' })
           .catch(e => console.error('operational nightly sync error:', e.message))
           .then(() => fullSyncStatsDeals().catch(e => console.error('stats nightly sync error:', e.message)))
-          .then(() => refreshLogistics().catch(e => console.error('logistics nightly refresh error:', e.message)));
+          .then(() => refreshAndAlert('nightly'));
       }
     }, 5 * 60 * 1000);
     // Planner ↔ Bitrix reconciliation — webhooks are best-effort, this catches

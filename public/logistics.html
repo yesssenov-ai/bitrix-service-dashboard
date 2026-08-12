@@ -6,6 +6,7 @@
 <title>ЦУП · Логистика</title>
 <link rel="icon" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{--bg:#070b16;--panel:rgba(20,27,45,0.55);--border:rgba(255,255,255,0.07);--text:#e8edf7;--dim:#8592ad;--dim2:#5c6884;--brand:#ff2d55;--brand2:#ff6b81;--good:#22c9a3;--warn:#ffb020;--bad:#ff5b6e;--purchase:#ffb020;--transit:#5b8cff;--customs:#a56bff;--domestic:#22c9a3}
   *{box-sizing:border-box;margin:0;padding:0}
@@ -177,6 +178,7 @@
       <div class="logo"><div class="lg1">Pro Lab <span>Support</span></div><div class="lg2">Логистика · путь заказанных приборов</div></div>
     </div>
     <div class="hctl">
+      <button class="btn" onclick="exportXlsx()" title="Выгрузить в Excel"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M12 3v12M8 11l4 4 4-4M4 21h16"/></svg> Экспорт</button>
       <button class="btn" id="refreshBtn" title="Обновить из Bitrix"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0114.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0020.5 15"/></svg> Обновить</button>
       <div class="clock"><div class="c1">Данные обновлены</div><div class="c2 tabular" id="updated">—</div></div>
     </div>
@@ -451,6 +453,28 @@ function renderMetrics(){
     `<div class="mhint">Число в ячейке — среднее число дней, проведённых на этапе. Цвет: <span style="color:#22c9a3">зелёный</span> быстрее, <span style="color:#ff5b6e">красный</span> дольше (относительно колонки). «Цикл до склада» — от «Заказ размещён» до «Прибыл на склад». Фильтры сверху применяются и к метрикам.</div>`;
 }
 function setDim(k){DIM=k;renderMetrics();}
+
+// ── Экспорт в Excel (текущий отфильтрованный список заказов) ──
+function exportXlsx(){
+  if(typeof XLSX==='undefined'){alert('Библиотека выгрузки не загрузилась (проверьте интернет).');return;}
+  const rows=getFiltered();
+  if(!rows.length){alert('Нет данных для выгрузки по текущим фильтрам.');return;}
+  const stageCols=MS.map(m=>'Дата: '+m.short);
+  const header=['PO','Прибор','Производитель','Отдел','Менеджер (сделка)','Ответств. закупки','Стадия №','Стадия','Дата договора','Сдать до','Дней до срока','Статус срока','Отгружен','ETA транзит','Идёт (дн)','Трек','Прогноз дата','Прогноз-риск','Сумма, млн ₸','Закупка ID','Сделка ID',...stageCols];
+  const statusSrok=o=>o.done?'доставлено':o.deadlineOverdue?'просрочка':o.deadlineSoon?'скоро дедлайн':o.deadline?'в норме':'—';
+  const data=rows.map(o=>{const md=o.milestoneDates||{};return [
+    o.po||'',o.instrument||'',o.manufacturer||'',o.dept||'',o.managerDeal||'',o.managerPurch||'',o.milestone,o.milestoneLabel,
+    o.contractDate?dfmt(o.contractDate):'',o.deadline?dfmt(o.deadline):'',o.deadlineLeft==null?'':o.deadlineLeft,statusSrok(o),
+    o.shipDate?dfmt(o.shipDate):'',o.transitEta?dfmt(o.transitEta):'',o.currentStageDays==null?'':o.currentStageDays,o.tracking||'',
+    o.forecastDate?dfmt(o.forecastDate):'',o.atRisk?'ДА':(o.forecastDate?'нет':''),o.opportunity?Math.round(o.opportunity/1e6):'',o.id,o.dealId||'',
+    ...MS.map(m=>md[m.i]?dfmt(md[m.i]):'')];});
+  const ws=XLSX.utils.aoa_to_sheet([header,...data]);
+  ws['!cols']=header.map((h,i)=>({wch:i===1?28:i<2?18:(i<8?15:12)}));
+  ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:data.length,c:header.length-1}})};
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Логистика');
+  const d=BOARD&&BOARD.generatedAt?BOARD.generatedAt.slice(0,10):'';
+  XLSX.writeFile(wb,`Логистика_${d}.xlsx`);
+}
 
 load();
 </script>

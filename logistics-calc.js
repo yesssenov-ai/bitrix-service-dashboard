@@ -107,11 +107,12 @@ const DOCS_1070 = [
   ['Накладная', 'ufCrm11_1744028435403'],
   ['Доверенность', 'ufCrm11_1744028340187'],
   ['Сопроводительные', 'ufCrm11_1732866398354'],
-  ['Пакинг-лист', 'ufCrm11_1732865726986'],
+  // «Пакинг-лист» (1070) убран — дублирует «Packing List / Customs» из закупки (1066).
 ];
 const fileUrl = v => { if (!v) return null; const f = Array.isArray(v) ? v[0] : v; return (f && (f.url || f.urlMachine || f.downloadUrl)) || null; };
 
-const ymd = v => (typeof v === 'string' && v.length >= 10) ? v.slice(0, 10) : null;
+// contract_date из pg приходит объектом Date, а даты из crm.item.list — строкой.
+const ymd = v => { if (v == null) return null; if (v instanceof Date) return v.toISOString().slice(0, 10); const s = String(v); return s.length >= 10 ? s.slice(0, 10) : null; };
 const dayMs = 86400000;
 // Базы ссылок в Bitrix (из вебхука): сделка и элемент смарт-процесса «Закупки».
 function bitrixOrigin() { try { return new URL(process.env.BITRIX_WEBHOOK).origin; } catch (e) { return null; } }
@@ -135,6 +136,21 @@ async function itemList(entityTypeId, categoryId, select) {
   }
   return items;
 }
+
+// Имена сотрудников, которых нет в статичном списке USERS (напр. #49/#66/#92) —
+// достаём из Bitrix (user.get) и кэшируем в процессе. Иначе показываются как «#id».
+const userNameCache = {};
+async function resolveUserNames(ids) {
+  for (const id of [...new Set(ids.filter(Boolean).map(Number))]) {
+    if (USERS[id] || userNameCache[id] !== undefined) continue;
+    try {
+      const { result } = await b24('user.get', { ID: id });
+      const u = (result || [])[0];
+      userNameCache[id] = u ? ([u.LAST_NAME, u.NAME].filter(Boolean).join(' ').trim() || u.EMAIL || ('#' + id)) : null;
+    } catch (e) { userNameCache[id] = null; }
+  }
+}
+const uname = id => id ? (USERS[id] || userNameCache[id] || ('#' + id)) : null;
 
 // ── История стадий (когда сущность зашла в каждую стадию), фильтр по OWNER_ID ──
 async function fetchHistory(entityTypeId, ownerIds) {
@@ -193,6 +209,9 @@ async function computeBoard() {
     fetchHistory(1070, logi.map(l => l.id)),
   ]);
   const nowIso = new Date().toISOString();
+
+  // Дорезолвим имена ответственных, которых нет в статичном USERS.
+  await resolveUserNames([...purch.map(p => p.assignedById), ...Object.values(deals).map(d => d.assigned_by_id)]);
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -261,8 +280,8 @@ async function computeBoard() {
 
       const deptId = deal ? deal.department_id : null;
       const dept = deal ? saleType(deal.category_id, deptId) : 'Не указан';
-      const mgrDeal = deal && deal.assigned_by_id ? (USERS[deal.assigned_by_id] || `#${deal.assigned_by_id}`) : null;
-      const mgrPurch = p.assignedById ? (USERS[p.assignedById] || `#${p.assignedById}`) : null;
+      const mgrDeal = deal && deal.assigned_by_id ? uname(deal.assigned_by_id) : null;
+      const mgrPurch = p.assignedById ? uname(p.assignedById) : null;
       const po = p[F1066.po] || (l && l[F1070.po]) || null;
       const docs = [];
       DOCS_1066.forEach(([lbl, code]) => { const u = fileUrl(p[code]); if (u) docs.push({ label: lbl, url: u }); });
@@ -283,6 +302,8 @@ async function computeBoard() {
         instrument, manufacturer,
         dept, licensed,
         managerDeal: mgrDeal, managerPurch: mgrPurch,
+        dealRespId: deal && deal.assigned_by_id ? deal.assigned_by_id : null,
+        purchRespId: p.assignedById ? parseInt(p.assignedById, 10) : null,
         milestone: ms, milestoneKey: mdef.key, milestoneLabel: mdef.label, phase: mdef.phase,
         purchStage: p.stageId, logiStage: l ? l.stageId : null, dealStage,
         shipDate, transitDays: TRANSIT_DAYS, transitEta, progress, transitElapsed, transitLeft, arrivingSoon,

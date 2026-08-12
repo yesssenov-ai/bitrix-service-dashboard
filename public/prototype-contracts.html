@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ЦУП · Контракты — прототип</title>
+<style>
+  :root{
+    --bg:#070b16;
+    --panel:rgba(20,27,45,0.55);
+    --panel-solid:#121a2e;
+    --border:rgba(255,255,255,0.07);
+    --text:#e8edf7;
+    --dim:#8592ad;
+    --dim2:#5c6884;
+    --brand:#ff2d55;
+    --brand2:#ff6b81;
+    --c1:#5b8cff; --c2:#ffb020; --c3:#22c9a3; --c4:#a56bff; --c5:#ff6b6b; --c6:#3ddc97;
+    --good:#22c9a3; --warn:#ffb020; --bad:#ff5b6e;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--text);font-family:"SF Pro Display","Segoe UI",Inter,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+  body{
+    min-height:100vh;overflow-x:hidden;
+    background:
+      radial-gradient(1200px 600px at 15% -5%, rgba(255,45,85,0.10), transparent 60%),
+      radial-gradient(1000px 700px at 100% 0%, rgba(91,140,255,0.10), transparent 55%),
+      radial-gradient(900px 800px at 50% 120%, rgba(34,201,163,0.07), transparent 60%),
+      var(--bg);
+  }
+  .wrap{max-width:1440px;margin:0 auto;padding:22px 26px 60px}
+  .tabular{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+
+  /* ---------- Header ---------- */
+  header{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:18px}
+  .brand{display:flex;align-items:center;gap:14px}
+  .logo{display:flex;flex-direction:column;line-height:1}
+  .logo .lg1{font-weight:800;font-size:22px;letter-spacing:.5px}
+  .logo .lg1 span{color:var(--brand)}
+  .logo .lg2{font-size:11px;color:var(--dim);margin-top:5px;letter-spacing:.3px}
+  .logo-bars{display:flex;gap:3px;align-items:flex-end;height:26px}
+  .logo-bars i{width:5px;background:linear-gradient(180deg,var(--brand2),var(--brand));border-radius:2px;display:block;animation:eq 1.6s ease-in-out infinite}
+  .logo-bars i:nth-child(1){height:40%;animation-delay:0s}
+  .logo-bars i:nth-child(2){height:75%;animation-delay:.2s}
+  .logo-bars i:nth-child(3){height:100%;animation-delay:.4s}
+  @keyframes eq{0%,100%{transform:scaleY(.6)}50%{transform:scaleY(1)}}
+  .clock{text-align:right}
+  .clock .c1{font-size:12px;color:var(--dim)}
+  .clock .c2{font-size:20px;font-weight:700;letter-spacing:.5px;color:#fff;margin-top:2px}
+  .live{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--good);margin-top:3px}
+  .live .dot{width:7px;height:7px;border-radius:50%;background:var(--good);box-shadow:0 0 0 0 rgba(34,201,163,.6);animation:pulse 1.8s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,201,163,.5)}70%{box-shadow:0 0 0 8px rgba(34,201,163,0)}100%{box-shadow:0 0 0 0 rgba(34,201,163,0)}}
+
+  /* ---------- Filters ---------- */
+  .filters{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+  .fl{position:relative;flex:1;min-width:150px}
+  .fl label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--dim2);margin-bottom:6px;font-weight:600}
+  .fl .sel{display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:11px 13px;font-size:13.5px;cursor:pointer;transition:.2s;backdrop-filter:blur(12px)}
+  .fl .sel:hover{border-color:rgba(255,255,255,.18);background:rgba(30,40,64,.6)}
+  .fl .sel svg{opacity:.5}
+
+  /* ---------- Tabs ---------- */
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+  .tab{padding:9px 17px;border-radius:11px;font-size:13px;font-weight:600;color:var(--dim);background:var(--panel);border:1px solid var(--border);cursor:pointer;transition:.22s;backdrop-filter:blur(12px)}
+  .tab:hover{color:var(--text);border-color:rgba(255,255,255,.16)}
+  .tab.active{color:#fff;background:linear-gradient(135deg,var(--brand),#e01e45);border-color:transparent;box-shadow:0 8px 24px -8px rgba(255,45,85,.6)}
+
+  /* ---------- Grid ---------- */
+  .grid{display:grid;grid-template-columns:1.05fr 1.15fr 1fr;gap:16px;margin-bottom:16px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:1080px){.grid,.grid2{grid-template-columns:1fr}}
+  .card{
+    position:relative;background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:20px;
+    backdrop-filter:blur(16px);overflow:hidden;
+    opacity:0;transform:translateY(16px);animation:rise .7s cubic-bezier(.2,.7,.3,1) forwards;
+  }
+  .card::before{content:"";position:absolute;inset:0;border-radius:18px;padding:1px;background:linear-gradient(160deg,rgba(255,255,255,.12),transparent 40%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:.7}
+  @keyframes rise{to{opacity:1;transform:none}}
+  .card:nth-child(1){animation-delay:.05s}.card:nth-child(2){animation-delay:.13s}.card:nth-child(3){animation-delay:.21s}
+  .grid2 .card:nth-child(1){animation-delay:.28s}.grid2 .card:nth-child(2){animation-delay:.34s}
+  .card h3{font-size:14px;font-weight:700;margin-bottom:2px;display:flex;align-items:center;gap:8px}
+  .card h3 .ic{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;background:rgba(255,255,255,.06)}
+  .card .sub{font-size:11.5px;color:var(--dim2);margin-bottom:16px}
+
+  /* ---------- Donut ---------- */
+  .donut-wrap{display:flex;align-items:center;gap:12px}
+  .donut{position:relative;width:158px;height:158px;flex-shrink:0}
+  .donut svg{transform:rotate(-90deg);width:100%;height:100%}
+  .donut circle{fill:none;stroke-width:20;stroke-linecap:round;transition:stroke-width .2s,filter .2s}
+  .donut .seg{cursor:pointer}
+  .donut .seg:hover{stroke-width:24;filter:drop-shadow(0 0 10px currentColor)}
+  .donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+  .donut-center .dc1{font-size:11px;color:var(--dim)}
+  .donut-center .dc2{font-size:23px;font-weight:800;letter-spacing:-.5px}
+  .donut-center .dc3{font-size:10.5px;color:var(--dim2)}
+  .legend{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}
+  .lg{display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:4px 4px;border-radius:8px;transition:.15s}
+  .lg:hover{background:rgba(255,255,255,.04)}
+  .lg .sw{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+  .lg .nm{flex:1;min-width:0;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lg .vl{color:var(--dim);font-weight:600;flex-shrink:0}
+  .lg .pc{width:38px;text-align:right;font-weight:700;flex-shrink:0}
+
+  /* ---------- Plan bars ---------- */
+  .planrow{margin-bottom:13px}
+  .planrow .pr-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;font-size:12.5px}
+  .planrow .pr-top .nm{color:var(--text)}
+  .planrow .pr-top .vals{color:var(--dim2);font-size:11px}
+  .planrow .pr-top .vals b{color:var(--dim);font-weight:600}
+  .planrow .pr-top .pct{font-weight:800;font-size:13px}
+  .track{height:9px;background:rgba(255,255,255,.06);border-radius:6px;overflow:hidden;position:relative}
+  .fill{height:100%;width:0;border-radius:6px;transition:width 1.3s cubic-bezier(.2,.8,.2,1)}
+  .plan-total{display:flex;align-items:center;justify-content:space-between;margin-top:16px;padding-top:15px;border-top:1px solid var(--border)}
+  .gauge{position:relative;width:120px;height:70px}
+  .plan-total .pt-txt .l1{font-size:11px;color:var(--dim)}
+  .plan-total .pt-txt .l2{font-size:22px;font-weight:800}
+  .plan-total .pt-txt .l2 small{font-size:12px;color:var(--dim);font-weight:600}
+
+  /* ---------- Tree ---------- */
+  .tree-total{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+  .tree-total .tt1{font-size:12px;color:var(--dim)}
+  .tree-total .tt2{font-size:24px;font-weight:800;letter-spacing:-.5px}
+  .grp{margin-bottom:6px}
+  .grp-head{display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:10px;cursor:pointer;transition:.15s;background:rgba(255,255,255,.03)}
+  .grp-head:hover{background:rgba(255,255,255,.06)}
+  .grp-head .chev{transition:transform .25s;color:var(--dim);font-size:11px}
+  .grp-head.open .chev{transform:rotate(90deg)}
+  .grp-head .gn{flex:1;font-weight:700;font-size:13px}
+  .grp-head .gv{font-weight:700;font-size:13px}
+  .grp-head .gdot{width:8px;height:8px;border-radius:50%}
+  .kids{max-height:0;overflow:hidden;transition:max-height .35s ease}
+  .kid{display:flex;align-items:center;gap:10px;padding:7px 10px 7px 30px;font-size:12px}
+  .kid .kn{width:150px;color:var(--dim);flex-shrink:0}
+  .kid .kbar{flex:1;height:6px;background:rgba(255,255,255,.05);border-radius:4px;overflow:hidden}
+  .kid .kbar i{display:block;height:100%;width:0;border-radius:4px;transition:width 1s cubic-bezier(.2,.8,.2,1)}
+  .kid .kv{width:110px;text-align:right;color:var(--text);font-weight:600}
+
+  /* ---------- Monthly bars ---------- */
+  .bars{display:flex;align-items:flex-end;gap:8px;height:210px;padding-top:24px}
+  .bcol{flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;height:100%;justify-content:flex-end;cursor:pointer}
+  .bcol .bval{font-size:11px;font-weight:700;color:var(--dim);opacity:0;transition:.2s}
+  .bcol:hover .bval{opacity:1;color:#fff}
+  .bcol .bwrap{width:100%;display:flex;flex-direction:column-reverse;border-radius:7px 7px 0 0;overflow:hidden;transition:.2s}
+  .bcol:hover .bwrap{filter:brightness(1.15)}
+  .bseg{width:100%;height:0;transition:height 1.1s cubic-bezier(.2,.8,.2,1)}
+  .bcol .bm{font-size:10.5px;color:var(--dim2)}
+
+  /* ---------- Area chart ---------- */
+  .area-legend{display:flex;gap:16px;margin-bottom:8px;flex-wrap:wrap}
+  .area-legend .al{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--dim)}
+  .area-legend .al i{width:14px;height:3px;border-radius:2px;display:block}
+  .path-anim{stroke-dasharray:2000;stroke-dashoffset:2000;animation:draw 2s ease forwards .3s}
+  @keyframes draw{to{stroke-dashoffset:0}}
+
+  .footnote{text-align:center;color:var(--dim2);font-size:11.5px;margin-top:26px}
+  .footnote b{color:var(--brand2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="logo-bars"><i></i><i></i><i></i></div>
+      <div class="logo">
+        <div class="lg1">Pro Lab <span>Support</span></div>
+        <div class="lg2">Центр управления продажами · ЦУП</div>
+      </div>
+    </div>
+    <div class="clock">
+      <div class="c1">По состоянию на</div>
+      <div class="c2 tabular" id="clock">12.08.2026 11:55:14</div>
+      <div class="live"><span class="dot"></span> данные в реальном времени · Bitrix</div>
+    </div>
+  </header>
+
+  <div class="filters">
+    <div class="fl"><label>Производитель</label><div class="sel">Все <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div></div>
+    <div class="fl"><label>Стадия сделки</label><div class="sel">Все <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div></div>
+    <div class="fl"><label>Заказчик</label><div class="sel">Все <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div></div>
+    <div class="fl"><label>Отдел</label><div class="sel">Все <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div></div>
+    <div class="fl"><label>Год / Месяц</label><div class="sel">2026 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div></div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <!-- ROW 1 -->
+  <div class="grid">
+    <!-- Donut -->
+    <div class="card">
+      <h3><span class="ic">🍩</span> Контракты по услугам</h3>
+      <div class="sub">Структура портфеля, 2026 год</div>
+      <div class="donut-wrap">
+        <div class="donut">
+          <svg width="186" height="186" viewBox="0 0 186 186" id="donutSvg"></svg>
+          <div class="donut-center">
+            <div class="dc1">Итого</div>
+            <div class="dc2 tabular" id="donutTotal">0</div>
+            <div class="dc3">млрд ₸</div>
+          </div>
+        </div>
+        <div class="legend" id="legend"></div>
+      </div>
+    </div>
+
+    <!-- Plan -->
+    <div class="card">
+      <h3><span class="ic">🎯</span> Выполнение плана</h3>
+      <div class="sub">План / факт Bitrix, млн ₸</div>
+      <div id="planRows"></div>
+      <div class="plan-total">
+        <div class="pt-txt">
+          <div class="l1">Итого выполнение</div>
+          <div class="l2 tabular"><span id="planTotalVal">0</span> <small>/ 9 708 млн</small></div>
+        </div>
+        <div class="gauge"><svg width="120" height="70" viewBox="0 0 120 70" id="gaugeSvg"></svg></div>
+      </div>
+    </div>
+
+    <!-- Tree -->
+    <div class="card">
+      <h3><span class="ic">📋</span> Детали контрактов</h3>
+      <div class="sub">Сумма по стадиям, ₸</div>
+      <div class="tree-total">
+        <div class="tt1">Итого по всем сделкам</div>
+        <div class="tt2 tabular" id="treeTotal">0</div>
+      </div>
+      <div id="tree"></div>
+    </div>
+  </div>
+
+  <!-- ROW 2 -->
+  <div class="grid2">
+    <div class="card">
+      <h3><span class="ic">📊</span> Динамика суммы контрактов</h3>
+      <div class="sub">По месяцам, млн ₸</div>
+      <div class="bars" id="bars"></div>
+    </div>
+    <div class="card">
+      <h3><span class="ic">📈</span> Накопительная динамика</h3>
+      <div class="sub">Нарастающим итогом, млрд ₸</div>
+      <div class="area-legend" id="areaLegend"></div>
+      <svg width="100%" height="210" viewBox="0 0 520 210" preserveAspectRatio="none" id="areaSvg" style="overflow:visible"></svg>
+    </div>
+  </div>
+
+  <div class="footnote">Прототип на демо-данных со скриншотов Power BI · вживую подключается к <b>Bitrix</b> через ту же БД, что и остальные вкладки ЦУП</div>
+</div>
+
+<script>
+const fmt = n => Math.round(n).toLocaleString('ru-RU').replace(/,/g,' ');
+const easeOut = t => 1 - Math.pow(1-t, 3);
+function countUp(el, to, dur=1200, fmtFn=fmt){
+  const start=performance.now();
+  function step(now){
+    const p=Math.min((now-start)/dur,1);
+    el.textContent=fmtFn(to*easeOut(p));
+    if(p<1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+/* ---- Tabs ---- */
+const TABS=['Контракты','Реализация','План продаж','Динамика','BIG проекты','Дебет','Качество','Склад','Эффективность','Полученные авансы'];
+document.getElementById('tabs').innerHTML=TABS.map((t,i)=>`<div class="tab${i===0?' active':''}">${t}</div>`).join('');
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelector('.tab.active').classList.remove('active');t.classList.add('active')});
+
+/* ---- Live clock ---- */
+(function(){
+  let d=new Date(2026,7,12,11,55,14);
+  const el=document.getElementById('clock');
+  setInterval(()=>{d=new Date(d.getTime()+1000);
+    const p=n=>String(n).padStart(2,'0');
+    el.textContent=`${p(d.getDate())}.${p(d.getMonth()+1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  },1000);
+})();
+
+/* ---- Donut ---- */
+const donut=[
+  {nm:'Instrument',pc:45,c:'var(--c1)'},
+  {nm:'Spares',pc:33,c:'var(--c2)'},
+  {nm:'General Lab',pc:10,c:'var(--c3)'},
+  {nm:'Service',pc:7,c:'var(--c4)'},
+  {nm:'Training',pc:3,c:'var(--c5)'},
+  {nm:'Материаловедение',pc:2,c:'var(--c6)'},
+];
+const TOTAL_BLN=3.163;
+(function(){
+  const svg=document.getElementById('donutSvg'), R=73, C=2*Math.PI*R, cx=93;
+  let off=0;
+  donut.forEach((d,i)=>{
+    const len=C*d.pc/100;
+    const el=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    el.setAttribute('class','seg');el.setAttribute('cx',cx);el.setAttribute('cy',cx);el.setAttribute('r',R);
+    el.setAttribute('stroke',d.c);el.style.color=d.c;
+    el.setAttribute('stroke-dasharray',`${len} ${C-len}`);
+    el.setAttribute('stroke-dashoffset', -off);
+    el.style.strokeDasharray=`0 ${C}`;
+    setTimeout(()=>{el.style.transition='stroke-dasharray 1.1s cubic-bezier(.2,.8,.2,1)';el.style.strokeDasharray=`${len} ${C-len}`;}, 200+i*90);
+    svg.appendChild(el);
+    off+=len;
+  });
+  countUp(document.getElementById('donutTotal'), TOTAL_BLN, 1400, n=>n.toFixed(2).replace('.',','));
+  document.getElementById('legend').innerHTML=donut.map(d=>
+    `<div class="lg"><span class="sw" style="background:${d.c}"></span><span class="nm">${d.nm}</span><span class="vl tabular">${(TOTAL_BLN*d.pc/100).toFixed(2).replace('.',',')}</span><span class="pc tabular" style="color:${d.c}">${d.pc}%</span></div>`
+  ).join('');
+})();
+
+/* ---- Plan ---- */
+const plan=[
+  {nm:'Элементный',plan:3048,fact:897,pct:29.4},
+  {nm:'Хроматография и клеточный анализ',plan:2500,fact:297,pct:11.9},
+  {nm:'Электрохимия',plan:1100,fact:228,pct:20.7},
+  {nm:'Spares',plan:1500,fact:1034,pct:68.9},
+  {nm:'Service',plan:535,fact:229,pct:42.8},
+  {nm:'General Lab',plan:300,fact:88,pct:29.4},
+];
+const pcColor=p=>p>=60?'var(--good)':p>=30?'var(--warn)':'var(--bad)';
+document.getElementById('planRows').innerHTML=plan.map(p=>`
+  <div class="planrow">
+    <div class="pr-top">
+      <span class="nm">${p.nm}</span>
+      <span><span class="vals">факт <b>${fmt(p.fact)}</b> / план ${fmt(p.plan)}</span> &nbsp;<span class="pct" style="color:${pcColor(p.pct)}">${String(p.pct).replace('.',',')}%</span></span>
+    </div>
+    <div class="track"><div class="fill" style="background:linear-gradient(90deg,${pcColor(p.pct)},${pcColor(p.pct)})" data-w="${Math.min(p.pct,100)}"></div></div>
+  </div>`).join('');
+setTimeout(()=>document.querySelectorAll('#planRows .fill').forEach(f=>f.style.width=f.dataset.w+'%'),300);
+countUp(document.getElementById('planTotalVal'),3163,1400,n=>fmt(n)+' млн'.slice(0,0)+'');
+document.getElementById('planTotalVal').textContent='0';
+countUp(document.getElementById('planTotalVal'),3163,1400);
+
+/* gauge 32.6% */
+(function(){
+  const svg=document.getElementById('gaugeSvg');
+  const cx=60,cy=62,r=48;
+  const arc=(a1,a2)=>{const p=a=>[cx+r*Math.cos(a),cy+r*Math.sin(a)];const[x1,y1]=p(a1),[x2,y2]=p(a2);return `M${x1} ${y1} A${r} ${r} 0 0 1 ${x2} ${y2}`;};
+  const bg=document.createElementNS('http://www.w3.org/2000/svg','path');
+  bg.setAttribute('d',arc(Math.PI,2*Math.PI));bg.setAttribute('fill','none');bg.setAttribute('stroke','rgba(255,255,255,.08)');bg.setAttribute('stroke-width','11');bg.setAttribute('stroke-linecap','round');
+  svg.appendChild(bg);
+  const val=32.6, end=Math.PI+Math.PI*val/100;
+  const fg=document.createElementNS('http://www.w3.org/2000/svg','path');
+  fg.setAttribute('d',arc(Math.PI,end));fg.setAttribute('fill','none');fg.setAttribute('stroke','url(#gg)');fg.setAttribute('stroke-width','11');fg.setAttribute('stroke-linecap','round');
+  const L=Math.PI*r*val/100;fg.style.strokeDasharray=L+' 999';fg.style.strokeDashoffset=L;fg.style.transition='stroke-dashoffset 1.4s cubic-bezier(.2,.8,.2,1)';
+  const defs=document.createElementNS('http://www.w3.org/2000/svg','defs');
+  defs.innerHTML='<linearGradient id="gg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ff5b6e"/><stop offset="1" stop-color="#ffb020"/></linearGradient>';
+  svg.appendChild(defs);svg.appendChild(fg);
+  setTimeout(()=>fg.style.strokeDashoffset=0,350);
+  const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+  t.setAttribute('x',cx);t.setAttribute('y',cy-6);t.setAttribute('text-anchor','middle');t.setAttribute('fill','#fff');t.setAttribute('font-size','20');t.setAttribute('font-weight','800');t.textContent='32,6%';
+  svg.appendChild(t);
+})();
+
+/* ---- Tree ---- */
+const tree=[
+  {nm:'Сделки в работе',v:2569143209,c:'var(--c1)',kids:[
+    {nm:'Contract',v:325464484},{nm:'Logistics',v:852022702},{nm:'Подготовка к отгрузке',v:250957627},
+    {nm:'Готов к отгрузке',v:138547999},{nm:'Installation',v:417251020},{nm:'Оказание сервиса',v:3065360},
+    {nm:'Обучение',v:39129835},{nm:'Money / Document',v:542704181},
+  ]},
+  {nm:'Завершённые сделки',v:593832646,c:'var(--c3)',kids:[{nm:'Завершена',v:593832646}]},
+];
+const GRAND=3162975855;
+countUp(document.getElementById('treeTotal'),GRAND,1500);
+const maxKid=Math.max(...tree.flatMap(g=>g.kids.map(k=>k.v)));
+document.getElementById('tree').innerHTML=tree.map((g,gi)=>`
+  <div class="grp">
+    <div class="grp-head${gi===0?' open':''}" data-g="${gi}">
+      <span class="chev">▶</span><span class="gdot" style="background:${g.c}"></span>
+      <span class="gn">${g.nm}</span><span class="gv tabular">${fmt(g.v)}</span>
+    </div>
+    <div class="kids" data-k="${gi}">
+      ${g.kids.map(k=>`<div class="kid"><span class="kn">${k.nm}</span><span class="kbar"><i style="background:${g.c}" data-w="${(k.v/maxKid*100).toFixed(1)}"></i></span><span class="kv tabular">${fmt(k.v)}</span></div>`).join('')}
+    </div>`).join('')+`</div>`;
+function setKids(){document.querySelectorAll('.grp-head.open').forEach(h=>{const k=document.querySelector(`.kids[data-k="${h.dataset.g}"]`);k.style.maxHeight=k.scrollHeight+'px';});}
+document.querySelectorAll('.grp-head').forEach(h=>h.onclick=()=>{
+  h.classList.toggle('open');
+  const k=document.querySelector(`.kids[data-k="${h.dataset.g}"]`);
+  k.style.maxHeight=h.classList.contains('open')?k.scrollHeight+'px':'0';
+});
+setTimeout(()=>{setKids();document.querySelectorAll('.kid i').forEach(i=>i.style.width=i.dataset.w+'%');},400);
+
+/* ---- Monthly bars ---- */
+const months=['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+// split each month into 2 stacked segments (в работе / завершено) for texture
+const mdata=[169,450,655,621,216,544,423,85,0,0,0,0];
+const maxM=Math.max(...mdata);
+document.getElementById('bars').innerHTML=months.map((m,i)=>{
+  const v=mdata[i];const h=v/maxM*100;
+  const s1=h*0.72, s2=h*0.28;
+  return `<div class="bcol"><span class="bval">${v||''}</span>
+    <div class="bwrap" style="height:100%;justify-content:flex-end">
+      <div class="bseg" data-h="${s1}" style="background:linear-gradient(180deg,#5b8cff,#3a63d6)"></div>
+      <div class="bseg" data-h="${s2}" style="background:linear-gradient(180deg,#ffb020,#e08a10)"></div>
+    </div><span class="bm">${m}</span></div>`;
+}).join('');
+setTimeout(()=>document.querySelectorAll('.bseg').forEach((s,i)=>setTimeout(()=>s.style.height=s.dataset.h+'%',i*25)),300);
+
+/* ---- Area cumulative ---- */
+(function(){
+  const svg=document.getElementById('areaSvg'),W=520,H=210,pad=6;
+  const series=[
+    {nm:'План',c:'#8592ad',dash:true,d:[0.4,0.9,1.5,2.2,2.9,3.6,4.3,5.1,5.9,6.8,7.8,9.0]},
+    {nm:'1С',c:'#22c9a3',d:[0.17,0.55,1.05,1.55,1.8,2.25,2.6,2.9,2.95,3.0,3.02,3.03]},
+    {nm:'Bitrix',c:'#5b8cff',d:[0.17,0.6,1.2,1.75,2.0,2.5,2.9,3.1,3.15,3.16,3.16,3.16]},
+  ];
+  const maxV=9.2;
+  const X=i=>pad+i*(W-2*pad)/11;
+  const Y=v=>H-pad-(v/maxV)*(H-2*pad);
+  // grid
+  let g='';
+  for(let k=0;k<=3;k++){const y=pad+k*(H-2*pad)/3;g+=`<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="rgba(255,255,255,.05)"/>`;}
+  const defs=`<defs>
+    <linearGradient id="afill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5b8cff" stop-opacity=".35"/><stop offset="1" stop-color="#5b8cff" stop-opacity="0"/></linearGradient></defs>`;
+  let paths='';
+  // area under Bitrix
+  const bit=series[2];
+  let ap=`M${X(0)} ${Y(bit.d[0])}`;bit.d.forEach((v,i)=>ap+=` L${X(i)} ${Y(v)}`);ap+=` L${X(11)} ${H-pad} L${X(0)} ${H-pad} Z`;
+  paths+=`<path d="${ap}" fill="url(#afill)"/>`;
+  series.forEach(s=>{
+    let p=`M${X(0)} ${Y(s.d[0])}`;s.d.forEach((v,i)=>p+=` L${X(i)} ${Y(v)}`);
+    paths+=`<path class="path-anim" d="${p}" fill="none" stroke="${s.c}" stroke-width="${s.dash?2:2.6}" ${s.dash?'stroke-dasharray="6 5"':''} stroke-linecap="round" stroke-linejoin="round"/>`;
+    if(!s.dash){const last=s.d.length-1;paths+=`<circle cx="${X(last)}" cy="${Y(s.d[last])}" r="3.5" fill="${s.c}"/>`;}
+  });
+  let labels='';months.forEach((m,i)=>labels+=`<text x="${X(i)}" y="${H+2}" fill="#5c6884" font-size="9" text-anchor="middle">${m}</text>`);
+  svg.innerHTML=defs+g+paths+labels;
+  document.getElementById('areaLegend').innerHTML=series.map(s=>`<span class="al"><i style="background:${s.c};${s.dash?'height:2px;border-top:2px dashed '+s.c+';background:transparent':''}"></i>${s.nm}</span>`).join('');
+})();
+</script>
+</body>
+</html>

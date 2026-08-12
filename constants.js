@@ -50,4 +50,40 @@ const COORDINATORS = new Set([26, 79]);
 
 const VALID_ROLES = new Set(['admin', 'coordinator', 'engineer', 'viewer']);
 
-module.exports = { USERS, USER_EMAILS, SERVICE_TYPES, COORDINATORS, VALID_ROLES };
+// ── Гидратация справочника сотрудников из Bitrix (глобально для ВСЕХ модулей) ──
+// Статический USERS выше — курируемый минимум; сотрудники с новыми ID (49, 66, 92…)
+// в нём отсутствовали и показывались как «#49». Здесь один раз при старте сервера
+// дозагружаем полный список из user.get и ДОПИСЫВАЕМ недостающие имена прямо в тот
+// же объект USERS. Так как все модули импортируют одну и ту же ссылку, обновление
+// подхватывается везде (Логистика, Контракты, Реализация и т.д.). Курируемые имена
+// не перетираем. Best-effort: при ошибке остаётся статический справочник.
+let _hydrated = false;
+async function hydrateUsers() {
+  if (_hydrated) return 0;
+  const { b24 } = require('./bitrix');
+  let start = 0, added = 0, guard = 0;
+  try {
+    while (guard++ < 60) {
+      const res = await b24('user.get', { start, ADMIN_MODE: 'Y' });
+      const arr = (res && res.result) || [];
+      for (const u of arr) {
+        const id = String(u.ID);
+        if (USERS[id]) continue; // курируемое имя не трогаем
+        const name = [u.LAST_NAME, u.NAME].filter(Boolean).join(' ').trim()
+          || u.EMAIL || ('#' + id);
+        USERS[id] = name;
+        added++;
+      }
+      const next = res && res.next;
+      if (next === undefined || next === null) break;
+      start = next;
+    }
+    _hydrated = true;
+    if (added) console.log(`USERS: дозагружено сотрудников из Bitrix — ${added} (всего ${Object.keys(USERS).length})`);
+  } catch (e) {
+    console.error('hydrateUsers error:', e.message);
+  }
+  return added;
+}
+
+module.exports = { USERS, USER_EMAILS, SERVICE_TYPES, COORDINATORS, VALID_ROLES, hydrateUsers };
