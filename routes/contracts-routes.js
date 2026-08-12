@@ -16,12 +16,17 @@ router.get('/summary', requireAuth(VIEW_ROLES), async (req, res) => {
   }
 });
 
-// GET /api/contracts/news — сделки, зашедшие в «Контракт»/«Завершена» за 3 дня.
+// GET /api/contracts/news?mode=latest&limit=3 — самые свежие заключённые контракты;
+// ?mode=window&days=3 — все заходы в «Контракт»/«Завершена» за N дней (по убыванию).
 router.get('/news', requireAuth(VIEW_ROLES), async (req, res) => {
   try {
-    const days = Math.min(30, Math.max(1, parseInt(req.query.days, 10) || 3));
-    const { getRecentNews } = require('../contracts-calc');
-    res.json({ days, items: await getRecentNews(days) });
+    const { getRecentNews, getLatestContracts } = require('../contracts-calc');
+    if (req.query.mode === 'window') {
+      const days = Math.min(30, Math.max(1, parseInt(req.query.days, 10) || 3));
+      return res.json({ mode: 'window', days, items: await getRecentNews(days) });
+    }
+    const limit = Math.min(20, Math.max(1, parseInt(req.query.limit, 10) || 3));
+    res.json({ mode: 'latest', items: await getLatestContracts(limit) });
   } catch (e) {
     console.error('GET /api/contracts/news error:', e.message);
     res.status(500).json({ error: e.message, items: [] });

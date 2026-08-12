@@ -39,11 +39,22 @@
   .filterbar{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px}
   .fsel{flex:1;min-width:180px}
   .fsel label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--dim2);font-weight:600;margin-bottom:5px}
-  .fsel select{width:100%;background:var(--panel);border:1px solid var(--border);border-radius:11px;padding:10px 12px;color:var(--text);font:inherit;font-size:13.5px;font-weight:600;cursor:pointer;outline:none;backdrop-filter:blur(12px);transition:.2s}
-  .fsel select:hover{border-color:rgba(255,255,255,.18)}
-  .fsel select:focus{border-color:var(--brand2)}
-  .fsel select option{background:#121a2e}
-  .fsel.act select{border-color:rgba(255,45,85,.4);background:rgba(255,45,85,.06)}
+  .ms{position:relative}
+  .ms-btn{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:11px;padding:10px 12px;font-size:13.5px;font-weight:600;cursor:pointer;transition:.2s;backdrop-filter:blur(12px)}
+  .ms-btn:hover{border-color:rgba(255,255,255,.18)}
+  .ms-btn .ms-lab{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ms-btn svg{opacity:.5;flex-shrink:0;transition:transform .2s}
+  .ms.open .ms-btn svg{transform:rotate(180deg)}
+  .fsel.act .ms-btn{border-color:rgba(255,45,85,.4);background:rgba(255,45,85,.06)}
+  .ms-panel{position:absolute;top:calc(100% + 6px);left:0;right:0;background:#0f1728;border:1px solid var(--border);border-radius:12px;padding:8px;z-index:30;box-shadow:0 20px 50px -18px rgba(0,0,0,.8);display:none;max-height:320px;overflow:auto}
+  .ms.open .ms-panel{display:block;animation:msin .18s ease}
+  @keyframes msin{from{opacity:0;transform:translateY(-5px)}to{opacity:1}}
+  .ms-search{width:100%;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--text);font:inherit;font-size:12.5px;outline:none;margin-bottom:6px}
+  .ms-opt{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;cursor:pointer;font-size:12.5px;transition:.12s}
+  .ms-opt:hover{background:rgba(255,255,255,.06)}
+  .ms-opt input{accent-color:var(--brand);width:15px;height:15px;cursor:pointer;flex-shrink:0}
+  .ms-opt .msw{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+  .ms-empty{color:var(--dim2);font-size:12px;padding:8px}
   .chipbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;min-height:30px}
   .chip{display:inline-flex;align-items:center;gap:9px;background:linear-gradient(135deg,rgba(255,45,85,.18),rgba(255,45,85,.07));border:1px solid rgba(255,45,85,.35);color:#fff;border-radius:20px;padding:7px 8px 7px 14px;font-size:13px;font-weight:600;animation:chipin .3s cubic-bezier(.2,.8,.2,1)}
   @keyframes chipin{from{opacity:0;transform:translateX(-8px)}to{opacity:1}}
@@ -234,9 +245,15 @@
   </header>
 
   <div class="filterbar">
-    <div class="fsel"><label>Производитель</label><select id="fManuf"><option value="">Все</option></select></div>
-    <div class="fsel"><label>Отдел</label><select id="fDept"><option value="">Все</option></select></div>
-    <div class="fsel"><label>Месяц</label><select id="fMonth"><option value="">Все</option></select></div>
+    <div class="fsel"><label>Производитель</label>
+      <div class="ms" data-k="manuf"><div class="ms-btn" onclick="toggleMS('manuf')"><span class="ms-lab">Все</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div><div class="ms-panel"><input class="ms-search" placeholder="Поиск…" oninput="msSearch('manuf',this.value)"><div class="ms-opts"></div></div></div>
+    </div>
+    <div class="fsel"><label>Отдел</label>
+      <div class="ms" data-k="dept"><div class="ms-btn" onclick="toggleMS('dept')"><span class="ms-lab">Все</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div><div class="ms-panel"><div class="ms-opts"></div></div></div>
+    </div>
+    <div class="fsel"><label>Месяц</label>
+      <div class="ms" data-k="month"><div class="ms-btn" onclick="toggleMS('month')"><span class="ms-lab">Все</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div><div class="ms-panel"><div class="ms-opts"></div></div></div>
+    </div>
   </div>
 
   <div class="chipbar" id="chipbar"></div>
@@ -313,28 +330,40 @@ const showTip=(h,x,y)=>{tip.innerHTML=h;tip.style.left=(x+14)+'px';tip.style.top
 const hideTip=()=>tip.style.opacity=0;
 
 let ROLE='viewer',YEAR=2026,ALL=[],PLAN={},PIPES={},DEPT_ORDER=[],UPDATED=null;
-const FILT={manuf:'',dept:'',month:''}; let WASWIN=false; const openGrp=new Set([0]), openStage=new Set();
-const fManuf=document.getElementById('fManuf'),fDept=document.getElementById('fDept'),fMonth=document.getElementById('fMonth');
-fManuf.onchange=()=>{FILT.manuf=fManuf.value;renderAll();};
-fDept.onchange=()=>{FILT.dept=fDept.value;renderAll();};
-fMonth.onchange=()=>{FILT.month=fMonth.value;renderAll();};
+const FILT={manuf:[],dept:[],month:[]}; let WASWIN=false; const openGrp=new Set([0]), openStage=new Set();
+let MSOPTS={manuf:[],dept:[],month:[]};
 // проверки/выборки по активным фильтрам (excl — измерение, которое НЕ применяем: сам селектор)
-const passManuf=d=>!FILT.manuf||d.manufacturer===FILT.manuf;
-const passDept=d=>!FILT.dept||d.saleType===FILT.dept;
-const passMonth=d=>FILT.month===''||d.month===+FILT.month;
+const passManuf=d=>!FILT.manuf.length||FILT.manuf.includes(d.manufacturer);
+const passDept=d=>!FILT.dept.length||FILT.dept.includes(d.saleType);
+const passMonth=d=>!FILT.month.length||FILT.month.includes(d.month);
 const getFiltered=excl=>ALL.filter(d=>(excl==='manuf'||passManuf(d))&&(excl==='dept'||passDept(d))&&(excl==='month'||passMonth(d)));
+function msLabel(k){const s=FILT[k];if(!s.length)return'Все';if(s.length===1){const o=MSOPTS[k].find(o=>String(o.v)===String(s[0]));return o?o.l:String(s[0]);}return 'Выбрано: '+s.length;}
 function buildFilterOptions(){
   const manufs=[...new Set(ALL.map(d=>d.manufacturer).filter(m=>m&&m!=='Не определено'))].sort((a,b)=>a.localeCompare(b,'ru'));
   const depts=orderDepts([...new Set(ALL.map(d=>d.saleType))]);
   const months=[...new Set(ALL.map(d=>d.month).filter(m=>m!=null))].sort((a,b)=>a-b);
-  const op=(v,l,sel)=>`<option value="${esc(v)}"${sel?' selected':''}>${esc(l)}</option>`;
-  fManuf.innerHTML=op('','Все производители',!FILT.manuf)+manufs.map(m=>op(m,m,FILT.manuf===m)).join('');
-  fDept.innerHTML=op('','Все отделы',!FILT.dept)+depts.map(d=>op(d,d,FILT.dept===d)).join('');
-  fMonth.innerHTML=op('','Все месяцы',FILT.month==='')+months.map(m=>op(m,MONTHS[m],FILT.month===String(m))).join('');
-  [['manuf',fManuf],['dept',fDept],['month',fMonth]].forEach(([k,el])=>el.closest('.fsel').classList.toggle('act',!!FILT[k]&&FILT[k]!==''));
+  MSOPTS.manuf=manufs.map(m=>({v:m,l:m}));
+  MSOPTS.dept=depts.map(d=>({v:d,l:d,c:stColor(d,DEPT_ORDER.indexOf(d))}));
+  MSOPTS.month=months.map(m=>({v:m,l:MONTHS[m]}));
+  FILT.manuf=FILT.manuf.filter(v=>manufs.includes(v));
+  FILT.dept=FILT.dept.filter(v=>depts.includes(v));
+  FILT.month=FILT.month.filter(v=>months.includes(v));
+  ['manuf','dept','month'].forEach(renderMS);
 }
-function syncSelect(dim){({manuf:fManuf,dept:fDept,month:fMonth}[dim]).value=FILT[dim];({manuf:fManuf,dept:fDept,month:fMonth}[dim]).closest('.fsel').classList.toggle('act',FILT[dim]!=='');}
-function clearFilter(dim){FILT[dim]='';syncSelect(dim);renderAll();}
+function renderMS(k){
+  const box=document.querySelector(`.ms[data-k="${k}"]`);if(!box)return;
+  const sel=FILT[k].map(String);
+  box.querySelector('.ms-lab').textContent=msLabel(k);
+  box.closest('.fsel').classList.toggle('act',!!FILT[k].length);
+  box.querySelector('.ms-opts').innerHTML=MSOPTS[k].map(o=>`<label class="ms-opt"><input type="checkbox" ${sel.includes(String(o.v))?'checked':''} onchange="msToggle('${k}','${String(o.v).replace(/'/g,"\\'")}')">${o.c?`<span class="msw" style="background:${o.c}"></span>`:''}<span>${esc(o.l)}</span></label>`).join('')||'<div class="ms-empty">нет данных</div>';
+}
+function msToggle(k,v){const val=k==='month'?+v:v;const a=FILT[k];const i=a.findIndex(x=>String(x)===String(val));if(i>=0)a.splice(i,1);else a.push(val);
+  const box=document.querySelector(`.ms[data-k="${k}"]`);box.querySelector('.ms-lab').textContent=msLabel(k);box.closest('.fsel').classList.toggle('act',!!FILT[k].length);
+  renderAll();}
+function toggleMS(k){const box=document.querySelector(`.ms[data-k="${k}"]`);const open=box.classList.contains('open');document.querySelectorAll('.ms.open').forEach(b=>b.classList.remove('open'));if(!open)box.classList.add('open');}
+function msSearch(k,q){q=(q||'').toLowerCase();document.querySelectorAll(`.ms[data-k="${k}"] .ms-opt`).forEach(o=>{o.style.display=o.textContent.toLowerCase().includes(q)?'':'none';});}
+document.addEventListener('click',e=>{if(!e.target.closest('.ms'))document.querySelectorAll('.ms.open').forEach(b=>b.classList.remove('open'));});
+function clearFilter(k){FILT[k]=[];renderMS(k);renderAll();}
 
 // курсор-прожектор
 (function(){const s=document.getElementById('spotlight');
@@ -355,7 +384,7 @@ function confettiBurst(x,y){
   })(t0);
 }
 
-(function(){const y=new Date().getFullYear();const sel=document.getElementById('yearSel');for(let yy=y;yy>=y-3;yy--){const o=document.createElement('option');o.value=yy;o.textContent=yy;sel.appendChild(o);}sel.value=2026;sel.onchange=()=>{YEAR=+sel.value;FILT.manuf=FILT.dept=FILT.month='';load();};})();
+(function(){const y=new Date().getFullYear();const sel=document.getElementById('yearSel');for(let yy=y;yy>=y-3;yy--){const o=document.createElement('option');o.value=yy;o.textContent=yy;sel.appendChild(o);}sel.value=2026;sel.onchange=()=>{YEAR=+sel.value;FILT.manuf=[];FILT.dept=[];FILT.month=[];load();};})();
 
 async function init(){
   try{const r=await fetch('/auth/me');if(r.ok){const {user}=await r.json();ROLE=user.role;}}catch(e){}
@@ -381,7 +410,7 @@ async function load(){
 
 // список отделов в порядке DEPT_ORDER, потом остальные
 function orderDepts(names){const seen=new Set(names);return [...DEPT_ORDER.filter(d=>seen.has(d)),...names.filter(n=>!DEPT_ORDER.includes(n)).sort()];}
-function toggleFilter(dep){FILT.dept=FILT.dept===dep?'':dep;syncSelect('dept');renderAll();}
+function toggleFilter(dep){const a=FILT.dept;const i=a.indexOf(dep);if(i>=0)a.splice(i,1);else a.push(dep);renderMS('dept');renderAll();}
 
 function renderAll(){
   const cons=getFiltered();
@@ -396,20 +425,22 @@ function renderAll(){
 
 function renderChip(){
   const c=document.getElementById('chipbar');const chips=[];
-  if(FILT.manuf)chips.push(`<span class="chip">Производитель: ${esc(FILT.manuf)} <span class="x" onclick="clearFilter('manuf')">✕</span></span>`);
-  if(FILT.dept){const col=stColor(FILT.dept,DEPT_ORDER.indexOf(FILT.dept));chips.push(`<span class="chip"><span class="sw" style="background:${col}"></span>Отдел: ${esc(FILT.dept)} <span class="x" onclick="clearFilter('dept')">✕</span></span>`);}
-  if(FILT.month!=='')chips.push(`<span class="chip">Месяц: ${esc(MONTHS[+FILT.month])} <span class="x" onclick="clearFilter('month')">✕</span></span>`);
+  if(FILT.manuf.length)chips.push(`<span class="chip">Производитель: ${esc(FILT.manuf.join(', '))} <span class="x" onclick="clearFilter('manuf')">✕</span></span>`);
+  if(FILT.dept.length)chips.push(`<span class="chip"><span class="sw" style="background:${stColor(FILT.dept[0],DEPT_ORDER.indexOf(FILT.dept[0]))}"></span>Отдел: ${esc(FILT.dept.join(', '))} <span class="x" onclick="clearFilter('dept')">✕</span></span>`);
+  if(FILT.month.length)chips.push(`<span class="chip">Месяц: ${esc(FILT.month.slice().sort((a,b)=>a-b).map(m=>MONTHS[m]).join(', '))} <span class="x" onclick="clearFilter('month')">✕</span></span>`);
   c.innerHTML=chips.length?chips.join('')+`<span class="chiphint">фильтры применены ко всем квадратам</span>`:`<span class="chiphint">Выберите фильтры сверху или кликните отдел в «Пироге» / «Выполнении плана»</span>`;
 }
 
 function renderKpi(f){
   const total=f.reduce((a,d)=>a+d.sumKzt,0),count=f.length,avg=count?total/count:0;
-  const plan=FILT.dept?(PLAN[FILT.dept]||0):Object.values(PLAN).reduce((a,v)=>a+v,0);
+  const selD=FILT.dept;
+  const plan=selD.length?selD.reduce((a,dp)=>a+(PLAN[dp]||0),0):Object.values(PLAN).reduce((a,v)=>a+v,0);
   const pct=plan?+(total/plan*100).toFixed(1):null;
   const win=pct!=null&&pct>=100;
+  const anyF=FILT.manuf.length||FILT.dept.length||FILT.month.length;
   const items=[
-    {l:FILT.dept?'Сумма ('+FILT.dept+')':'Сумма контрактов',v:total/1e9,dec:1,suf:'млрд ₸',s:'контрактных сделок',accent:true},
-    {l:'Сделок',v:count,dec:0,suf:'',s:FILT.dept?'в отделе':'в портфеле года'},
+    {l:selD.length===1?'Сумма ('+selD[0]+')':selD.length?'Сумма (отделов: '+selD.length+')':'Сумма контрактов',v:total/1e9,dec:1,suf:'млрд ₸',s:anyF?'по фильтру':'контрактных сделок',accent:true},
+    {l:'Сделок',v:count,dec:0,suf:'',s:anyF?'по фильтру':'в портфеле года'},
     {l:'Средний чек',v:avg/1e6,dec:1,suf:'млн ₸',s:'на сделку'},
     {l:'Выполнение плана',v:pct==null?0:pct,dec:1,suf:'%',s:pct==null?'план не задан':`${fmt(total/1e6)} / ${fmt(plan/1e6)} млн`,color:win?null:pcColor(pct),win},
   ];
@@ -431,7 +462,7 @@ function renderDonut(){
     const el=document.createElementNS('http://www.w3.org/2000/svg','circle');
     el.setAttribute('cx',cx);el.setAttribute('cy',cx);el.setAttribute('r',R);el.setAttribute('stroke',col);el.style.color=col;
     el.setAttribute('stroke-dashoffset',-off);el.style.strokeDasharray=`0 ${C}`;
-    if(FILT.dept&&FILT.dept!==nm)el.style.opacity=.28;
+    if(FILT.dept.length&&!FILT.dept.includes(nm))el.style.opacity=.28;
     setTimeout(()=>{el.style.transition='stroke-dasharray 1s cubic-bezier(.2,.8,.2,1)';el.style.strokeDasharray=`${len} ${C-len}`;},120+i*70);
     el.onclick=()=>toggleFilter(nm);
     el.addEventListener('mousemove',e=>showTip(`<b>${esc(nm)}</b><br>${fmt(agg[nm]/1e6)} млн ₸ · ${Math.round(agg[nm]/total*100)}%`,e.clientX,e.clientY));
@@ -440,7 +471,7 @@ function renderDonut(){
   });
   countUp(document.getElementById('donutTotal'),total/1e9,1300,fmt1);
   document.getElementById('legend').innerHTML=names.map((nm,i)=>{
-    const col=stColor(nm,i),cls=FILT.dept?(FILT.dept===nm?'on':'dim'):'';
+    const col=stColor(nm,i),cls=FILT.dept.length?(FILT.dept.includes(nm)?'on':'dim'):'';
     return `<div class="lg ${cls}" onclick="toggleFilter('${nm.replace(/'/g,"\\'")}')"><span class="sw" style="background:${col}"></span><span class="nm">${esc(nm)}</span><span class="vl tabular">${fmt1(agg[nm]/1e9)}</span><span class="pc tabular" style="color:${col}">${Math.round(agg[nm]/total*100)}%</span></div>`;
   }).join('');
 }
@@ -450,7 +481,7 @@ function renderPlan(){
   const names=orderDepts([...new Set([...Object.keys(PLAN),...Object.keys(fact)])]);
   const rows=names.map(dep=>{const plan=PLAN[dep]||0,f=fact[dep]||0;return {dep,plan,fact:f,pct:plan?+(f/plan*100).toFixed(1):null};});
   document.getElementById('planRows').innerHTML=rows.map(r=>{
-    const cls=FILT.dept?(FILT.dept===r.dep?'on':'dim'):'';
+    const cls=FILT.dept.length?(FILT.dept.includes(r.dep)?'on':'dim'):'';
     return `<div class="planrow ${cls}" data-dep="${encodeURIComponent(r.dep)}">
       <div class="pr-top"><span class="nm">${esc(r.dep)}</span>
         <span class="rt"><span class="vals">факт <b>${fmt(r.fact/1e6)}</b> / план <span class="planval" data-plan="${r.plan}">${fmt(r.plan/1e6)}</span></span>
@@ -539,7 +570,7 @@ function renderArea(deals){
   const mln=Array(12).fill(0);deals.forEach(d=>{if(d.month!=null)mln[d.month]+=d.sumKzt;});
   const cum=[];mln.reduce((r,v,i)=>cum[i]=r+v,0);
   const bit=cum.map(v=>v/1e9);
-  const planTotal=(FILT.dept?(PLAN[FILT.dept]||0):Object.values(PLAN).reduce((a,v)=>a+v,0))/1e9;
+  const planTotal=(FILT.dept.length?FILT.dept.reduce((a,dp)=>a+(PLAN[dp]||0),0):Object.values(PLAN).reduce((a,v)=>a+v,0))/1e9;
   const svg=document.getElementById('areaSvg'),W=520,H=200,pad=6;
   const maxV=Math.max(planTotal,...bit,.001)*1.08;
   const X=i=>pad+i*(W-2*pad)/11,Y=v=>H-pad-(v/maxV)*(H-2*pad);
@@ -554,7 +585,7 @@ function renderArea(deals){
   paths+=`<circle cx="${X(11)}" cy="${Y(bit[11])}" r="3.5" fill="#5b8cff"/>`;
   let labels='';MONTHS.forEach((m,i)=>labels+=`<text x="${X(i)}" y="${H+2}" fill="#5c6884" font-size="9" text-anchor="middle">${m}</text>`);
   svg.innerHTML=defs+g+paths+labels;
-  document.getElementById('areaLegend').innerHTML=`<span class="al"><i style="background:transparent;border-top:2px dashed #8592ad;height:2px"></i>План${FILT.dept?' ('+esc(FILT.dept)+')':''}</span><span class="al"><i style="background:#5b8cff"></i>Bitrix (факт)</span>`;
+  document.getElementById('areaLegend').innerHTML=`<span class="al"><i style="background:transparent;border-top:2px dashed #8592ad;height:2px"></i>План${FILT.dept.length?' (выбрано)':''}</span><span class="al"><i style="background:#5b8cff"></i>Bitrix (факт)</span>`;
   AREA={bit,planTotal,maxV,W,H,pad};
 }
 // Наведение на «Накопительную»: направляющая + точка + цифра на дате под курсором
@@ -585,17 +616,12 @@ function renderNews(items){
 }
 async function loadNews(){
   const sub=document.getElementById('newsSub'),box=document.getElementById('news');
-  if(NEWSMODE==='latest'){
-    // 3 последних заключённых контракта — из уже загруженных сделок, по дате договора
-    const items=ALL.filter(d=>d.date).slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,3)
-      .map(d=>({title:d.title||('Сделка #'+d.id),kind:d.sem==='S'?'Завершена':'Контракт',sem:d.sem,stageName:d.stageName,sumKzt:d.sumKzt,at:d.date,url:d.url}));
-    sub.textContent='3 последних заключённых контракта';
-    renderNews(items);return;
-  }
   sub.textContent='';box.innerHTML='<div class="news-empty">Загрузка…</div>';
+  const url=NEWSMODE==='latest'?'/api/contracts/news?mode=latest&limit=3':'/api/contracts/news?mode=window&days=3';
   try{
-    const r=await fetch('/api/contracts/news?days=3');const {items,days}=await r.json();
-    sub.textContent=(items&&items.length)?`${items.length} обновлений за последние ${days} дн.`:'';
+    const r=await fetch(url);const {items,days}=await r.json();
+    if(NEWSMODE==='latest')sub.textContent=(items&&items.length)?'3 последних заключённых контракта':'';
+    else sub.textContent=(items&&items.length)?`${items.length} обновлений за последние ${days} дн.`:'';
     renderNews(items||[]);
   }catch(e){box.innerHTML='<div class="news-empty">Не удалось загрузить новости</div>';}
 }

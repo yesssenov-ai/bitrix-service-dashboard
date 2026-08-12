@@ -211,4 +211,36 @@ async function getRecentNews(days = 3) {
   return newsCache;
 }
 
-module.exports = { getContractsSummary, getPlan, setPlan, getRecentNews, DEPT_ORDER };
+// Самые свежие N заключённых контрактов — сделки, которые последними зашли в
+// стадию «Контракт» (по MOVED_TIME), без ограничения по дате. Кэш 10 мин.
+let latestCache = null, latestKey = '', latestAt = 0;
+async function getLatestContracts(limit = 3) {
+  const key = 'l' + limit;
+  if (latestCache && latestKey === key && Date.now() - latestAt < 10 * 60 * 1000) return latestCache;
+  const [stageMeta, rate] = await Promise.all([getAllStageMeta(), getTodayRate()]);
+  const base = dealUrlBase();
+  const out = [];
+  for (const cat of [0, 1, 2, 3]) {
+    try {
+      const { result } = await b24('crm.deal.list', {
+        filter: { CATEGORY_ID: String(cat), STAGE_ID: CONTRACT_STAGE[cat] },
+        select: ['ID', 'TITLE', 'STAGE_ID', 'OPPORTUNITY', 'CURRENCY_ID', 'MOVED_TIME', 'DATE_CREATE'],
+        order: { MOVED_TIME: 'DESC' }, start: 0,
+      });
+      (result || []).slice(0, limit).forEach(d => {
+        const m = stageMeta[d.STAGE_ID] || { name: d.STAGE_ID };
+        const sum = parseFloat(d.OPPORTUNITY) || 0;
+        out.push({
+          id: d.ID, title: d.TITLE || ('Сделка #' + d.ID), stageName: m.name, sem: 'P', kind: 'Контракт',
+          sumKzt: d.CURRENCY_ID === 'USD' ? sum * rate : sum, at: d.MOVED_TIME || d.DATE_CREATE || null,
+          url: base ? base + d.ID + '/' : null,
+        });
+      });
+    } catch (e) { console.error(`getLatestContracts(cat ${cat}) error:`, e.message); }
+  }
+  out.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  latestCache = out.slice(0, limit); latestKey = key; latestAt = Date.now();
+  return latestCache;
+}
+
+module.exports = { getContractsSummary, getPlan, setPlan, getRecentNews, getLatestContracts, DEPT_ORDER };
