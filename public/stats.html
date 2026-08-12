@@ -146,7 +146,10 @@ function buildBrandCols(d){
   const parents = d.parents || d.manufacturers || [];
   parents.forEach(p => {
     const subs = (d.groups && d.groups[p]) || [p];
-    const expandable = subs.length > 1;
+    // Раскрываемо, если под-брендов несколько ИЛИ единственный под-бренд назван
+    // точнее короткого ярлыка (напр. «Agilent» → раскрыть → «Agilent Technologies»).
+    // Так клик всегда что-то показывает, а в будущем году под-бренды подтянутся сами.
+    const expandable = subs.length > 1 || (subs.length === 1 && subs[0] !== p);
     cols.push({ key:p, label:p, subs, expandable, isParent:true });
     if (expandable && _expandedBrands.has(p)) subs.forEach(s => cols.push({ key:s, label:'↳ '+s, isSub:true }));
   });
