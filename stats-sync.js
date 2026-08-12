@@ -151,28 +151,38 @@ async function paginatedDealList(filter) {
 // pipelines and upserts. Safe to re-run any time.
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// Защита от одновременного запуска двух полных сверок В ОДНОМ ПРОЦЕССЕ (ночная +
+// ручной /resync). Второй вызов просто пропускается, а не удваивает нагрузку на
+// Битрикс. (Ручной CLI `node sync-stats-full.js` — отдельный процесс, флаг на него
+// не распространяется, но это осознанное действие, а не наложение по расписанию.)
+let _fullSyncRunning = false;
 async function fullSync() {
+  if (_fullSyncRunning) { console.log('stats fullSync уже идёт — пропускаю повторный запуск'); return 0; }
+  _fullSyncRunning = true;
   let total = 0, errors = 0;
   const startedAt = Date.now();
+  try {
+    for (const categoryId of CATEGORY_IDS) {
+      const deals = await paginatedDealList({ CATEGORY_ID: categoryId });
+      console.log(`Категория ${categoryId}: найдено ${deals.length} сделок`);
 
-  for (const categoryId of CATEGORY_IDS) {
-    const deals = await paginatedDealList({ CATEGORY_ID: categoryId });
-    console.log(`Категория ${categoryId}: найдено ${deals.length} сделок`);
-
-    for (const d of deals) {
-      try {
-        await upsertDeal(d);
-        total++;
-      } catch (e) {
-        errors++;
-        console.error(`  ⚠️  Ошибка на сделке #${d.ID}: ${e.message} (продолжаю дальше)`);
+      for (const d of deals) {
+        try {
+          await upsertDeal(d);
+          total++;
+        } catch (e) {
+          errors++;
+          console.error(`  ⚠️  Ошибка на сделке #${d.ID}: ${e.message} (продолжаю дальше)`);
+        }
+        if (total % 50 === 0 && total > 0) {
+          const elapsedMin = ((Date.now() - startedAt) / 60000).toFixed(1);
+          console.log(`  ...обработано ${total} сделок (${elapsedMin} мин, ошибок: ${errors})`);
+        }
+        await sleep(120); // stay under Bitrix's rate limit — long sync otherwise trips it partway through
       }
-      if (total % 50 === 0 && total > 0) {
-        const elapsedMin = ((Date.now() - startedAt) / 60000).toFixed(1);
-        console.log(`  ...обработано ${total} сделок (${elapsedMin} мин, ошибок: ${errors})`);
-      }
-      await sleep(120); // stay under Bitrix's rate limit — long sync otherwise trips it partway through
     }
+  } finally {
+    _fullSyncRunning = false;
   }
 
   const totalMin = ((Date.now() - startedAt) / 60000).toFixed(1);

@@ -503,10 +503,11 @@ initDB().then(() => {
     const { refreshDailyRate } = require('./nbrk-exchange-rate');
     setTimeout(() => refreshDailyRate(), 5000);
     setInterval(() => refreshDailyRate(), 24 * 60 * 60 * 1000);
-    // Статистика deals cache — full reconciliation once a day, catches
-    // anything a missed webhook delivery would otherwise leave stale.
+    // Статистика deals cache — полная сверка идёт НОЧЬЮ в 01:00 по Кызылорде
+    // (в ночном блоке ниже, сразу после операционной сверки, чтобы не грузить
+    // Битрикс двумя тяжёлыми прогонами одновременно). Живые точечные апдейты —
+    // через тот же вебхук ONCRMDEALADD/UPDATE.
     const { fullSync: fullSyncStatsDeals } = require('./stats-sync');
-    setInterval(() => fullSyncStatsDeals().catch(e => console.error('stats fullSync error:', e.message)), 24 * 60 * 60 * 1000);
     // Операционный модуль «Реализация»: кэш сделок исполнительной фазы. Один
     // полный прогон при старте (наполнить кэш после деплоя), затем ночная
     // сверка в 01:00 по Кызылорде (UTC+5) = 20:00 UTC. Живые точечные апдейты
@@ -519,7 +520,11 @@ initDB().then(() => {
       const dateKey = now.toISOString().slice(0, 10);
       if (now.getUTCHours() === 20 && lastOpSyncDate !== dateKey) {
         lastOpSyncDate = dateKey;
-        operationalFullSync({ source: 'nightly' }).catch(e => console.error('operational nightly sync error:', e.message));
+        // 01:00 Кызылорда: сначала операционная сверка, затем — статистика
+        // (последовательно, чтобы не долбить Битрикс двумя прогонами разом).
+        operationalFullSync({ source: 'nightly' })
+          .catch(e => console.error('operational nightly sync error:', e.message))
+          .finally(() => fullSyncStatsDeals().catch(e => console.error('stats nightly sync error:', e.message)));
       }
     }, 5 * 60 * 1000);
     // Planner ↔ Bitrix reconciliation — webhooks are best-effort, this catches
