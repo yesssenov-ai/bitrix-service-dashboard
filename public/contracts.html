@@ -154,9 +154,50 @@
   @keyframes sp{to{transform:rotate(360deg)}}
   .err{text-align:center;color:var(--bad);padding:20px;font-size:14px}
   ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:8px}
+
+  /* ───────── WOW-СЛОЙ ───────── */
+  #aurora{position:fixed;inset:0;z-index:-2;overflow:hidden;pointer-events:none}
+  #aurora span{position:absolute;border-radius:50%;filter:blur(90px);opacity:.45;mix-blend-mode:screen}
+  #aurora span:nth-child(1){width:520px;height:520px;background:radial-gradient(circle,#ff2d55,transparent 70%);top:-170px;left:-130px;animation:drift1 24s ease-in-out infinite}
+  #aurora span:nth-child(2){width:600px;height:600px;background:radial-gradient(circle,#5b8cff,transparent 70%);top:-210px;right:-160px;animation:drift2 28s ease-in-out infinite}
+  #aurora span:nth-child(3){width:560px;height:560px;background:radial-gradient(circle,#22c9a3,transparent 70%);bottom:-240px;left:38%;animation:drift3 32s ease-in-out infinite}
+  @keyframes drift1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(130px,90px) scale(1.15)}}
+  @keyframes drift2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-110px,120px) scale(1.1)}}
+  @keyframes drift3{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-150px,-70px) scale(1.2)}}
+  #spotlight{position:fixed;width:620px;height:620px;border-radius:50%;pointer-events:none;z-index:0;background:radial-gradient(circle,rgba(255,45,85,.10),transparent 60%);transform:translate(-50%,-50%);left:-9999px;top:0;opacity:0;transition:opacity .4s}
+  #confetti{position:fixed;inset:0;pointer-events:none;z-index:60}
+  .wrap{position:relative;z-index:1}
+
+  .card,.kpi{opacity:0;transform:translateY(18px) scale(.985);animation:cardIn .7s cubic-bezier(.16,.84,.32,1) forwards}
+  @keyframes cardIn{to{opacity:1;transform:none}}
+  .kpi:nth-child(1){animation-delay:.04s}.kpi:nth-child(2){animation-delay:.1s}.kpi:nth-child(3){animation-delay:.16s}.kpi:nth-child(4){animation-delay:.22s}
+  .grid .card:nth-child(1){animation-delay:.26s}.grid .card:nth-child(2){animation-delay:.32s}.grid .card:nth-child(3){animation-delay:.38s}
+  .grid2 .card:nth-child(1){animation-delay:.42s}.grid2 .card:nth-child(2){animation-delay:.47s}
+  .card{transition:transform .35s cubic-bezier(.2,.8,.2,1),box-shadow .35s,border-color .35s}
+  .card:hover{transform:translateY(-4px);border-color:rgba(255,255,255,.14);box-shadow:0 26px 60px -26px rgba(0,0,0,.75)}
+  .card>*{position:relative;z-index:1}
+  .card::after{content:"";position:absolute;top:-60%;left:0;width:45%;height:220%;transform:rotate(18deg) translateX(-170%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.07),transparent);pointer-events:none;z-index:0}
+  .card:hover::after{transform:rotate(18deg) translateX(360%);transition:transform 1s ease}
+  .kpi{transition:transform .3s,box-shadow .3s}
+  .kpi:hover{transform:translateY(-3px);box-shadow:0 18px 40px -20px rgba(0,0,0,.7)}
+  @property --a{syntax:'<angle>';inherits:false;initial-value:0deg}
+  .kpi.accent::after{content:"";position:absolute;inset:0;border-radius:15px;padding:1.4px;background:conic-gradient(from var(--a,0deg),transparent 0deg,rgba(255,45,85,.85) 40deg,transparent 120deg);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:spinborder 4.5s linear infinite;pointer-events:none}
+  @keyframes spinborder{to{--a:360deg}}
+  .kpi .kv.win span{color:#ffd76a!important;text-shadow:0 0 20px rgba(255,215,106,.55)}
+  .gauge.win svg text{fill:#ffd76a}
+  .bcol .bwrap{position:relative}
+  .bcol .bwrap::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.22),transparent 45%);opacity:0;animation:barsheen 2.6s ease-in-out infinite}
+  .loader-logo{height:42px;margin-bottom:14px;animation:loadpulse 1.1s ease-in-out infinite;filter:drop-shadow(0 0 12px rgba(255,45,85,.5))}
+  .loading{flex-direction:column}
+  @keyframes loadpulse{0%,100%{opacity:.5;transform:scale(.92)}50%{opacity:1;transform:scale(1.08)}}
+  @keyframes barsheen{0%,100%{opacity:0}50%{opacity:.45}}
+  @media(prefers-reduced-motion:reduce){#aurora span,.card,.kpi,.bcol .bwrap::after,.kpi.accent::after,.loader-logo,.logo-emblem,.card::after{animation:none!important}#spotlight{display:none}.card,.kpi{opacity:1;transform:none}}
 </style>
 </head>
 <body>
+<div id="aurora"><span></span><span></span><span></span></div>
+<div id="spotlight"></div>
+<canvas id="confetti"></canvas>
 <div class="wrap">
   <header>
     <div class="brand">
@@ -227,7 +268,7 @@
   </div>
 </div>
 <div class="tip" id="tip"></div>
-<div class="loading" id="loading"><div class="spin"></div></div>
+<div class="loading" id="loading"><img src="/assets/logo-icon.png" alt="" class="loader-logo"><div class="spin"></div></div>
 
 <script>
 const MONTHS=['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
@@ -245,7 +286,26 @@ const showTip=(h,x,y)=>{tip.innerHTML=h;tip.style.left=(x+14)+'px';tip.style.top
 const hideTip=()=>tip.style.opacity=0;
 
 let ROLE='viewer',YEAR=2026,ALL=[],PLAN={},PIPES={},DEPT_ORDER=[],UPDATED=null;
-let FILTER=null; const openGrp=new Set([0]), openStage=new Set();
+let FILTER=null,WASWIN=false; const openGrp=new Set([0]), openStage=new Set();
+
+// курсор-прожектор
+(function(){const s=document.getElementById('spotlight');
+  addEventListener('pointermove',e=>{s.style.left=e.clientX+'px';s.style.top=e.clientY+'px';s.style.opacity=1;},{passive:true});
+  addEventListener('pointerleave',()=>s.style.opacity=0);
+})();
+// конфетти при выполнении плана ≥100%
+function confettiBurst(x,y){
+  if(matchMedia('(prefers-reduced-motion:reduce)').matches)return;
+  const cv=document.getElementById('confetti'),ctx=cv.getContext('2d');cv.width=innerWidth;cv.height=innerHeight;
+  const cols=['#ff2d55','#5b8cff','#ffb020','#22c9a3','#ffd76a','#a56bff'],P=[];
+  for(let i=0;i<110;i++){const a=Math.random()*Math.PI*2,sp=4+Math.random()*8;P.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-7,g:.22+Math.random()*.16,r:3+Math.random()*4,rot:Math.random()*6,vr:-.35+Math.random()*.7,c:cols[i%cols.length],life:1});}
+  let t0=performance.now();
+  (function frame(t){const dt=Math.min((t-t0)/16,3);t0=t;ctx.clearRect(0,0,cv.width,cv.height);let alive=false;
+    P.forEach(p=>{p.vy+=p.g*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.rot+=p.vr*dt;p.life-=.011*dt;
+      if(p.life>0&&p.y<cv.height+30){alive=true;ctx.save();ctx.globalAlpha=Math.max(0,p.life);ctx.translate(p.x,p.y);ctx.rotate(p.rot);ctx.fillStyle=p.c;ctx.fillRect(-p.r,-p.r*.5,p.r*2,p.r);ctx.restore();}});
+    if(alive)requestAnimationFrame(frame);else ctx.clearRect(0,0,cv.width,cv.height);
+  })(t0);
+}
 
 (function(){const y=new Date().getFullYear();const sel=document.getElementById('yearSel');for(let yy=y;yy>=y-3;yy--){const o=document.createElement('option');o.value=yy;o.textContent=yy;sel.appendChild(o);}sel.value=2026;sel.onchange=()=>{YEAR=+sel.value;FILTER=null;load();};})();
 
@@ -296,14 +356,17 @@ function renderKpi(f){
   const total=f.reduce((a,d)=>a+d.sumKzt,0),count=f.length,avg=count?total/count:0;
   const plan=FILTER?(PLAN[FILTER]||0):Object.values(PLAN).reduce((a,v)=>a+v,0);
   const pct=plan?+(total/plan*100).toFixed(1):null;
+  const win=pct!=null&&pct>=100;
   const items=[
     {l:FILTER?'Сумма ('+FILTER+')':'Сумма контрактов',v:total/1e9,dec:1,suf:'млрд ₸',s:'контрактных сделок',accent:true},
     {l:'Сделок',v:count,dec:0,suf:'',s:FILTER?'в отделе':'в портфеле года'},
     {l:'Средний чек',v:avg/1e6,dec:1,suf:'млн ₸',s:'на сделку'},
-    {l:'Выполнение плана',v:pct==null?0:pct,dec:1,suf:'%',s:pct==null?'план не задан':`${fmt(total/1e6)} / ${fmt(plan/1e6)} млн`,color:pcColor(pct)},
+    {l:'Выполнение плана',v:pct==null?0:pct,dec:1,suf:'%',s:pct==null?'план не задан':`${fmt(total/1e6)} / ${fmt(plan/1e6)} млн`,color:win?null:pcColor(pct),win},
   ];
-  document.getElementById('kpis').innerHTML=items.map(it=>`<div class="kpi${it.accent?' accent':''}"><div class="kl">${esc(it.l)}</div><div class="kv tabular"><span data-cu="${it.v}" data-dec="${it.dec}" style="${it.color?'color:'+it.color:''}">0</span> ${it.suf?`<small>${it.suf}</small>`:''}</div><div class="ks">${esc(it.s)}</div></div>`).join('');
+  document.getElementById('kpis').innerHTML=items.map(it=>`<div class="kpi${it.accent?' accent':''}"><div class="kl">${esc(it.l)}</div><div class="kv tabular${it.win?' win':''}"><span data-cu="${it.v}" data-dec="${it.dec}" style="${it.color?'color:'+it.color:''}">0</span> ${it.suf?`<small>${it.suf}</small>`:''}</div><div class="ks">${esc(it.s)}</div></div>`).join('');
   document.querySelectorAll('#kpis [data-cu]').forEach(el=>countUp(el,+el.dataset.cu,1200,el.dataset.dec==='1'?fmt1:fmt));
+  if(win&&!WASWIN)setTimeout(()=>confettiBurst(innerWidth*0.72,150),200);
+  WASWIN=win;
 }
 
 function aggByDept(deals){const m={};deals.forEach(d=>m[d.saleType]=(m[d.saleType]||0)+d.sumKzt);return m;}
@@ -364,6 +427,7 @@ function editPlan(dep,elm){
     .then(r=>r.json()).then(res=>{if(res.error)throw new Error(res.error);PLAN=res.planMap;renderAll();}).catch(e=>alert('Не сохранилось: '+e.message));
 }
 function renderGauge(pct){
+  const gEl=document.querySelector('#planCard .gauge');if(gEl)gEl.classList.toggle('win',pct!=null&&pct>=100);
   const svg=document.getElementById('gaugeSvg');svg.innerHTML='';
   const cx=60,cy=62,r=48,val=pct==null?0:Math.min(pct,100);
   const arc=(a1,a2)=>{const P=a=>[cx+r*Math.cos(a),cy+r*Math.sin(a)];const[x1,y1]=P(a1),[x2,y2]=P(a2);return `M${x1} ${y1} A${r} ${r} 0 0 1 ${x2} ${y2}`;};
