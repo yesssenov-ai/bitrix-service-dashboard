@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ЦУП · Контракты</title>
+<link rel="icon" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <style>
   :root{
     --bg:#070b16;--panel:rgba(20,27,45,0.55);--border:rgba(255,255,255,0.07);
@@ -21,10 +23,8 @@
   .brand{display:flex;align-items:center;gap:13px}
   .back{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--panel);border:1px solid var(--border);transition:.2s;flex-shrink:0}
   .back:hover{border-color:rgba(255,255,255,.2);background:rgba(30,40,64,.6)}
-  .logo-bars{display:flex;gap:3px;align-items:flex-end;height:24px}
-  .logo-bars i{width:5px;background:linear-gradient(180deg,var(--brand2),var(--brand));border-radius:2px;display:block;animation:eq 1.6s ease-in-out infinite}
-  .logo-bars i:nth-child(1){height:40%}.logo-bars i:nth-child(2){height:75%;animation-delay:.2s}.logo-bars i:nth-child(3){height:100%;animation-delay:.4s}
-  @keyframes eq{0%,100%{transform:scaleY(.6)}50%{transform:scaleY(1)}}
+  .logo-emblem{height:32px;width:auto;display:block;filter:drop-shadow(0 0 9px rgba(255,45,85,.35));animation:emblemin .7s cubic-bezier(.2,.8,.2,1)}
+  @keyframes emblemin{from{opacity:0;transform:translateX(-6px) scale(.9)}to{opacity:1;transform:none}}
   .logo .lg1{font-weight:800;font-size:20px;letter-spacing:.4px}.logo .lg1 span{color:var(--brand)}
   .logo .lg2{font-size:11px;color:var(--dim);margin-top:3px}
   .hctl{display:flex;align-items:center;gap:14px}
@@ -161,7 +161,7 @@
   <header>
     <div class="brand">
       <a class="back" href="/portal.html" title="К порталу"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 18l-6-6 6-6"/></svg></a>
-      <div class="logo-bars"><i></i><i></i><i></i></div>
+      <img src="/assets/logo-icon.png" alt="Pro Lab Support" class="logo-emblem">
       <div class="logo"><div class="lg1">Pro Lab <span>Support</span></div><div class="lg2">Контракты · портфель и выполнение плана</div></div>
     </div>
     <div class="hctl">
