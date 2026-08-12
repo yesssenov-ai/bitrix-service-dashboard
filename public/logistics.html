@@ -37,8 +37,7 @@
   .btn:hover{border-color:rgba(255,255,255,.2)}
   .clock{text-align:right}.clock .c1{font-size:11px;color:var(--dim)}.clock .c2{font-size:15px;font-weight:700;color:#fff}
 
-  .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:11px;margin-bottom:13px}
-  @media(max-width:1000px){.kpis{grid-template-columns:repeat(3,1fr)}}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:11px;margin-bottom:13px}
   .kpi{position:relative;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:13px 15px;cursor:pointer;transition:.2s;overflow:hidden;backdrop-filter:blur(14px)}
   .kpi:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.16)}
   .kpi.on{border-color:var(--brand2);background:rgba(255,45,85,.08)}
@@ -118,7 +117,7 @@
   .search{width:100%;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px 12px 40px;color:var(--text);font:inherit;font-size:14px;outline:none;backdrop-filter:blur(12px);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%238592ad' stroke-width='2' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M21 21l-4.3-4.3'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:14px center;transition:.2s}
   .search:focus{border-color:var(--brand2)}
 
-  .route{position:relative;height:84px;margin:8px 4px 12px}
+  .route{position:relative;height:94px;margin:8px 4px 12px}
   .sec-lab{position:absolute;top:0;transform:translateX(-50%);font-size:9.5px;font-weight:700;white-space:nowrap;letter-spacing:.2px}
   .sec-bar{position:absolute;top:14px;height:2px;border-radius:2px;opacity:.35}
   .wp-icon{position:absolute;top:24px;transform:translateX(-50%);font-size:13px;line-height:1;z-index:3;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
@@ -127,6 +126,7 @@
   .dur-label.cur{top:33px;color:var(--warn);font-weight:700;font-size:9.5px;background:rgba(7,11,22,.82);padding:1px 5px;border-radius:6px;z-index:5}
   .wp-cap{position:absolute;top:67px;transform:translateX(-50%);font-size:8.5px;font-weight:600;white-space:nowrap}
   .wp-cap.dim{opacity:.35;color:var(--dim2)}
+  .wp-date{position:absolute;top:79px;transform:translateX(-50%);font-size:7.5px;color:var(--dim2);white-space:nowrap;font-variant-numeric:tabular-nums}
   .route-line{position:absolute;top:48px;left:12px;right:12px;height:3px;background:rgba(255,255,255,.09);border-radius:3px}
   .route-fill{position:absolute;top:48px;left:12px;height:3px;border-radius:3px;transition:width 1s cubic-bezier(.2,.8,.2,1)}
   .wp{position:absolute;top:48px;width:11px;height:11px;border-radius:50%;transform:translate(-50%,-50%);background:#1a2338;border:2px solid rgba(255,255,255,.18);z-index:2;cursor:default;transition:.2s}
@@ -149,6 +149,9 @@
   .eta .soon{color:var(--warn);font-weight:700}
   .eta .over{color:var(--bad);font-weight:700}
   .o-right{margin-left:auto;font-size:11.5px;color:var(--dim2)}
+  .o-docs{margin-top:9px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--dim2)}
+  .o-docs a{background:rgba(255,255,255,.05);border:1px solid var(--border);padding:4px 10px;border-radius:7px;color:var(--dim);font-weight:600;transition:.15s}
+  .o-docs a:hover{color:#fff;border-color:rgba(255,255,255,.2)}
 
   .tip{position:fixed;pointer-events:none;background:#0d1424;border:1px solid var(--border);border-radius:9px;padding:7px 10px;font-size:12px;box-shadow:0 12px 30px -8px rgba(0,0,0,.6);opacity:0;transition:opacity .12s;z-index:50}
   .tip b{color:#fff}
@@ -204,6 +207,7 @@
 const fmt=n=>Math.round(n).toLocaleString('ru-RU').replace(/,/g,' ');
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const dfmt=s=>{if(!s)return'—';const[y,m,d]=s.split('-');return `${d}.${m}.${y}`;};
+const ddmm=s=>{if(!s)return'';const[y,m,d]=s.split('-');return `${d}.${m}`;};
 const tip=document.getElementById('tip');
 const showTip=(h,x,y)=>{tip.innerHTML=h;tip.style.left=(x+14)+'px';tip.style.top=(y+14)+'px';tip.style.opacity=1;};
 const hideTip=()=>tip.style.opacity=0;
@@ -220,7 +224,8 @@ async function load(force){
     const r=await fetch('/api/logistics/board'+(force?'?force=1':''));
     if(!r.ok)throw new Error((await r.json()).error||r.status);
     BOARD=await r.json();MS=BOARD.milestones;PHC=BOARD.phaseColor;SEC=BOARD.sections||[];ORDERS=BOARD.orders||[];
-    if(QUICK==='critical'&&!BOARD.kpi.critical)QUICK=null; // если критических нет — показываем всё
+    computeForecasts();
+    if(QUICK==='critical'&&!ORDERS.some(o=>o.critical||o.atRisk))QUICK=null; // если критических нет — показываем всё
     const u=BOARD.generatedAt?new Date(BOARD.generatedAt):null;const p=n=>String(n).padStart(2,'0');
     document.getElementById('updated').textContent=u?`${p(u.getDate())}.${p(u.getMonth()+1)}.${u.getFullYear()} ${p(u.getHours())}:${p(u.getMinutes())}`:'—';
     buildFilters();renderAll();
@@ -229,13 +234,36 @@ async function load(force){
 }
 document.getElementById('refreshBtn').onclick=()=>load(true);
 
+// ── Прогноз риска: по средним длительностям этапов предсказываем дату «сдан клиенту»
+// (веха 9 «Отправлен заказчику») и сравниваем с договорным дедлайном. atRisk = ещё
+// не просрочен, но по прогнозу опоздаем → раннее предупреждение.
+function computeForecasts(){
+  const sums={},cnts={};
+  ORDERS.forEach(o=>{if(o.stageDurations)for(const s in o.stageDurations){sums[s]=(sums[s]||0)+o.stageDurations[s];cnts[s]=(cnts[s]||0)+1;}});
+  const avg=s=>cnts[s]?sums[s]/cnts[s]:null;
+  const TARGET=9;
+  ORDERS.forEach(o=>{
+    o.forecastDate=null;o.forecastLate=false;o.atRisk=false;o.forecastDaysVsDeadline=null;
+    if(o.done||o.milestone>=TARGET||!o.deadline)return;
+    let rem=0,ok=true;
+    for(let s=o.milestone;s<TARGET;s++){const a=avg(s);if(a==null){ok=false;break;}rem+=a;}
+    if(!ok)return;
+    rem=Math.max(0,rem-(o.currentStageDays||0));
+    const fd=new Date();fd.setDate(fd.getDate()+Math.round(rem));
+    o.forecastDate=fd.toISOString().slice(0,10);
+    o.forecastLate=o.forecastDate>o.deadline;
+    o.forecastDaysVsDeadline=Math.round((new Date(o.forecastDate)-new Date(o.deadline))/86400000);
+    o.atRisk=o.forecastLate&&!o.deadlineOverdue;
+  });
+}
+
 // ── фильтры (мультиселект) + сквозной поиск ──
 const passYear=o=>!FILT.year.length||FILT.year.includes(orderYear(o));
 const passManuf=o=>!FILT.manuf.length||FILT.manuf.includes(o.manufacturer);
 const passDept=o=>!FILT.dept.length||FILT.dept.includes(o.dept);
 const passMgr=o=>!FILT.manager.length||FILT.manager.includes(o.managerDeal)||FILT.manager.includes(o.managerPurch);
 const passStatus=o=>!FILT.status.length||FILT.status.includes(o.milestoneKey);
-function passQuick(o){switch(QUICK){case'critical':return o.critical;case'inTransit':return o.milestone===5;case'arrivingSoon':return o.arrivingSoon;case'atCustoms':return o.milestone===6;case'atWarehouse':return o.milestone===7;case'overdue':return o.deadlineOverdue;default:return true;}}
+function passQuick(o){switch(QUICK){case'critical':return o.critical||o.atRisk;case'atRisk':return o.atRisk;case'inTransit':return o.milestone===5;case'arrivingSoon':return o.arrivingSoon;case'atCustoms':return o.milestone===6;case'atWarehouse':return o.milestone===7;case'overdue':return o.deadlineOverdue;default:return true;}}
 function passSearch(o){if(!SEARCH)return true;const q=SEARCH;return [o.po,o.instrument,o.manufacturer,o.dept,o.dealTitle,o.tracking,o.managerDeal,o.managerPurch,o.cityCountry,o.id,o.dealId].some(v=>v!=null&&String(v).toLowerCase().includes(q));}
 const getFiltered=()=>ORDERS.filter(o=>passYear(o)&&passManuf(o)&&passDept(o)&&passMgr(o)&&passStatus(o)&&passQuick(o)&&passSearch(o));
 function onSearch(v){SEARCH=(v||'').trim().toLowerCase();renderChip();renderMain();}
@@ -272,8 +300,10 @@ function renderAll(){renderKpis();renderChip();renderMain();}
 
 function renderKpis(){
   const k=BOARD.kpi;
+  const riskCount=ORDERS.filter(o=>o.atRisk).length;
   const items=[
-    {q:'critical',l:'Критические',v:k.critical,c:'#ff2d55'},
+    {q:'critical',l:'Критические',v:ORDERS.filter(o=>o.critical||o.atRisk).length,c:'#ff2d55'},
+    {q:'atRisk',l:'Прогноз-риск',v:riskCount,c:'#ff8c42'},
     {q:'overdue',l:'Просрочка (договор)',v:k.overdue,c:'#ff5b6e'},
     {q:'inTransit',l:'В пути',v:k.inTransit,c:'#5b8cff'},
     {q:'arrivingSoon',l:'Подлетают (≤3д)',v:k.arrivingSoon,c:'#ffb020'},
@@ -286,7 +316,7 @@ function setQuick(q){QUICK=(QUICK===q)?null:q;renderKpis();renderChip();renderMa
 
 function renderChip(){
   const c=document.getElementById('chipbar');const chips=[];
-  if(QUICK){const lbl={critical:'Критические',inTransit:'В пути',arrivingSoon:'Подлетают',atCustoms:'На таможне',atWarehouse:'На складе',overdue:'Просрочка по договору'}[QUICK];chips.push(`<span class="chip">${lbl} <span class="x" onclick="setQuick('${QUICK}')">✕</span></span>`);}
+  if(QUICK){const lbl={critical:'Критические',atRisk:'Прогноз-риск',inTransit:'В пути',arrivingSoon:'Подлетают',atCustoms:'На таможне',atWarehouse:'На складе',overdue:'Просрочка по договору'}[QUICK];chips.push(`<span class="chip">${lbl} <span class="x" onclick="setQuick('${QUICK}')">✕</span></span>`);}
   if(FILT.year.length)chips.push(`<span class="chip">Год: ${esc(FILT.year.join(', '))} <span class="x" onclick="clearFilter('year')">✕</span></span>`);
   if(FILT.manuf.length)chips.push(`<span class="chip">Производитель: ${esc(FILT.manuf.join(', '))} <span class="x" onclick="clearFilter('manuf')">✕</span></span>`);
   if(FILT.dept.length)chips.push(`<span class="chip">Отдел: ${esc(FILT.dept.join(', '))} <span class="x" onclick="clearFilter('dept')">✕</span></span>`);
@@ -318,7 +348,8 @@ function orderCard(o){
     const info=(dt?`<br>${dfmt(dt)}`:'')+(du!=null?` · ${du}д на этапе`:(cur&&o.currentStageDays!=null?`<br>идёт ${o.currentStageDays}д`:''));
     return `<div class="wp-icon${reached?'':' dim'}" style="left:${lf}">${m.icon}</div>`+
       `<div class="${cls}" style="left:${lf};background:${bg};color:${col}" data-ml="${esc(m.label)}" data-info="${info.replace(/"/g,'&quot;')}" onmousemove="wpTip(event,this)" onmouseleave="hideTipG()"></div>`+
-      `<div class="wp-cap${reached?'':' dim'}" style="left:${lf};color:${cur?col:(reached?'var(--dim)':'var(--dim2)')}">${esc(m.short)}</div>`;
+      `<div class="wp-cap${reached?'':' dim'}" style="left:${lf};color:${cur?col:(reached?'var(--dim)':'var(--dim2)')}">${esc(m.short)}</div>`+
+      `<div class="wp-date" style="left:${lf}">${dt?ddmm(dt):''}</div>`;
   }).join('');
   const flyingCol=PHC[o.phase];
   // фаза/транзит (самолёт ~15 дн от отгрузки)
@@ -333,8 +364,11 @@ function orderCard(o){
   else if(o.deadline)slaTxt=`🎯 сдать до <b>${dfmt(o.deadline)}</b> · `+(o.deadlineOverdue?`<span class="over">просрочка ${Math.abs(o.deadlineLeft)} дн</span>`
     :o.deadlineSoon?`<span class="soon">осталось ${o.deadlineLeft} дн</span>`
     :`осталось <b>${o.deadlineLeft}</b> дн`);
+  // прогноз
+  let fcTxt='';
+  if(o.forecastDate&&!o.done)fcTxt=o.forecastLate?`<span class="over">⚠ прогноз ~${dfmt(o.forecastDate)} (+${o.forecastDaysVsDeadline}д к сроку)</span>`:`<span style="color:var(--good)">прогноз ~${dfmt(o.forecastDate)} (в срок)</span>`;
   const mgr=[o.managerDeal,o.managerPurch].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(' · ');
-  const cls='order'+(o.done?' done':o.deadlineOverdue?' overdue':(o.deadlineSoon||o.arrivingSoon)?' soon':'');
+  const cls='order'+(o.done?' done':o.deadlineOverdue?' overdue':(o.deadlineSoon||o.arrivingSoon||o.atRisk)?' soon':'');
   const titleMain=`${o.po?`<span class="po">PO ${esc(o.po)}</span> · `:''}${esc(o.instrument||o.dealTitle||('Заказ #'+o.id))} <span class="arr">↗</span>`;
   return `<div class="${cls}">
     <div class="o-head">
@@ -360,8 +394,10 @@ function orderCard(o){
       <span class="status-badge phase-${o.phase}">${o.milestone}/11 · ${esc(o.milestoneLabel)}</span>
       ${phaseTxt?`<span class="eta">${phaseTxt}</span>`:''}
       ${slaTxt?`<span class="eta">·&nbsp; ${slaTxt}</span>`:''}
+      ${fcTxt?`<span class="eta">·&nbsp; ${fcTxt}</span>`:''}
       ${o.opportunity?`<span class="o-right">${fmt(o.opportunity/1e6)} млн ₸</span>`:''}
     </div>
+    ${o.docs&&o.docs.length?`<div class="o-docs">📎 ${o.docs.map(d=>`<a href="${d.url}" target="_blank">${esc(d.label)}</a>`).join('')}</div>`:''}
   </div>`;
 }
 function wpTip(e,el){showTip(`<b>${el.dataset.ml}</b>${el.dataset.info||''}`,e.clientX,e.clientY);}

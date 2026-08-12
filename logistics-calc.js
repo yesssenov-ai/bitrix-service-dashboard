@@ -93,6 +93,24 @@ const F1070 = {
   warehouseDate: 'ufCrm11_1732866412851', // Дата поступления на склад
   po: 'ufCrm11_1763537575780',          // Номер PO
 };
+// Файлы-документы: [подпись, код поля]. Показываем как кнопки в карточке.
+const DOCS_1066 = [
+  ['Invoice', 'ufCrm10_1763537277532'],
+  ['Proforma', 'ufCrm10_1763547107682'],
+  ['Packing List / Customs', 'ufCrm10_1732858448434'],
+  ['Договор / Спецификация', 'ufCrm10_1732858619051'],
+  ['Тех. описание', 'ufCrm10_1763550466425'],
+];
+const DOCS_1070 = [
+  ['Таможенная декларация', 'ufCrm11_1732866302418'],
+  ['Документы для таможни', 'ufCrm11_1732866046625'],
+  ['Накладная', 'ufCrm11_1744028435403'],
+  ['Доверенность', 'ufCrm11_1744028340187'],
+  ['Сопроводительные', 'ufCrm11_1732866398354'],
+  ['Пакинг-лист', 'ufCrm11_1732865726986'],
+];
+const fileUrl = v => { if (!v) return null; const f = Array.isArray(v) ? v[0] : v; return (f && (f.url || f.urlMachine || f.downloadUrl)) || null; };
+
 const ymd = v => (typeof v === 'string' && v.length >= 10) ? v.slice(0, 10) : null;
 const dayMs = 86400000;
 // Базы ссылок в Bitrix (из вебхука): сделка и элемент смарт-процесса «Закупки».
@@ -156,11 +174,13 @@ async function getBoard(force) {
 
   // 1) Закупки (активные — без FAIL/переноса плановой даты как отдельного «провала»)
   const purch = await itemList(1066, 13, ['id', 'title', 'stageId', 'movedTime', 'assignedById', 'parentId2',
-    'opportunity', 'currencyId', 'begindate', 'closedate', F1066.ship, F1066.track, F1066.trackUrl, F1066.needInstall, F1066.cityCountry]);
+    'opportunity', 'currencyId', 'begindate', 'closedate', F1066.ship, F1066.track, F1066.trackUrl, F1066.needInstall, F1066.cityCountry, F1066.po,
+    ...DOCS_1066.map(d => d[1])]);
 
   // 2) Логистика → индекс по parentId1066 (id закупки)
   const logi = await itemList(1070, 14, ['id', 'title', 'stageId', 'movedTime', 'assignedById', 'parentId2', 'parentId1066',
-    F1070.track, F1070.carrier, F1070.customsExpected, F1070.postedDate, F1070.warehouseDate]);
+    F1070.track, F1070.carrier, F1070.customsExpected, F1070.postedDate, F1070.warehouseDate, F1070.po,
+    ...DOCS_1070.map(d => d[1])]);
   const logiByPurch = {};
   logi.forEach(l => { const pid = l.parentId1066; if (pid) logiByPurch[String(pid)] = l; });
 
@@ -246,6 +266,9 @@ async function getBoard(force) {
       const mgrDeal = deal && deal.assigned_by_id ? (USERS[deal.assigned_by_id] || `#${deal.assigned_by_id}`) : null;
       const mgrPurch = p.assignedById ? (USERS[p.assignedById] || `#${p.assignedById}`) : null;
       const po = p[F1066.po] || (l && l[F1070.po]) || null;
+      const docs = [];
+      DOCS_1066.forEach(([lbl, code]) => { const u = fileUrl(p[code]); if (u) docs.push({ label: lbl, url: u }); });
+      if (l) DOCS_1070.forEach(([lbl, code]) => { const u = fileUrl(l[code]); if (u) docs.push({ label: lbl, url: u }); });
 
       // ── «Критический» кейс: горит по договору / застрял / просрочен транзит ──
       const stuck = !done && currentStageDays != null && currentStageDays >= 30;
@@ -273,7 +296,7 @@ async function getBoard(force) {
         trackingUrl: p[F1066.trackUrl] || null,
         carrierId: l ? (l[F1070.carrier] || null) : null,
         cityCountry: p[F1066.cityCountry] || null,
-        done, stuck, transitOverdue, critical,
+        done, stuck, transitOverdue, critical, docs,
         opportunity: parseFloat(p.opportunity) || 0,
         movedTime: (l && l.movedTime) || p.movedTime || null,
       };
