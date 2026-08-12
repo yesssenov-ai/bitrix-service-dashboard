@@ -91,20 +91,34 @@
   .badge.lic{background:rgba(165,107,255,.15);color:#c9a8ff}
   .badge.track{background:rgba(255,255,255,.06);color:var(--dim)}
   .badge.track:hover{color:#fff}
+  .badge.deal{background:rgba(34,201,163,.13);color:#66e0c2}
+  .badge.deal:hover{color:#fff}
+  a.o-instr{display:block}a.o-instr:hover .po{text-decoration:underline}
+  .o-instr .po{color:var(--brand2);font-weight:800}
+  .o-instr .arr{color:var(--dim2);font-size:12px}
+  .searchrow{margin-bottom:12px}
+  .search{width:100%;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px 12px 40px;color:var(--text);font:inherit;font-size:14px;outline:none;backdrop-filter:blur(12px);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%238592ad' stroke-width='2' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M21 21l-4.3-4.3'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:14px center;transition:.2s}
+  .search:focus{border-color:var(--brand2)}
 
-  .route{position:relative;height:52px;margin:6px 4px 14px}
-  .dur-label{position:absolute;top:34px;transform:translateX(-50%);font-size:9px;color:var(--dim2);white-space:nowrap;pointer-events:none}
-  .dur-label.cur{top:0;color:var(--warn);font-weight:700;font-size:9.5px}
-  .route-line{position:absolute;top:22px;left:12px;right:12px;height:3px;background:rgba(255,255,255,.09);border-radius:3px}
-  .route-fill{position:absolute;top:22px;left:12px;height:3px;border-radius:3px;transition:width 1s cubic-bezier(.2,.8,.2,1)}
-  .wp{position:absolute;top:22px;width:11px;height:11px;border-radius:50%;transform:translate(-50%,-50%);background:#1a2338;border:2px solid rgba(255,255,255,.18);z-index:2;cursor:default;transition:.2s}
+  .route{position:relative;height:84px;margin:8px 4px 12px}
+  .sec-lab{position:absolute;top:0;transform:translateX(-50%);font-size:9.5px;font-weight:700;white-space:nowrap;letter-spacing:.2px}
+  .sec-bar{position:absolute;top:14px;height:2px;border-radius:2px;opacity:.35}
+  .wp-icon{position:absolute;top:24px;transform:translateX(-50%);font-size:13px;line-height:1;z-index:3;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
+  .wp-icon.dim{opacity:.28;filter:grayscale(1)}
+  .dur-label{position:absolute;top:56px;transform:translateX(-50%);font-size:9px;color:var(--dim2);white-space:nowrap;pointer-events:none}
+  .dur-label.cur{top:33px;color:var(--warn);font-weight:700;font-size:9.5px;background:rgba(7,11,22,.82);padding:1px 5px;border-radius:6px;z-index:5}
+  .wp-cap{position:absolute;top:67px;transform:translateX(-50%);font-size:8.5px;font-weight:600;white-space:nowrap}
+  .wp-cap.dim{opacity:.35;color:var(--dim2)}
+  .route-line{position:absolute;top:48px;left:12px;right:12px;height:3px;background:rgba(255,255,255,.09);border-radius:3px}
+  .route-fill{position:absolute;top:48px;left:12px;height:3px;border-radius:3px;transition:width 1s cubic-bezier(.2,.8,.2,1)}
+  .wp{position:absolute;top:48px;width:11px;height:11px;border-radius:50%;transform:translate(-50%,-50%);background:#1a2338;border:2px solid rgba(255,255,255,.18);z-index:2;cursor:default;transition:.2s}
   .wp.passed{border-color:transparent}
   .wp.current{width:15px;height:15px;box-shadow:0 0 0 4px rgba(255,255,255,.08)}
   .wp.current::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid currentColor;opacity:.5;animation:ping 1.8s ease-out infinite}
   @keyframes ping{0%{transform:scale(.7);opacity:.6}100%{transform:scale(1.8);opacity:0}}
-  .plane{position:absolute;top:22px;transform:translate(-50%,-50%) rotate(45deg);font-size:19px;color:#fff;z-index:4;filter:drop-shadow(0 0 8px rgba(91,140,255,.9));transition:left 1.1s cubic-bezier(.2,.8,.2,1);animation:bob 2.4s ease-in-out infinite}
+  .plane{position:absolute;top:48px;transform:translate(-50%,-50%) rotate(45deg);font-size:19px;color:#fff;z-index:4;filter:drop-shadow(0 0 8px rgba(91,140,255,.9));transition:left 1.1s cubic-bezier(.2,.8,.2,1);animation:bob 2.4s ease-in-out infinite}
   @keyframes bob{0%,100%{margin-top:0}50%{margin-top:-3px}}
-  .plane-trail{position:absolute;top:22px;height:2px;transform:translateY(-50%);background:linear-gradient(90deg,transparent,rgba(91,140,255,.55));z-index:1;border-radius:2px}
+  .plane-trail{position:absolute;top:48px;height:2px;transform:translateY(-50%);background:linear-gradient(90deg,transparent,rgba(91,140,255,.55));z-index:1;border-radius:2px}
 
   .o-foot{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
   .status-badge{font-size:12px;font-weight:700;padding:6px 12px;border-radius:9px}
@@ -149,7 +163,10 @@
 
   <div class="kpis" id="kpis"></div>
 
+  <div class="searchrow"><input class="search" id="search" placeholder="Сквозной поиск: PO, прибор, производитель, компания, № сделки, трек…" oninput="onSearch(this.value)"></div>
+
   <div class="filterbar">
+    <div class="fsel"><label>Производитель</label><div class="ms" data-k="manuf"><div class="ms-btn" onclick="toggleMS('manuf')"><span class="ms-lab">Все</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div><div class="ms-panel"><input class="ms-search" placeholder="Поиск…" oninput="msSearch('manuf',this.value)"><div class="ms-opts"></div></div></div></div>
     <div class="fsel"><label>Отдел</label><div class="ms" data-k="dept"><div class="ms-btn" onclick="toggleMS('dept')"><span class="ms-lab">Все</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div><div class="ms-panel"><div class="ms-opts"></div></div></div></div>
     <div class="fsel"><label>Менеджер</label><div class="ms" data-k="manager"><div class="ms-btn" onclick="toggleMS('manager')"><span class="ms-lab">Все</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div><div class="ms-panel"><input class="ms-search" placeholder="Поиск…" oninput="msSearch('manager',this.value)"><div class="ms-opts"></div></div></div></div>
     <div class="fsel"><label>Статус</label><div class="ms" data-k="status"><div class="ms-btn" onclick="toggleMS('status')"><span class="ms-lab">Все</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div><div class="ms-panel"><div class="ms-opts"></div></div></div></div>
@@ -171,16 +188,17 @@ const showTip=(h,x,y)=>{tip.innerHTML=h;tip.style.left=(x+14)+'px';tip.style.top
 const hideTip=()=>tip.style.opacity=0;
 (function(){const s=document.getElementById('spotlight');addEventListener('pointermove',e=>{s.style.left=e.clientX+'px';s.style.top=e.clientY+'px';s.style.opacity=1;},{passive:true});addEventListener('pointerleave',()=>s.style.opacity=0);})();
 
-let BOARD=null,MS=[],PHC={},ORDERS=[];
-const FILT={dept:[],manager:[],status:[]}, MSOPTS={dept:[],manager:[],status:[]};
-let QUICK=null, GROUP='flat';
+let BOARD=null,MS=[],PHC={},SEC=[],ORDERS=[];
+const FILT={manuf:[],dept:[],manager:[],status:[]}, MSOPTS={manuf:[],dept:[],manager:[],status:[]};
+let QUICK='critical', GROUP='flat', SEARCH='';
 
 async function load(force){
   const L=document.getElementById('loading');L.style.display='flex';
   try{
     const r=await fetch('/api/logistics/board'+(force?'?force=1':''));
     if(!r.ok)throw new Error((await r.json()).error||r.status);
-    BOARD=await r.json();MS=BOARD.milestones;PHC=BOARD.phaseColor;ORDERS=BOARD.orders||[];
+    BOARD=await r.json();MS=BOARD.milestones;PHC=BOARD.phaseColor;SEC=BOARD.sections||[];ORDERS=BOARD.orders||[];
+    if(QUICK==='critical'&&!BOARD.kpi.critical)QUICK=null; // если критических нет — показываем всё
     const u=BOARD.generatedAt?new Date(BOARD.generatedAt):null;const p=n=>String(n).padStart(2,'0');
     document.getElementById('updated').textContent=u?`${p(u.getDate())}.${p(u.getMonth()+1)}.${u.getFullYear()} ${p(u.getHours())}:${p(u.getMinutes())}`:'—';
     buildFilters();renderAll();
@@ -189,22 +207,27 @@ async function load(force){
 }
 document.getElementById('refreshBtn').onclick=()=>load(true);
 
-// ── фильтры (мультиселект) ──
+// ── фильтры (мультиселект) + сквозной поиск ──
+const passManuf=o=>!FILT.manuf.length||FILT.manuf.includes(o.manufacturer);
 const passDept=o=>!FILT.dept.length||FILT.dept.includes(o.dept);
 const passMgr=o=>!FILT.manager.length||FILT.manager.includes(o.managerDeal)||FILT.manager.includes(o.managerPurch);
 const passStatus=o=>!FILT.status.length||FILT.status.includes(o.milestoneKey);
-function passQuick(o){switch(QUICK){case'inTransit':return o.milestone===5;case'arrivingSoon':return o.arrivingSoon;case'atCustoms':return o.milestone===6;case'atWarehouse':return o.milestone===7;case'overdue':return o.deadlineOverdue;default:return true;}}
-const getFiltered=()=>ORDERS.filter(o=>passDept(o)&&passMgr(o)&&passStatus(o)&&passQuick(o));
+function passQuick(o){switch(QUICK){case'critical':return o.critical;case'inTransit':return o.milestone===5;case'arrivingSoon':return o.arrivingSoon;case'atCustoms':return o.milestone===6;case'atWarehouse':return o.milestone===7;case'overdue':return o.deadlineOverdue;default:return true;}}
+function passSearch(o){if(!SEARCH)return true;const q=SEARCH;return [o.po,o.instrument,o.manufacturer,o.dept,o.dealTitle,o.tracking,o.managerDeal,o.managerPurch,o.cityCountry,o.id,o.dealId].some(v=>v!=null&&String(v).toLowerCase().includes(q));}
+const getFiltered=()=>ORDERS.filter(o=>passManuf(o)&&passDept(o)&&passMgr(o)&&passStatus(o)&&passQuick(o)&&passSearch(o));
+function onSearch(v){SEARCH=(v||'').trim().toLowerCase();renderChip();renderList();}
 
 function buildFilters(){
+  const manufs=[...new Set(ORDERS.map(o=>o.manufacturer).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
   const depts=[...new Set(ORDERS.map(o=>o.dept).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
   const mgrs=[...new Set(ORDERS.flatMap(o=>[o.managerDeal,o.managerPurch]).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
   const stset=[...new Set(ORDERS.map(o=>o.milestoneKey))];
+  MSOPTS.manuf=manufs.map(m=>({v:m,l:m}));
   MSOPTS.dept=depts.map(d=>({v:d,l:d}));
   MSOPTS.manager=mgrs.map(m=>({v:m,l:m}));
   MSOPTS.status=MS.filter(m=>stset.includes(m.key)).map(m=>({v:m.key,l:m.label,c:PHC[m.phase]}));
-  FILT.dept=FILT.dept.filter(v=>depts.includes(v));FILT.manager=FILT.manager.filter(v=>mgrs.includes(v));FILT.status=FILT.status.filter(v=>stset.includes(v));
-  ['dept','manager','status'].forEach(renderMS);
+  FILT.manuf=FILT.manuf.filter(v=>manufs.includes(v));FILT.dept=FILT.dept.filter(v=>depts.includes(v));FILT.manager=FILT.manager.filter(v=>mgrs.includes(v));FILT.status=FILT.status.filter(v=>stset.includes(v));
+  ['manuf','dept','manager','status'].forEach(renderMS);
 }
 function msLabel(k){const s=FILT[k];if(!s.length)return'Все';if(s.length===1){const o=MSOPTS[k].find(o=>String(o.v)===String(s[0]));return o?o.l:s[0];}return 'Выбрано: '+s.length;}
 function renderMS(k){const box=document.querySelector(`.ms[data-k="${k}"]`);if(!box)return;const sel=FILT[k].map(String);
@@ -223,12 +246,12 @@ function renderAll(){renderKpis();renderChip();renderList();}
 function renderKpis(){
   const k=BOARD.kpi;
   const items=[
-    {q:null,l:'Всего заказов',v:k.total,c:'#8592ad'},
+    {q:'critical',l:'Критические',v:k.critical,c:'#ff2d55'},
+    {q:'overdue',l:'Просрочка (договор)',v:k.overdue,c:'#ff5b6e'},
     {q:'inTransit',l:'В пути',v:k.inTransit,c:'#5b8cff'},
     {q:'arrivingSoon',l:'Подлетают (≤3д)',v:k.arrivingSoon,c:'#ffb020'},
     {q:'atCustoms',l:'На таможне',v:k.atCustoms,c:'#a56bff'},
-    {q:'atWarehouse',l:'На складе',v:k.atWarehouse,c:'#22c9a3'},
-    {q:'overdue',l:'Просрочка (договор)',v:k.overdue,c:'#ff5b6e'},
+    {q:null,l:'Всего заказов',v:k.total,c:'#8592ad'},
   ];
   document.getElementById('kpis').innerHTML=items.map(it=>`<div class="kpi${QUICK===it.q&&it.q?' on':''}" onclick="setQuick(${it.q?`'${it.q}'`:'null'})"><span class="kd" style="background:${it.c}"></span><div class="kv tabular" style="color:${it.c}">${it.v}</div><div class="kl">${it.l}</div></div>`).join('');
 }
@@ -236,7 +259,8 @@ function setQuick(q){QUICK=(QUICK===q)?null:q;renderKpis();renderChip();renderLi
 
 function renderChip(){
   const c=document.getElementById('chipbar');const chips=[];
-  if(QUICK){const lbl={inTransit:'В пути',arrivingSoon:'Подлетают',atCustoms:'На таможне',atWarehouse:'На складе',overdue:'Просрочка'}[QUICK];chips.push(`<span class="chip">${lbl} <span class="x" onclick="setQuick('${QUICK}')">✕</span></span>`);}
+  if(QUICK){const lbl={critical:'Критические',inTransit:'В пути',arrivingSoon:'Подлетают',atCustoms:'На таможне',atWarehouse:'На складе',overdue:'Просрочка по договору'}[QUICK];chips.push(`<span class="chip">${lbl} <span class="x" onclick="setQuick('${QUICK}')">✕</span></span>`);}
+  if(FILT.manuf.length)chips.push(`<span class="chip">Производитель: ${esc(FILT.manuf.join(', '))} <span class="x" onclick="clearFilter('manuf')">✕</span></span>`);
   if(FILT.dept.length)chips.push(`<span class="chip">Отдел: ${esc(FILT.dept.join(', '))} <span class="x" onclick="clearFilter('dept')">✕</span></span>`);
   if(FILT.manager.length)chips.push(`<span class="chip">Менеджер: ${esc(FILT.manager.join(', '))} <span class="x" onclick="clearFilter('manager')">✕</span></span>`);
   if(FILT.status.length)chips.push(`<span class="chip">Статус: ${FILT.status.length} <span class="x" onclick="clearFilter('status')">✕</span></span>`);
@@ -252,14 +276,21 @@ function orderCard(o){
   let durHtml='';
   for(let i=0;i<reachedD.length-1;i++){const a=reachedD[i],b=reachedD[i+1];const d=o.stageDurations?o.stageDurations[a]:null;if(d==null)continue;const mid=((a-1)+(b-1))/2/10;durHtml+=`<div class="dur-label" style="left:calc(12px + ${mid} * (100% - 24px))">${d}д</div>`;}
   if(o.currentStageDays!=null&&!o.done)durHtml+=`<div class="dur-label cur" style="left:calc(12px + ${f} * (100% - 24px))">идёт ${o.currentStageDays}д</div>`;
+  // секции пути (над линией)
+  const secHtml=SEC.map(s=>{const fi=s.from-1,ti=s.to-1,cen=((fi+ti)/2)/10,lf=fi/10,wf=(ti-fi)/10;
+    return `<div class="sec-lab" style="left:calc(12px + ${cen} * (100% - 24px));color:${s.color}">${esc(s.label)}</div><div class="sec-bar" style="left:calc(12px + ${lf} * (100% - 24px));width:calc(${wf} * (100% - 24px));background:${s.color}"></div>`;}).join('');
+  // узлы: иконка сверху, точка на линии, подпись снизу
   const wps=MS.map((m,idx)=>{
-    const passed=(idx+1)<o.milestone, cur=(idx+1)===o.milestone;
+    const passed=(idx+1)<o.milestone, cur=(idx+1)===o.milestone, reached=(idx+1)<=o.milestone;
     const col=PHC[m.phase];
     const cls=passed?'wp passed':cur?'wp current':'wp';
     const bg=passed?col:(cur?col:'#1a2338');
+    const lf=`calc(12px + ${idx/10} * (100% - 24px))`;
     const dt=(o.milestoneDates||{})[m.i], du=o.stageDurations?o.stageDurations[m.i]:null;
     const info=(dt?`<br>${dfmt(dt)}`:'')+(du!=null?` · ${du}д на этапе`:(cur&&o.currentStageDays!=null?`<br>идёт ${o.currentStageDays}д`:''));
-    return `<div class="${cls}" style="left:calc(12px + ${idx/10} * (100% - 24px));background:${bg};color:${col}" data-ml="${esc(m.label)}" data-info="${info.replace(/"/g,'&quot;')}" onmousemove="wpTip(event,this)" onmouseleave="hideTipG()"></div>`;
+    return `<div class="wp-icon${reached?'':' dim'}" style="left:${lf}">${m.icon}</div>`+
+      `<div class="${cls}" style="left:${lf};background:${bg};color:${col}" data-ml="${esc(m.label)}" data-info="${info.replace(/"/g,'&quot;')}" onmousemove="wpTip(event,this)" onmouseleave="hideTipG()"></div>`+
+      `<div class="wp-cap${reached?'':' dim'}" style="left:${lf};color:${cur?col:(reached?'var(--dim)':'var(--dim2)')}">${esc(m.short)}</div>`;
   }).join('');
   const flyingCol=PHC[o.phase];
   // фаза/транзит (самолёт ~15 дн от отгрузки)
@@ -276,17 +307,20 @@ function orderCard(o){
     :`по договору: <b>${o.deadlineLeft}</b> дн · до ${dfmt(o.deadline)}`;
   const mgr=[o.managerDeal,o.managerPurch].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(' · ');
   const cls='order'+(o.done?' done':o.deadlineOverdue?' overdue':(o.deadlineSoon||o.arrivingSoon)?' soon':'');
+  const titleMain=`${o.po?`<span class="po">PO ${esc(o.po)}</span> · `:''}${esc(o.instrument||o.dealTitle||('Заказ #'+o.id))} <span class="arr">↗</span>`;
   return `<div class="${cls}">
     <div class="o-head">
-      <div class="o-title"><span class="o-instr">${esc(o.instrument||o.dealTitle||('Заказ #'+o.id))}</span>
+      <div class="o-title"><a class="o-instr" href="${o.purchUrl||'#'}" target="_blank" title="Открыть закупку в Bitrix">${titleMain}</a>
         <div class="o-meta">${esc(o.manufacturer||'')}${o.manufacturer?' · ':''}${esc(mgr||'—')}${o.cityCountry?' · '+esc(o.cityCountry):''} · закупка #${o.id}</div></div>
       <div class="o-badges">
         <span class="badge dept">${esc(o.dept)}</span>
-        ${o.licensed?'<span class="badge lic" title="Лицензируемый товар · срок 180 дн">лицензия · 180д</span>':''}
+        ${o.licensed?'<span class="badge lic" title="Лицензируемый товар · срок по договору 180 дн">лицензия · 180д</span>':''}
+        ${o.dealUrl?`<a class="badge deal" href="${o.dealUrl}" target="_blank">сделка ↗</a>`:''}
         ${o.tracking?`<a class="badge track" href="${o.trackingUrl||'#'}" target="_blank">трек: ${esc(o.tracking)} ↗</a>`:''}
       </div>
     </div>
     <div class="route">
+      ${secHtml}
       <div class="route-line"></div>
       <div class="route-fill" style="width:calc(${f} * (100% - 24px));background:linear-gradient(90deg,${PHC.purchase},${flyingCol})"></div>
       <div class="plane-trail" style="left:calc(12px + ${Math.max(0,f-0.12)} * (100% - 24px));width:calc(${Math.min(f,0.12)} * (100% - 24px));background:linear-gradient(90deg,transparent,${flyingCol}88)"></div>
@@ -311,8 +345,8 @@ function renderList(){
   const box=document.getElementById('list');
   if(!list.length){box.innerHTML='<div class="empty">Нет заказов по выбранным фильтрам</div>';return;}
   if(GROUP==='deal'){
-    const groups={};list.forEach(o=>{const k=o.dealId||'—';(groups[k]=groups[k]||{title:o.dealTitle||('Сделка #'+o.dealId),items:[]}).items.push(o);});
-    box.innerHTML=Object.values(groups).map(g=>`<div class="grouphead">📄 ${esc(g.title)} <span style="color:var(--dim2);font-weight:500">· ${g.items.length} закуп.</span><span class="gl"></span></div>`+g.items.map(orderCard).join('')).join('');
+    const groups={};list.forEach(o=>{const k=o.dealId||'—';(groups[k]=groups[k]||{title:o.dealTitle||('Сделка #'+o.dealId),url:o.dealUrl,items:[]}).items.push(o);});
+    box.innerHTML=Object.values(groups).map(g=>`<div class="grouphead">📄 ${g.url?`<a href="${g.url}" target="_blank" style="color:inherit">${esc(g.title)} ↗</a>`:esc(g.title)} <span style="color:var(--dim2);font-weight:500">· ${g.items.length} закуп.</span><span class="gl"></span></div>`+g.items.map(orderCard).join('')).join('');
   }else{
     box.innerHTML=list.map(orderCard).join('');
   }

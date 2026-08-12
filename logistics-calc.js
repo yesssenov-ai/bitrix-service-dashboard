@@ -23,19 +23,25 @@ function saleType(categoryId, deptId) {
 
 // ── 11 канонических вех (6+7 и 8+9 объединены по согласованию) ───────────────
 const MILESTONES = [
-  { i: 1, key: 'placed',        label: 'Заказ размещён',              phase: 'purchase' },
-  { i: 2, key: 'awaiting_pay',  label: 'Ожидает оплаты поставщику',   phase: 'purchase' },
-  { i: 3, key: 'paid',          label: 'Оплачен',                     phase: 'purchase' },
-  { i: 4, key: 'awaiting_ship', label: 'Ожидание отгрузки',           phase: 'purchase' },
-  { i: 5, key: 'in_transit',    label: 'Отгружен / В пути',           phase: 'transit'  },
-  { i: 6, key: 'customs',       label: 'Прибыл в страну · Таможня',    phase: 'customs'  },
-  { i: 7, key: 'warehouse',     label: 'Выпущен · Прибыл на склад',    phase: 'customs'  },
-  { i: 8, key: 'prep_ship',     label: 'Подготовка к отгрузке',       phase: 'domestic' },
-  { i: 9, key: 'sent_client',   label: 'Отправлен заказчику',         phase: 'domestic' },
-  { i: 10, key: 'install',      label: 'Установка',                   phase: 'domestic' },
-  { i: 11, key: 'docs',         label: 'Документы и оплата',          phase: 'domestic' },
+  { i: 1, key: 'placed',        label: 'Заказ размещён',              phase: 'purchase', icon: '📝', short: 'Заказ' },
+  { i: 2, key: 'awaiting_pay',  label: 'Ожидает оплаты поставщику',   phase: 'purchase', icon: '⏳', short: 'Предоплата' },
+  { i: 3, key: 'paid',          label: 'Оплачен',                     phase: 'purchase', icon: '💳', short: 'Оплачен' },
+  { i: 4, key: 'awaiting_ship', label: 'Ожидание отгрузки',           phase: 'purchase', icon: '📦', short: 'Ждём отгр.' },
+  { i: 5, key: 'in_transit',    label: 'Отгружен / В пути',           phase: 'transit',  icon: '🛫', short: 'Отгружен' },
+  { i: 6, key: 'customs',       label: 'Прибыл в страну · Таможня',    phase: 'customs',  icon: '🛃', short: 'Таможня' },
+  { i: 7, key: 'warehouse',     label: 'Выпущен · Прибыл на склад',    phase: 'customs',  icon: '🏬', short: 'Наш склад' },
+  { i: 8, key: 'prep_ship',     label: 'Подготовка к отгрузке',       phase: 'domestic', icon: '🧰', short: 'Подготовка' },
+  { i: 9, key: 'sent_client',   label: 'Отправлен заказчику',         phase: 'domestic', icon: '🚚', short: 'Клиенту' },
+  { i: 10, key: 'install',      label: 'Установка',                   phase: 'domestic', icon: '🔧', short: 'Монтаж' },
+  { i: 11, key: 'docs',         label: 'Документы и оплата',          phase: 'domestic', icon: '📄', short: 'Док-ты' },
 ];
 const PHASE_COLOR = { purchase: '#ffb020', transit: '#5b8cff', customs: '#a56bff', domestic: '#22c9a3' };
+// Три смысловые секции пути
+const SECTIONS = [
+  { key: 'import',   label: 'Путь до нашего склада',    from: 1, to: 7,  color: '#5b8cff' },
+  { key: 'dispatch', label: 'Склад → отправка клиенту', from: 8, to: 9,  color: '#22c9a3' },
+  { key: 'closeout', label: 'Установка и закрытие',      from: 10, to: 11, color: '#3ddc97' },
+];
 
 // Стадия Закупки → веха
 const PURCH_MS = {
@@ -77,6 +83,7 @@ const F1066 = {
   trackUrl: 'ufCrm10_1732858524962',    // Трек номер заказа от завода (url)
   needInstall: 'ufCrm10_1732858371116', // Требуется установка
   cityCountry: 'ufCrm10_1764043678827', // Город / Область / Страна
+  po: 'ufCrm10_1763536157575',          // Номер PO
 };
 const F1070 = {
   track: 'ufCrm11_1732865717409',       // Трек-номер
@@ -84,9 +91,12 @@ const F1070 = {
   customsExpected: 'ufCrm11_1732866287827', // Ожидаемая дата таможенной очистки
   postedDate: 'ufCrm11_1732866384410',  // Дата оприходования
   warehouseDate: 'ufCrm11_1732866412851', // Дата поступления на склад
+  po: 'ufCrm11_1763537575780',          // Номер PO
 };
 const ymd = v => (typeof v === 'string' && v.length >= 10) ? v.slice(0, 10) : null;
 const dayMs = 86400000;
+// Базы ссылок в Bitrix (из вебхука): сделка и элемент смарт-процесса «Закупки».
+function bitrixOrigin() { try { return new URL(process.env.BITRIX_WEBHOOK).origin; } catch (e) { return null; } }
 function addDays(ymdStr, n) {
   const d = new Date(ymdStr + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
@@ -235,11 +245,20 @@ async function getBoard(force) {
       const dept = deal ? saleType(deal.category_id, deptId) : 'Не указан';
       const mgrDeal = deal && deal.assigned_by_id ? (USERS[deal.assigned_by_id] || `#${deal.assigned_by_id}`) : null;
       const mgrPurch = p.assignedById ? (USERS[p.assignedById] || `#${p.assignedById}`) : null;
+      const po = p[F1066.po] || (l && l[F1070.po]) || null;
 
+      // ── «Критический» кейс: горит по договору / застрял / просрочен транзит ──
+      const stuck = !done && currentStageDays != null && currentStageDays >= 30;
+      const transitOverdue = ms === 5 && transitLeft != null && transitLeft < 0;
+      const critical = deadlineOverdue || deadlineSoon || arrivingSoon || transitOverdue || stuck;
+
+      const o = bitrixOrigin();
       return {
-        id: p.id,
+        id: p.id, po,
         dealId: deal ? deal.deal_id : (p.parentId2 || null),
         dealTitle: deal ? (deal.deal_title || '') : '',
+        purchUrl: o ? `${o}/crm/type/1066/details/${p.id}/` : null,
+        dealUrl: o && deal ? `${o}/crm/deal/details/${deal.deal_id}/` : null,
         instrument, manufacturer,
         dept, licensed,
         managerDeal: mgrDeal, managerPurch: mgrPurch,
@@ -254,7 +273,7 @@ async function getBoard(force) {
         trackingUrl: p[F1066.trackUrl] || null,
         carrierId: l ? (l[F1070.carrier] || null) : null,
         cityCountry: p[F1066.cityCountry] || null,
-        done,
+        done, stuck, transitOverdue, critical,
         opportunity: parseFloat(p.opportunity) || 0,
         movedTime: (l && l.movedTime) || p.movedTime || null,
       };
@@ -265,10 +284,11 @@ async function getBoard(force) {
 
   const board = {
     generatedAt: new Date().toISOString(),
-    milestones: MILESTONES, phaseColor: PHASE_COLOR,
+    milestones: MILESTONES, phaseColor: PHASE_COLOR, sections: SECTIONS,
     orders,
     kpi: {
       total: orders.length,
+      critical: orders.filter(o => o.critical).length,
       inTransit: orders.filter(o => o.milestone === 5).length,
       arrivingSoon: orders.filter(o => o.arrivingSoon).length,
       atCustoms: orders.filter(o => o.milestone === 6).length,
