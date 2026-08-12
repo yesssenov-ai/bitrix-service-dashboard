@@ -184,7 +184,7 @@ async function getContractsSummary(year) {
   const planRows = [...depSet]
     .map(dep => {
       const plan = planMap[dep] || 0, fact = factByDept[dep] || 0;
-      return { dept, plan, fact, pct: plan ? +(fact / plan * 100).toFixed(1) : null };
+      return { dept: dep, plan, fact, pct: plan ? +(fact / plan * 100).toFixed(1) : null };
     })
     .sort((a, b) => (DEPT_ORDER.indexOf(a.dept) + 1 || 99) - (DEPT_ORDER.indexOf(b.dept) + 1 || 99) || b.fact - a.fact);
   const planTotal = planRows.reduce((a, r) => a + r.plan, 0);
