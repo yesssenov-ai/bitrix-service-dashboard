@@ -36,7 +36,15 @@
   .live .dot{width:6px;height:6px;border-radius:50%;background:var(--good);animation:pulse 1.8s infinite}
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,201,163,.5)}70%{box-shadow:0 0 0 7px rgba(34,201,163,0)}100%{box-shadow:0 0 0 0 rgba(34,201,163,0)}}
 
-  .chipbar{display:flex;align-items:center;gap:10px;margin-bottom:12px;min-height:32px}
+  .filterbar{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+  .fsel{flex:1;min-width:180px}
+  .fsel label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--dim2);font-weight:600;margin-bottom:5px}
+  .fsel select{width:100%;background:var(--panel);border:1px solid var(--border);border-radius:11px;padding:10px 12px;color:var(--text);font:inherit;font-size:13.5px;font-weight:600;cursor:pointer;outline:none;backdrop-filter:blur(12px);transition:.2s}
+  .fsel select:hover{border-color:rgba(255,255,255,.18)}
+  .fsel select:focus{border-color:var(--brand2)}
+  .fsel select option{background:#121a2e}
+  .fsel.act select{border-color:rgba(255,45,85,.4);background:rgba(255,45,85,.06)}
+  .chipbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;min-height:30px}
   .chip{display:inline-flex;align-items:center;gap:9px;background:linear-gradient(135deg,rgba(255,45,85,.18),rgba(255,45,85,.07));border:1px solid rgba(255,45,85,.35);color:#fff;border-radius:20px;padding:7px 8px 7px 14px;font-size:13px;font-weight:600;animation:chipin .3s cubic-bezier(.2,.8,.2,1)}
   @keyframes chipin{from{opacity:0;transform:translateX(-8px)}to{opacity:1}}
   .chip .sw{width:9px;height:9px;border-radius:50%}
@@ -225,7 +233,13 @@
     </div>
   </header>
 
-  <div class="chipbar" id="chipbar"><span class="chiphint">Кликните отдел в «Пироге» или «Выполнении плана» — все квадраты отфильтруются по нему</span></div>
+  <div class="filterbar">
+    <div class="fsel"><label>Производитель</label><select id="fManuf"><option value="">Все</option></select></div>
+    <div class="fsel"><label>Отдел</label><select id="fDept"><option value="">Все</option></select></div>
+    <div class="fsel"><label>Месяц</label><select id="fMonth"><option value="">Все</option></select></div>
+  </div>
+
+  <div class="chipbar" id="chipbar"></div>
 
   <div class="kpis" id="kpis"></div>
 
@@ -299,7 +313,28 @@ const showTip=(h,x,y)=>{tip.innerHTML=h;tip.style.left=(x+14)+'px';tip.style.top
 const hideTip=()=>tip.style.opacity=0;
 
 let ROLE='viewer',YEAR=2026,ALL=[],PLAN={},PIPES={},DEPT_ORDER=[],UPDATED=null;
-let FILTER=null,WASWIN=false; const openGrp=new Set([0]), openStage=new Set();
+const FILT={manuf:'',dept:'',month:''}; let WASWIN=false; const openGrp=new Set([0]), openStage=new Set();
+const fManuf=document.getElementById('fManuf'),fDept=document.getElementById('fDept'),fMonth=document.getElementById('fMonth');
+fManuf.onchange=()=>{FILT.manuf=fManuf.value;renderAll();};
+fDept.onchange=()=>{FILT.dept=fDept.value;renderAll();};
+fMonth.onchange=()=>{FILT.month=fMonth.value;renderAll();};
+// проверки/выборки по активным фильтрам (excl — измерение, которое НЕ применяем: сам селектор)
+const passManuf=d=>!FILT.manuf||d.manufacturer===FILT.manuf;
+const passDept=d=>!FILT.dept||d.saleType===FILT.dept;
+const passMonth=d=>FILT.month===''||d.month===+FILT.month;
+const getFiltered=excl=>ALL.filter(d=>(excl==='manuf'||passManuf(d))&&(excl==='dept'||passDept(d))&&(excl==='month'||passMonth(d)));
+function buildFilterOptions(){
+  const manufs=[...new Set(ALL.map(d=>d.manufacturer).filter(m=>m&&m!=='Не определено'))].sort((a,b)=>a.localeCompare(b,'ru'));
+  const depts=orderDepts([...new Set(ALL.map(d=>d.saleType))]);
+  const months=[...new Set(ALL.map(d=>d.month).filter(m=>m!=null))].sort((a,b)=>a-b);
+  const op=(v,l,sel)=>`<option value="${esc(v)}"${sel?' selected':''}>${esc(l)}</option>`;
+  fManuf.innerHTML=op('','Все производители',!FILT.manuf)+manufs.map(m=>op(m,m,FILT.manuf===m)).join('');
+  fDept.innerHTML=op('','Все отделы',!FILT.dept)+depts.map(d=>op(d,d,FILT.dept===d)).join('');
+  fMonth.innerHTML=op('','Все месяцы',FILT.month==='')+months.map(m=>op(m,MONTHS[m],FILT.month===String(m))).join('');
+  [['manuf',fManuf],['dept',fDept],['month',fMonth]].forEach(([k,el])=>el.closest('.fsel').classList.toggle('act',!!FILT[k]&&FILT[k]!==''));
+}
+function syncSelect(dim){({manuf:fManuf,dept:fDept,month:fMonth}[dim]).value=FILT[dim];({manuf:fManuf,dept:fDept,month:fMonth}[dim]).closest('.fsel').classList.toggle('act',FILT[dim]!=='');}
+function clearFilter(dim){FILT[dim]='';syncSelect(dim);renderAll();}
 
 // курсор-прожектор
 (function(){const s=document.getElementById('spotlight');
@@ -320,7 +355,7 @@ function confettiBurst(x,y){
   })(t0);
 }
 
-(function(){const y=new Date().getFullYear();const sel=document.getElementById('yearSel');for(let yy=y;yy>=y-3;yy--){const o=document.createElement('option');o.value=yy;o.textContent=yy;sel.appendChild(o);}sel.value=2026;sel.onchange=()=>{YEAR=+sel.value;FILTER=null;load();};})();
+(function(){const y=new Date().getFullYear();const sel=document.getElementById('yearSel');for(let yy=y;yy>=y-3;yy--){const o=document.createElement('option');o.value=yy;o.textContent=yy;sel.appendChild(o);}sel.value=2026;sel.onchange=()=>{YEAR=+sel.value;FILT.manuf=FILT.dept=FILT.month='';load();};})();
 
 async function init(){
   try{const r=await fetch('/auth/me');if(r.ok){const {user}=await r.json();ROLE=user.role;}}catch(e){}
@@ -336,6 +371,7 @@ async function load(){
     ALL=d.deals||[];PLAN=d.planMap||{};PIPES=d.pipelines||{};DEPT_ORDER=d.deptOrder||[];UPDATED=d.updatedAt;
     const u=UPDATED?new Date(UPDATED):null;const p=n=>String(n).padStart(2,'0');
     document.getElementById('updated').textContent=u?`${p(u.getDate())}.${p(u.getMonth()+1)}.${u.getFullYear()} ${p(u.getHours())}:${p(u.getMinutes())}`:'—';
+    buildFilterOptions();
     renderAll();
     loadNews();
   }catch(e){
@@ -345,34 +381,35 @@ async function load(){
 
 // список отделов в порядке DEPT_ORDER, потом остальные
 function orderDepts(names){const seen=new Set(names);return [...DEPT_ORDER.filter(d=>seen.has(d)),...names.filter(n=>!DEPT_ORDER.includes(n)).sort()];}
-function toggleFilter(dep){FILTER=FILTER===dep?null:dep;renderAll();}
+function toggleFilter(dep){FILT.dept=FILT.dept===dep?'':dep;syncSelect('dept');renderAll();}
 
 function renderAll(){
-  const filtered=FILTER?ALL.filter(d=>d.saleType===FILTER):ALL;
+  const cons=getFiltered();
   renderChip();
-  renderKpi(filtered);
+  renderKpi(cons);
   renderDonut();
   renderPlan();
-  renderTree(filtered);
-  renderBars(filtered);
-  renderArea(filtered);
+  renderTree(cons);
+  renderBars(cons);
+  renderArea(cons);
 }
 
 function renderChip(){
-  const c=document.getElementById('chipbar');
-  if(!FILTER){c.innerHTML=`<span class="chiphint">Кликните отдел в «Пироге» или «Выполнении плана» — все квадраты отфильтруются по нему</span>`;return;}
-  const col=stColor(FILTER,DEPT_ORDER.indexOf(FILTER));
-  c.innerHTML=`<span class="chip"><span class="sw" style="background:${col}"></span>Отдел: ${esc(FILTER)} <span class="x" onclick="toggleFilter('${FILTER.replace(/'/g,"\\'")}')">✕</span></span><span class="chiphint">показаны только сделки этого отдела во всех квадратах</span>`;
+  const c=document.getElementById('chipbar');const chips=[];
+  if(FILT.manuf)chips.push(`<span class="chip">Производитель: ${esc(FILT.manuf)} <span class="x" onclick="clearFilter('manuf')">✕</span></span>`);
+  if(FILT.dept){const col=stColor(FILT.dept,DEPT_ORDER.indexOf(FILT.dept));chips.push(`<span class="chip"><span class="sw" style="background:${col}"></span>Отдел: ${esc(FILT.dept)} <span class="x" onclick="clearFilter('dept')">✕</span></span>`);}
+  if(FILT.month!=='')chips.push(`<span class="chip">Месяц: ${esc(MONTHS[+FILT.month])} <span class="x" onclick="clearFilter('month')">✕</span></span>`);
+  c.innerHTML=chips.length?chips.join('')+`<span class="chiphint">фильтры применены ко всем квадратам</span>`:`<span class="chiphint">Выберите фильтры сверху или кликните отдел в «Пироге» / «Выполнении плана»</span>`;
 }
 
 function renderKpi(f){
   const total=f.reduce((a,d)=>a+d.sumKzt,0),count=f.length,avg=count?total/count:0;
-  const plan=FILTER?(PLAN[FILTER]||0):Object.values(PLAN).reduce((a,v)=>a+v,0);
+  const plan=FILT.dept?(PLAN[FILT.dept]||0):Object.values(PLAN).reduce((a,v)=>a+v,0);
   const pct=plan?+(total/plan*100).toFixed(1):null;
   const win=pct!=null&&pct>=100;
   const items=[
-    {l:FILTER?'Сумма ('+FILTER+')':'Сумма контрактов',v:total/1e9,dec:1,suf:'млрд ₸',s:'контрактных сделок',accent:true},
-    {l:'Сделок',v:count,dec:0,suf:'',s:FILTER?'в отделе':'в портфеле года'},
+    {l:FILT.dept?'Сумма ('+FILT.dept+')':'Сумма контрактов',v:total/1e9,dec:1,suf:'млрд ₸',s:'контрактных сделок',accent:true},
+    {l:'Сделок',v:count,dec:0,suf:'',s:FILT.dept?'в отделе':'в портфеле года'},
     {l:'Средний чек',v:avg/1e6,dec:1,suf:'млн ₸',s:'на сделку'},
     {l:'Выполнение плана',v:pct==null?0:pct,dec:1,suf:'%',s:pct==null?'план не задан':`${fmt(total/1e6)} / ${fmt(plan/1e6)} млн`,color:win?null:pcColor(pct),win},
   ];
@@ -385,7 +422,7 @@ function renderKpi(f){
 function aggByDept(deals){const m={};deals.forEach(d=>m[d.saleType]=(m[d.saleType]||0)+d.sumKzt);return m;}
 
 function renderDonut(){
-  const agg=aggByDept(ALL);const names=orderDepts(Object.keys(agg));
+  const agg=aggByDept(getFiltered('dept'));const names=orderDepts(Object.keys(agg));
   const total=Object.values(agg).reduce((a,v)=>a+v,0)||1;
   const svg=document.getElementById('donutSvg');svg.innerHTML='';
   const R=73,C=2*Math.PI*R,cx=93;let off=0;
@@ -394,7 +431,7 @@ function renderDonut(){
     const el=document.createElementNS('http://www.w3.org/2000/svg','circle');
     el.setAttribute('cx',cx);el.setAttribute('cy',cx);el.setAttribute('r',R);el.setAttribute('stroke',col);el.style.color=col;
     el.setAttribute('stroke-dashoffset',-off);el.style.strokeDasharray=`0 ${C}`;
-    if(FILTER&&FILTER!==nm)el.style.opacity=.28;
+    if(FILT.dept&&FILT.dept!==nm)el.style.opacity=.28;
     setTimeout(()=>{el.style.transition='stroke-dasharray 1s cubic-bezier(.2,.8,.2,1)';el.style.strokeDasharray=`${len} ${C-len}`;},120+i*70);
     el.onclick=()=>toggleFilter(nm);
     el.addEventListener('mousemove',e=>showTip(`<b>${esc(nm)}</b><br>${fmt(agg[nm]/1e6)} млн ₸ · ${Math.round(agg[nm]/total*100)}%`,e.clientX,e.clientY));
@@ -403,17 +440,17 @@ function renderDonut(){
   });
   countUp(document.getElementById('donutTotal'),total/1e9,1300,fmt1);
   document.getElementById('legend').innerHTML=names.map((nm,i)=>{
-    const col=stColor(nm,i),cls=FILTER?(FILTER===nm?'on':'dim'):'';
+    const col=stColor(nm,i),cls=FILT.dept?(FILT.dept===nm?'on':'dim'):'';
     return `<div class="lg ${cls}" onclick="toggleFilter('${nm.replace(/'/g,"\\'")}')"><span class="sw" style="background:${col}"></span><span class="nm">${esc(nm)}</span><span class="vl tabular">${fmt1(agg[nm]/1e9)}</span><span class="pc tabular" style="color:${col}">${Math.round(agg[nm]/total*100)}%</span></div>`;
   }).join('');
 }
 
 function renderPlan(){
-  const fact=aggByDept(ALL);
+  const fact=aggByDept(getFiltered('dept'));
   const names=orderDepts([...new Set([...Object.keys(PLAN),...Object.keys(fact)])]);
   const rows=names.map(dep=>{const plan=PLAN[dep]||0,f=fact[dep]||0;return {dep,plan,fact:f,pct:plan?+(f/plan*100).toFixed(1):null};});
   document.getElementById('planRows').innerHTML=rows.map(r=>{
-    const cls=FILTER?(FILTER===r.dep?'on':'dim'):'';
+    const cls=FILT.dept?(FILT.dept===r.dep?'on':'dim'):'';
     return `<div class="planrow ${cls}" data-dep="${encodeURIComponent(r.dep)}">
       <div class="pr-top"><span class="nm">${esc(r.dep)}</span>
         <span class="rt"><span class="vals">факт <b>${fmt(r.fact/1e6)}</b> / план <span class="planval" data-plan="${r.plan}">${fmt(r.plan/1e6)}</span></span>
@@ -458,14 +495,14 @@ function renderTree(deals){
   countUp(document.getElementById('treeTotal'),grand,1300);
   // stageId -> {name, sem, sum, deals[]}
   const st={};
-  deals.forEach(d=>{const k=d.stageId||'—';(st[k]=st[k]||{name:d.stageName,sem:d.sem,sum:0,deals:[]});st[k].sum+=d.sumKzt;st[k].deals.push(d);});
+  deals.forEach(d=>{const k=d.stageId||'—';(st[k]=st[k]||{name:d.stageName,sem:d.sem,sort:(d.stageSort==null?9999:d.stageSort),sum:0,deals:[]});st[k].sum+=d.sumKzt;st[k].deals.push(d);});
   const GROUPS={P:{name:'Сделки в работе',color:'#5b8cff'},S:{name:'Завершённые сделки',color:'#22c9a3'},F:{name:'Отменённые',color:'#ff5b6e'}};
   const groups={P:[],S:[],F:[]};
   Object.entries(st).forEach(([id,s])=>(groups[s.sem]||groups.P).push({id,...s}));
   const order=['P','S','F'].filter(k=>groups[k].length);
   const maxStage=Math.max(1,...Object.values(st).map(s=>s.sum));
   document.getElementById('tree').innerHTML=order.map((k,gi)=>{
-    const g=groups[k].sort((a,b)=>b.sum-a.sum);const gsum=g.reduce((a,s)=>a+s.sum,0);const open=openGrp.has(gi);
+    const g=groups[k].sort((a,b)=>a.sort-b.sort||b.sum-a.sum);const gsum=g.reduce((a,s)=>a+s.sum,0);const open=openGrp.has(gi);
     return `<div class="grp">
       <div class="grp-head${open?' open':''}" onclick="tGrp(${gi})"><span class="chev">▶</span><span class="gdot" style="background:${GROUPS[k].color}"></span><span class="gn">${GROUPS[k].name}</span><span class="gv tabular">${fmt(gsum)}</span></div>
       <div style="display:${open?'block':'none'}">${g.map(s=>{
@@ -502,7 +539,7 @@ function renderArea(deals){
   const mln=Array(12).fill(0);deals.forEach(d=>{if(d.month!=null)mln[d.month]+=d.sumKzt;});
   const cum=[];mln.reduce((r,v,i)=>cum[i]=r+v,0);
   const bit=cum.map(v=>v/1e9);
-  const planTotal=(FILTER?(PLAN[FILTER]||0):Object.values(PLAN).reduce((a,v)=>a+v,0))/1e9;
+  const planTotal=(FILT.dept?(PLAN[FILT.dept]||0):Object.values(PLAN).reduce((a,v)=>a+v,0))/1e9;
   const svg=document.getElementById('areaSvg'),W=520,H=200,pad=6;
   const maxV=Math.max(planTotal,...bit,.001)*1.08;
   const X=i=>pad+i*(W-2*pad)/11,Y=v=>H-pad-(v/maxV)*(H-2*pad);
@@ -517,7 +554,7 @@ function renderArea(deals){
   paths+=`<circle cx="${X(11)}" cy="${Y(bit[11])}" r="3.5" fill="#5b8cff"/>`;
   let labels='';MONTHS.forEach((m,i)=>labels+=`<text x="${X(i)}" y="${H+2}" fill="#5c6884" font-size="9" text-anchor="middle">${m}</text>`);
   svg.innerHTML=defs+g+paths+labels;
-  document.getElementById('areaLegend').innerHTML=`<span class="al"><i style="background:transparent;border-top:2px dashed #8592ad;height:2px"></i>План${FILTER?' ('+esc(FILTER)+')':''}</span><span class="al"><i style="background:#5b8cff"></i>Bitrix (факт)</span>`;
+  document.getElementById('areaLegend').innerHTML=`<span class="al"><i style="background:transparent;border-top:2px dashed #8592ad;height:2px"></i>План${FILT.dept?' ('+esc(FILT.dept)+')':''}</span><span class="al"><i style="background:#5b8cff"></i>Bitrix (факт)</span>`;
   AREA={bit,planTotal,maxV,W,H,pad};
 }
 // Наведение на «Накопительную»: направляющая + точка + цифра на дате под курсором

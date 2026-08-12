@@ -84,7 +84,7 @@ async function loadDeals(year) {
   const [rate, stageMeta] = await Promise.all([getTodayRate(), getAllStageMeta()]);
   const { rows } = await pool.query(
     `SELECT deal_id, category_id, stage_id, deal_title, opportunity, currency_id,
-            department_id, company_id, contract_date
+            department_id, company_id, contract_date, manufacturer
        FROM ticketsmodule_stat_deals
       WHERE contract_date BETWEEN $1 AND $2 AND stage_id = ANY($3)`,
     [`${year}-01-01`, `${year}-12-31`, CONTRACT_SET]
@@ -92,7 +92,7 @@ async function loadDeals(year) {
   const base = dealUrlBase();
   return rows.map(d => {
     const sum = parseFloat(d.opportunity) || 0;
-    const m = stageMeta[d.stage_id] || { name: d.stage_id || 'Без стадии', semantics: 'P' };
+    const m = stageMeta[d.stage_id] || { name: d.stage_id || 'Без стадии', semantics: 'P', sort: 9999 };
     const pipe = PIPE_META[d.category_id] || { name: 'Прочее', color: '#8592ad' };
     return {
       id: d.deal_id,
@@ -100,8 +100,10 @@ async function loadDeals(year) {
       category: d.category_id,
       pipeName: pipe.name,
       saleType: saleType(d.category_id, d.department_id),
+      manufacturer: d.manufacturer || null,
       stageId: d.stage_id,
       stageName: m.name,
+      stageSort: m.sort != null ? m.sort : 9999,
       sem: m.semantics,
       sumKzt: d.currency_id === 'USD' ? sum * rate : sum,
       currency: d.currency_id,
