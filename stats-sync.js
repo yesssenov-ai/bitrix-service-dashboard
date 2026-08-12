@@ -44,13 +44,9 @@ const MANUF_FALLBACK = {
   '8371': 'LGC Standards', '8372': 'KUKA', '8443': 'OLYMPUS', '8815': 'Sartorius',
 };
 
-// Схлопывание под-брендов одного производителя (для отчёта «по производителям»).
-// Убери запись, если хочешь видеть их раздельно.
-const MANUF_NORMALIZE = {
-  'Agilent Technologies': 'Agilent', 'Agilent Cell Analysis': 'Agilent', 'Agilent Vacuum pump': 'Agilent',
-  'Metrohm Autolab': 'Metrohm', 'Metrohm DropSens': 'Metrohm',
-};
-const normManuf = name => (name ? (MANUF_NORMALIZE[name] || name) : name);
+// В БАЗУ пишем СЫРОЙ бренд как есть (напр. «Agilent Cell Analysis»). Группировку
+// в родительский бренд (Agilent) и раскрытие под-брендов делаем на отображении
+// (stats-calc.js) — чтобы деталь не терялась и её можно было раскрыть.
 
 // Карта ID→бренд из определения поля (кэш 6ч, новые бренды подхватятся сами).
 let manufMapCache = null, manufMapAt = 0;
@@ -114,7 +110,7 @@ async function upsertDeal(d) {
   // фолбэк на старую карту «прибор→производитель» ради покрытия старых сделок.
   const manufMap = await getManufacturerMap();
   const rawManuf = d[MANUF_FIELD] ? (manufMap[String(d[MANUF_FIELD])] || null) : null;
-  const manufacturer = normManuf(rawManuf) || (await getManufacturer(instrumentName));
+  const manufacturer = rawManuf || (await getManufacturer(instrumentName)); // сырой бренд; группировка — на отображении
   const industry = await getCompanyIndustry(d.COMPANY_ID);
   const contractDate = d[REAL_CONTRACT_DATE_FIELD] ? d[REAL_CONTRACT_DATE_FIELD].slice(0, 10) : null;
 

@@ -65,8 +65,25 @@ async function getWonDealsInRange(startDate, endDate) {
   });
 }
 
+// Под-бренды одного производителя → родительский бренд. В БАЗЕ хранится сырой
+// бренд; здесь только группируем для отображения (детали раскрываемы).
+const MANUF_GROUP = {
+  'Agilent Technologies': 'Agilent', 'Agilent Cell Analysis': 'Agilent', 'Agilent Vacuum pump': 'Agilent',
+  'Metrohm Autolab': 'Metrohm', 'Metrohm DropSens': 'Metrohm',
+};
+const manufParent = m => MANUF_GROUP[m] || m;
+
 function summarizeByManufacturerAndType(deals) {
   const manufacturers = [...new Set(deals.map(d => d.manufacturer))].filter(m => m !== 'Не определено').sort();
+  // Группировка по родительскому бренду: parents (отсортированный список),
+  // groups (parent → [сырые под-бренды]). table остаётся по сырым брендам —
+  // фронт сам суммирует родителя и раскрывает под-бренды.
+  const groupSets = {};
+  manufacturers.forEach(m => { const p = manufParent(m); (groupSets[p] = groupSets[p] || new Set()).add(m); });
+  const parents = Object.keys(groupSets).sort();
+  const groups = {};
+  parents.forEach(p => { groups[p] = [...groupSets[p]].sort(); });
+
   const typeOrder = ['Элементный', 'Хроматография и клеточный анализ', 'Электрохимия', 'Spares', 'Service', 'Training', 'General Lab', 'Complex', 'Материаловедение'];
   const presentTypes = new Set(deals.map(d => d.saleType || 'Не указан'));
   const types = typeOrder.filter(t => presentTypes.has(t));
@@ -83,7 +100,7 @@ function summarizeByManufacturerAndType(deals) {
     table[key].Common += d.sumKzt;
     if (d.manufacturer !== 'Не определено') table[key][d.manufacturer] += d.sumKzt;
   }
-  return { manufacturers, types, table };
+  return { manufacturers, parents, groups, types, table };
 }
 
 function summarizeByManager(deals) {

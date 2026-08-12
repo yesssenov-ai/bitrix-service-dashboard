@@ -135,25 +135,56 @@ async function loadCurrent(){
   }
 }
 
+let _summaryData = null;
+const _expandedBrands = new Set();
+function toggleBrand(p){ if(_expandedBrands.has(p)) _expandedBrands.delete(p); else _expandedBrands.add(p); renderSummary(_summaryData); }
+
+// Столбцы: сначала «Все», затем родительские бренды; раскрытый бренд показывает
+// свой итог + под-бренды после него.
+function buildBrandCols(d){
+  const cols = [{ key:'Common', label:'Все', isCommon:true }];
+  const parents = d.parents || d.manufacturers || [];
+  parents.forEach(p => {
+    const subs = (d.groups && d.groups[p]) || [p];
+    const expandable = subs.length > 1;
+    cols.push({ key:p, label:p, subs, expandable, isParent:true });
+    if (expandable && _expandedBrands.has(p)) subs.forEach(s => cols.push({ key:s, label:'↳ '+s, isSub:true }));
+  });
+  return cols;
+}
+function brandCellVal(row, col){
+  if (col.isCommon) return row.Common || 0;
+  if (col.isParent && col.subs) return col.subs.reduce((a,s)=>a+(row[s]||0),0);
+  return row[col.key] || 0;
+}
+function brandHeader(col){
+  if (col.expandable) {
+    const open = _expandedBrands.has(col.key);
+    return `<th style="cursor:pointer;white-space:nowrap" onclick="toggleBrand('${esc(col.key).replace(/'/g,"\\'")}')" title="Показать под-бренды">${open?'▾':'▸'} ${esc(col.label)}</th>`;
+  }
+  return `<th${col.isSub?' style="color:var(--text-dim);font-weight:500"':''}>${esc(col.label)}</th>`;
+}
+
 function renderSummary(d){
+  _summaryData = d;
   const wrap = document.getElementById('content');
-  const cols = ['Common', ...d.manufacturers];
+  const cols = buildBrandCols(d);
   const typeLabels = { Instrument:'Инструменты', 'General lab':'General Lab', Robots:'Роботы', Spares:'Расходники', Training:'Обучение', Service:'Сервис' };
 
   let sumRows = '', pctRows = '';
   d.types.forEach(type => {
     const row = d.table[type];
-    sumRows += `<tr><td>${typeLabels[type]||type}, тыс.тг</td>${cols.map(c => `<td>${money((row[c]||0)/1000)}</td>`).join('')}</tr>`;
+    sumRows += `<tr><td>${typeLabels[type]||type}, тыс.тг</td>${cols.map(c => `<td>${money(brandCellVal(row,c)/1000)}</td>`).join('')}</tr>`;
     const common = row.Common || 1;
-    pctRows += `<tr class="pct-row"><td>${typeLabels[type]||type}, %</td>${cols.map(c => `<td>${common ? Math.round((row[c]||0)/common*100) : 0}</td>`).join('')}</tr>`;
+    pctRows += `<tr class="pct-row"><td>${typeLabels[type]||type}, %</td>${cols.map(c => `<td>${common ? Math.round(brandCellVal(row,c)/common*100) : 0}</td>`).join('')}</tr>`;
   });
 
   wrap.innerHTML = `
     <div class="card">
-      <div style="margin-bottom:10px;font-size:12.5px;color:var(--text-dim)">${d.year} год · сделок учтено: ${d.dealCount}</div>
+      <div style="margin-bottom:10px;font-size:12.5px;color:var(--text-dim)">${d.year} год · сделок учтено: ${d.dealCount} · ▸ у брендов с под-марками — клик, чтобы раскрыть детали</div>
       <div style="overflow-x:auto">
         <table style="min-width:${640 + cols.length*110}px">
-          <thead><tr><th>${d.year}</th>${cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead>
+          <thead><tr><th>${d.year}</th>${cols.map(brandHeader).join('')}</tr></thead>
           <tbody>${sumRows}<tr><td style="padding-top:14px"></td></tr>${pctRows}</tbody>
         </table>
       </div>
