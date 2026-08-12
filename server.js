@@ -73,6 +73,7 @@ app.get('/kp.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirn
 app.get('/bonus.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'bonus.html')));
 app.get('/stats.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'stats.html')));
 app.get('/contracts.html', requirePageAuth(['admin','coordinator']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'contracts.html')));
+app.get('/logistics.html', requirePageAuth(['admin','coordinator']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'logistics.html')));
 app.get('/operational.html', requirePageAuth(['admin','coordinator']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'operational.html')));
 app.get('/cup-admin.html', requirePageAuth(['admin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'cup-admin.html')));
 // `index:false` — without this, static would auto-serve public/index.html
@@ -90,6 +91,7 @@ app.use('/api/kp', require('./routes/kp-routes').router);
 app.use('/api/bonus', require('./routes/bonus-routes').router);
 app.use('/api/stats', require('./routes/stats-routes').router);
 app.use('/api/contracts', require('./routes/contracts-routes').router);
+app.use('/api/logistics', require('./routes/logistics-routes').router);
 app.use('/api/operational', require('./routes/operational-routes').router);
 const { router: relationsRouter, handleBitrixWebhook } = require('./routes/relations-routes');
 app.use('/relations', relationsRouter);

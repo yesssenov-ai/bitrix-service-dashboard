@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ЦУП · Логистика</title>
+<link rel="icon" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<style>
+  :root{--bg:#070b16;--panel:rgba(20,27,45,0.55);--border:rgba(255,255,255,0.07);--text:#e8edf7;--dim:#8592ad;--dim2:#5c6884;--brand:#ff2d55;--brand2:#ff6b81;--good:#22c9a3;--warn:#ffb020;--bad:#ff5b6e;--purchase:#ffb020;--transit:#5b8cff;--customs:#a56bff;--domestic:#22c9a3}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--text);font-family:"SF Pro Display","Segoe UI",Inter,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+  body{min-height:100vh;overflow-x:hidden;background:radial-gradient(1200px 600px at 15% -5%,rgba(255,45,85,.10),transparent 60%),radial-gradient(1000px 700px at 100% 0%,rgba(91,140,255,.12),transparent 55%),radial-gradient(900px 800px at 50% 120%,rgba(34,201,163,.07),transparent 60%),var(--bg)}
+  .wrap{max-width:1500px;margin:0 auto;padding:18px 24px 60px}
+  .tabular{font-variant-numeric:tabular-nums}
+  a{color:inherit;text-decoration:none}
+  #aurora{position:fixed;inset:0;z-index:-2;overflow:hidden;pointer-events:none}
+  #aurora span{position:absolute;border-radius:50%;filter:blur(90px);opacity:.4;mix-blend-mode:screen}
+  #aurora span:nth-child(1){width:520px;height:520px;background:radial-gradient(circle,#5b8cff,transparent 70%);top:-170px;left:-120px;animation:d1 26s ease-in-out infinite}
+  #aurora span:nth-child(2){width:560px;height:560px;background:radial-gradient(circle,#a56bff,transparent 70%);top:-200px;right:-140px;animation:d2 30s ease-in-out infinite}
+  #aurora span:nth-child(3){width:560px;height:560px;background:radial-gradient(circle,#22c9a3,transparent 70%);bottom:-240px;left:40%;animation:d3 34s ease-in-out infinite}
+  @keyframes d1{0%,100%{transform:translate(0,0)}50%{transform:translate(120px,80px) scale(1.15)}}
+  @keyframes d2{0%,100%{transform:translate(0,0)}50%{transform:translate(-110px,110px) scale(1.1)}}
+  @keyframes d3{0%,100%{transform:translate(0,0)}50%{transform:translate(-140px,-60px) scale(1.2)}}
+  #spotlight{position:fixed;width:600px;height:600px;border-radius:50%;pointer-events:none;z-index:0;background:radial-gradient(circle,rgba(91,140,255,.10),transparent 60%);transform:translate(-50%,-50%);left:-9999px;top:0;opacity:0;transition:opacity .4s}
+  .wrap{position:relative;z-index:1}
+
+  header{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:16px}
+  .brand{display:flex;align-items:center;gap:13px}
+  .back{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--panel);border:1px solid var(--border);transition:.2s;flex-shrink:0}
+  .back:hover{border-color:rgba(255,255,255,.2)}
+  .logo-emblem{height:32px;width:auto;filter:drop-shadow(0 0 9px rgba(255,45,85,.35))}
+  .logo .lg1{font-weight:800;font-size:20px;letter-spacing:.4px}.logo .lg1 span{color:var(--brand)}
+  .logo .lg2{font-size:11px;color:var(--dim);margin-top:3px}
+  .hctl{display:flex;align-items:center;gap:12px}
+  .btn{background:var(--panel);border:1px solid var(--border);border-radius:11px;padding:9px 14px;font:inherit;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;transition:.2s;display:flex;align-items:center;gap:7px}
+  .btn:hover{border-color:rgba(255,255,255,.2)}
+  .clock{text-align:right}.clock .c1{font-size:11px;color:var(--dim)}.clock .c2{font-size:15px;font-weight:700;color:#fff}
+
+  .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:11px;margin-bottom:13px}
+  @media(max-width:1000px){.kpis{grid-template-columns:repeat(3,1fr)}}
+  .kpi{position:relative;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:13px 15px;cursor:pointer;transition:.2s;overflow:hidden;backdrop-filter:blur(14px)}
+  .kpi:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.16)}
+  .kpi.on{border-color:var(--brand2);background:rgba(255,45,85,.08)}
+  .kpi .kv{font-size:26px;font-weight:800;letter-spacing:-.5px}
+  .kpi .kl{font-size:11px;color:var(--dim);margin-top:2px}
+  .kpi .kd{position:absolute;right:12px;top:12px;width:8px;height:8px;border-radius:50%}
+
+  .filterbar{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;align-items:flex-end}
+  .fsel{flex:1;min-width:180px}
+  .fsel>label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--dim2);font-weight:600;margin-bottom:5px}
+  .ms{position:relative}
+  .ms-btn{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:11px;padding:10px 12px;font-size:13.5px;font-weight:600;cursor:pointer;transition:.2s;backdrop-filter:blur(12px)}
+  .ms-btn:hover{border-color:rgba(255,255,255,.18)}
+  .ms-btn .ms-lab{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ms-btn svg{opacity:.5;flex-shrink:0;transition:transform .2s}.ms.open .ms-btn svg{transform:rotate(180deg)}
+  .fsel.act .ms-btn{border-color:rgba(255,45,85,.4);background:rgba(255,45,85,.06)}
+  .ms-panel{position:absolute;top:calc(100% + 6px);left:0;right:0;background:#0f1728;border:1px solid var(--border);border-radius:12px;padding:8px;z-index:30;box-shadow:0 20px 50px -18px rgba(0,0,0,.8);display:none;max-height:340px;overflow:auto}
+  .ms.open .ms-panel{display:block;animation:msin .18s ease}
+  @keyframes msin{from{opacity:0;transform:translateY(-5px)}to{opacity:1}}
+  .ms-search{width:100%;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--text);font:inherit;font-size:12.5px;outline:none;margin-bottom:6px}
+  .ms-panel .ms-opt{display:flex;align-items:center;gap:8px;margin:0;padding:6px 8px;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;color:var(--text);transition:.12s}
+  .ms-panel .ms-opt:hover{background:rgba(255,255,255,.06)}
+  .ms-panel .ms-opt input{accent-color:var(--brand);width:15px;height:15px;flex-shrink:0}
+  .ms-panel .ms-opt .msw{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+  .grouptoggle{display:flex;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:11px;padding:2px;height:40px}
+  .grouptoggle button{background:transparent;border:0;color:var(--dim);font:inherit;font-size:12.5px;font-weight:600;padding:0 14px;border-radius:9px;cursor:pointer;transition:.15s}
+  .grouptoggle button.on{background:linear-gradient(135deg,var(--brand),#e01e45);color:#fff}
+
+  .chipbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:12px;min-height:24px}
+  .chip{display:inline-flex;align-items:center;gap:8px;background:rgba(255,45,85,.12);border:1px solid rgba(255,45,85,.3);border-radius:20px;padding:6px 8px 6px 12px;font-size:12.5px;font-weight:600}
+  .chip .x{width:19px;height:19px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.1);cursor:pointer}
+  .chiphint{font-size:12px;color:var(--dim2)}
+
+  .grouphead{display:flex;align-items:center;gap:10px;margin:16px 2px 8px;font-size:13px;font-weight:700;color:var(--dim)}
+  .grouphead .gl{flex:1;height:1px;background:var(--border)}
+
+  .order{position:relative;background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:16px 18px 14px;margin-bottom:11px;backdrop-filter:blur(14px);overflow:hidden;transition:transform .3s,border-color .3s;opacity:0;transform:translateY(12px);animation:rise .5s cubic-bezier(.2,.7,.3,1) forwards}
+  @keyframes rise{to{opacity:1;transform:none}}
+  .order:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.14)}
+  .order.soon{border-color:rgba(255,176,32,.35);box-shadow:0 0 0 1px rgba(255,176,32,.12),0 14px 40px -20px rgba(255,176,32,.3)}
+  .order.overdue{border-color:rgba(255,91,110,.4)}
+  .order.done{opacity:.72}
+  .o-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:14px}
+  .o-title{min-width:0}
+  .o-instr{font-size:14.5px;font-weight:700;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .o-meta{font-size:11.5px;color:var(--dim2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .o-badges{display:flex;gap:6px;flex-shrink:0;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+  .badge{font-size:10.5px;font-weight:700;padding:4px 9px;border-radius:7px;white-space:nowrap}
+  .badge.dept{background:rgba(91,140,255,.15);color:#9db8ff}
+  .badge.lic{background:rgba(165,107,255,.15);color:#c9a8ff}
+  .badge.track{background:rgba(255,255,255,.06);color:var(--dim)}
+  .badge.track:hover{color:#fff}
+
+  .route{position:relative;height:52px;margin:6px 4px 14px}
+  .dur-label{position:absolute;top:34px;transform:translateX(-50%);font-size:9px;color:var(--dim2);white-space:nowrap;pointer-events:none}
+  .dur-label.cur{top:0;color:var(--warn);font-weight:700;font-size:9.5px}
+  .route-line{position:absolute;top:22px;left:12px;right:12px;height:3px;background:rgba(255,255,255,.09);border-radius:3px}
+  .route-fill{position:absolute;top:22px;left:12px;height:3px;border-radius:3px;transition:width 1s cubic-bezier(.2,.8,.2,1)}
+  .wp{position:absolute;top:22px;width:11px;height:11px;border-radius:50%;transform:translate(-50%,-50%);background:#1a2338;border:2px solid rgba(255,255,255,.18);z-index:2;cursor:default;transition:.2s}
+  .wp.passed{border-color:transparent}
+  .wp.current{width:15px;height:15px;box-shadow:0 0 0 4px rgba(255,255,255,.08)}
+  .wp.current::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid currentColor;opacity:.5;animation:ping 1.8s ease-out infinite}
+  @keyframes ping{0%{transform:scale(.7);opacity:.6}100%{transform:scale(1.8);opacity:0}}
+  .plane{position:absolute;top:22px;transform:translate(-50%,-50%) rotate(45deg);font-size:19px;color:#fff;z-index:4;filter:drop-shadow(0 0 8px rgba(91,140,255,.9));transition:left 1.1s cubic-bezier(.2,.8,.2,1);animation:bob 2.4s ease-in-out infinite}
+  @keyframes bob{0%,100%{margin-top:0}50%{margin-top:-3px}}
+  .plane-trail{position:absolute;top:22px;height:2px;transform:translateY(-50%);background:linear-gradient(90deg,transparent,rgba(91,140,255,.55));z-index:1;border-radius:2px}
+
+  .o-foot{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .status-badge{font-size:12px;font-weight:700;padding:6px 12px;border-radius:9px}
+  .phase-purchase{background:rgba(255,176,32,.15);color:#ffc861}
+  .phase-transit{background:rgba(91,140,255,.15);color:#9db8ff}
+  .phase-customs{background:rgba(165,107,255,.15);color:#c9a8ff}
+  .phase-domestic{background:rgba(34,201,163,.15);color:#66e0c2}
+  .eta{font-size:12px;color:var(--dim)}
+  .eta b{color:var(--text)}
+  .eta .soon{color:var(--warn);font-weight:700}
+  .eta .over{color:var(--bad);font-weight:700}
+  .o-right{margin-left:auto;font-size:11.5px;color:var(--dim2)}
+
+  .tip{position:fixed;pointer-events:none;background:#0d1424;border:1px solid var(--border);border-radius:9px;padding:7px 10px;font-size:12px;box-shadow:0 12px 30px -8px rgba(0,0,0,.6);opacity:0;transition:opacity .12s;z-index:50}
+  .tip b{color:#fff}
+  .loading{position:fixed;inset:0;display:grid;place-items:center;background:rgba(7,11,22,.6);z-index:40;flex-direction:column}
+  .loader-logo{height:42px;margin-bottom:14px;animation:lp 1.1s ease-in-out infinite;filter:drop-shadow(0 0 12px rgba(255,45,85,.5))}
+  @keyframes lp{0%,100%{opacity:.5;transform:scale(.92)}50%{opacity:1;transform:scale(1.08)}}
+  .spin{width:32px;height:32px;border:3px solid rgba(255,255,255,.15);border-top-color:var(--brand);border-radius:50%;animation:sp .8s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .empty,.err{text-align:center;color:var(--dim2);padding:50px;font-size:14px}
+  .err{color:var(--bad)}
+  ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:8px}
+  @media(prefers-reduced-motion:reduce){#aurora span,.plane,.wp.current::after,.order,.loader-logo{animation:none!important}#spotlight{display:none}.order{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div id="aurora"><span></span><span></span><span></span></div>
+<div id="spotlight"></div>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <a class="back" href="/portal.html" title="К порталу"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 18l-6-6 6-6"/></svg></a>
+      <img src="/assets/logo-icon.png" alt="Pro Lab Support" class="logo-emblem">
+      <div class="logo"><div class="lg1">Pro Lab <span>Support</span></div><div class="lg2">Логистика · путь заказанных приборов</div></div>
+    </div>
+    <div class="hctl">
+      <button class="btn" id="refreshBtn" title="Обновить из Bitrix"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0114.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0020.5 15"/></svg> Обновить</button>
+      <div class="clock"><div class="c1">Данные обновлены</div><div class="c2 tabular" id="updated">—</div></div>
+    </div>
+  </header>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="filterbar">
+    <div class="fsel"><label>Отдел</label><div class="ms" data-k="dept"><div class="ms-btn" onclick="toggleMS('dept')"><span class="ms-lab">Все</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div><div class="ms-panel"><div class="ms-opts"></div></div></div></div>
+    <div class="fsel"><label>Менеджер</label><div class="ms" data-k="manager"><div class="ms-btn" onclick="toggleMS('manager')"><span class="ms-lab">Все</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div><div class="ms-panel"><input class="ms-search" placeholder="Поиск…" oninput="msSearch('manager',this.value)"><div class="ms-opts"></div></div></div></div>
+    <div class="fsel"><label>Статус</label><div class="ms" data-k="status"><div class="ms-btn" onclick="toggleMS('status')"><span class="ms-lab">Все</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div><div class="ms-panel"><div class="ms-opts"></div></div></div></div>
+    <div class="grouptoggle" id="groupToggle"><button data-g="flat" class="on">По заказам</button><button data-g="deal">По сделкам</button></div>
+  </div>
+
+  <div class="chipbar" id="chipbar"></div>
+  <div id="list"></div>
+</div>
+<div class="tip" id="tip"></div>
+<div class="loading" id="loading"><img src="/assets/logo-icon.png" alt="" class="loader-logo"><div class="spin"></div></div>
+
+<script>
+const fmt=n=>Math.round(n).toLocaleString('ru-RU').replace(/,/g,' ');
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const dfmt=s=>{if(!s)return'—';const[y,m,d]=s.split('-');return `${d}.${m}.${y}`;};
+const tip=document.getElementById('tip');
+const showTip=(h,x,y)=>{tip.innerHTML=h;tip.style.left=(x+14)+'px';tip.style.top=(y+14)+'px';tip.style.opacity=1;};
+const hideTip=()=>tip.style.opacity=0;
+(function(){const s=document.getElementById('spotlight');addEventListener('pointermove',e=>{s.style.left=e.clientX+'px';s.style.top=e.clientY+'px';s.style.opacity=1;},{passive:true});addEventListener('pointerleave',()=>s.style.opacity=0);})();
+
+let BOARD=null,MS=[],PHC={},ORDERS=[];
+const FILT={dept:[],manager:[],status:[]}, MSOPTS={dept:[],manager:[],status:[]};
+let QUICK=null, GROUP='flat';
+
+async function load(force){
+  const L=document.getElementById('loading');L.style.display='flex';
+  try{
+    const r=await fetch('/api/logistics/board'+(force?'?force=1':''));
+    if(!r.ok)throw new Error((await r.json()).error||r.status);
+    BOARD=await r.json();MS=BOARD.milestones;PHC=BOARD.phaseColor;ORDERS=BOARD.orders||[];
+    const u=BOARD.generatedAt?new Date(BOARD.generatedAt):null;const p=n=>String(n).padStart(2,'0');
+    document.getElementById('updated').textContent=u?`${p(u.getDate())}.${p(u.getMonth()+1)}.${u.getFullYear()} ${p(u.getHours())}:${p(u.getMinutes())}`:'—';
+    buildFilters();renderAll();
+  }catch(e){document.getElementById('list').innerHTML=`<div class="err">Ошибка загрузки: ${esc(e.message)}</div>`;}
+  finally{L.style.display='none';}
+}
+document.getElementById('refreshBtn').onclick=()=>load(true);
+
+// ── фильтры (мультиселект) ──
+const passDept=o=>!FILT.dept.length||FILT.dept.includes(o.dept);
+const passMgr=o=>!FILT.manager.length||FILT.manager.includes(o.managerDeal)||FILT.manager.includes(o.managerPurch);
+const passStatus=o=>!FILT.status.length||FILT.status.includes(o.milestoneKey);
+function passQuick(o){switch(QUICK){case'inTransit':return o.milestone===5;case'arrivingSoon':return o.arrivingSoon;case'atCustoms':return o.milestone===6;case'atWarehouse':return o.milestone===7;case'overdue':return o.deadlineOverdue;default:return true;}}
+const getFiltered=()=>ORDERS.filter(o=>passDept(o)&&passMgr(o)&&passStatus(o)&&passQuick(o));
+
+function buildFilters(){
+  const depts=[...new Set(ORDERS.map(o=>o.dept).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
+  const mgrs=[...new Set(ORDERS.flatMap(o=>[o.managerDeal,o.managerPurch]).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
+  const stset=[...new Set(ORDERS.map(o=>o.milestoneKey))];
+  MSOPTS.dept=depts.map(d=>({v:d,l:d}));
+  MSOPTS.manager=mgrs.map(m=>({v:m,l:m}));
+  MSOPTS.status=MS.filter(m=>stset.includes(m.key)).map(m=>({v:m.key,l:m.label,c:PHC[m.phase]}));
+  FILT.dept=FILT.dept.filter(v=>depts.includes(v));FILT.manager=FILT.manager.filter(v=>mgrs.includes(v));FILT.status=FILT.status.filter(v=>stset.includes(v));
+  ['dept','manager','status'].forEach(renderMS);
+}
+function msLabel(k){const s=FILT[k];if(!s.length)return'Все';if(s.length===1){const o=MSOPTS[k].find(o=>String(o.v)===String(s[0]));return o?o.l:s[0];}return 'Выбрано: '+s.length;}
+function renderMS(k){const box=document.querySelector(`.ms[data-k="${k}"]`);if(!box)return;const sel=FILT[k].map(String);
+  box.querySelector('.ms-lab').textContent=msLabel(k);box.closest('.fsel').classList.toggle('act',!!FILT[k].length);
+  box.querySelector('.ms-opts').innerHTML=MSOPTS[k].map(o=>`<label class="ms-opt"><input type="checkbox" ${sel.includes(String(o.v))?'checked':''} onchange="msToggle('${k}','${String(o.v).replace(/'/g,"\\'")}')">${o.c?`<span class="msw" style="background:${o.c}"></span>`:''}<span>${esc(o.l)}</span></label>`).join('')||'<div style="color:var(--dim2);font-size:12px;padding:8px">нет</div>';}
+function msToggle(k,v){const a=FILT[k];const i=a.indexOf(v);if(i>=0)a.splice(i,1);else a.push(v);const box=document.querySelector(`.ms[data-k="${k}"]`);box.querySelector('.ms-lab').textContent=msLabel(k);box.closest('.fsel').classList.toggle('act',!!a.length);renderChip();renderList();}
+function toggleMS(k){const box=document.querySelector(`.ms[data-k="${k}"]`);const open=box.classList.contains('open');document.querySelectorAll('.ms.open').forEach(b=>b.classList.remove('open'));if(!open)box.classList.add('open');}
+function msSearch(k,q){q=(q||'').toLowerCase();document.querySelectorAll(`.ms[data-k="${k}"] .ms-opt`).forEach(o=>o.style.display=o.textContent.toLowerCase().includes(q)?'':'none');}
+document.addEventListener('click',e=>{if(!e.target.closest('.ms'))document.querySelectorAll('.ms.open').forEach(b=>b.classList.remove('open'));});
+function clearFilter(k){FILT[k]=[];renderMS(k);renderChip();renderList();}
+
+document.getElementById('groupToggle').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;GROUP=b.dataset.g;document.querySelectorAll('#groupToggle button').forEach(x=>x.classList.toggle('on',x===b));renderList();});
+
+function renderAll(){renderKpis();renderChip();renderList();}
+
+function renderKpis(){
+  const k=BOARD.kpi;
+  const items=[
+    {q:null,l:'Всего заказов',v:k.total,c:'#8592ad'},
+    {q:'inTransit',l:'В пути',v:k.inTransit,c:'#5b8cff'},
+    {q:'arrivingSoon',l:'Подлетают (≤3д)',v:k.arrivingSoon,c:'#ffb020'},
+    {q:'atCustoms',l:'На таможне',v:k.atCustoms,c:'#a56bff'},
+    {q:'atWarehouse',l:'На складе',v:k.atWarehouse,c:'#22c9a3'},
+    {q:'overdue',l:'Просрочка (договор)',v:k.overdue,c:'#ff5b6e'},
+  ];
+  document.getElementById('kpis').innerHTML=items.map(it=>`<div class="kpi${QUICK===it.q&&it.q?' on':''}" onclick="setQuick(${it.q?`'${it.q}'`:'null'})"><span class="kd" style="background:${it.c}"></span><div class="kv tabular" style="color:${it.c}">${it.v}</div><div class="kl">${it.l}</div></div>`).join('');
+}
+function setQuick(q){QUICK=(QUICK===q)?null:q;renderKpis();renderChip();renderList();}
+
+function renderChip(){
+  const c=document.getElementById('chipbar');const chips=[];
+  if(QUICK){const lbl={inTransit:'В пути',arrivingSoon:'Подлетают',atCustoms:'На таможне',atWarehouse:'На складе',overdue:'Просрочка'}[QUICK];chips.push(`<span class="chip">${lbl} <span class="x" onclick="setQuick('${QUICK}')">✕</span></span>`);}
+  if(FILT.dept.length)chips.push(`<span class="chip">Отдел: ${esc(FILT.dept.join(', '))} <span class="x" onclick="clearFilter('dept')">✕</span></span>`);
+  if(FILT.manager.length)chips.push(`<span class="chip">Менеджер: ${esc(FILT.manager.join(', '))} <span class="x" onclick="clearFilter('manager')">✕</span></span>`);
+  if(FILT.status.length)chips.push(`<span class="chip">Статус: ${FILT.status.length} <span class="x" onclick="clearFilter('status')">✕</span></span>`);
+  c.innerHTML=chips.length?chips.join('')+`<span class="chiphint">показано: ${getFiltered().length}</span>`:`<span class="chiphint">Фильтры вверху и клик по плашкам · всего заказов: ${ORDERS.length}</span>`;
+}
+
+function planePos(o){const base=(o.milestone-1);const extra=(o.milestone===5&&o.shipDate)?o.progress:0;return Math.max(0,Math.min(1,(base+extra)/10));}
+
+function orderCard(o){
+  const f=planePos(o);
+  // подписи длительности этапов между достигнутыми вехами + «идёт Nд» у самолёта
+  const reachedD=Object.keys(o.milestoneDates||{}).map(Number).sort((a,b)=>a-b);
+  let durHtml='';
+  for(let i=0;i<reachedD.length-1;i++){const a=reachedD[i],b=reachedD[i+1];const d=o.stageDurations?o.stageDurations[a]:null;if(d==null)continue;const mid=((a-1)+(b-1))/2/10;durHtml+=`<div class="dur-label" style="left:calc(12px + ${mid} * (100% - 24px))">${d}д</div>`;}
+  if(o.currentStageDays!=null&&!o.done)durHtml+=`<div class="dur-label cur" style="left:calc(12px + ${f} * (100% - 24px))">идёт ${o.currentStageDays}д</div>`;
+  const wps=MS.map((m,idx)=>{
+    const passed=(idx+1)<o.milestone, cur=(idx+1)===o.milestone;
+    const col=PHC[m.phase];
+    const cls=passed?'wp passed':cur?'wp current':'wp';
+    const bg=passed?col:(cur?col:'#1a2338');
+    const dt=(o.milestoneDates||{})[m.i], du=o.stageDurations?o.stageDurations[m.i]:null;
+    const info=(dt?`<br>${dfmt(dt)}`:'')+(du!=null?` · ${du}д на этапе`:(cur&&o.currentStageDays!=null?`<br>идёт ${o.currentStageDays}д`:''));
+    return `<div class="${cls}" style="left:calc(12px + ${idx/10} * (100% - 24px));background:${bg};color:${col}" data-ml="${esc(m.label)}" data-info="${info.replace(/"/g,'&quot;')}" onmousemove="wpTip(event,this)" onmouseleave="hideTipG()"></div>`;
+  }).join('');
+  const flyingCol=PHC[o.phase];
+  // фаза/транзит (самолёт ~15 дн от отгрузки)
+  let phaseTxt='';
+  if(o.milestone===5&&o.shipDate){phaseTxt=o.arrivingSoon?`<span class="soon">подлетает · ~${o.transitLeft} дн</span>`:`в пути ~${o.transitElapsed}/${o.transitDays} дн`;}
+  else if(o.milestone===6){phaseTxt=o.customsExpected?`ожид. очистка ${dfmt(o.customsExpected)}`:'на таможне';}
+  else if(o.milestone===7){phaseTxt=o.warehouseDate?`на складе с ${dfmt(o.warehouseDate)}`:'на складе';}
+  else if(o.shipDate){phaseTxt=`отгружен ${dfmt(o.shipDate)}`;}
+  // договорной срок (SLA): контракт + 90/180
+  let slaTxt='';
+  if(o.done)slaTxt=`<span style="color:var(--good)">✓ доставлено</span>`;
+  else if(o.deadline)slaTxt=o.deadlineOverdue?`<span class="over">⚠ просрочка по договору ${Math.abs(o.deadlineLeft)} дн</span>`
+    :o.deadlineSoon?`<span class="soon">по договору: ${o.deadlineLeft} дн до ${dfmt(o.deadline)}</span>`
+    :`по договору: <b>${o.deadlineLeft}</b> дн · до ${dfmt(o.deadline)}`;
+  const mgr=[o.managerDeal,o.managerPurch].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(' · ');
+  const cls='order'+(o.done?' done':o.deadlineOverdue?' overdue':(o.deadlineSoon||o.arrivingSoon)?' soon':'');
+  return `<div class="${cls}">
+    <div class="o-head">
+      <div class="o-title"><span class="o-instr">${esc(o.instrument||o.dealTitle||('Заказ #'+o.id))}</span>
+        <div class="o-meta">${esc(o.manufacturer||'')}${o.manufacturer?' · ':''}${esc(mgr||'—')}${o.cityCountry?' · '+esc(o.cityCountry):''} · закупка #${o.id}</div></div>
+      <div class="o-badges">
+        <span class="badge dept">${esc(o.dept)}</span>
+        ${o.licensed?'<span class="badge lic" title="Лицензируемый товар · срок 180 дн">лицензия · 180д</span>':''}
+        ${o.tracking?`<a class="badge track" href="${o.trackingUrl||'#'}" target="_blank">трек: ${esc(o.tracking)} ↗</a>`:''}
+      </div>
+    </div>
+    <div class="route">
+      <div class="route-line"></div>
+      <div class="route-fill" style="width:calc(${f} * (100% - 24px));background:linear-gradient(90deg,${PHC.purchase},${flyingCol})"></div>
+      <div class="plane-trail" style="left:calc(12px + ${Math.max(0,f-0.12)} * (100% - 24px));width:calc(${Math.min(f,0.12)} * (100% - 24px));background:linear-gradient(90deg,transparent,${flyingCol}88)"></div>
+      ${wps}
+      ${durHtml}
+      <div class="plane" style="left:calc(12px + ${f} * (100% - 24px));color:${o.done?'#22c9a3':'#fff'}">✈︎</div>
+    </div>
+    <div class="o-foot">
+      <span class="status-badge phase-${o.phase}">${o.milestone}/11 · ${esc(o.milestoneLabel)}</span>
+      ${phaseTxt?`<span class="eta">${phaseTxt}</span>`:''}
+      ${slaTxt?`<span class="eta">·&nbsp; ${slaTxt}</span>`:''}
+      ${o.opportunity?`<span class="o-right">${fmt(o.opportunity/1e6)} млн ₸</span>`:''}
+    </div>
+  </div>`;
+}
+function wpTip(e,el){showTip(`<b>${el.dataset.ml}</b>${el.dataset.info||''}`,e.clientX,e.clientY);}
+function hideTipG(){hideTip();}
+
+function renderList(){
+  renderChip();
+  const list=getFiltered();
+  const box=document.getElementById('list');
+  if(!list.length){box.innerHTML='<div class="empty">Нет заказов по выбранным фильтрам</div>';return;}
+  if(GROUP==='deal'){
+    const groups={};list.forEach(o=>{const k=o.dealId||'—';(groups[k]=groups[k]||{title:o.dealTitle||('Сделка #'+o.dealId),items:[]}).items.push(o);});
+    box.innerHTML=Object.values(groups).map(g=>`<div class="grouphead">📄 ${esc(g.title)} <span style="color:var(--dim2);font-weight:500">· ${g.items.length} закуп.</span><span class="gl"></span></div>`+g.items.map(orderCard).join('')).join('');
+  }else{
+    box.innerHTML=list.map(orderCard).join('');
+  }
+  // анимация заполнения линии
+  requestAnimationFrame(()=>document.querySelectorAll('.route-fill').forEach(f=>{const w=f.style.width;f.style.width='0';requestAnimationFrame(()=>f.style.width=w);}));
+}
+
+load();
+</script>
+</body>
+</html>
