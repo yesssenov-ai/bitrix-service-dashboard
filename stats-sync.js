@@ -10,12 +10,50 @@ const { pool } = require('./auth');
 const REAL_CONTRACT_DATE_FIELD = 'UF_CRM_1753708701368';
 const INSTRUMENT_FIELD = 'UF_CRM_NAME_PRIOBOR';
 const DEPARTMENT_FIELD = 'UF_CRM_1758005356984'; // "Отдел" — confirmed via correlation across 93 deals (find-department-field.js)
+// Производитель — поле-СПИСОК (enumeration), значение = ID элемента, имя бренда
+// достаётся из определения поля. ПОДТВЕРЖДЕНО probe-manufacturer.js (резолв 20/20).
+// Раньше грешили на UF_CRM_1731862648 — а это оказался РЕГИОН (инфоблок 17).
+const MANUF_FIELD = 'UF_CRM_1733300779';
 const CATEGORY_IDS = ['0', '1', '2', '3'];
 
 const SELECT_FIELDS = [
   'ID', 'CATEGORY_ID', 'STAGE_ID', 'TYPE_ID', 'OPPORTUNITY', 'CURRENCY_ID',
-  'COMPANY_ID', 'ASSIGNED_BY_ID', REAL_CONTRACT_DATE_FIELD, INSTRUMENT_FIELD, DEPARTMENT_FIELD,
+  'COMPANY_ID', 'ASSIGNED_BY_ID', REAL_CONTRACT_DATE_FIELD, INSTRUMENT_FIELD, DEPARTMENT_FIELD, MANUF_FIELD,
 ];
+
+// Вшитый резерв ID→бренд (на случай, если userfield.list недоступен). Основной
+// источник — динамический fetch ниже, чтобы новые бренды подхватывались сами.
+const MANUF_FALLBACK = {
+  '2860': 'Agilent Technologies', '2861': 'Metrohm', '2862': 'Malvern Panalytical', '2863': 'LECO', '2864': 'Wasson',
+  '2865': 'LNI', '2866': 'Peak Scientific', '2867': 'Metrohm Autolab', '2868': 'Metrohm DropSens', '2869': 'Agilent Cell Analysis',
+  '2870': 'Agilent Vacuum pump', '8212': 'PowTeq', '2871': 'ELGA LabWater', '8240': 'Struers', '5796': 'Waters', '2872': 'Другое',
+  '8360': 'Sciaps', '8361': 'Belaquilon', '8362': 'Snol', '8363': 'Labtech', '8364': 'Biobase', '8365': 'Environmental Express',
+  '8366': 'Mettler Toledo', '8367': 'Athena Instruments Pvt Ltd', '8368': 'Everfuge', '8369': 'Glass Expansion', '8370': 'Sciencix',
+  '8371': 'LGC Standards', '8372': 'KUKA', '8443': 'OLYMPUS', '8815': 'Sartorius',
+};
+
+// Схлопывание под-брендов одного производителя (для отчёта «по производителям»).
+// Убери запись, если хочешь видеть их раздельно.
+const MANUF_NORMALIZE = {
+  'Agilent Technologies': 'Agilent', 'Agilent Cell Analysis': 'Agilent', 'Agilent Vacuum pump': 'Agilent',
+  'Metrohm Autolab': 'Metrohm', 'Metrohm DropSens': 'Metrohm',
+};
+const normManuf = name => (name ? (MANUF_NORMALIZE[name] || name) : name);
+
+// Карта ID→бренд из определения поля (кэш 6ч, новые бренды подхватятся сами).
+let manufMapCache = null, manufMapAt = 0;
+async function getManufacturerMap() {
+  if (manufMapCache && Date.now() - manufMapAt < 6 * 3600 * 1000) return manufMapCache;
+  try {
+    const { result } = await b24('crm.deal.userfield.list', { filter: { FIELD_NAME: MANUF_FIELD } });
+    const f = (result || [])[0];
+    const map = {};
+    (f?.LIST || []).forEach(it => { map[String(it.ID)] = it.VALUE; });
+    if (Object.keys(map).length) { manufMapCache = map; manufMapAt = Date.now(); return map; }
+  } catch (e) { console.error('getManufacturerMap error:', e.message); }
+  manufMapCache = MANUF_FALLBACK; manufMapAt = Date.now();
+  return MANUF_FALLBACK;
+}
 
 const companyIndustryCache = new Map();
 async function getCompanyIndustry(companyId) {
@@ -43,7 +81,11 @@ async function getManufacturer(instrumentName) {
 
 async function upsertDeal(d) {
   const instrumentName = d[INSTRUMENT_FIELD] || null;
-  const manufacturer = await getManufacturer(instrumentName);
+  // Производитель — напрямую из поля-списка (ID→бренд). Если поле пустое —
+  // фолбэк на старую карту «прибор→производитель» ради покрытия старых сделок.
+  const manufMap = await getManufacturerMap();
+  const rawManuf = d[MANUF_FIELD] ? (manufMap[String(d[MANUF_FIELD])] || null) : null;
+  const manufacturer = normManuf(rawManuf) || (await getManufacturer(instrumentName));
   const industry = await getCompanyIndustry(d.COMPANY_ID);
   const contractDate = d[REAL_CONTRACT_DATE_FIELD] ? d[REAL_CONTRACT_DATE_FIELD].slice(0, 10) : null;
 
