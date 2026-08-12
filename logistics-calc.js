@@ -168,10 +168,8 @@ async function dealMapFor(dealIds) {
   return map;
 }
 
-let boardCache = null, boardAt = 0;
-async function getBoard(force) {
-  if (!force && boardCache && Date.now() - boardAt < 10 * 60 * 1000) return boardCache;
-
+let boardCache = null, boardAt = 0, _refreshP = null;
+async function computeBoard() {
   // 1) Закупки (активные — без FAIL/переноса плановой даты как отдельного «провала»)
   const purch = await itemList(1066, 13, ['id', 'title', 'stageId', 'movedTime', 'assignedById', 'parentId2',
     'opportunity', 'currencyId', 'begindate', 'closedate', F1066.ship, F1066.track, F1066.trackUrl, F1066.needInstall, F1066.cityCountry, F1066.po,
@@ -321,8 +319,26 @@ async function getBoard(force) {
       done: orders.filter(o => o.done).length,
     },
   };
-  boardCache = board; boardAt = Date.now();
   return board;
 }
 
-module.exports = { getBoard, MILESTONES };
+// refreshBoard — принудительный пересчёт с записью в кэш; параллельные вызовы
+// (кнопка «Обновить» + фоновый таймер) переиспользуют один и тот же запуск.
+function refreshBoard() {
+  if (_refreshP) return _refreshP;
+  _refreshP = computeBoard()
+    .then(b => { boardCache = b; boardAt = Date.now(); return b; })
+    .finally(() => { _refreshP = null; });
+  return _refreshP;
+}
+
+// getBoard — отдаёт кэш МГНОВЕННО (не блокирует загрузку страницы тяжёлым
+// пересчётом). Живой пересчёт только: (1) если кэша ещё нет — первый прогрев,
+// (2) force=1 — кнопка «Обновить». В фоне кэш освежает планировщик (server.js).
+async function getBoard(force) {
+  if (force) return refreshBoard();
+  if (boardCache) return boardCache;
+  return refreshBoard();
+}
+
+module.exports = { getBoard, refreshBoard, MILESTONES };

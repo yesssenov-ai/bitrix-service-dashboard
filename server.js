@@ -518,17 +518,24 @@ initDB().then(() => {
     // приходят через вебхук ONCRMDEALADD/UPDATE (см. relations-routes).
     const { fullSync: operationalFullSync } = require('./operational-sync');
     setTimeout(() => operationalFullSync({ source: 'boot' }).catch(e => console.error('operational boot sync error:', e.message)), 20000);
+    // Логистика: считается тяжело (~1 мин), поэтому НЕ на каждый заход страницы, а
+    // в фоне — прогрев кэша на старте + освежение раз в час. Страница отдаёт кэш
+    // мгновенно; кнопка «Обновить» пересчитывает по требованию.
+    const { refreshBoard: refreshLogistics } = require('./logistics-calc');
+    setTimeout(() => refreshLogistics().catch(e => console.error('logistics boot refresh error:', e.message)), 25000);
+    setInterval(() => refreshLogistics().catch(e => console.error('logistics hourly refresh error:', e.message)), 60 * 60 * 1000);
     let lastOpSyncDate = null;
     setInterval(() => {
       const now = new Date();
       const dateKey = now.toISOString().slice(0, 10);
       if (now.getUTCHours() === 20 && lastOpSyncDate !== dateKey) {
         lastOpSyncDate = dateKey;
-        // 01:00 Кызылорда: сначала операционная сверка, затем — статистика
-        // (последовательно, чтобы не долбить Битрикс двумя прогонами разом).
+        // 01:00 Кызылорда, последовательно (чтобы не долбить Битрикс разом):
+        // операционная сверка → статистика → полный пересбор логистики.
         operationalFullSync({ source: 'nightly' })
           .catch(e => console.error('operational nightly sync error:', e.message))
-          .finally(() => fullSyncStatsDeals().catch(e => console.error('stats nightly sync error:', e.message)));
+          .then(() => fullSyncStatsDeals().catch(e => console.error('stats nightly sync error:', e.message)))
+          .then(() => refreshLogistics().catch(e => console.error('logistics nightly refresh error:', e.message)));
       }
     }, 5 * 60 * 1000);
     // Planner ↔ Bitrix reconciliation — webhooks are best-effort, this catches
