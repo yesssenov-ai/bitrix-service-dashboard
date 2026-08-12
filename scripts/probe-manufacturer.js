@@ -1,73 +1,69 @@
-// Проверка: резолвится ли поле «Производитель» через API (ID значения → имя бренда).
-// Если да — робот в Битриксе не нужен, чиним только код.
+// Проверка v2: поле «Производитель» — тип iblock_element (на сделке лежит ID
+// элемента справочника-инфоблока). Пытаемся прочитать справочник через lists.*
+// и собрать карту ID→имя. Если получится — робот не нужен, чиним код.
 //
-// ЗАПУСК: положи в scripts/, задеплой, потом в Railway Console:
-//   node scripts/probe-manufacturer.js
-// (нужен только BITRIX_WEBHOOK в окружении; БД не трогает)
-
+// ЗАПУСК (нужен только BITRIX_WEBHOOK): node scripts/probe-manufacturer.js
 const { b24 } = require('../bitrix');
 
-const MANUF_CODE = 'UF_CRM_1731862648';     // Производитель (по памяти)
-const INSTR_CODE = 'UF_CRM_NAME_PRIOBOR';   // Название прибора
+const MANUF_CODE = 'UF_CRM_1731862648';
+const INSTR_CODE = 'UF_CRM_NAME_PRIOBOR';
 
-const lbl = f => {
-  const v = f.EDIT_FORM_LABEL || f.LIST_COLUMN_LABEL || f.FIELD_NAME;
-  return typeof v === 'object' ? (v.ru || v.en || Object.values(v)[0] || '') : v;
-};
+async function call(m, p) { try { return await b24(m, p || {}); } catch (e) { return { __error: e.message }; } }
 
 async function main() {
-  // 1) Все пользовательские поля сделок — находим «Производитель» и «Название прибора»
-  const resp = await b24('crm.deal.userfield.list', {});
-  const fields = resp.result || [];
-  console.log(`Всего пользовательских полей сделок: ${fields.length}`);
+  const fields = (await call('crm.deal.userfield.list', {})).result || [];
+  const manuf = fields.find(f => f.FIELD_NAME === MANUF_CODE);
+  if (!manuf) { console.log('❌ поле не найдено'); return; }
 
-  const byCode = code => fields.find(f => f.FIELD_NAME === code);
-  const byLabel = re => fields.filter(f => re.test(lbl(f)) || re.test(f.FIELD_NAME));
+  console.log('=== Настройки поля «Производитель» ===');
+  console.log('тип:', manuf.USER_TYPE_ID);
+  console.log('SETTINGS:', JSON.stringify(manuf.SETTINGS));
+  const IBLOCK_ID = manuf.SETTINGS?.IBLOCK_ID;
+  const IBLOCK_TYPE_ID = manuf.SETTINGS?.IBLOCK_TYPE_ID;
+  console.log(`→ IBLOCK_ID=${IBLOCK_ID}  IBLOCK_TYPE_ID=${IBLOCK_TYPE_ID}`);
 
-  console.log('\n=== Кандидаты по слову «Произв» ===');
-  for (const f of byLabel(/произв/i)) console.log(`  ${f.FIELD_NAME}  тип=${f.USER_TYPE_ID}  «${lbl(f)}»  значений в списке: ${(f.LIST || []).length}`);
-
-  const manuf = byCode(MANUF_CODE) || byLabel(/произв/i)[0];
-  if (!manuf) { console.log('\n❌ Поле «Производитель» не найдено — проверь код'); return; }
-
-  console.log(`\n=== Поле производителя: ${manuf.FIELD_NAME} ===`);
-  console.log(`тип (USER_TYPE_ID): ${manuf.USER_TYPE_ID}`);
-  const list = manuf.LIST || [];
-  console.log(`значений в справочнике (LIST): ${list.length}`);
-  if (list.length) {
-    console.log('первые значения (ID → имя):');
-    list.slice(0, 45).forEach(it => console.log(`   ${it.ID}  →  ${it.VALUE}`));
-  } else {
-    console.log('⚠️  LIST пустой — это НЕ обычное перечисление, значит через API имя не достать (нужен робот).');
+  // Пробуем прочитать элементы справочника разными способами
+  const typeGuesses = [IBLOCK_TYPE_ID, 'lists', 'bitrix_processes', 'lists_socnet'].filter(Boolean);
+  let elements = null, usedType = null;
+  for (const t of [...new Set(typeGuesses)]) {
+    const r = await call('lists.element.get', { IBLOCK_TYPE_ID: t, IBLOCK_ID, ELEMENT_ORDER: { ID: 'ASC' } });
+    if (r.__error) { console.log(`  lists.element.get(type=${t}) → ошибка: ${r.__error}`); continue; }
+    if (Array.isArray(r.result) && r.result.length) { elements = r.result; usedType = t; console.log(`  ✅ прочитано через IBLOCK_TYPE_ID=${t}: элементов ${r.result.length}`); break; }
+    console.log(`  lists.element.get(type=${t}) → пусто`);
   }
-  const id2name = Object.fromEntries(list.map(it => [String(it.ID), it.VALUE]));
 
-  // 2) Сырые значения на реальных сделках + попытка резолва
-  const deals = (await b24('crm.deal.list', {
-    filter: { [`!${manuf.FIELD_NAME}`]: '', '@CATEGORY_ID': ['0', '1', '2', '3'] },
-    select: ['ID', 'TITLE', manuf.FIELD_NAME, INSTR_CODE],
-    order: { ID: 'DESC' },
+  const id2name = {};
+  if (elements) {
+    console.log('\n=== Справочник производителей (ID → имя) ===');
+    for (const el of elements) {
+      const id = el.ID || el.id;
+      const name = el.NAME || el.name || (el.PROPERTY_ && Object.values(el.PROPERTY_)[0]);
+      id2name[String(id)] = name;
+      console.log(`   ${id}  →  ${name}`);
+    }
+  }
+
+  // Сырые значения на сделках + резолв
+  const deals = (await call('crm.deal.list', {
+    filter: { [`!${MANUF_CODE}`]: '', '@CATEGORY_ID': ['0', '1', '2', '3'] },
+    select: ['ID', MANUF_CODE, INSTR_CODE], order: { ID: 'DESC' },
   })).result || [];
-
-  console.log(`\n=== Сырые значения на ${Math.min(deals.length, 20)} последних сделках ===`);
-  let hit = 0, total = 0;
+  console.log(`\n=== Сырые значения (20 сделок) ===`);
+  let hit = 0, tot = 0;
   for (const d of deals.slice(0, 20)) {
-    const raw = d[manuf.FIELD_NAME];
-    const rawArr = Array.isArray(raw) ? raw : [raw];
-    total++;
-    const resolved = rawArr.map(v => id2name[String(v)] || `?(${v})`).join(', ');
-    if (rawArr.every(v => id2name[String(v)])) hit++;
-    console.log(`  #${d.ID}  сырое=${JSON.stringify(raw)}  → ${resolved}   [прибор: ${d[INSTR_CODE] || '—'}]`);
+    const raw = d[MANUF_CODE]; tot++;
+    const name = id2name[String(raw)];
+    if (name) hit++;
+    console.log(`  #${d.ID}  ID=${raw}  →  ${name || '?'}   [прибор: ${d[INSTR_CODE] || '—'}]`);
   }
 
-  console.log(`\n=== ИТОГ ===`);
-  if (list.length && total && hit === total) {
-    console.log(`✅ РЕЗОЛВИТСЯ: ${hit}/${total}. Значения — это ID из LIST, имя достаётся напрямую. Робот НЕ нужен — правим только код.`);
-  } else if (list.length && hit > 0) {
-    console.log(`⚠️  ЧАСТИЧНО: ${hit}/${total} резолвится через LIST, остальное — нет. Пришли вывод, разберёмся.`);
+  console.log('\n=== ИТОГ ===');
+  if (elements && hit === tot && tot > 0) {
+    console.log(`✅ СПРАВОЧНИК ЧИТАЕТСЯ (${elements.length} брендов), резолв ${hit}/${tot}. Робот НЕ нужен — я захардкожу карту ID→бренд и правлю код. Пришли мне ВЕСЬ список «ID → имя» выше.`);
+  } else if (elements && hit > 0) {
+    console.log(`⚠️ читается частично (${hit}/${tot}). Пришли вывод.`);
   } else {
-    console.log(`❌ НЕ РЕЗОЛВИТСЯ через API: сырые значения не совпадают с ID из справочника. Идём роботом, как договаривались.`);
+    console.log(`❌ справочник через lists.* не читается (обычный инфоблок, как оплата клиента). Тогда либо робот, либо ты дашь мне список ID→бренд из админки инфоблока. Пришли строки SETTINGS и ошибки выше.`);
   }
 }
-
 main().then(() => process.exit(0)).catch(e => { console.error('Ошибка:', e.message); process.exit(1); });
