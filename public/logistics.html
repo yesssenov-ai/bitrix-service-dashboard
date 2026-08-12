@@ -66,6 +66,24 @@
   .grouptoggle{display:flex;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:11px;padding:2px;height:40px}
   .grouptoggle button{background:transparent;border:0;color:var(--dim);font:inherit;font-size:12.5px;font-weight:600;padding:0 14px;border-radius:9px;cursor:pointer;transition:.15s}
   .grouptoggle button.on{background:linear-gradient(135deg,var(--brand),#e01e45);color:#fff}
+  .viewtabs{display:flex;gap:8px;margin-bottom:14px}
+  .viewtabs button{background:var(--panel);border:1px solid var(--border);color:var(--dim);font:inherit;font-size:13.5px;font-weight:700;padding:9px 18px;border-radius:12px;cursor:pointer;transition:.2s}
+  .viewtabs button:hover{color:var(--text);border-color:rgba(255,255,255,.16)}
+  .viewtabs button.on{color:#fff;background:linear-gradient(135deg,var(--brand),#e01e45);border-color:transparent;box-shadow:0 8px 22px -8px rgba(255,45,85,.6)}
+  .dimctrl{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+  .dimctrl .lb{font-size:12px;color:var(--dim2);font-weight:600}
+  .dimctrl button{background:var(--panel);border:1px solid var(--border);color:var(--dim);font:inherit;font-size:12.5px;font-weight:600;padding:7px 13px;border-radius:10px;cursor:pointer;transition:.15s}
+  .dimctrl button.on{background:rgba(91,140,255,.15);border-color:rgba(91,140,255,.4);color:#9db8ff}
+  .mwrap{overflow:auto;max-height:72vh;background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:10px 12px;backdrop-filter:blur(14px)}
+  .mtable{width:100%;border-collapse:separate;border-spacing:3px;font-size:12px}
+  .mtable th{font-size:10px;color:var(--dim2);font-weight:700;padding:6px 6px;position:sticky;top:0;background:#0b1220;z-index:2}
+  .mtable th .ic{display:block;font-size:14px;margin-bottom:2px}
+  .mtable td{text-align:center;padding:7px 6px;border-radius:7px;font-weight:700;font-variant-numeric:tabular-nums;color:#fff}
+  .mtable th.grp,.mtable td.grp{text-align:left;position:sticky;left:0;background:#0b1220;z-index:1;min-width:150px;color:var(--text);font-weight:600}
+  .mtable th.grp{z-index:3}
+  .mtable td.muted{color:var(--dim2);background:rgba(255,255,255,.02)}
+  .mtable tr.tot td{border-top:2px solid var(--border);background:rgba(255,255,255,.04);font-weight:800}
+  .mhint{font-size:11.5px;color:var(--dim2);margin:10px 2px 0}
 
   .chipbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:12px;min-height:24px}
   .chip{display:inline-flex;align-items:center;gap:8px;background:rgba(255,45,85,.12);border:1px solid rgba(255,45,85,.3);border-radius:20px;padding:6px 8px 6px 12px;font-size:12.5px;font-weight:600}
@@ -161,11 +179,14 @@
     </div>
   </header>
 
+  <div class="viewtabs" id="viewtabs"><button data-v="orders" class="on">📦 Заказы</button><button data-v="metrics">📊 Метрики</button></div>
+
   <div class="kpis" id="kpis"></div>
 
   <div class="searchrow"><input class="search" id="search" placeholder="Сквозной поиск: PO, прибор, производитель, компания, № сделки, трек…" oninput="onSearch(this.value)"></div>
 
   <div class="filterbar">
+    <div class="fsel" style="flex:0 0 120px;min-width:110px"><label>Год (договор)</label><div class="ms" data-k="year"><div class="ms-btn" onclick="toggleMS('year')"><span class="ms-lab">Все</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div><div class="ms-panel"><div class="ms-opts"></div></div></div></div>
     <div class="fsel"><label>Производитель</label><div class="ms" data-k="manuf"><div class="ms-btn" onclick="toggleMS('manuf')"><span class="ms-lab">Все</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div><div class="ms-panel"><input class="ms-search" placeholder="Поиск…" oninput="msSearch('manuf',this.value)"><div class="ms-opts"></div></div></div></div>
     <div class="fsel"><label>Отдел</label><div class="ms" data-k="dept"><div class="ms-btn" onclick="toggleMS('dept')"><span class="ms-lab">Все</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div><div class="ms-panel"><div class="ms-opts"></div></div></div></div>
     <div class="fsel"><label>Менеджер</label><div class="ms" data-k="manager"><div class="ms-btn" onclick="toggleMS('manager')"><span class="ms-lab">Все</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div><div class="ms-panel"><input class="ms-search" placeholder="Поиск…" oninput="msSearch('manager',this.value)"><div class="ms-opts"></div></div></div></div>
@@ -189,8 +210,9 @@ const hideTip=()=>tip.style.opacity=0;
 (function(){const s=document.getElementById('spotlight');addEventListener('pointermove',e=>{s.style.left=e.clientX+'px';s.style.top=e.clientY+'px';s.style.opacity=1;},{passive:true});addEventListener('pointerleave',()=>s.style.opacity=0);})();
 
 let BOARD=null,MS=[],PHC={},SEC=[],ORDERS=[];
-const FILT={manuf:[],dept:[],manager:[],status:[]}, MSOPTS={manuf:[],dept:[],manager:[],status:[]};
-let QUICK='critical', GROUP='flat', SEARCH='';
+const FILT={year:[],manuf:[],dept:[],manager:[],status:[]}, MSOPTS={year:[],manuf:[],dept:[],manager:[],status:[]};
+const orderYear=o=>o.contractDate?o.contractDate.slice(0,4):'—';
+let QUICK='critical', GROUP='flat', SEARCH='', VIEW='orders', DIM='manager';
 
 async function load(force){
   const L=document.getElementById('loading');L.style.display='flex';
@@ -208,40 +230,45 @@ async function load(force){
 document.getElementById('refreshBtn').onclick=()=>load(true);
 
 // ── фильтры (мультиселект) + сквозной поиск ──
+const passYear=o=>!FILT.year.length||FILT.year.includes(orderYear(o));
 const passManuf=o=>!FILT.manuf.length||FILT.manuf.includes(o.manufacturer);
 const passDept=o=>!FILT.dept.length||FILT.dept.includes(o.dept);
 const passMgr=o=>!FILT.manager.length||FILT.manager.includes(o.managerDeal)||FILT.manager.includes(o.managerPurch);
 const passStatus=o=>!FILT.status.length||FILT.status.includes(o.milestoneKey);
 function passQuick(o){switch(QUICK){case'critical':return o.critical;case'inTransit':return o.milestone===5;case'arrivingSoon':return o.arrivingSoon;case'atCustoms':return o.milestone===6;case'atWarehouse':return o.milestone===7;case'overdue':return o.deadlineOverdue;default:return true;}}
 function passSearch(o){if(!SEARCH)return true;const q=SEARCH;return [o.po,o.instrument,o.manufacturer,o.dept,o.dealTitle,o.tracking,o.managerDeal,o.managerPurch,o.cityCountry,o.id,o.dealId].some(v=>v!=null&&String(v).toLowerCase().includes(q));}
-const getFiltered=()=>ORDERS.filter(o=>passManuf(o)&&passDept(o)&&passMgr(o)&&passStatus(o)&&passQuick(o)&&passSearch(o));
-function onSearch(v){SEARCH=(v||'').trim().toLowerCase();renderChip();renderList();}
+const getFiltered=()=>ORDERS.filter(o=>passYear(o)&&passManuf(o)&&passDept(o)&&passMgr(o)&&passStatus(o)&&passQuick(o)&&passSearch(o));
+function onSearch(v){SEARCH=(v||'').trim().toLowerCase();renderChip();renderMain();}
 
 function buildFilters(){
+  const years=[...new Set(ORDERS.map(orderYear).filter(y=>y&&y!=='—'))].sort((a,b)=>b.localeCompare(a));
   const manufs=[...new Set(ORDERS.map(o=>o.manufacturer).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
   const depts=[...new Set(ORDERS.map(o=>o.dept).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
   const mgrs=[...new Set(ORDERS.flatMap(o=>[o.managerDeal,o.managerPurch]).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
   const stset=[...new Set(ORDERS.map(o=>o.milestoneKey))];
+  MSOPTS.year=years.map(y=>({v:y,l:y}));
   MSOPTS.manuf=manufs.map(m=>({v:m,l:m}));
   MSOPTS.dept=depts.map(d=>({v:d,l:d}));
   MSOPTS.manager=mgrs.map(m=>({v:m,l:m}));
   MSOPTS.status=MS.filter(m=>stset.includes(m.key)).map(m=>({v:m.key,l:m.label,c:PHC[m.phase]}));
-  FILT.manuf=FILT.manuf.filter(v=>manufs.includes(v));FILT.dept=FILT.dept.filter(v=>depts.includes(v));FILT.manager=FILT.manager.filter(v=>mgrs.includes(v));FILT.status=FILT.status.filter(v=>stset.includes(v));
-  ['manuf','dept','manager','status'].forEach(renderMS);
+  FILT.year=FILT.year.filter(v=>years.includes(v));FILT.manuf=FILT.manuf.filter(v=>manufs.includes(v));FILT.dept=FILT.dept.filter(v=>depts.includes(v));FILT.manager=FILT.manager.filter(v=>mgrs.includes(v));FILT.status=FILT.status.filter(v=>stset.includes(v));
+  ['year','manuf','dept','manager','status'].forEach(renderMS);
 }
 function msLabel(k){const s=FILT[k];if(!s.length)return'Все';if(s.length===1){const o=MSOPTS[k].find(o=>String(o.v)===String(s[0]));return o?o.l:s[0];}return 'Выбрано: '+s.length;}
 function renderMS(k){const box=document.querySelector(`.ms[data-k="${k}"]`);if(!box)return;const sel=FILT[k].map(String);
   box.querySelector('.ms-lab').textContent=msLabel(k);box.closest('.fsel').classList.toggle('act',!!FILT[k].length);
   box.querySelector('.ms-opts').innerHTML=MSOPTS[k].map(o=>`<label class="ms-opt"><input type="checkbox" ${sel.includes(String(o.v))?'checked':''} onchange="msToggle('${k}','${String(o.v).replace(/'/g,"\\'")}')">${o.c?`<span class="msw" style="background:${o.c}"></span>`:''}<span>${esc(o.l)}</span></label>`).join('')||'<div style="color:var(--dim2);font-size:12px;padding:8px">нет</div>';}
-function msToggle(k,v){const a=FILT[k];const i=a.indexOf(v);if(i>=0)a.splice(i,1);else a.push(v);const box=document.querySelector(`.ms[data-k="${k}"]`);box.querySelector('.ms-lab').textContent=msLabel(k);box.closest('.fsel').classList.toggle('act',!!a.length);renderChip();renderList();}
+function msToggle(k,v){const a=FILT[k];const i=a.indexOf(v);if(i>=0)a.splice(i,1);else a.push(v);const box=document.querySelector(`.ms[data-k="${k}"]`);box.querySelector('.ms-lab').textContent=msLabel(k);box.closest('.fsel').classList.toggle('act',!!a.length);renderChip();renderMain();}
 function toggleMS(k){const box=document.querySelector(`.ms[data-k="${k}"]`);const open=box.classList.contains('open');document.querySelectorAll('.ms.open').forEach(b=>b.classList.remove('open'));if(!open)box.classList.add('open');}
 function msSearch(k,q){q=(q||'').toLowerCase();document.querySelectorAll(`.ms[data-k="${k}"] .ms-opt`).forEach(o=>o.style.display=o.textContent.toLowerCase().includes(q)?'':'none');}
 document.addEventListener('click',e=>{if(!e.target.closest('.ms'))document.querySelectorAll('.ms.open').forEach(b=>b.classList.remove('open'));});
-function clearFilter(k){FILT[k]=[];renderMS(k);renderChip();renderList();}
+function clearFilter(k){FILT[k]=[];renderMS(k);renderChip();renderMain();}
 
 document.getElementById('groupToggle').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;GROUP=b.dataset.g;document.querySelectorAll('#groupToggle button').forEach(x=>x.classList.toggle('on',x===b));renderList();});
 
-function renderAll(){renderKpis();renderChip();renderList();}
+document.getElementById('viewtabs').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;VIEW=b.dataset.v;document.querySelectorAll('#viewtabs button').forEach(x=>x.classList.toggle('on',x===b));renderMain();});
+function renderMain(){if(VIEW==='metrics')renderMetrics();else renderList();}
+function renderAll(){renderKpis();renderChip();renderMain();}
 
 function renderKpis(){
   const k=BOARD.kpi;
@@ -255,11 +282,12 @@ function renderKpis(){
   ];
   document.getElementById('kpis').innerHTML=items.map(it=>`<div class="kpi${QUICK===it.q&&it.q?' on':''}" onclick="setQuick(${it.q?`'${it.q}'`:'null'})"><span class="kd" style="background:${it.c}"></span><div class="kv tabular" style="color:${it.c}">${it.v}</div><div class="kl">${it.l}</div></div>`).join('');
 }
-function setQuick(q){QUICK=(QUICK===q)?null:q;renderKpis();renderChip();renderList();}
+function setQuick(q){QUICK=(QUICK===q)?null:q;renderKpis();renderChip();renderMain();}
 
 function renderChip(){
   const c=document.getElementById('chipbar');const chips=[];
   if(QUICK){const lbl={critical:'Критические',inTransit:'В пути',arrivingSoon:'Подлетают',atCustoms:'На таможне',atWarehouse:'На складе',overdue:'Просрочка по договору'}[QUICK];chips.push(`<span class="chip">${lbl} <span class="x" onclick="setQuick('${QUICK}')">✕</span></span>`);}
+  if(FILT.year.length)chips.push(`<span class="chip">Год: ${esc(FILT.year.join(', '))} <span class="x" onclick="clearFilter('year')">✕</span></span>`);
   if(FILT.manuf.length)chips.push(`<span class="chip">Производитель: ${esc(FILT.manuf.join(', '))} <span class="x" onclick="clearFilter('manuf')">✕</span></span>`);
   if(FILT.dept.length)chips.push(`<span class="chip">Отдел: ${esc(FILT.dept.join(', '))} <span class="x" onclick="clearFilter('dept')">✕</span></span>`);
   if(FILT.manager.length)chips.push(`<span class="chip">Менеджер: ${esc(FILT.manager.join(', '))} <span class="x" onclick="clearFilter('manager')">✕</span></span>`);
@@ -299,19 +327,19 @@ function orderCard(o){
   else if(o.milestone===6){phaseTxt=o.customsExpected?`ожид. очистка ${dfmt(o.customsExpected)}`:'на таможне';}
   else if(o.milestone===7){phaseTxt=o.warehouseDate?`на складе с ${dfmt(o.warehouseDate)}`:'на складе';}
   else if(o.shipDate){phaseTxt=`отгружен ${dfmt(o.shipDate)}`;}
-  // договорной срок (SLA): контракт + 90/180
+  // договорной срок (SLA): контракт + 90/180 → дата сдачи клиенту
   let slaTxt='';
   if(o.done)slaTxt=`<span style="color:var(--good)">✓ доставлено</span>`;
-  else if(o.deadline)slaTxt=o.deadlineOverdue?`<span class="over">⚠ просрочка по договору ${Math.abs(o.deadlineLeft)} дн</span>`
-    :o.deadlineSoon?`<span class="soon">по договору: ${o.deadlineLeft} дн до ${dfmt(o.deadline)}</span>`
-    :`по договору: <b>${o.deadlineLeft}</b> дн · до ${dfmt(o.deadline)}`;
+  else if(o.deadline)slaTxt=`🎯 сдать до <b>${dfmt(o.deadline)}</b> · `+(o.deadlineOverdue?`<span class="over">просрочка ${Math.abs(o.deadlineLeft)} дн</span>`
+    :o.deadlineSoon?`<span class="soon">осталось ${o.deadlineLeft} дн</span>`
+    :`осталось <b>${o.deadlineLeft}</b> дн`);
   const mgr=[o.managerDeal,o.managerPurch].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(' · ');
   const cls='order'+(o.done?' done':o.deadlineOverdue?' overdue':(o.deadlineSoon||o.arrivingSoon)?' soon':'');
   const titleMain=`${o.po?`<span class="po">PO ${esc(o.po)}</span> · `:''}${esc(o.instrument||o.dealTitle||('Заказ #'+o.id))} <span class="arr">↗</span>`;
   return `<div class="${cls}">
     <div class="o-head">
       <div class="o-title"><a class="o-instr" href="${o.purchUrl||'#'}" target="_blank" title="Открыть закупку в Bitrix">${titleMain}</a>
-        <div class="o-meta">${esc(o.manufacturer||'')}${o.manufacturer?' · ':''}${esc(mgr||'—')}${o.cityCountry?' · '+esc(o.cityCountry):''} · закупка #${o.id}</div></div>
+        <div class="o-meta">${esc(o.manufacturer||'')}${o.manufacturer?' · ':''}${esc(mgr||'—')}${o.cityCountry?' · '+esc(o.cityCountry):''}${o.contractDate?' · договор '+dfmt(o.contractDate):''} · закупка #${o.id}</div></div>
       <div class="o-badges">
         <span class="badge dept">${esc(o.dept)}</span>
         ${o.licensed?'<span class="badge lic" title="Лицензируемый товар · срок по договору 180 дн">лицензия · 180д</span>':''}
@@ -353,6 +381,40 @@ function renderList(){
   // анимация заполнения линии
   requestAnimationFrame(()=>document.querySelectorAll('.route-fill').forEach(f=>{const w=f.style.width;f.style.width='0';requestAnimationFrame(()=>f.style.width=w);}));
 }
+
+// ── МЕТРИКИ: среднее время на этапах по менеджеру/прибору/производителю/отделу ──
+const getFilteredM=()=>ORDERS.filter(o=>passYear(o)&&passManuf(o)&&passDept(o)&&passMgr(o)&&passStatus(o)&&passSearch(o));
+const DIMS={manager:{l:'Менеджер',get:o=>o.managerDeal||o.managerPurch||'—'},instrument:{l:'Прибор',get:o=>o.instrument||'—'},manuf:{l:'Производитель',get:o=>o.manufacturer||'—'},dept:{l:'Отдел',get:o=>o.dept||'—'}};
+function heatRGB(t){t=Math.max(0,Math.min(1,t));let r,g,b;if(t<0.5){const u=t/0.5;r=34+(255-34)*u;g=201+(176-201)*u;b=163+(32-163)*u;}else{const u=(t-0.5)/0.5;r=255;g=176+(91-176)*u;b=32+(110-32)*u;}return [Math.round(r),Math.round(g),Math.round(b)];}
+function renderMetrics(){
+  const box=document.getElementById('list');
+  const rows=getFilteredM();
+  // стадии с длительностью — 1..10 (у 11 длительности нет)
+  const stages=MS.filter(m=>m.i<=10);
+  const dim=DIMS[DIM];
+  const groups={};
+  rows.forEach(o=>{const key=dim.get(o);const g=groups[key]=groups[key]||{key,count:0,sums:{},cnts:{},cycle:[]};g.count++;
+    stages.forEach(m=>{const d=o.stageDurations&&o.stageDurations[m.i];if(d!=null){g.sums[m.i]=(g.sums[m.i]||0)+d;g.cnts[m.i]=(g.cnts[m.i]||0)+1;}});
+    const md=o.milestoneDates||{};if(md[1]&&md[7]){const dd=Math.round((new Date(md[7])-new Date(md[1]))/86400000);if(dd>=0)g.cycle.push(dd);}});
+  const list=Object.values(groups).sort((a,b)=>b.count-a.count);
+  const avg=(g,i)=>g.cnts[i]?g.sums[i]/g.cnts[i]:null;
+  const cycleAvg=g=>g.cycle.length?g.cycle.reduce((a,v)=>a+v,0)/g.cycle.length:null;
+  // границы для теплокарты по каждой стадии
+  const colMinMax={};stages.forEach(m=>{const vals=list.map(g=>avg(g,m.i)).filter(v=>v!=null);colMinMax[m.i]=[Math.min(...vals),Math.max(...vals)];});
+  const cell=(v,mm)=>{if(v==null)return `<td class="muted">—</td>`;const[mn,mx]=mm;const t=mx>mn?(v-mn)/(mx-mn):0;const[r,g,b]=heatRGB(t);return `<td style="background:rgba(${r},${g},${b},.18);color:rgb(${r},${g},${b})">${v.toFixed(v<10?1:0)}<span style="font-size:8px;color:var(--dim2)">д</span></td>`;};
+  // строка «в среднем по всем»
+  const totals={};stages.forEach(m=>{const vals=list.flatMap(g=>{const a=avg(g,m.i);return a!=null?[[a,g.cnts[m.i]]]:[];});const s=vals.reduce((x,[a,c])=>x+a*c,0),c=vals.reduce((x,[,c])=>x+c,0);totals[m.i]=c?s/c:null;});
+  const cyMinMax=[Math.min(...list.map(cycleAvg).filter(v=>v!=null)),Math.max(...list.map(cycleAvg).filter(v=>v!=null))];
+
+  const ctrl=`<div class="dimctrl"><span class="lb">Группировать по:</span>${Object.entries(DIMS).map(([k,d])=>`<button class="${DIM===k?'on':''}" onclick="setDim('${k}')">${d.l}</button>`).join('')}<span class="lb" style="margin-left:auto">строк: ${list.length} · заказов: ${rows.length}</span></div>`;
+  if(!rows.length){box.innerHTML=ctrl+'<div class="empty">Нет данных по выбранным фильтрам</div>';return;}
+  const head=`<tr><th class="grp">${dim.l}</th><th>Зак.</th>${stages.map(m=>`<th><span class="ic">${m.icon}</span>${esc(m.short)}</th>`).join('')}<th><span class="ic">🏁</span>Цикл до склада</th></tr>`;
+  const body=list.map(g=>`<tr><td class="grp">${esc(g.key)}</td><td class="muted">${g.count}</td>${stages.map(m=>cell(avg(g,m.i),colMinMax[m.i])).join('')}${cell(cycleAvg(g),cyMinMax)}</tr>`).join('');
+  const totRow=`<tr class="tot"><td class="grp">Среднее по всем</td><td class="muted">${rows.length}</td>${stages.map(m=>totals[m.i]==null?'<td class="muted">—</td>':`<td>${totals[m.i].toFixed(totals[m.i]<10?1:0)}<span style="font-size:8px;color:var(--dim2)">д</span></td>`).join('')}<td class="muted">—</td></tr>`;
+  box.innerHTML=ctrl+`<div class="mwrap"><table class="mtable"><thead>${head}</thead><tbody>${body}${totRow}</tbody></table></div>`+
+    `<div class="mhint">Число в ячейке — среднее число дней, проведённых на этапе. Цвет: <span style="color:#22c9a3">зелёный</span> быстрее, <span style="color:#ff5b6e">красный</span> дольше (относительно колонки). «Цикл до склада» — от «Заказ размещён» до «Прибыл на склад». Фильтры сверху применяются и к метрикам.</div>`;
+}
+function setDim(k){DIM=k;renderMetrics();}
 
 load();
 </script>
