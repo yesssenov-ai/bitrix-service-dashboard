@@ -407,11 +407,11 @@ function renderConversions(){
     <div class="kpi" style="--kc:var(--good)"><div class="kv">${DN(t.leadToContract.avg)}</div><div class="kl">Средний цикл (Лид→Контракт)</div><div class="ks">${t.leadToContract.n} сделок</div></div>
   </div>`;
   const fmax=Math.max(1,...CONV.funnel.map(f=>f.count));
-  const funnel=`<div class="card"><h3>Конверсия воронки · когорта ${BOARD.year} (${CONV.cohort} сделок)</h3><div class="funnel">${
+  const funnel=`<div class="card"><h3>Конверсия воронки · сделки ${BOARD.year} (${CONV.cohort} сделок)</h3><div class="funnel">${
     CONV.funnel.map((f,i)=>`<div class="frow"><div class="fl">${esc(f.label)}</div>
       <div class="fbar" style="width:${Math.max(4,f.count/fmax*100)}%;--fc:${fcolC[f.step]}">${f.count}</div>
       <div class="fv"><b>${f.fromStart}%</b>${i>0?` <span class="pct">шаг ${f.fromPrev}%</span>`:''}</div></div>`).join('')
-  }</div><div class="hint">Когорта = сделки, впервые вошедшие в воронку в ${BOARD.year}. «%» — доля от старта (P10), «шаг» — конверсия с предыдущей стадии.</div></div>`;
+  }</div><div class="hint">«Сделка» = сделки, впервые вошедшие в воронку в ${BOARD.year}. «%» — доля от старта (P10), «шаг» — конверсия с предыдущей стадии.</div></div>`;
   const timings=`<div class="card"><h3>Среднее время на стадиях</h3><div class="mini">
     <div class="mcell"><div class="mv">${DN(t.p10p30.avg)}</div><div class="ml">P10 → P30</div></div>
     <div class="mcell"><div class="mv">${DN(t.p30p60.avg)}</div><div class="ml">P30 → P60 (до КП)</div></div>
@@ -423,7 +423,7 @@ function renderConversions(){
   return backfill+kpis+funnel+timings
     +convTable('Менеджеры',CONV.byManager)
     +convTable('Отделы',CONV.byDept)
-    +convTable('Приборы (топ-40 по когорте)',CONV.byInstrument);
+    +convTable('Приборы (топ-40 по сделкам)',CONV.byInstrument);
 }
 function convTable(title,rows){
   if(!rows||!rows.length)return '';
@@ -432,7 +432,7 @@ function convTable(title,rows){
     <td><b>${r.convRate}%</b></td><td>${DN(r.avgToKp)}</td><td>${DN(r.avgCycle)}</td></tr>`).join('');
   return `<div class="card" style="padding-bottom:6px"><h3>${esc(title)} · конверсия и цикл</h3>
     <div class="tscroll"><table><thead><tr>
-      <th class="l">${esc(title)}</th><th>Когорта</th><th>КП</th><th>Контракт</th><th>Конв.</th><th>Ср. до КП</th><th>Ср. цикл</th>
+      <th class="l">${esc(title)}</th><th>Сделка</th><th>КП</th><th>Контракт</th><th>Конв.</th><th>Ср. до КП</th><th>Ср. цикл</th>
     </tr></thead><tbody>${body}</tbody></table></div></div>`;
 }
 async function loadConversions(){
