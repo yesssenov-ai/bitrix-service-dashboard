@@ -49,7 +49,15 @@ const MANUF_GROUP = {
 const manufParent = m => MANUF_GROUP[m] || m;
 
 const uname = id => id ? (USERS[id] || `#${id}`) : '—';
-const yr = d => (d ? new Date(d).getFullYear() : null);
+// node-pg отдаёт колонки DATE как JS Date — приводим к строке 'YYYY-MM-DD' надёжно
+// (String(dateObj).slice(0,10) давал бы «Thu Aug 13» и ломал фильтр по году).
+const ymd = v => {
+  if (v == null) return null;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  const s = String(v);
+  return s.length >= 10 ? s.slice(0, 10) : null;
+};
+const yr = d => { if (!d) return null; const n = parseInt(String(d).slice(0, 4), 10); return Number.isNaN(n) ? null : n; };
 
 // ── Основной расчёт борда за год ─────────────────────────────────────────────
 async function computeBoard(year) {
@@ -67,8 +75,8 @@ async function computeBoard(year) {
     instrument: d.instrument_name || '', title: d.deal_title || '',
     companyId: d.company_id, company: d.company_name || (d.company_id ? `Компания #${d.company_id}` : 'Без компании'),
     industry: d.industry || 'Не указана',
-    contractDate: d.contract_date ? String(d.contract_date).slice(0, 10) : null,
-    createDate: d.date_create ? String(d.date_create).slice(0, 10) : null,
+    contractDate: ymd(d.contract_date),
+    createDate: ymd(d.date_create),
   });
 
   const all = rows.map(enrich);
