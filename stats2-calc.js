@@ -3,8 +3,23 @@
 // по производителям, менеджерам, приборам, компаниям и сферам.
 // Конверсии/тайминги (нужна история стадий) — Фаза 2.
 const { pool } = require('./auth');
+const { b24 } = require('./bitrix');
 const { getTodayRate } = require('./nbrk-exchange-rate');
 const { USERS } = require('./constants');
+
+// Справочник сфер деятельности (INDUSTRY): Bitrix хранит код (напр. «3»), а имя
+// берётся из статус-справочника. Кэш 6ч, коды → человеческие названия.
+let _indMap = null, _indAt = 0;
+async function getIndustryMap() {
+  if (_indMap && Date.now() - _indAt < 6 * 3600 * 1000) return _indMap;
+  const map = {};
+  try {
+    const { result } = await b24('crm.status.list', { filter: { ENTITY_ID: 'INDUSTRY' } });
+    (result || []).forEach(s => { map[String(s.STATUS_ID)] = s.NAME; });
+  } catch (e) { /* best-effort — останутся коды */ }
+  _indMap = map; _indAt = Date.now();
+  return map;
+}
 
 // ── Стадии воронки (по выгрузке discover-stages, все 4 воронки) ───────────────
 const RAW = {
@@ -40,6 +55,11 @@ const deptLabel = id => {
 };
 // Категория воронки → крупная группа (приборы/расходка/услуги/обучение)
 const CAT_GROUP = { 0: 'Приборы', 1: 'Расходники', 2: 'Обучение', 3: 'Услуги' };
+// «Направление» для таблицы: приборы (воронка 0) — по полю «Отдел», а расходка/
+// обучение/сервис — это САМИ воронки (1/2/3), считаем их целиком по воронке,
+// а не по полю «Отдел» (которое у них часто пустое → сервис недосчитывался).
+const CAT_DIRECTION = { 1: 'Расходники', 2: 'Обучение', 3: 'Сервис' };
+const direction = (catId, departmentId) => CAT_DIRECTION[catId] || deptLabel(departmentId);
 
 // Под-бренды → родительский бренд
 const MANUF_GROUP = {
@@ -65,16 +85,17 @@ async function computeBoard(year) {
   const kzt = d => (d.currency_id === 'USD' ? (parseFloat(d.opportunity) || 0) * rate : (parseFloat(d.opportunity) || 0));
 
   const { rows } = await pool.query('SELECT * FROM ticketsmodule_stat_deals');
+  const indMap = await getIndustryMap();
 
   // Обогащаем и делим на группы
   const enrich = d => ({
     id: d.deal_id, cat: d.category_id, stage: d.stage_id, step: step(d.stage_id),
-    sum: kzt(d), dept: deptLabel(d.department_id), catGroup: CAT_GROUP[d.category_id] || '—',
+    sum: kzt(d), dept: direction(d.category_id, d.department_id), catGroup: CAT_GROUP[d.category_id] || '—',
     managerId: d.assigned_by_id, manager: uname(d.assigned_by_id),
     manufacturer: d.manufacturer && d.manufacturer !== 'Не определено' ? d.manufacturer : 'Не определено',
     instrument: d.instrument_name || '', title: d.deal_title || '',
     companyId: d.company_id, company: d.company_name || (d.company_id ? `Компания #${d.company_id}` : 'Без компании'),
-    industry: d.industry || 'Не указана',
+    industry: (d.industry != null && d.industry !== '' ? (indMap[String(d.industry)] || String(d.industry)) : 'Не указана'),
     contractDate: ymd(d.contract_date),
     createDate: ymd(d.date_create),
   });
