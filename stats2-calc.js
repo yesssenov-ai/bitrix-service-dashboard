@@ -103,6 +103,13 @@ async function computeBoard(year) {
   const all = rows.map(enrich);
   const sold = all.filter(d => isSold(d.stage) && yr(d.contractDate) === year);
   const kp = all.filter(d => isKp(d.stage) && yr(d.createDate) === year);
+  // Все продажи (любой год) в компактном виде — для клиентской фильтрации
+  // вкладки «Компании» по году / отделу / менеджеру.
+  const soldAll = all.filter(d => isSold(d.stage)).map(d => ({
+    cId: d.companyId, co: d.company, ind: d.industry, y: yr(d.contractDate),
+    dept: d.dept, mId: d.managerId, mgr: d.manager,
+    cat: d.catGroup, manuf: d.manufacturer, instr: d.instrument, sum: d.sum,
+  }));
 
   return {
     year, rate,
@@ -120,6 +127,7 @@ async function computeBoard(year) {
     instrumentsSold: byInstrument(sold),
     instrumentsKp: byInstrument(kp),
     companies: byCompany(sold),
+    companyDeals: soldAll,
     spheres: bySphere(sold),
     years: [...new Set(all.map(d => yr(d.contractDate)).filter(Boolean))].sort((a, b) => b - a),
   };
@@ -259,4 +267,115 @@ function topEntries(obj) {
   return Object.entries(obj).map(([k, v]) => ({ key: k, sum: v })).sort((a, b) => b.sum - a.sum);
 }
 
-module.exports = { computeBoard };
+// ── Фаза 2: реальные конверсии и тайминги по истории стадий ──────────────────
+// Читает ticketsmodule_stage_history (моменты входа в стадии) + атрибуцию
+// (менеджер/отдел/прибор) из зеркала сделок. Считает по когорте: сделки,
+// чей ПЕРВЫЙ вход в воронку пришёлся на выбранный год.
+const CONV_ORD = { P10: 0, P30: 1, P60: 2, P80: 3, CONTRACT: 4, EXEC: 4, WON: 5 };
+const MS_DAY = 86400000;
+const tms = v => { if (v == null) return NaN; if (v instanceof Date) return v.getTime(); const t = Date.parse(String(v)); return t; };
+
+async function computeConversions(year) {
+  const { rows: hist } = await pool.query('SELECT deal_id, stage_id, created_time FROM ticketsmodule_stage_history');
+  if (!hist.length) return { year, hasData: false };
+
+  // Атрибуция из зеркала (менеджер / отдел / прибор).
+  const { rows: dealRows } = await pool.query(
+    'SELECT deal_id, category_id, assigned_by_id, department_id, instrument_name FROM ticketsmodule_stat_deals'
+  );
+  const attr = {};
+  for (const d of dealRows) {
+    attr[d.deal_id] = {
+      managerId: d.assigned_by_id, manager: uname(d.assigned_by_id),
+      dept: direction(d.category_id, d.department_id),
+      instrument: d.instrument_name || '—',
+    };
+  }
+
+  // Группируем входы в стадии по сделке (только прогрессивные стадии; LOSE/FROZEN игнорим).
+  const byDeal = {};
+  const unmapped = {};
+  for (const h of hist) {
+    const st = step(h.stage_id);
+    if (st == null) { const k = h.stage_id || '∅'; unmapped[k] = (unmapped[k] || 0) + 1; continue; }
+    if (CONV_ORD[st] == null) continue;
+    const t = tms(h.created_time);
+    if (Number.isNaN(t)) continue;
+    (byDeal[h.deal_id] = byDeal[h.deal_id] || []).push({ ord: CONV_ORD[st], t });
+  }
+  const diag = { histRows: hist.length, unmappedTop: Object.entries(unmapped).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, n]) => `${k}:${n}`) };
+
+  // По каждой сделке — момент первого достижения каждой вехи.
+  const deals = [];
+  for (const id in byDeal) {
+    const entries = byDeal[id].sort((a, b) => a.t - b.t);
+    const firstBeyond = o => { for (const e of entries) if (e.ord >= o) return e.t; return null; };
+    const m = { P10: firstBeyond(0), P30: firstBeyond(1), P60: firstBeyond(2), P80: firstBeyond(3), CONTRACT: firstBeyond(4), WON: firstBeyond(5) };
+    if (m.P10 == null) continue;
+    if (new Date(m.P10).getFullYear() !== year) continue;
+    deals.push({ id: Number(id), m, a: attr[id] || { manager: '—', dept: 'Не указан', instrument: '—', managerId: null } });
+  }
+  if (!deals.length) return { year, hasData: true, cohort: 0, funnel: [], headline: {}, timings: {}, byManager: [], byDept: [], byInstrument: [], diag };
+
+  const reached = (arr, s) => arr.filter(d => d.m[s] != null).length;
+  const avgDays = (arr, from, to) => {
+    const v = arr.map(d => (d.m[to] != null && d.m[from] != null ? (d.m[to] - d.m[from]) / MS_DAY : null)).filter(x => x != null && x >= 0);
+    return { avg: v.length ? v.reduce((a, b) => a + b, 0) / v.length : null, n: v.length };
+  };
+  const rate = (a, b) => (b ? Math.round(a / b * 1000) / 10 : 0);
+
+  const c = {
+    P10: reached(deals, 'P10'), P30: reached(deals, 'P30'), P60: reached(deals, 'P60'),
+    P80: reached(deals, 'P80'), CONTRACT: reached(deals, 'CONTRACT'), WON: reached(deals, 'WON'),
+  };
+  const FL = { P10: 'P10 · Новый лид', P30: 'P30 · Задача принята', P60: 'P60 · КП выставлено', P80: 'P80 · Покупка ≤3 мес', CONTRACT: 'Контракт', WON: 'Завершена' };
+  const order = ['P10', 'P30', 'P60', 'P80', 'CONTRACT', 'WON'];
+  const funnel = order.map((s, i) => ({
+    step: s, label: FL[s], count: c[s],
+    fromStart: rate(c[s], c.P10),
+    fromPrev: i === 0 ? 100 : rate(c[s], c[order[i - 1]]),
+  }));
+
+  const headline = {
+    leadToKp: { rate: rate(c.P60, c.P10), a: c.P60, b: c.P10 },
+    kpToContract: { rate: rate(c.CONTRACT, c.P60), a: c.CONTRACT, b: c.P60 },
+    leadToContract: { rate: rate(c.CONTRACT, c.P10), a: c.CONTRACT, b: c.P10 },
+    contractToWon: { rate: rate(c.WON, c.CONTRACT), a: c.WON, b: c.CONTRACT },
+  };
+  const timings = {
+    p10p30: avgDays(deals, 'P10', 'P30'),
+    p30p60: avgDays(deals, 'P30', 'P60'),
+    p60p80: avgDays(deals, 'P60', 'P80'),
+    p80contract: avgDays(deals, 'P80', 'CONTRACT'),
+    leadToKp: avgDays(deals, 'P10', 'P60'),
+    kpToContract: avgDays(deals, 'P60', 'CONTRACT'),
+    leadToContract: avgDays(deals, 'P10', 'CONTRACT'),
+    contractToWon: avgDays(deals, 'CONTRACT', 'WON'),
+  };
+
+  const groupStat = keyFn => {
+    const g = {};
+    for (const d of deals) { const k = keyFn(d); if (k == null || k === '') continue; (g[k] = g[k] || []).push(d); }
+    return Object.values(g).map(arr => {
+      const con = reached(arr, 'CONTRACT');
+      const kp = reached(arr, 'P60');
+      return {
+        key: keyFn(arr[0]), cohort: arr.length, kp, contract: con,
+        convRate: rate(con, arr.length),
+        avgCycle: avgDays(arr, 'P10', 'CONTRACT').avg,
+        avgToKp: avgDays(arr, 'P10', 'P60').avg,
+      };
+    }).sort((a, b) => b.cohort - a.cohort);
+  };
+
+  return {
+    year, hasData: true, cohort: deals.length,
+    funnel, headline, timings,
+    byManager: groupStat(d => d.a.manager),
+    byDept: groupStat(d => d.a.dept),
+    byInstrument: groupStat(d => d.a.instrument).slice(0, 40),
+    diag,
+  };
+}
+
+module.exports = { computeBoard, computeConversions };

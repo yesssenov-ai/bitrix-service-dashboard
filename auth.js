@@ -279,6 +279,19 @@ async function initDB() {
     ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS company_name VARCHAR(400);
     CREATE INDEX IF NOT EXISTS idx_stat_deals_datecreate ON ticketsmodule_stat_deals(date_create);
 
+    -- ── Фаза 2 Статистики: история стадий сделок ───────────────────────────
+    -- Каждая запись = момент входа сделки в стадию (из crm.stagehistory.list).
+    -- По ней считаем РЕАЛЬНЫЕ конверсии между стадиями и время на каждой стадии.
+    CREATE TABLE IF NOT EXISTS ticketsmodule_stage_history (
+      id BIGINT PRIMARY KEY,
+      deal_id INTEGER NOT NULL,
+      category_id INTEGER,
+      stage_id VARCHAR(60),
+      created_time TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_stage_hist_deal ON ticketsmodule_stage_history(deal_id);
+    CREATE INDEX IF NOT EXISTS idx_stage_hist_created ON ticketsmodule_stage_history(created_time);
+
     -- ── Переписка с клиентом по заявке (Написать клиенту) ───────────────────
     -- Each engineer stores their own Yandex 360 app password (encrypted) so
     -- outgoing mail can be sent as their real corporate address via SMTP.

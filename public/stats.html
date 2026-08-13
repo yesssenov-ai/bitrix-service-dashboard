@@ -140,7 +140,8 @@ const M=n=>{n=n||0;if(Math.abs(n)>=1e9)return (n/1e9).toFixed(2)+' млрд';if(
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const pct=(v,t)=>t?Math.round(v/t*100):0;
 let BOARD=null, TAB='producers', DEPT='', INSTR='sold', CSEARCH='', EXPANDM={}, CX='all';
-let FDEPT='', FMGR='', FMONTH='', FMANUF='', FINSTR='';
+let FDEPT='', FMGR='', FMONTH='', FMANUF='', FINSTR='', IS_ADMIN=false, CONV=null, CONV_POLL=null;
+let CO_YEAR=null, CO_DEPT='', CO_MGR='';
 const MONTHS_RU=['','января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 const MONTHS_NOM=['','Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 
@@ -150,7 +151,7 @@ async function load(force){
   try{
     const me=await fetch('/auth/me');if(!me.ok){location.href='/login.html';return;}
     const u=await me.json();document.getElementById('who').innerHTML='<b>'+esc(u.user.displayName)+'</b>';
-    if(u.user.role==='admin')document.getElementById('resyncBtn').style.display='';
+    if(u.user.role==='admin'){IS_ADMIN=true;document.getElementById('resyncBtn').style.display='';}
     const r=await fetch('/api/stats/board?year='+y+(force?'&force=1':''));
     if(!r.ok){document.getElementById('content').innerHTML='<div class="empty">Не удалось загрузить статистику.</div>';return;}
     BOARD=await r.json();
@@ -173,7 +174,7 @@ function render(){
     <div class="kpi" style="--kc:var(--signal)"><div class="kv">${F(k.companies)}</div><div class="kl">Компаний-покупателей</div></div>
     <div class="kpi" style="--kc:var(--warn)"><div class="kv">${F(k.managers)}</div><div class="kl">Менеджеров с продажами</div></div>
   </div>`;
-  const tabs=`<div class="tabs">${tabBtn('producers','Производители')}${tabBtn('managers','Менеджеры')}${tabBtn('instruments','Приборы')}${tabBtn('companies','Компании')}${tabBtn('spheres','Сферы')}</div><div id="tab"></div>`;
+  const tabs=`<div class="tabs">${tabBtn('producers','Производители')}${tabBtn('managers','Менеджеры')}${tabBtn('instruments','Приборы')}${tabBtn('companies','Компании')}${tabBtn('spheres','Сферы')}${tabBtn('conversions','Конверсии')}</div><div id="tab"></div>`;
   document.getElementById('content').innerHTML=kpis+'<div id="funnelWrap"></div>'+tabs;
   renderFunnel();
   renderTab();
@@ -231,6 +232,7 @@ function renderTab(){
   else if(TAB==='instruments')el.innerHTML=renderInstruments();
   else if(TAB==='companies')el.innerHTML=renderCompanies();
   else if(TAB==='spheres')el.innerHTML=renderSpheres();
+  else if(TAB==='conversions')el.innerHTML=renderConversions();
 }
 
 function renderProducers(){
@@ -306,13 +308,51 @@ function renderInstruments(){
 }
 function setInstr(v){INSTR=v;renderTab();}
 
+function aggCompanies(deals){
+  const CAT_ORDER=['Приборы','Расходники','Услуги','Обучение'];
+  const by={};
+  for(const d of deals){
+    const k=d.cId||d.co;
+    if(!by[k])by[k]={companyId:d.cId,name:d.co,industry:d.ind,sum:0,count:0,byCat:{},byManuf:{},instruments:{}};
+    const c=by[k];c.sum+=d.sum;c.count++;
+    c.byCat[d.cat]=(c.byCat[d.cat]||0)+d.sum;
+    c.byManuf[d.manuf]=(c.byManuf[d.manuf]||0)+d.sum;
+    if(d.instr)c.instruments[d.instr]=(c.instruments[d.instr]||0)+d.sum;
+    if(d.ind&&d.ind!=='Не указана')c.industry=d.ind;
+  }
+  const top=o=>Object.entries(o).map(([key,sum])=>({key,sum})).sort((a,b)=>b.sum-a.sum);
+  return Object.values(by).map(c=>{
+    const cats=CAT_ORDER.filter(k=>c.byCat[k]);
+    return {companyId:c.companyId,name:c.name,industry:c.industry,sum:c.sum,count:c.count,
+      avg:c.count?c.sum/c.count:0,byCat:top(c.byCat),byManuf:top(c.byManuf),
+      topInstruments:top(c.instruments).slice(0,6),cats,complexity:cats.length};
+  }).sort((a,b)=>b.sum-a.sum);
+}
 function renderCompanies(){
+  if(CO_YEAR===null)CO_YEAR=String(BOARD.year);
+  const src=BOARD.companyDeals||[];
+  const cdepts=[...new Set(src.map(d=>d.dept))].filter(Boolean).sort((a,b)=>String(a).localeCompare(String(b),'ru'));
+  const cmgrMap={};src.forEach(d=>{if(d.mId!=null)cmgrMap[d.mId]=d.mgr;});
+  const cmgrs=Object.entries(cmgrMap).sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'ru'));
+  const years=(BOARD.years&&BOARD.years.length)?BOARD.years:[BOARD.year];
+  const optc=(v,label,sel)=>`<option value="${esc(v)}" ${String(sel)===String(v)?'selected':''}>${esc(label)}</option>`;
+  const filters=`<div class="ffilters">
+    <select onchange="CO_YEAR=this.value;renderTab()"><option value="">Все годы</option>${years.map(y=>optc(y,y,CO_YEAR)).join('')}</select>
+    <select onchange="CO_DEPT=this.value;renderTab()"><option value="">Все отделы</option>${cdepts.map(d=>optc(d,d,CO_DEPT)).join('')}</select>
+    <select onchange="CO_MGR=this.value;renderTab()"><option value="">Все менеджеры</option>${cmgrs.map(([id,nm])=>optc(id,nm,CO_MGR)).join('')}</select>
+    ${(CO_YEAR||CO_DEPT||CO_MGR)?'<button class="btn" onclick="CO_YEAR=\'\';CO_DEPT=CO_MGR=\'\';renderTab()">Сбросить</button>':''}
+  </div>`;
+  let deals=src;
+  if(CO_YEAR)deals=deals.filter(d=>String(d.y)===CO_YEAR);
+  if(CO_DEPT)deals=deals.filter(d=>d.dept===CO_DEPT);
+  if(CO_MGR)deals=deals.filter(d=>String(d.mId)===CO_MGR);
+  const base=aggCompanies(deals);
   const q=CSEARCH.toLowerCase();
-  let list=BOARD.companies;
+  let list=base;
   if(q)list=list.filter(c=>(c.name||'').toLowerCase().includes(q)||(c.industry||'').toLowerCase().includes(q));
   if(CX==='complex')list=list.filter(c=>c.complexity>=2);
-  const complexCount=BOARD.companies.filter(c=>c.complexity>=2).length;
-  const bar=`<div class="toolbar">
+  const complexCount=base.filter(c=>c.complexity>=2).length;
+  const bar=filters+`<div class="toolbar">
     <input class="search" id="csearch" placeholder="Поиск компании или сферы…" value="${esc(CSEARCH)}" oninput="CSEARCH=this.value;renderTab();refocus()">
     <div class="seg"><button class="${CX==='all'?'on':''}" onclick="CX='all';renderTab()">Все компании</button><button class="${CX==='complex'?'on':''}" onclick="CX='complex';renderTab()">В комплексе · ${complexCount}</button></div>
   </div>`;
@@ -347,6 +387,74 @@ function renderSpheres(){
     <div class="rbody"><div class="mini" style="margin-top:14px">${['Приборы','Расходники','Услуги','Обучение'].map(cat=>{const e=s.byCat.find(x=>x.key===cat);return `<div class="mcell"><div class="mv" style="color:${e?'var(--good)':'var(--faint)'}">${e?M(e.sum)+' ₸':'—'}</div><div class="ml">${cat}</div></div>`;}).join('')}</div></div>
   </div>`).join('');
   return '<div class="list">'+rows+'</div>';
+}
+
+// ── Фаза 2: Конверсии и тайминги ──────────────────────────────────────────
+const DN=v=>v==null?'—':(Math.round(v*10)/10)+' дн';
+const fcolC={P10:'var(--p10)',P30:'var(--p30)',P60:'var(--p60)',P80:'var(--p80)',CONTRACT:'var(--contract)',WON:'var(--won)'};
+function renderConversions(){
+  if(!CONV||CONV.year!==BOARD.year){loadConversions();return '<div class="spin"></div>';}
+  const backfill=IS_ADMIN?`<div class="toolbar"><button class="btn" id="bfBtn" onclick="backfillHistory()">⟳ Собрать историю стадий</button><span class="hint" id="bfStatus" style="margin:0"></span></div>`:'';
+  if(CONV.error)return backfill+`<div class="empty">Ошибка: ${esc(CONV.error)}</div>`;
+  if(!CONV.hasData)return backfill+`<div class="empty">История стадий ещё не собрана.<br>${IS_ADMIN?'Нажмите «Собрать историю стадий» — займёт несколько минут.':'Обратитесь к администратору, чтобы запустить сбор истории стадий.'}</div>`;
+  if(!CONV.cohort)return backfill+`<div class="empty">Нет сделок, начавших воронку в ${BOARD.year}.</div>`;
+  const h=CONV.headline,t=CONV.timings;
+  const kpis=`<div class="kpis">
+    <div class="kpi" style="--kc:var(--won)"><div class="kv">${h.leadToContract.rate}%</div><div class="kl">Лид → Контракт</div><div class="ks">${h.leadToContract.a} из ${h.leadToContract.b}</div></div>
+    <div class="kpi" style="--kc:var(--p60)"><div class="kv">${h.leadToKp.rate}%</div><div class="kl">Лид → КП (P60)</div><div class="ks">${h.leadToKp.a} из ${h.leadToKp.b}</div></div>
+    <div class="kpi" style="--kc:var(--contract)"><div class="kv">${h.kpToContract.rate}%</div><div class="kl">КП → Контракт</div><div class="ks">${h.kpToContract.a} из ${h.kpToContract.b}</div></div>
+    <div class="kpi" style="--kc:var(--good)"><div class="kv">${DN(t.leadToContract.avg)}</div><div class="kl">Средний цикл (Лид→Контракт)</div><div class="ks">${t.leadToContract.n} сделок</div></div>
+  </div>`;
+  const fmax=Math.max(1,...CONV.funnel.map(f=>f.count));
+  const funnel=`<div class="card"><h3>Конверсия воронки · когорта ${BOARD.year} (${CONV.cohort} сделок)</h3><div class="funnel">${
+    CONV.funnel.map((f,i)=>`<div class="frow"><div class="fl">${esc(f.label)}</div>
+      <div class="fbar" style="width:${Math.max(4,f.count/fmax*100)}%;--fc:${fcolC[f.step]}">${f.count}</div>
+      <div class="fv"><b>${f.fromStart}%</b>${i>0?` <span class="pct">шаг ${f.fromPrev}%</span>`:''}</div></div>`).join('')
+  }</div><div class="hint">Когорта = сделки, впервые вошедшие в воронку в ${BOARD.year}. «%» — доля от старта (P10), «шаг» — конверсия с предыдущей стадии.</div></div>`;
+  const timings=`<div class="card"><h3>Среднее время на стадиях</h3><div class="mini">
+    <div class="mcell"><div class="mv">${DN(t.p10p30.avg)}</div><div class="ml">P10 → P30</div></div>
+    <div class="mcell"><div class="mv">${DN(t.p30p60.avg)}</div><div class="ml">P30 → P60 (до КП)</div></div>
+    <div class="mcell"><div class="mv">${DN(t.p60p80.avg)}</div><div class="ml">P60 → P80</div></div>
+    <div class="mcell"><div class="mv">${DN(t.p80contract.avg)}</div><div class="ml">P80 → Контракт</div></div>
+    <div class="mcell"><div class="mv">${DN(t.kpToContract.avg)}</div><div class="ml">КП → Контракт</div></div>
+    <div class="mcell"><div class="mv">${DN(t.contractToWon.avg)}</div><div class="ml">Контракт → Завершение</div></div>
+  </div></div>`;
+  return backfill+kpis+funnel+timings
+    +convTable('Менеджеры',CONV.byManager)
+    +convTable('Отделы',CONV.byDept)
+    +convTable('Приборы (топ-40 по когорте)',CONV.byInstrument);
+}
+function convTable(title,rows){
+  if(!rows||!rows.length)return '';
+  const body=rows.map(r=>`<tr><td class="l">${esc(r.key)}</td>
+    <td>${r.cohort}</td><td>${r.kp}</td><td>${r.contract}</td>
+    <td><b>${r.convRate}%</b></td><td>${DN(r.avgToKp)}</td><td>${DN(r.avgCycle)}</td></tr>`).join('');
+  return `<div class="card" style="padding-bottom:6px"><h3>${esc(title)} · конверсия и цикл</h3>
+    <div class="tscroll"><table><thead><tr>
+      <th class="l">${esc(title)}</th><th>Когорта</th><th>КП</th><th>Контракт</th><th>Конв.</th><th>Ср. до КП</th><th>Ср. цикл</th>
+    </tr></thead><tbody>${body}</tbody></table></div></div>`;
+}
+async function loadConversions(){
+  try{const r=await fetch('/api/stats/conversions?year='+BOARD.year);CONV=await r.json();if(!CONV.year)CONV.year=BOARD.year;}
+  catch(e){CONV={year:BOARD.year,hasData:true,cohort:0,error:e.message};}
+  if(TAB==='conversions'){const el=document.getElementById('tab');if(el)el.innerHTML=renderConversions();}
+}
+async function backfillHistory(){
+  if(!confirm('Собрать историю стадий из Битрикс?\n\nПройдёт по всем сделкам и соберёт моменты входа в каждую стадию — нужно для реальных конверсий и таймингов. Идёт в фоне несколько минут. Повторный запуск безопасен (только новые записи).'))return;
+  const b=document.getElementById('bfBtn');if(b){b.disabled=true;b.textContent='Запуск…';}
+  try{await fetch('/api/stats/backfill-history',{method:'POST'});}catch(e){}
+  pollBackfill();
+}
+function pollBackfill(){
+  if(CONV_POLL)clearInterval(CONV_POLL);
+  const tick=async()=>{
+    let s;try{s=await (await fetch('/api/stats/backfill-status')).json();}catch(e){return;}
+    const el=document.getElementById('bfStatus');
+    if(el)el.textContent=s.running?`Собрано ${s.fetched||0} записей…`:(s.done?`Готово: ${s.fetched||0} записей. Обновляю…`:'');
+    if(!s.running){clearInterval(CONV_POLL);CONV_POLL=null;const b=document.getElementById('bfBtn');if(b){b.disabled=false;b.textContent='⟳ Собрать историю стадий';}
+      if(s.done){CONV=null;fetch('/api/stats/conversions?year='+BOARD.year+'&force=1').then(r=>r.json()).then(d=>{CONV=d;if(!CONV.year)CONV.year=BOARD.year;if(TAB==='conversions')renderTab();});}}
+  };
+  tick();CONV_POLL=setInterval(tick,3000);
 }
 
 function brk(title,entries,total){
