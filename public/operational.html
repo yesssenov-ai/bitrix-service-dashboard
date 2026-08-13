@@ -133,6 +133,10 @@ a.deal-link:hover{text-decoration:underline;}
 
 /* Drill-down */
 tr.detail-row td{background:#171b22;padding:0;border-bottom:1px solid var(--line);}
+/* Светлая тема: раскрытая карточка сделки и админ-панель — светлый фон, а не чёрный */
+html[data-theme="light"] tr.detail-row td{background:#f4f7fb;}
+html[data-theme="light"] .admin-panel{background:#eef2f8;}
+html[data-theme="light"] .apr select,html[data-theme="light"] .apr input{background:#fff;}
 .detail-bar{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:10px 18px 0;}
 .detail-sync{font-size:11px;color:var(--text-faint);font-family:var(--font-mono);}
 .admin-panel{margin:10px 18px 0;padding:12px 14px;background:#171b22;border:1px solid var(--line-2);border-radius:10px;}
