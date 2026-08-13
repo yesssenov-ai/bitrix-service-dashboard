@@ -418,7 +418,7 @@ function orderCard(o){
       ${fcTxt?`<span class="eta">·&nbsp; ${fcTxt}</span>`:''}
       ${o.opportunity?`<span class="o-right">${fmt(o.opportunity/1e6)} млн ₸</span>`:''}
     </div>
-    ${o.docs&&o.docs.length?`<div class="o-docs">📎 ${o.docs.map(d=>`<a href="${d.url}" target="_blank">${esc(d.label)}</a>`).join('')}</div>`:''}
+    ${o.docs&&o.docs.length?`<div class="o-docs">📎 ${o.docs.map(d=>`<a href="/api/logistics/file?e=${d.e}&id=${d.id}&f=${encodeURIComponent(d.f)}" target="_blank" rel="noopener">${esc(d.label)}</a>`).join('')}</div>`:''}
   </div>`;
 }
 function wpTip(e,el){showTip(`<b>${el.dataset.ml}</b>${el.dataset.info||''}`,e.clientX,e.clientY);}

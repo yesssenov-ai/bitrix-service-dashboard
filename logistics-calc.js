@@ -283,9 +283,12 @@ async function computeBoard() {
       const mgrDeal = deal && deal.assigned_by_id ? uname(deal.assigned_by_id) : null;
       const mgrPurch = p.assignedById ? uname(p.assignedById) : null;
       const po = p[F1066.po] || (l && l[F1070.po]) || null;
+      // Документы: НЕ кэшируем прямую ссылку Bitrix (подпись протухает → ошибка
+      // «allowed_only_intranet_user»). Храним ссылку на сущность/поле, а скачивание
+      // идёт через наш прокси /api/logistics/file, который берёт свежий URL на клик.
       const docs = [];
-      DOCS_1066.forEach(([lbl, code]) => { const u = fileUrl(p[code]); if (u) docs.push({ label: lbl, url: u }); });
-      if (l) DOCS_1070.forEach(([lbl, code]) => { const u = fileUrl(l[code]); if (u) docs.push({ label: lbl, url: u }); });
+      DOCS_1066.forEach(([lbl, code]) => { if (fileUrl(p[code])) docs.push({ label: lbl, e: 1066, id: p.id, f: code }); });
+      if (l) DOCS_1070.forEach(([lbl, code]) => { if (fileUrl(l[code])) docs.push({ label: lbl, e: 1070, id: l.id, f: code }); });
 
       // ── «Критический» кейс: горит по договору / застрял / просрочен транзит ──
       const stuck = !done && currentStageDays != null && currentStageDays >= 30;
@@ -362,4 +365,7 @@ async function getBoard(force) {
   return refreshBoard();
 }
 
-module.exports = { getBoard, refreshBoard, MILESTONES };
+// Белый список кодов файловых полей — только их разрешаем качать через прокси.
+const FILE_FIELDS = new Set([...DOCS_1066.map(d => d[1]), ...DOCS_1070.map(d => d[1])]);
+
+module.exports = { getBoard, refreshBoard, MILESTONES, FILE_FIELDS, fileUrl, bitrixOrigin };
