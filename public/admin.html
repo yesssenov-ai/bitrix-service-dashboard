@@ -489,7 +489,7 @@ function toggleEngineerField() {
 // Список сотрудников Bitrix для привязки учётки (id → имя).
 async function loadBitrixEmployees() {
   try {
-    const r = await fetch('/admin/tg-links');
+    const r = await fetch('/admin/employee-options');
     const d = await r.json();
     if (!d.ok) return;
     const sel = document.getElementById('fBitrixUserId');

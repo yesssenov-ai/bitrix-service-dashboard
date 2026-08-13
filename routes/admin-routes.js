@@ -36,6 +36,21 @@ router.get('/tg-links', requireAuth(['admin']), async (req, res) => {
   } catch(e) { sanitizeError(e, res); }
 });
 
+// GET /admin/employee-options — все сотрудники для привязки учётки к Bitrix.
+// В отличие от /tg-links (там фильтр id>10 для служебных учёток) здесь показываем
+// ВСЕХ реальных людей, включая ID ≤ 10 (напр. Куаныш Есенов = 4), исключая только
+// настоящие служебные аккаунты.
+const SERVICE_ACCOUNTS = new Set(['Администратор', 'Power BI']);
+router.get('/employee-options', requireAuth(['admin']), async (req, res) => {
+  try {
+    const users = Object.entries(USERS)
+      .map(([id, name]) => ({ id: Number(id), name }))
+      .filter(u => u.name && !SERVICE_ACCOUNTS.has(u.name))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    res.json({ ok: true, users });
+  } catch (e) { sanitizeError(e, res); }
+});
+
 // GET /admin/users
 router.get('/users', requireAuth(['admin']), async (req, res) => {
   try {
