@@ -151,6 +151,29 @@ router.delete('/users/:id', requireAuth(['admin']), async (req, res) => {
   } catch(e) { sanitizeError(e, res); }
 });
 
+// DELETE /admin/users/:id/permanent — безвозвратное удаление учётки.
+// Нельзя удалить себя и последнего активного администратора. Журнал действий
+// сохраняется (user_id обнулится по ON DELETE SET NULL, имя останется в записях).
+router.delete('/users/:id/permanent', requireAuth(['admin']), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (!id) return res.status(400).json({ ok: false, error: 'Неверный ID' });
+    if (id === req.user.id) return res.status(400).json({ ok: false, error: 'Нельзя удалить себя' });
+    const u = await pool.query('SELECT username, display_name, role FROM ticketsmodule_users WHERE id=$1', [id]);
+    if (!u.rows.length) return res.status(404).json({ ok: false, error: 'Пользователь не найден' });
+    if (u.rows[0].role === 'admin') {
+      const admins = await pool.query("SELECT COUNT(*) FROM ticketsmodule_users WHERE role='admin' AND active=true AND id!=$1", [id]);
+      if (parseInt(admins.rows[0].count) === 0) {
+        return res.status(400).json({ ok: false, error: 'Нельзя удалить последнего администратора' });
+      }
+    }
+    await pool.query('DELETE FROM ticketsmodule_users WHERE id=$1', [id]);
+    await auditLog(req.user.id, req.user.username, 'USER_DELETED', null,
+      { targetId: id, username: u.rows[0].username, name: u.rows[0].display_name }, req.ip, req.headers['user-agent']);
+    res.json({ ok: true });
+  } catch(e) { sanitizeError(e, res); }
+});
+
 // POST /admin/import-bitrix-users — массовое создание учёток по сотрудникам Bitrix.
 // Логин = корпоративная почта из Bitrix, пароль у всех стартовый «123qwerty»
 // (сотрудники сменят сами), роль по умолчанию — viewer (Просмотр), имя как в
