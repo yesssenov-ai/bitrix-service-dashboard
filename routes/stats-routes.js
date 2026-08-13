@@ -8,6 +8,25 @@ function yearRange(year) {
   return { start: `${year}-01-01`, end: `${year}-12-31` };
 }
 
+// GET /api/stats/board?year=2026 — единый борд новой Статистики (все вкладки).
+// Кэш в процессе на 10 мин по году; ?force=1 пересчитывает.
+const _boardCache = new Map();
+router.get('/board', requireAuth(PM_ROLES), async (req, res) => {
+  try {
+    const year = parseInt(req.query.year, 10) || new Date().getFullYear();
+    const force = req.query.force === '1';
+    const cached = _boardCache.get(year);
+    if (cached && !force && Date.now() - cached.at < 10 * 60 * 1000) return res.json(cached.data);
+    const { computeBoard } = require('../stats2-calc');
+    const data = await computeBoard(year);
+    _boardCache.set(year, { at: Date.now(), data });
+    res.json(data);
+  } catch (e) {
+    console.error('GET /api/stats/board error:', e.message);
+    res.status(500).json({ error: 'Не удалось рассчитать: ' + e.message });
+  }
+});
+
 // GET /api/stats/summary?year=2026
 router.get('/summary', requireAuth(PM_ROLES), async (req, res) => {
   try {

@@ -273,6 +273,11 @@ async function initDB() {
     );
     ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS deal_type_id VARCHAR(60);
     ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS deal_title TEXT;
+    -- Для нового модуля Статистики: дата создания сделки (для «Выдано КП» — где
+    -- ещё нет даты договора) и название компании (для вкладки «Компании»).
+    ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS date_create DATE;
+    ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS company_name VARCHAR(400);
+    CREATE INDEX IF NOT EXISTS idx_stat_deals_datecreate ON ticketsmodule_stat_deals(date_create);
 
     -- ── Переписка с клиентом по заявке (Написать клиенту) ───────────────────
     -- Each engineer stores their own Yandex 360 app password (encrypted) so

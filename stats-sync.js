@@ -21,7 +21,7 @@ const MODEL_FIELD = 'UF_CRM_1733300721';
 const CATEGORY_IDS = ['0', '1', '2', '3'];
 
 const SELECT_FIELDS = [
-  'ID', 'TITLE', 'CATEGORY_ID', 'STAGE_ID', 'TYPE_ID', 'OPPORTUNITY', 'CURRENCY_ID',
+  'ID', 'TITLE', 'CATEGORY_ID', 'STAGE_ID', 'TYPE_ID', 'OPPORTUNITY', 'CURRENCY_ID', 'DATE_CREATE',
   'COMPANY_ID', 'ASSIGNED_BY_ID', REAL_CONTRACT_DATE_FIELD, INSTRUMENT_FIELD, DEPARTMENT_FIELD, MANUF_FIELD, MODEL_FIELD,
 ];
 
@@ -77,19 +77,17 @@ async function getModelMap() {
   } catch (e) { console.error('getModelMap error:', e.message); return modelMapCache || {}; }
 }
 
-const companyIndustryCache = new Map();
-async function getCompanyIndustry(companyId) {
-  if (!companyId) return '';
-  if (companyIndustryCache.has(companyId)) return companyIndustryCache.get(companyId);
+const companyInfoCache = new Map();
+async function getCompanyInfo(companyId) {
+  if (!companyId) return { industry: '', name: '' };
+  if (companyInfoCache.has(companyId)) return companyInfoCache.get(companyId);
+  let info = { industry: '', name: '' };
   try {
     const { result } = await b24('crm.company.get', { id: companyId });
-    const industry = result?.INDUSTRY || '';
-    companyIndustryCache.set(companyId, industry);
-    return industry;
-  } catch (e) {
-    companyIndustryCache.set(companyId, '');
-    return '';
-  }
+    info = { industry: result?.INDUSTRY || '', name: result?.TITLE || '' };
+  } catch (e) { /* best-effort */ }
+  companyInfoCache.set(companyId, info);
+  return info;
 }
 
 async function getManufacturer(instrumentName) {
@@ -111,20 +109,23 @@ async function upsertDeal(d) {
   const manufMap = await getManufacturerMap();
   const rawManuf = d[MANUF_FIELD] ? (manufMap[String(d[MANUF_FIELD])] || null) : null;
   const manufacturer = rawManuf || (await getManufacturer(instrumentName)); // сырой бренд; группировка — на отображении
-  const industry = await getCompanyIndustry(d.COMPANY_ID);
+  const company = await getCompanyInfo(d.COMPANY_ID);
   const contractDate = d[REAL_CONTRACT_DATE_FIELD] ? d[REAL_CONTRACT_DATE_FIELD].slice(0, 10) : null;
+  const dateCreate = d.DATE_CREATE ? d.DATE_CREATE.slice(0, 10) : null;
 
   await pool.query(
     `INSERT INTO ticketsmodule_stat_deals
       (deal_id, category_id, stage_id, deal_type_id, opportunity, currency_id, company_id, assigned_by_id,
-       contract_date, instrument_name, department_id, manufacturer, industry, deal_title, synced_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW())
+       contract_date, instrument_name, department_id, manufacturer, industry, deal_title, date_create, company_name, synced_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW())
      ON CONFLICT (deal_id) DO UPDATE SET
        category_id=$2, stage_id=$3, deal_type_id=$4, opportunity=$5, currency_id=$6, company_id=$7, assigned_by_id=$8,
-       contract_date=$9, instrument_name=$10, department_id=$11, manufacturer=$12, industry=$13, deal_title=$14, synced_at=NOW()`,
+       contract_date=$9, instrument_name=$10, department_id=$11, manufacturer=$12, industry=$13, deal_title=$14,
+       date_create=$15, company_name=$16, synced_at=NOW()`,
     [d.ID, parseInt(d.CATEGORY_ID, 10), d.STAGE_ID, d.TYPE_ID || null, parseFloat(d.OPPORTUNITY) || 0, d.CURRENCY_ID || 'KZT',
      d.COMPANY_ID || null, d.ASSIGNED_BY_ID ? parseInt(d.ASSIGNED_BY_ID, 10) : null,
-     contractDate, instrumentName, d[DEPARTMENT_FIELD] || null, manufacturer, industry, d.TITLE || null]
+     contractDate, instrumentName, d[DEPARTMENT_FIELD] || null, manufacturer, company.industry, d.TITLE || null,
+     dateCreate, company.name || null]
   );
 }
 
