@@ -162,6 +162,9 @@
   .o-docs{margin-top:9px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--dim2)}
   .o-docs a{background:rgba(255,255,255,.05);border:1px solid var(--border);padding:4px 10px;border-radius:7px;color:var(--dim);font-weight:600;transition:.15s}
   .o-docs a:hover{color:#fff;border-color:rgba(255,255,255,.2)}
+  /* Светлая тема: кнопки документов — видимый фон и читаемый ховер (не белый на белом) */
+  html[data-theme="light"] .o-docs a{background:#eef1f6;color:#4b5563}
+  html[data-theme="light"] .o-docs a:hover{color:#14171d;background:#e3e8f0;border-color:#c9cfdb}
 
   .tip{position:fixed;pointer-events:none;background:#0d1424;border:1px solid var(--border);border-radius:9px;padding:7px 10px;font-size:12px;box-shadow:0 12px 30px -8px rgba(0,0,0,.6);opacity:0;transition:opacity .12s;z-index:50}
   .tip b{color:#fff}

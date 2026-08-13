@@ -35,7 +35,9 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); font-si
 .logo-mark svg { width:16px; height:16px; }
 .hdiv { width:1px; height:24px; background:var(--border2); margin:0 18px; }
 .h-sub { font-size:13.5px; font-weight:500; color:var(--text-3); }
-.h-right { margin-left:auto; display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+.h-right { margin-left:auto; display:flex; align-items:center; gap:7px; flex-wrap:wrap; justify-content:flex-end; }
+.header .btn { padding:6px 11px; font-size:12px; }
+.header .h-time { font-size:11.5px; }
 .h-time { font-size:12px; color:var(--text-4); background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:4px 10px; }
 .btn { display:inline-flex; align-items:center; gap:6px; border-radius:8px; padding:7px 14px; font-size:13px; font-weight:500; cursor:pointer; border:1px solid var(--border2); background:transparent; color:var(--text-2); transition:all .15s; font-family:var(--font); white-space:nowrap; }
 .btn:hover { background:var(--bg); }
@@ -173,11 +175,11 @@ tr.tr:hover td { background:#fafbfd; }
   <span class="h-sub">Сервисные заявки</span>
   <div class="h-right">
     <span class="h-time" id="htime">—</span>
-    <a href="/relations.html" class="btn" style="font-size:12px">🔗 Связи сделок</a>
-    <a href="/equipment-map.html" class="btn" style="font-size:12px">🗺 Карта оборудования</a>
-    <a href="/licenses-map.html" class="btn" style="font-size:12px">⛏ Лицензии ГМК</a>
-    <a href="/planner.html" class="btn" style="font-size:12px">📅 Планировщик</a>
-    <button class="btn" onclick="logout()" style="font-size:12px">Выйти</button>
+    <a href="/relations.html" class="btn">Связи сделок</a>
+    <a href="/equipment-map.html" class="btn">Карта оборуд.</a>
+    <a href="/licenses-map.html" class="btn">Лицензии ГМК</a>
+    <a href="/planner.html" class="btn">Планировщик</a>
+    <button class="btn" onclick="logout()">Выйти</button>
     <button class="btn" id="btnRef" onclick="load()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
         <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>

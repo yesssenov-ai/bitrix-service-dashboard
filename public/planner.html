@@ -31,7 +31,7 @@ html,body{height:100%;font-family:var(--font);background:#e8e6e3;color:var(--tex
 .right-col{background:#ffffff;}
 
 /* ── HEADER ─────────────────────────────────────────────────── */
-.hdr{position:fixed;inset:0 0 auto 0;height:var(--head-h);background:#ffffff;border-bottom:1px solid var(--stroke);display:flex;align-items:center;padding:0 10px;gap:8px;z-index:400;user-select:none;}
+.hdr{position:fixed;inset:0 0 auto 0;height:var(--head-h);background:#ffffff;border-bottom:1px solid var(--stroke);display:flex;align-items:center;padding:0 10px;gap:5px;z-index:400;user-select:none;}
 .logo{display:flex;align-items:center;gap:6px;color:var(--text);font-weight:700;font-size:14px;letter-spacing:-.2px;flex-shrink:0;}
 .logo-mk{width:22px;height:22px;background:#C53B2F;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff;}
 .hdiv{width:1px;height:20px;background:var(--stroke);}
@@ -58,12 +58,12 @@ html,body{height:100%;font-family:var(--font);background:#e8e6e3;color:var(--tex
 .vb{padding:3px 10px;border-radius:3px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--text-2);font-family:var(--font);}
 .vb.on{background:#fff;color:var(--text);}
 .hdr-r{margin-left:auto;display:flex;align-items:center;gap:6px;}
-.hbtn{padding:6px 13px;border-radius:5px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:var(--font);border:1px solid var(--stroke-2);background:none;color:var(--text-2);}
+.hbtn{padding:6px 8px;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);border:1px solid var(--stroke-2);background:none;color:var(--text-2);white-space:nowrap;}
 .hbtn:hover{background:var(--bg);color:var(--text);}
 .hbtn.p{background:var(--blue);color:#fff;border-color:var(--blue);}
 .hbtn.p:hover{background:#2d6bc4;}
-.leg{display:flex;gap:10px;align-items:center;}
-.leg-i{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--text-2);}
+.leg{display:flex;gap:6px;align-items:center;}
+.leg-i{display:flex;align-items:center;gap:3px;font-size:10px;color:var(--text-2);white-space:nowrap;}
 .leg-d{width:10px;height:10px;border-radius:2px;}
 
 /* ── LAYOUT ─────────────────────────────────────────────────── */
@@ -301,7 +301,7 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 .staff-row:hover .drag-handle{color:var(--text-2);}
 
 /* Nav links */
-.hnav-link{padding:5px 11px;border-radius:5px;font-size:12.5px;font-weight:500;color:var(--text-2);text-decoration:none;transition:background .15s;}
+.hnav-link{padding:5px 8px;border-radius:5px;font-size:12px;font-weight:500;color:var(--text-2);text-decoration:none;transition:background .15s;white-space:nowrap;}
 .hnav-link:hover{background:var(--bg);color:var(--text);}
 .hnav-link.active{color:var(--text);background:var(--bg);font-weight:600;}
 
@@ -320,9 +320,9 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
   <div class="hdiv"></div>
   <nav style="display:flex;gap:2px;">
     <a href="/" class="hnav-link">← Дашборд</a>
-    <a href="/equipment-map.html" class="hnav-link">🗺 Карта</a>
-    <a href="/licenses-map.html" class="hnav-link">⛏ Лицензии</a>
-    <span class="hnav-link active">📅 Планировщик</span>
+    <a href="/equipment-map.html" class="hnav-link">Карта</a>
+    <a href="/licenses-map.html" class="hnav-link">Лицензии</a>
+    <span class="hnav-link active">Планировщик</span>
   </nav>
   <div class="hdiv"></div>
   <div class="hdr-r">
@@ -332,9 +332,9 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
       <div class="leg-i"><div class="leg-d" style="background:#64b5e8"></div>Отпуск</div>
       <div class="leg-i"><div class="leg-d" style="background:#8B6547"></div>Обучение</div>
     </div>
-    <button class="hbtn" onclick="openReports()">📊 Отчёты</button>
-    <button class="hbtn" onclick="openAdmin()">👤 Управление</button>
-    <button class="hbtn" onclick="openDF()">⚙ Data Fields</button>
+    <button class="hbtn" onclick="openReports()">Отчёты</button>
+    <button class="hbtn" onclick="openAdmin()">Управление</button>
+    <button class="hbtn" onclick="openDF()">Data&nbsp;Fields</button>
     <button class="hbtn p" onclick="openNew()">+ Событие</button>
     <span id="uChip" style="font-size:12px;color:var(--text-2);background:var(--bg);border:1px solid var(--stroke-2);border-radius:20px;padding:4px 11px 4px 8px;display:flex;align-items:center;gap:5px;"><span style="width:6px;height:6px;border-radius:50%;background:#4caf7d;display:inline-block"></span><span id="uName">—</span></span>
   </div>
