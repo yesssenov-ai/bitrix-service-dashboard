@@ -36,15 +36,18 @@ html[data-theme="light"] body *{transition:background-color .2s ease, border-col
 
 /* ── Плавающий переключатель темы ─────────────────────────────────────────── */
 #themeToggle{
-  position:fixed; right:16px; bottom:16px; z-index:9999;
-  width:44px; height:44px; border-radius:50%;
+  position:fixed; right:18px; bottom:18px; z-index:9999;
+  width:40px; height:40px; border-radius:10px;
   display:flex; align-items:center; justify-content:center;
-  background:#1b1f27; color:#eef0f3; border:1px solid rgba(255,255,255,.14);
-  box-shadow:0 6px 20px rgba(0,0,0,.28); cursor:pointer;
-  font-size:19px; line-height:1; transition:transform .15s ease, background .2s ease;
+  background:rgba(27,31,39,.92); color:#c7ccd6; border:1px solid rgba(255,255,255,.10);
+  box-shadow:0 4px 14px rgba(0,0,0,.24); cursor:pointer;
+  padding:0; line-height:0; -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+  transition:color .15s ease, border-color .15s ease, background .2s ease;
 }
-#themeToggle:hover{transform:translateY(-2px)}
+#themeToggle:hover{color:#fff; border-color:rgba(255,255,255,.22)}
+#themeToggle svg{display:block}
 html[data-theme="light"] #themeToggle{
-  background:#ffffff; color:#c05a1f; border-color:#e2e5ec; box-shadow:0 6px 20px rgba(18,28,45,.16);
+  background:rgba(255,255,255,.92); color:#4b5563; border-color:#e0e4ec; box-shadow:0 4px 14px rgba(18,28,45,.12);
 }
+html[data-theme="light"] #themeToggle:hover{color:#1a1e27; border-color:#c9cfdb}
 @media print{#themeToggle{display:none}}
