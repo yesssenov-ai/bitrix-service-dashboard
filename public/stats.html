@@ -45,6 +45,8 @@ select{background:var(--panel);border:1px solid var(--line-2);border-radius:10px
 .kpi .ks{font-size:11px;color:var(--faint);margin-top:2px;font-family:var(--fm)}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin-bottom:16px}
 .card h3{font-family:var(--fd);font-size:14px;font-weight:600;margin-bottom:14px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px}
+.ffilters{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.ffilters select{font-size:13px;padding:8px 11px;max-width:230px}
 .funnel{display:flex;flex-direction:column;gap:7px}
 .frow{display:grid;grid-template-columns:160px 1fr auto;align-items:center;gap:12px}
 .frow .fl{font-size:12.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -138,6 +140,9 @@ const M=n=>{n=n||0;if(Math.abs(n)>=1e9)return (n/1e9).toFixed(2)+' млрд';if(
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const pct=(v,t)=>t?Math.round(v/t*100):0;
 let BOARD=null, TAB='producers', DEPT='', INSTR='sold', CSEARCH='', EXPANDM={}, CX='all';
+let FDEPT='', FMGR='', FMONTH='', FMANUF='', FINSTR='';
+const MONTHS_RU=['','января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+const MONTHS_NOM=['','Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 
 async function load(force){
   const y=(document.getElementById('year').value)||new Date().getFullYear();
@@ -168,17 +173,54 @@ function render(){
     <div class="kpi" style="--kc:var(--signal)"><div class="kv">${F(k.companies)}</div><div class="kl">Компаний-покупателей</div></div>
     <div class="kpi" style="--kc:var(--warn)"><div class="kv">${F(k.managers)}</div><div class="kl">Менеджеров с продажами</div></div>
   </div>`;
-  const fmax=Math.max(1,...BOARD.funnel.map(f=>f.count));
-  const fcol={P10:'var(--p10)',P30:'var(--p30)',P60:'var(--p60)',P80:'var(--p80)',CONTRACT:'var(--contract)',EXEC:'var(--exec)',WON:'var(--won)'};
-  const funnel=`<div class="card"><h3>Воронка (снимок на текущий момент, ${BOARD.year})</h3><div class="funnel">${
-    BOARD.funnel.map(f=>`<div class="frow"><div class="fl">${esc(f.label)}</div>
-      <div class="fbar" style="width:${Math.max(4,f.count/fmax*100)}%;--fc:${fcol[f.step]}">${f.count}</div>
-      <div class="fv"><b>${M(f.sum)} ₸</b></div></div>`).join('')
-  }</div><div class="hint">Распределение сделок по текущим стадиям. Настоящие конверсии и время на стадиях — в Фазе 2 (сбор истории стадий).</div></div>`;
   const tabs=`<div class="tabs">${tabBtn('producers','Производители')}${tabBtn('managers','Менеджеры')}${tabBtn('instruments','Приборы')}${tabBtn('companies','Компании')}${tabBtn('spheres','Сферы')}</div><div id="tab"></div>`;
-  document.getElementById('content').innerHTML=kpis+funnel+tabs;
+  document.getElementById('content').innerHTML=kpis+'<div id="funnelWrap"></div>'+tabs;
+  renderFunnel();
   renderTab();
 }
+const FLABELS={P10:'P10 · Новый лид',P30:'P30 · Задача принята',P60:'P60 · КП выставлено',P80:'P80 · Покупка ≤3 мес',CONTRACT:'Контракт',EXEC:'Исполнение',WON:'Завершена'};
+const FSTEPS=['P10','P30','P60','P80','CONTRACT','EXEC','WON'];
+function funnelFiltered(){
+  let d=BOARD.funnelDeals||[];
+  if(FDEPT)d=d.filter(x=>x.dept===FDEPT);
+  if(FMGR)d=d.filter(x=>String(x.managerId)===FMGR);
+  if(FMONTH)d=d.filter(x=>String(x.month)===FMONTH);
+  if(FMANUF)d=d.filter(x=>x.manufacturer===FMANUF);
+  if(FINSTR)d=d.filter(x=>x.instrument===FINSTR);
+  return d;
+}
+function uniqSorted(arr){return [...new Set(arr)].filter(v=>v!=null&&v!=='').sort((a,b)=>String(a).localeCompare(String(b),'ru'));}
+function renderFunnel(){
+  const wrap=document.getElementById('funnelWrap');if(!wrap)return;
+  const all=BOARD.funnelDeals||[];
+  const depts=uniqSorted(all.map(d=>d.dept));
+  const mgrMap={};all.forEach(d=>{if(d.managerId!=null)mgrMap[d.managerId]=d.manager;});
+  const mgrs=Object.entries(mgrMap).sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'ru'));
+  const months=[...new Set(all.map(d=>d.month).filter(Boolean))].sort((a,b)=>a-b);
+  const manufs=uniqSorted(all.map(d=>d.manufacturer).filter(m=>m&&m!=='Не определено'));
+  const instrs=uniqSorted(all.map(d=>d.instrument));
+  const opt=(v,label,sel)=>`<option value="${esc(v)}" ${String(sel)===String(v)?'selected':''}>${esc(label)}</option>`;
+  const filters=`<div class="ffilters">
+    <select onchange="FDEPT=this.value;renderFunnel()"><option value="">Все отделы</option>${depts.map(d=>opt(d,d,FDEPT)).join('')}</select>
+    <select onchange="FMGR=this.value;renderFunnel()"><option value="">Все менеджеры</option>${mgrs.map(([id,nm])=>opt(id,nm,FMGR)).join('')}</select>
+    <select onchange="FMONTH=this.value;renderFunnel()"><option value="">Все месяцы</option>${months.map(m=>opt(m,MONTHS_NOM[m],FMONTH)).join('')}</select>
+    <select onchange="FMANUF=this.value;renderFunnel()"><option value="">Все производители</option>${manufs.map(m=>opt(m,m,FMANUF)).join('')}</select>
+    <select onchange="FINSTR=this.value;renderFunnel()"><option value="">Все приборы</option>${instrs.map(m=>opt(m,m,FINSTR)).join('')}</select>
+    ${(FDEPT||FMGR||FMONTH||FMANUF||FINSTR)?'<button class="btn" onclick="FDEPT=FMGR=FMONTH=FMANUF=FINSTR=\'\';renderFunnel()">Сбросить</button>':''}
+  </div>`;
+  const deals=funnelFiltered();
+  const rows=FSTEPS.map(s=>{const g=deals.filter(d=>d.step===s);return{step:s,label:FLABELS[s],count:g.length,sum:g.reduce((a,d)=>a+d.sum,0)};});
+  const fmax=Math.max(1,...rows.map(f=>f.count));
+  const fcol={P10:'var(--p10)',P30:'var(--p30)',P60:'var(--p60)',P80:'var(--p80)',CONTRACT:'var(--contract)',EXEC:'var(--exec)',WON:'var(--won)'};
+  const active=FDEPT||FMGR||FMONTH||FMANUF||FINSTR;
+  const asOf=fmtDate(new Date());
+  wrap.innerHTML=`${filters}<div class="card"><h3>Воронка (данные на ${asOf})</h3><div class="funnel">${
+    rows.map(f=>`<div class="frow"><div class="fl">${esc(f.label)}</div>
+      <div class="fbar" style="width:${Math.max(4,f.count/fmax*100)}%;--fc:${fcol[f.step]}">${f.count}</div>
+      <div class="fv"><b>${M(f.sum)} ₸</b></div></div>`).join('')
+  }</div><div class="hint">${active?'Отфильтровано · '+deals.length+' сделок. ':''}Распределение сделок по текущим стадиям. Настоящие конверсии и время на стадиях — в Фазе 2 (сбор истории стадий).</div></div>`;
+}
+function fmtDate(d){return d.getDate()+' '+MONTHS_RU[d.getMonth()+1]+' '+d.getFullYear();}
 const tabBtn=(k,l)=>`<button class="${TAB===k?'on':''}" onclick="setTab('${k}')">${l}</button>`;
 function setTab(t){TAB=t;render();}
 

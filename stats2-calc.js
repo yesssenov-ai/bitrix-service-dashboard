@@ -113,6 +113,7 @@ async function computeBoard(year) {
       managers: new Set(sold.map(d => d.managerId).filter(Boolean)).size,
     },
     funnel: snapshotFunnel(all, year),
+    funnelDeals: snapshotDeals(all, year),
     producers: byManufacturer(sold),
     departments: [...new Set(sold.map(d => d.dept))].sort((a, b) => a.localeCompare(b, 'ru')),
     managers: byManager(sold),
@@ -136,6 +137,19 @@ function snapshotFunnel(all, year) {
     const g = inYear.filter(d => d.step === s);
     return { step: s, label: labels[s], count: g.length, sum: sum(g) };
   });
+}
+
+// Лёгкий срез сделок для клиентской фильтрации воронки
+// (по отделу / менеджеру / месяцу / производителю / прибору).
+const moOf = d => { if (!d) return null; const n = parseInt(String(d).slice(5, 7), 10); return Number.isNaN(n) ? null : n; };
+function snapshotDeals(all, year) {
+  return all
+    .filter(d => yr(d.createDate) === year || yr(d.contractDate) === year)
+    .map(d => ({
+      step: d.step, dept: d.dept, managerId: d.managerId, manager: d.manager,
+      manufacturer: d.manufacturer, instrument: d.instrument || '',
+      sum: d.sum, month: moOf(d.createDate) || moOf(d.contractDate),
+    }));
 }
 
 // Производители × направление (только продано)
