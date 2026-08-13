@@ -186,18 +186,18 @@ function byManager(deals) {
   const by = {};
   for (const d of deals) {
     const k = d.managerId || 'unknown';
-    if (!by[k]) by[k] = { managerId: d.managerId, name: d.manager, sum: 0, count: 0, byDept: {}, byManuf: {}, byCat: {}, deals: [] };
+    if (!by[k]) by[k] = { managerId: d.managerId, name: d.manager, sum: 0, count: 0, byDept: {}, byManuf: {}, byCat: {}, byDeptC: {}, byManufC: {}, byCatC: {}, deals: [] };
     const m = by[k];
     m.sum += d.sum; m.count++;
-    m.byDept[d.dept] = (m.byDept[d.dept] || 0) + d.sum;
-    m.byManuf[d.manufacturer] = (m.byManuf[d.manufacturer] || 0) + d.sum;
-    m.byCat[d.catGroup] = (m.byCat[d.catGroup] || 0) + d.sum;
+    m.byDept[d.dept] = (m.byDept[d.dept] || 0) + d.sum; m.byDeptC[d.dept] = (m.byDeptC[d.dept] || 0) + 1;
+    m.byManuf[d.manufacturer] = (m.byManuf[d.manufacturer] || 0) + d.sum; m.byManufC[d.manufacturer] = (m.byManufC[d.manufacturer] || 0) + 1;
+    m.byCat[d.catGroup] = (m.byCat[d.catGroup] || 0) + d.sum; m.byCatC[d.catGroup] = (m.byCatC[d.catGroup] || 0) + 1;
     m.deals.push({ id: d.id, title: d.title, company: d.company, instrument: d.instrument, manufacturer: d.manufacturer, dept: d.dept, sum: d.sum, date: d.contractDate });
   }
   return Object.values(by).map(m => ({
     ...m, avg: m.count ? m.sum / m.count : 0,
     depts: [...new Set(m.deals.map(x => x.dept))],
-    byDept: topEntries(m.byDept), byManuf: topEntries(m.byManuf), byCat: topEntries(m.byCat),
+    byDept: topEntries(m.byDept, m.byDeptC), byManuf: topEntries(m.byManuf, m.byManufC), byCat: topEntries(m.byCat, m.byCatC),
     deals: m.deals.sort((a, b) => b.sum - a.sum),
   })).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
 }
@@ -208,15 +208,15 @@ function byInstrument(deals) {
   for (const d of deals) {
     if (!d.instrument) continue;
     const k = d.instrument;
-    if (!by[k]) by[k] = { name: k, manufacturer: d.manufacturer, sum: 0, count: 0, byDept: {}, byManager: {} };
+    if (!by[k]) by[k] = { name: k, manufacturer: d.manufacturer, sum: 0, count: 0, byDept: {}, byManager: {}, byDeptC: {}, byManagerC: {} };
     const i = by[k];
     i.sum += d.sum; i.count++;
-    i.byDept[d.dept] = (i.byDept[d.dept] || 0) + d.sum;
-    i.byManager[d.manager] = (i.byManager[d.manager] || 0) + d.sum;
+    i.byDept[d.dept] = (i.byDept[d.dept] || 0) + d.sum; i.byDeptC[d.dept] = (i.byDeptC[d.dept] || 0) + 1;
+    i.byManager[d.manager] = (i.byManager[d.manager] || 0) + d.sum; i.byManagerC[d.manager] = (i.byManagerC[d.manager] || 0) + 1;
   }
   return Object.values(by).map(i => ({
     ...i, avg: i.count ? i.sum / i.count : 0,
-    byDept: topEntries(i.byDept), byManager: topEntries(i.byManager),
+    byDept: topEntries(i.byDept, i.byDeptC), byManager: topEntries(i.byManager, i.byManagerC),
   })).sort((a, b) => b.sum - a.sum);
 }
 
@@ -263,8 +263,10 @@ function bySphere(deals) {
   })).sort((a, b) => b.sum - a.sum);
 }
 
-function topEntries(obj) {
-  return Object.entries(obj).map(([k, v]) => ({ key: k, sum: v })).sort((a, b) => b.sum - a.sum);
+function topEntries(obj, cnt) {
+  return Object.entries(obj)
+    .map(([k, v]) => ({ key: k, sum: v, count: cnt ? (cnt[k] || 0) : undefined }))
+    .sort((a, b) => b.sum - a.sum);
 }
 
 // ── Фаза 2: реальные конверсии и тайминги по истории стадий ──────────────────

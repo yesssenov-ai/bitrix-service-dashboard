@@ -5,16 +5,56 @@
 //
 // Бэкфилл идемпотентен (ON CONFLICT (id) DO NOTHING): можно жать кнопку
 // повторно — подтянутся только новые записи, дубли не создаются.
+const fetch = require('node-fetch');
 const { b24 } = require('./bitrix');
 const { pool } = require('./auth');
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const SELECT = ['ID', 'OWNER_ID', 'CREATED_TIME', 'CATEGORY_ID', 'STAGE_ID'];
 
 // Прогресс живёт в процессе — фронт опрашивает /api/stats/backfill-status.
 let _running = false;
-let _progress = { running: false, fetched: 0, inserted: 0, pages: 0, done: false, error: null, startedAt: null, finishedAt: null };
+let _progress = { running: false, fetched: 0, inserted: 0, pages: 0, done: false, error: null, variant: null, startedAt: null, finishedAt: null };
 function status() { return { ..._progress, running: _running }; }
+
+// Разные порталы Битрикса капризны к параметрам crm.stagehistory.list
+// (order/select/имя entityTypeId). Пробуем набор вариантов — минимальный
+// первым — и запоминаем первый рабочий.
+const VARIANTS = [
+  { entityTypeId: 'deal' },
+  { entityTypeId: 'deal', order: { ID: 'ASC' } },
+  { entityTypeId: 2 },
+  { entity_type_id: 'deal' },
+];
+let _variant = null;
+
+async function callPage(start) {
+  if (_variant) return b24('crm.stagehistory.list', { ..._variant, start });
+  let lastErr;
+  for (const v of VARIANTS) {
+    try {
+      const res = await b24('crm.stagehistory.list', { ...v, start });
+      _variant = v; _progress.variant = JSON.stringify(v);
+      console.log('stage-history: рабочий вариант параметров —', _progress.variant);
+      return res;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr;
+}
+
+// Прямой вызов ради ТЕКСТА ошибки Битрикса (b24 бросает без тела ответа).
+async function probeError() {
+  const WEBHOOK = process.env.BITRIX_WEBHOOK;
+  if (!WEBHOOK) return 'BITRIX_WEBHOOK не задан';
+  try {
+    const res = await fetch(`${WEBHOOK}crm.stagehistory.list.json`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept-Encoding': 'identity' },
+      body: 'entityTypeId=deal&start=0',
+    });
+    const txt = await res.text();
+    return `HTTP ${res.status}: ${txt.slice(0, 400)}`;
+  } catch (e) { return 'probe error: ' + e.message; }
+}
 
 async function insertBatch(items) {
   if (!items.length) return 0;
@@ -41,16 +81,20 @@ async function insertBatch(items) {
 async function backfillStageHistory() {
   if (_running) { console.log('stage-history backfill уже идёт — пропускаю'); return 0; }
   _running = true;
-  _progress = { running: true, fetched: 0, inserted: 0, pages: 0, done: false, error: null, startedAt: Date.now(), finishedAt: null };
+  _variant = null;
+  _progress = { running: true, fetched: 0, inserted: 0, pages: 0, done: false, error: null, variant: null, startedAt: Date.now(), finishedAt: null };
   let start = 0, safety = 0;
   try {
     while (true) {
-      const { result, next } = await b24('crm.stagehistory.list', {
-        entityTypeId: 'deal',
-        order: { ID: 'ASC' },
-        select: SELECT,
-        start,
-      });
+      let resp;
+      try {
+        resp = await callPage(start);
+      } catch (e) {
+        // Все варианты параметров упали — вытащим текст ошибки Битрикса в лог/статус.
+        const detail = await probeError();
+        throw new Error(`${e.message} · ответ Битрикса: ${detail}`);
+      }
+      const { result, next } = resp;
       const items = Array.isArray(result) ? result : (result && Array.isArray(result.items) ? result.items : []);
       if (items.length) {
         _progress.fetched += items.length;

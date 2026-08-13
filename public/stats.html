@@ -96,8 +96,9 @@ tbody tr:hover td.l{background:var(--panel-h)}
 .brk h5{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--faint);margin-bottom:8px}
 .bar{display:flex;align-items:center;gap:9px;margin-bottom:6px;font-size:12.5px}
 .bar .bl{width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dim)}
-.bar .bt{flex:1;height:8px;background:var(--line);border-radius:4px;overflow:hidden}
-.bar .bt i{display:block;height:100%;background:linear-gradient(90deg,var(--signal),var(--good));border-radius:4px}
+.bar .bt{position:relative;flex:1;height:12px;background:var(--line);border-radius:6px;overflow:visible}
+.bar .bt i{display:block;height:100%;background:linear-gradient(90deg,var(--signal),var(--good));border-radius:6px}
+.bar .bt .bcnt{position:absolute;right:7px;top:50%;transform:translateY(-50%);font-family:var(--fm);font-size:9.5px;line-height:1;color:rgba(255,255,255,.9);text-shadow:0 0 3px rgba(0,0,0,.85),0 0 2px rgba(0,0,0,.7);pointer-events:none;white-space:nowrap}
 .bar .bv{width:70px;text-align:right;font-family:var(--fm);font-size:11.5px;color:var(--text)}
 .deals{margin-top:12px}
 .deal{display:flex;gap:12px;align-items:center;padding:8px 0;border-top:1px dashed var(--line);font-size:12.5px}
@@ -313,19 +314,19 @@ function aggCompanies(deals){
   const by={};
   for(const d of deals){
     const k=d.cId||d.co;
-    if(!by[k])by[k]={companyId:d.cId,name:d.co,industry:d.ind,sum:0,count:0,byCat:{},byManuf:{},instruments:{}};
+    if(!by[k])by[k]={companyId:d.cId,name:d.co,industry:d.ind,sum:0,count:0,byCat:{},byManuf:{},instruments:{},byCatC:{},byManufC:{},instrumentsC:{}};
     const c=by[k];c.sum+=d.sum;c.count++;
-    c.byCat[d.cat]=(c.byCat[d.cat]||0)+d.sum;
-    c.byManuf[d.manuf]=(c.byManuf[d.manuf]||0)+d.sum;
-    if(d.instr)c.instruments[d.instr]=(c.instruments[d.instr]||0)+d.sum;
+    c.byCat[d.cat]=(c.byCat[d.cat]||0)+d.sum;c.byCatC[d.cat]=(c.byCatC[d.cat]||0)+1;
+    c.byManuf[d.manuf]=(c.byManuf[d.manuf]||0)+d.sum;c.byManufC[d.manuf]=(c.byManufC[d.manuf]||0)+1;
+    if(d.instr){c.instruments[d.instr]=(c.instruments[d.instr]||0)+d.sum;c.instrumentsC[d.instr]=(c.instrumentsC[d.instr]||0)+1;}
     if(d.ind&&d.ind!=='Не указана')c.industry=d.ind;
   }
-  const top=o=>Object.entries(o).map(([key,sum])=>({key,sum})).sort((a,b)=>b.sum-a.sum);
+  const top=(o,cn)=>Object.entries(o).map(([key,sum])=>({key,sum,count:cn[key]||0})).sort((a,b)=>b.sum-a.sum);
   return Object.values(by).map(c=>{
     const cats=CAT_ORDER.filter(k=>c.byCat[k]);
     return {companyId:c.companyId,name:c.name,industry:c.industry,sum:c.sum,count:c.count,
-      avg:c.count?c.sum/c.count:0,byCat:top(c.byCat),byManuf:top(c.byManuf),
-      topInstruments:top(c.instruments).slice(0,6),cats,complexity:cats.length};
+      avg:c.count?c.sum/c.count:0,byCat:top(c.byCat,c.byCatC),byManuf:top(c.byManuf,c.byManufC),
+      topInstruments:top(c.instruments,c.instrumentsC).slice(0,6),cats,complexity:cats.length};
   }).sort((a,b)=>b.sum-a.sum);
 }
 function renderCompanies(){
@@ -450,7 +451,10 @@ function pollBackfill(){
   const tick=async()=>{
     let s;try{s=await (await fetch('/api/stats/backfill-status')).json();}catch(e){return;}
     const el=document.getElementById('bfStatus');
-    if(el)el.textContent=s.running?`Собрано ${s.fetched||0} записей…`:(s.done?`Готово: ${s.fetched||0} записей. Обновляю…`:'');
+    if(el){
+      if(s.error){el.textContent='Ошибка: '+s.error;el.style.color='var(--bad)';}
+      else{el.style.color='';el.textContent=s.running?`Собрано ${s.fetched||0} записей…`:(s.done?`Готово: ${s.fetched||0} записей. Обновляю…`:'');}
+    }
     if(!s.running){clearInterval(CONV_POLL);CONV_POLL=null;const b=document.getElementById('bfBtn');if(b){b.disabled=false;b.textContent='⟳ Собрать историю стадий';}
       if(s.done){CONV=null;fetch('/api/stats/conversions?year='+BOARD.year+'&force=1').then(r=>r.json()).then(d=>{CONV=d;if(!CONV.year)CONV.year=BOARD.year;if(TAB==='conversions')renderTab();});}}
   };
@@ -460,7 +464,7 @@ function pollBackfill(){
 function brk(title,entries,total){
   if(!entries||!entries.length)return '';
   const max=Math.max(1,...entries.map(e=>e.sum));
-  return `<div class="brk"><h5>${title}</h5>${entries.map(e=>`<div class="bar"><div class="bl">${esc(e.key)}</div><div class="bt"><i style="width:${Math.max(3,e.sum/max*100)}%"></i></div><div class="bv">${M(e.sum)}</div></div>`).join('')}</div>`;
+  return `<div class="brk"><h5>${title}</h5>${entries.map(e=>`<div class="bar"><div class="bl">${esc(e.key)}</div><div class="bt"><i style="width:${Math.max(3,e.sum/max*100)}%"></i>${e.count!=null?`<span class="bcnt">${e.count} шт</span>`:''}</div><div class="bv">${M(e.sum)}</div></div>`).join('')}</div>`;
 }
 
 async function resync(){
