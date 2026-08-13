@@ -42,6 +42,40 @@ app.use('/auth/totp', authLimiter);
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());
+
+// ── PWA: делаем дашборд устанавливаемым приложением на телефоне ──────────────
+// Патчим res.sendFile так, чтобы в КАЖДУЮ html-страницу (все они отдаются через
+// sendFile после проверки авторизации) автоматически подставлялись манифест,
+// иконки и регистрация service worker. Правим один раз здесь — не 19 файлов.
+const fs = require('fs');
+const PWA_HEAD = [
+  '<link rel="manifest" href="/manifest.webmanifest">',
+  '<meta name="theme-color" content="#14171d">',
+  '<meta name="apple-mobile-web-app-capable" content="yes">',
+  '<meta name="mobile-web-app-capable" content="yes">',
+  '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">',
+  '<meta name="apple-mobile-web-app-title" content="ЦУП">',
+  '<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">',
+  "<script>if('serviceWorker' in navigator){addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}</script>",
+].join('\n') + '\n';
+app.use((req, res, next) => {
+  const orig = res.sendFile.bind(res);
+  res.sendFile = (fp, opts, cb) => {
+    if (typeof fp === 'string' && fp.endsWith('.html')) {
+      fs.readFile(fp, 'utf8', (err, html) => {
+        if (err) return orig(fp, opts, cb);
+        let out = html;
+        if (out.includes('</head>') && !out.includes('/manifest.webmanifest')) out = out.replace('</head>', PWA_HEAD + '</head>');
+        res.set('Content-Type', 'text/html; charset=utf-8');
+        res.send(out);
+      });
+      return;
+    }
+    return orig(fp, opts, cb);
+  };
+  next();
+});
+
 // ── Page routes — MUST be registered before express.static, or static's
 // default file-serving would hand out these pages to anyone, auth or not. ──
 // Public-facing subdomains for client-facing forms — no auth, any path.
