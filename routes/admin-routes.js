@@ -149,6 +149,40 @@ router.delete('/users/:id', requireAuth(['admin']), async (req, res) => {
   } catch(e) { sanitizeError(e, res); }
 });
 
+// POST /admin/import-bitrix-users — массовое создание учёток по сотрудникам Bitrix.
+// Логин = корпоративная почта из Bitrix, пароль у всех стартовый «123qwerty»
+// (сотрудники сменят сами), роль по умолчанию — viewer (Просмотр), имя как в
+// Bitrix, сразу проставляется bitrix_user_id (для уведомлений). Категорию КП и
+// почтовый ящик НЕ трогаем. Идемпотентно: существующие учётки (по логину) не
+// изменяются — можно запускать повторно при найме новых.
+router.post('/import-bitrix-users', requireAuth(['admin']), async (req, res) => {
+  try {
+    const { fetchAllActiveUsers } = require('./planner-routes');
+    const users = await fetchAllActiveUsers();
+    const SERVICE = new Set(['Администратор', 'Power BI', 'Администратор Портала']);
+    const hash = await bcrypt.hash('123qwerty', 12); // один хэш на всех — общий стартовый пароль
+    let added = 0, skippedExisting = 0, skippedNoEmail = 0;
+    const noEmail = [];
+    for (const u of users) {
+      const id = parseInt(u.ID, 10);
+      const name = `${u.NAME || ''} ${u.LAST_NAME || ''}`.trim();
+      if (!id || !name || SERVICE.has(name)) continue;
+      const email = String(u.EMAIL || '').trim().toLowerCase();
+      if (!email) { skippedNoEmail++; noEmail.push({ id, name }); continue; }
+      const r = await pool.query(
+        `INSERT INTO ticketsmodule_users (username, display_name, password_hash, role, bitrix_user_id, active)
+         VALUES ($1,$2,$3,'viewer',$4,true)
+         ON CONFLICT (username) DO NOTHING RETURNING id`,
+        [email, name, hash, id]
+      );
+      if (r.rows.length) added++; else skippedExisting++;
+    }
+    await auditLog(req.user.id, req.user.username, 'BULK_IMPORT_BITRIX_USERS', null,
+      { added, skippedExisting, skippedNoEmail }, req.ip, req.headers['user-agent']);
+    res.json({ ok: true, added, skippedExisting, skippedNoEmail, noEmail });
+  } catch (e) { sanitizeError(e, res); }
+});
+
 // GET /admin/logs
 router.get('/logs', requireAuth(['admin']), async (req, res) => {
   try {

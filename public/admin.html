@@ -145,10 +145,16 @@ tr:hover td{background:#fafbfd;}
     <div class="card">
       <div class="card-head">
         <span class="card-title">Пользователи системы</span>
-        <button class="btn btn-primary" onclick="openCreate()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Добавить пользователя
-        </button>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn" id="btnImportBitrix" onclick="importBitrixUsers()" title="Создать учётки по всем сотрудникам Bitrix (логин — почта, пароль 123qwerty, роль Просмотр)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Импорт из Битрикс
+          </button>
+          <button class="btn btn-primary" onclick="openCreate()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Добавить пользователя
+          </button>
+        </div>
       </div>
       <div id="usersTable"><div class="empty">Загрузка…</div></div>
     </div>
@@ -394,6 +400,30 @@ async function loadTgLinks() {
 function copyTgLink(userId) {
   const link = `https://t.me/ProLab_Service_bot?start=${userId}`;
   navigator.clipboard.writeText(link).then(() => toast('🔗 Ссылка скопирована', 'success'));
+}
+
+// ── Массовый импорт учёток по сотрудникам Bitrix ──────────────────────────────
+async function importBitrixUsers() {
+  if (!confirm('Создать учётки по всем сотрудникам Bitrix?\n\n• Логин — корпоративная почта\n• Пароль у всех: 123qwerty (сменят сами)\n• Роль по умолчанию: Просмотр\n• Имя — как в Bitrix, привязка к Bitrix — сразу\n\nСуществующие учётки НЕ меняются. Можно запускать повторно.')) return;
+  const btn = document.getElementById('btnImportBitrix');
+  const old = btn.innerHTML;
+  btn.disabled = true; btn.textContent = 'Импорт…';
+  try {
+    const r = await fetch('/admin/import-bitrix-users', { method: 'POST' });
+    const d = await r.json();
+    if (!d.ok) { toast(d.error || 'Ошибка импорта', 'error'); return; }
+    let msg = `Добавлено: ${d.added}. Уже были: ${d.skippedExisting}.`;
+    if (d.skippedNoEmail) msg += ` Без почты (пропущены): ${d.skippedNoEmail}.`;
+    toast(msg, 'success');
+    if (d.noEmail && d.noEmail.length) {
+      console.log('Сотрудники без почты в Bitrix (не добавлены):', d.noEmail.map(u => `${u.name} (#${u.id})`).join(', '));
+    }
+    loadUsers();
+  } catch (e) {
+    toast('Ошибка сети', 'error');
+  } finally {
+    btn.disabled = false; btn.innerHTML = old;
+  }
 }
 
 // ── Users ─────────────────────────────────────────────────────────────────────
