@@ -1,0 +1,50 @@
+/* ── Светлая тема ЦУП ────────────────────────────────────────────────────────
+   Активируется атрибутом html[data-theme="light"] (ставит переключатель).
+   Переопределяем ТОЛЬКО нейтральные переменные (фон/панель/текст/границы/тени).
+   Фирменные и семантические цвета (brand, signal, good/bad/warn, blue, green…)
+   не трогаем — они читаемы и на светлом. Специфичность html[data-theme] выше,
+   чем у :root на страницах, поэтому переопределение выигрывает без !important.
+
+   Замечание: страницы с ТЁМНЫМ дизайном, где цвета заданы жёстко (не через
+   переменные) — логистика, контракты, статистика, реализация — доводятся
+   отдельными правилами ниже (по мере готовности). */
+
+html[data-theme="light"]{
+  /* фоны */
+  --bg:#f3f5f9; --bg2:#ffffff; --bg3:#eef1f6;
+  --canvas:#f3f4f7; --surface:#ffffff; --surface2:#f5f6fa;
+  --panel:#ffffff; --panel-h:#f3f6fb; --card:#ffffff; --white:#ffffff;
+  /* текст */
+  --text:#1a1e27; --text-2:#39414f; --text-3:#5b6472; --text-4:#8a93a3;
+  --text2:#39414f; --text3:#6b7280;
+  --text-dim:#5b6472; --text-faint:#8a93a3;
+  /* границы */
+  --line:#e4e7ef; --line-2:#d5dae4;
+  --border:#e4e7ef; --border2:#d0d5e2;
+  --stroke:#e2e0de; --stroke-2:#d3d1cf; --stroke-strong:#cfcdca;
+  /* тени — мягкие серые (у некоторых страниц уже такие) */
+  --shadow:0 4px 16px rgba(18,28,45,.08);
+  --shadow-1:0 1px 3px rgba(18,28,45,.08); --shadow-sm:0 1px 3px rgba(18,28,45,.07);
+  --shadow-2:0 4px 16px rgba(18,28,45,.09); --shadow-md:0 4px 16px rgba(18,28,45,.09);
+  --shadow-3:0 16px 44px rgba(18,28,45,.14); --shadow-lg:0 20px 56px rgba(18,28,45,.16);
+  color-scheme: light;
+}
+
+/* Плавный переход при переключении темы */
+html[data-theme="light"] body,
+html[data-theme="light"] body *{transition:background-color .2s ease, border-color .2s ease, color .15s ease}
+
+/* ── Плавающий переключатель темы ─────────────────────────────────────────── */
+#themeToggle{
+  position:fixed; right:16px; bottom:16px; z-index:9999;
+  width:44px; height:44px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  background:#1b1f27; color:#eef0f3; border:1px solid rgba(255,255,255,.14);
+  box-shadow:0 6px 20px rgba(0,0,0,.28); cursor:pointer;
+  font-size:19px; line-height:1; transition:transform .15s ease, background .2s ease;
+}
+#themeToggle:hover{transform:translateY(-2px)}
+html[data-theme="light"] #themeToggle{
+  background:#ffffff; color:#c05a1f; border-color:#e2e5ec; box-shadow:0 6px 20px rgba(18,28,45,.16);
+}
+@media print{#themeToggle{display:none}}

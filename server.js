@@ -57,6 +57,10 @@ const PWA_HEAD = [
   '<meta name="apple-mobile-web-app-title" content="ЦУП">',
   '<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">',
   "<script>if('serviceWorker' in navigator){addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}</script>",
+  // Тема: инлайн-скрипт ставит атрибут ДО отрисовки (без мигания), затем CSS и кнопка-переключатель.
+  "<script>(function(){try{if(localStorage.getItem('pls-theme')==='light')document.documentElement.setAttribute('data-theme','light')}catch(e){}})();</script>",
+  '<link rel="stylesheet" href="/assets/theme.css">',
+  '<script src="/assets/theme.js" defer></script>',
 ].join('\n') + '\n';
 app.use((req, res, next) => {
   const orig = res.sendFile.bind(res);

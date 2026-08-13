@@ -77,6 +77,11 @@ td b{color:var(--text);font-weight:600}
 .tabs{display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid var(--line)}
 .tabs button{background:none;border:0;border-bottom:2px solid transparent;color:var(--text-dim);font:inherit;font-size:13px;font-weight:600;padding:8px 12px;cursor:pointer;margin-bottom:-1px}
 .tabs button.on{color:var(--text);border-bottom-color:var(--brand)}
+/* Светлая тема: чиним жёстко заданные тёмные цвета (поля ввода, моно-блок) */
+html[data-theme="light"] .field input{background:#fff;color:var(--text)}
+html[data-theme="light"] .field input:disabled{background:#f1f3f7;color:var(--text-dim)}
+html[data-theme="light"] .mono{background:#f5f6fa;color:var(--text-dim)}
+html[data-theme="light"] .qrbox img{background:#fff}
 </style>
 </head>
 <body>
