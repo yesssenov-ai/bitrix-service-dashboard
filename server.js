@@ -110,12 +110,14 @@ app.get('/contracts.html', requirePageAuth(['admin','coordinator']), (_, res) =>
 app.get('/logistics.html', requirePageAuth(['admin','coordinator']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'logistics.html')));
 app.get('/operational.html', requirePageAuth(['admin','coordinator']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'operational.html')));
 app.get('/cup-admin.html', requirePageAuth(['admin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'cup-admin.html')));
+app.get('/account.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'account.html')));
 // `index:false` — without this, static would auto-serve public/index.html
 // for "/" and silently undo everything above.
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/auth', require('./routes/auth-routes'));
 app.use('/admin', require('./routes/admin-routes'));
+app.use('/api/account', require('./routes/account-routes'));
 equipmentRoutes.setB24(b24);
 app.use('/equipment', equipmentRoutes.router);
 app.use('/licenses', require('./routes/licenses-routes'));
@@ -441,21 +443,26 @@ app.get('/api/users', requireAuth(), (_, res) => {
   res.json({ ok: true, users: engineers, coordinators: [...COORDINATORS].map(id => ({ id, name: USERS[id] })) });
 });
 // GET /api/portal/my-access — which ЦУП modules the current user can see.
-// Admins always see everything. Otherwise: if this person's Bitrix identity
-// has an explicit override set in the ЦУП admin panel, use exactly that;
-// if not, tell the client to fall back to its own role-based defaults.
+// Строгий режим: сотрудник видит ТОЛЬКО модули, явно выданные администратором
+// («Доступ к модулям»), независимо от роли. Роль больше не даёт модули по умолчанию.
+// Админ видит всё. Связка с Bitrix — по полю bitrix_user_id из карточки (надёжно),
+// с фолбэком на совпадение по имени для старых учёток без явной привязки.
 app.get('/api/portal/my-access', requireAuth(), async (req, res) => {
   try {
     if (req.user.role === 'admin') return res.json({ ok: true, admin: true });
-    const found = Object.entries(USERS).find(([, name]) => name === req.user.engineer_name);
-    if (!found) return res.json({ ok: true, hasOverride: false });
-    const bitrixUserId = parseInt(found[0], 10);
+    let bitrixUserId = req.user.bitrix_user_id || null;
+    if (!bitrixUserId && req.user.engineer_name) {
+      const found = Object.entries(USERS).find(([, name]) => name === req.user.engineer_name);
+      if (found) bitrixUserId = parseInt(found[0], 10);
+    }
+    if (!bitrixUserId) return res.json({ ok: true, enforced: true, modules: [] });
     const { rows } = await pool.query('SELECT modules FROM ticketsmodule_module_access WHERE bitrix_user_id=$1', [bitrixUserId]);
-    if (!rows.length) return res.json({ ok: true, hasOverride: false });
-    res.json({ ok: true, hasOverride: true, modules: rows[0].modules || [] });
+    const modules = rows.length ? (rows[0].modules || []) : [];
+    res.json({ ok: true, enforced: true, modules });
   } catch (e) {
     console.error('GET /api/portal/my-access error:', e.message);
-    res.json({ ok: true, hasOverride: false }); // fail open to role defaults rather than break the portal
+    // Строгий режим: при ошибке не раскрываем лишнего — только личный кабинет.
+    res.json({ ok: true, enforced: true, modules: [] });
   }
 });
 // ── SPA fallback — must be LAST ───────────────────────────────────────────────

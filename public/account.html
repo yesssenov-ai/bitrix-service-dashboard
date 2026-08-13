@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Мой кабинет — ProLabSupport</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#14171d;--panel:#1b1f27;--panel-h:#20242e;--line:#2a2f3a;--line-2:#363c49;
+  --text:#eef0f3;--text-dim:#8b93a3;--text-faint:#565d6b;
+  --brand:#C53B2F;--brand-h:#d94737;--signal:#35d0c0;--warn:#e0a940;--good:#3ddc84;--bad:#ff5b6e;
+  --font-display:'Space Grotesk',sans-serif;--font-body:'Inter',system-ui,sans-serif;--font-mono:'IBM Plex Mono',monospace;
+  --radius:14px;
+}
+html,body{height:100%}
+body{font-family:var(--font-body);background:radial-gradient(ellipse 900px 500px at 15% -10%,rgba(197,59,47,.08),transparent 60%),radial-gradient(ellipse 700px 500px at 100% 0%,rgba(53,208,192,.06),transparent 55%),var(--bg);color:var(--text);min-height:100vh}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:18px 28px;flex-wrap:wrap;gap:12px}
+.brand{display:flex;align-items:center;gap:11px}
+.brand img{height:22px}
+.back{display:inline-flex;align-items:center;gap:6px;color:var(--text-dim);text-decoration:none;font-size:13px;border:1px solid var(--line);padding:7px 12px;border-radius:10px;transition:.15s}
+.back:hover{color:var(--text);border-color:var(--line-2)}
+.brand-name{font-family:var(--font-display);font-weight:600;font-size:16px}
+.brand-name b{color:var(--brand)}
+.who{font-size:13px;color:var(--text-dim);display:flex;align-items:center;gap:10px}
+.who b{color:var(--text)}
+.btn{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 14px;font:inherit;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:7px}
+.btn:hover{background:var(--panel-h);border-color:var(--line-2)}
+.btn:disabled{opacity:.5;cursor:default}
+.btn-primary{background:linear-gradient(135deg,var(--brand),var(--brand-h));border-color:transparent}
+.btn-primary:hover{filter:brightness(1.07)}
+.btn-ghost{background:transparent}
+.btn-danger{background:transparent;border-color:rgba(255,91,110,.4);color:#ff8b98}
+.btn-danger:hover{background:rgba(255,91,110,.1)}
+.wrap{max-width:1080px;margin:0 auto;padding:8px 24px 60px}
+.h1{font-family:var(--font-display);font-size:26px;font-weight:700;margin-bottom:4px}
+.sub{color:var(--text-dim);font-size:14px;margin-bottom:22px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:820px){.grid{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px}
+.card.wide{grid-column:1/-1}
+.card h2{font-family:var(--font-display);font-size:16px;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:9px}
+.card .hint{color:var(--text-faint);font-size:12.5px;margin-bottom:16px;line-height:1.5}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-faint);font-weight:600;margin-bottom:6px}
+.field input{width:100%;background:#12151b;border:1px solid var(--line);border-radius:10px;padding:11px 13px;font:inherit;font-size:14px;color:var(--text)}
+.field input:focus{outline:none;border-color:var(--signal)}
+.field input:disabled{color:var(--text-dim);background:#101318}
+.ro{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+.ro:last-child{border-bottom:0}
+.ro span:first-child{color:var(--text-dim)}
+.ro span:last-child{color:var(--text);font-weight:500;text-align:right}
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.3px}
+.badge.role{background:rgba(53,208,192,.14);color:var(--signal)}
+.badge.on{background:rgba(61,220,132,.15);color:var(--good)}
+.badge.off{background:rgba(255,91,110,.15);color:var(--bad)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:6px}
+.msg{font-size:12.5px;margin-top:8px;min-height:16px}
+.msg.ok{color:var(--good)}.msg.err{color:var(--bad)}
+.qrbox{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.qrbox img{width:150px;height:150px;border-radius:12px;background:#fff;padding:8px}
+.mono{font-family:var(--font-mono);font-size:12px;color:var(--text-dim);word-break:break-all;background:#12151b;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--text-faint);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:8px 10px;border-bottom:1px solid var(--line)}
+td{padding:9px 10px;border-bottom:1px solid var(--line);color:var(--text-dim);vertical-align:top}
+td b{color:var(--text);font-weight:600}
+.tag{display:inline-block;padding:1px 7px;border-radius:6px;font-size:11px;font-weight:600;background:rgba(255,255,255,.06);color:var(--text-dim)}
+.tag.ok{background:rgba(61,220,132,.15);color:var(--good)}
+.tag.bad{background:rgba(255,91,110,.15);color:var(--bad)}
+.empty{color:var(--text-faint);font-size:13px;padding:18px 4px;text-align:center}
+.loadmore{margin-top:12px;text-align:center}
+.spin{width:26px;height:26px;border:3px solid var(--line);border-top-color:var(--signal);border-radius:50%;animation:sp 1s linear infinite;margin:20px auto}
+@keyframes sp{to{transform:rotate(360deg)}}
+.tabs{display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid var(--line)}
+.tabs button{background:none;border:0;border-bottom:2px solid transparent;color:var(--text-dim);font:inherit;font-size:13px;font-weight:600;padding:8px 12px;cursor:pointer;margin-bottom:-1px}
+.tabs button.on{color:var(--text);border-bottom-color:var(--brand)}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="brand">
+    <a class="back" href="/portal.html"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 18l-6-6 6-6"/></svg> Портал</a>
+    <img src="/assets/logo-icon.png" alt="Pro Lab Support" onerror="this.style.display='none'">
+    <div class="brand-name">Pro Lab <b>Support</b></div>
+  </div>
+  <div class="who"><span id="who">—</span><button class="btn btn-ghost" onclick="logout()">Выйти</button></div>
+</div>
+
+<div class="wrap">
+  <div class="h1">Мой кабинет</div>
+  <div class="sub">Управление своей учётной записью: имя, пароль, 2ФА, Telegram-уведомления, журнал действий и лог уведомлений.</div>
+
+  <div id="content"><div class="spin"></div></div>
+</div>
+
+<script>
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const fmtDate=s=>{if(!s)return'—';const d=new Date(s);if(isNaN(d))return'—';const p=n=>String(n).padStart(2,'0');return `${p(d.getDate())}.${p(d.getMonth()+1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;};
+const ROLE_RU={admin:'администратор',coordinator:'координатор',engineer:'инженер',viewer:'просмотр'};
+let ME=null, TG=null;
+
+async function api(url,opts){const r=await fetch(url,opts);let d={};try{d=await r.json();}catch(e){}return {ok:r.ok&&d.ok!==false,status:r.status,data:d};}
+
+async function load(){
+  const r=await fetch('/auth/me');
+  if(!r.ok){location.href='/login.html';return;}
+  const me=await api('/api/account/me');
+  if(!me.ok){location.href='/login.html';return;}
+  ME=me.data.user; TG=me.data.telegram;
+  document.getElementById('who').innerHTML=`<b>${esc(ME.displayName)}</b> · ${ROLE_RU[ME.role]||ME.role}`;
+  render();
+}
+
+function render(){
+  document.getElementById('content').innerHTML=`
+  <div class="grid">
+    <div class="card">
+      <h2>👤 Профиль</h2>
+      <div class="hint">Менять можно только отображаемое имя. Логин, роль, почтовый ящик и категории КП настраивает администратор.</div>
+      <div class="field"><label>Отображаемое имя</label><input id="dispName" value="${esc(ME.displayName)}" maxlength="200"></div>
+      <div class="row"><button class="btn btn-primary" id="saveName" onclick="saveName()">Сохранить имя</button><span class="msg" id="nameMsg"></span></div>
+      <div style="margin-top:16px">
+        <div class="ro"><span>Логин</span><span>${esc(ME.username)}</span></div>
+        <div class="ro"><span>Роль</span><span><span class="badge role">${ROLE_RU[ME.role]||ME.role}</span></span></div>
+        <div class="ro"><span>Почтовый ящик</span><span>${ME.mailMailbox?esc(ME.mailMailbox):'—'}</span></div>
+        <div class="ro"><span>Категории КП</span><span>${(ME.kpCategories&&ME.kpCategories.length)?esc(ME.kpCategories.join(', ')):'—'}</span></div>
+        <div class="ro"><span>Сотрудник Bitrix</span><span>${ME.bitrixUserId?('#'+ME.bitrixUserId):'не привязан'}</span></div>
+        <div class="ro"><span>Учётка создана</span><span>${fmtDate(ME.createdAt)}</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🔒 Смена пароля</h2>
+      <div class="hint">Минимум 8 символов. Понадобится текущий пароль.</div>
+      <div class="field"><label>Текущий пароль</label><input id="curPass" type="password" autocomplete="current-password"></div>
+      <div class="field"><label>Новый пароль</label><input id="newPass" type="password" autocomplete="new-password"></div>
+      <div class="field"><label>Повторите новый пароль</label><input id="newPass2" type="password" autocomplete="new-password"></div>
+      <div class="row"><button class="btn btn-primary" id="savePass" onclick="savePass()">Сменить пароль</button><span class="msg" id="passMsg"></span></div>
+    </div>
+
+    <div class="card">
+      <h2>🛡️ Двухфакторная аутентификация</h2>
+      <div class="hint">2ФА обязательна для входа. Здесь можно перенастроить приложение-аутентификатор (Google Authenticator, 1Password и т.п.).</div>
+      <div id="totpBox"></div>
+    </div>
+
+    <div class="card">
+      <h2>✈️ Telegram-уведомления</h2>
+      <div class="hint">Персональные уведомления о ваших сделках, логистике и сроках приходят в Telegram.</div>
+      <div id="tgBox"><div class="spin"></div></div>
+    </div>
+
+    <div class="card wide">
+      <div class="tabs">
+        <button id="tabLogs" class="on" onclick="switchTab('logs')">📜 Мой журнал действий</button>
+        <button id="tabNotif" onclick="switchTab('notif')">🔔 Мой лог уведомлений</button>
+      </div>
+      <div id="tabBody"><div class="spin"></div></div>
+    </div>
+  </div>`;
+  renderTotp();
+  loadTelegram();
+  switchTab('logs');
+}
+
+// ── Профиль ──
+async function saveName(){
+  const v=document.getElementById('dispName').value.trim();
+  const msg=document.getElementById('nameMsg');
+  if(v.length<2){msg.className='msg err';msg.textContent='Имя минимум 2 символа';return;}
+  const btn=document.getElementById('saveName');btn.disabled=true;
+  const r=await api('/api/account/profile',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({displayName:v})});
+  btn.disabled=false;
+  if(r.ok){msg.className='msg ok';msg.textContent='Сохранено';ME.displayName=v;document.getElementById('who').innerHTML=`<b>${esc(v)}</b> · ${ROLE_RU[ME.role]||ME.role}`;}
+  else{msg.className='msg err';msg.textContent=r.data.error||'Ошибка';}
+}
+
+// ── Пароль ──
+async function savePass(){
+  const cur=document.getElementById('curPass').value, np=document.getElementById('newPass').value, np2=document.getElementById('newPass2').value;
+  const msg=document.getElementById('passMsg');
+  if(!cur||!np){msg.className='msg err';msg.textContent='Заполните поля';return;}
+  if(np.length<8){msg.className='msg err';msg.textContent='Новый пароль минимум 8 символов';return;}
+  if(np!==np2){msg.className='msg err';msg.textContent='Пароли не совпадают';return;}
+  const btn=document.getElementById('savePass');btn.disabled=true;
+  const r=await api('/api/account/password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({currentPassword:cur,newPassword:np})});
+  btn.disabled=false;
+  if(r.ok){msg.className='msg ok';msg.textContent='Пароль изменён';document.getElementById('curPass').value='';document.getElementById('newPass').value='';document.getElementById('newPass2').value='';}
+  else{msg.className='msg err';msg.textContent=r.data.error||'Ошибка';}
+}
+
+// ── 2ФА ──
+function renderTotp(){
+  const box=document.getElementById('totpBox');
+  box.innerHTML=`
+    <div class="ro"><span>Статус</span><span>${ME.totpEnabled?'<span class="badge on">включена</span>':'<span class="badge off">не настроена</span>'}</span></div>
+    <div class="row" style="margin-top:12px"><button class="btn" onclick="startTotp()">${ME.totpEnabled?'Перенастроить 2ФА':'Настроить 2ФА'}</button><span class="msg" id="totpMsg"></span></div>
+    <div id="totpSetup"></div>`;
+}
+async function startTotp(){
+  const setup=document.getElementById('totpSetup');
+  setup.innerHTML='<div class="spin"></div>';
+  const r=await api('/auth/setup-totp',{method:'POST'});
+  if(!r.ok){setup.innerHTML='';document.getElementById('totpMsg').className='msg err';document.getElementById('totpMsg').textContent=r.data.error||'Ошибка';return;}
+  setup.innerHTML=`
+    <div class="qrbox">
+      <img src="${r.data.qr}" alt="QR">
+      <div>
+        <div class="hint" style="margin:0 0 8px">Отсканируйте QR в приложении-аутентификаторе или введите ключ вручную, затем подтвердите 6-значным кодом.</div>
+        <div class="mono">${esc(r.data.secret)}</div>
+      </div>
+    </div>
+    <div class="field" style="max-width:220px;margin-top:14px"><label>Код из приложения</label><input id="totpCode" inputmode="numeric" maxlength="6" placeholder="000000"></div>
+    <div class="row"><button class="btn btn-primary" onclick="confirmTotp()">Подтвердить</button><span class="msg" id="totpConfirmMsg"></span></div>`;
+}
+async function confirmTotp(){
+  const code=(document.getElementById('totpCode').value||'').replace(/\s/g,'');
+  const msg=document.getElementById('totpConfirmMsg');
+  if(code.length<6){msg.className='msg err';msg.textContent='Введите 6 цифр';return;}
+  const r=await api('/auth/confirm-totp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
+  if(r.ok){ME.totpEnabled=true;renderTotp();document.getElementById('totpMsg').className='msg ok';document.getElementById('totpMsg').textContent='2ФА включена';}
+  else{msg.className='msg err';msg.textContent=r.data.error||'Неверный код';}
+}
+
+// ── Telegram ──
+async function loadTelegram(){
+  const box=document.getElementById('tgBox');
+  const r=await api('/api/account/telegram');
+  if(!r.ok){box.innerHTML='<div class="empty">Не удалось загрузить</div>';return;}
+  const d=r.data;
+  if(!d.hasBitrixLink){
+    box.innerHTML=`<div class="ro"><span>Статус</span><span><span class="badge off">недоступно</span></span></div>
+      <div class="hint" style="margin-top:10px">${esc(d.note||'Учётка не привязана к сотруднику Bitrix. Обратитесь к администратору, чтобы включить персональные уведомления.')}</div>`;
+    return;
+  }
+  if(d.linked){
+    box.innerHTML=`
+      <div class="ro"><span>Статус</span><span><span class="badge on">подключён</span></span></div>
+      <div class="ro"><span>Аккаунт</span><span>${d.username?('@'+esc(d.username)):'—'}</span></div>
+      <div class="ro"><span>Привязан</span><span>${fmtDate(d.linkedAt)}</span></div>
+      <div class="row" style="margin-top:12px"><button class="btn btn-danger" onclick="unlinkTg()">Отвязать</button><span class="msg" id="tgMsg"></span></div>`;
+  }else{
+    const link=d.deepLink;
+    box.innerHTML=`
+      <div class="ro"><span>Статус</span><span><span class="badge off">не подключён</span></span></div>
+      <div class="hint" style="margin-top:10px">Нажмите кнопку (на телефоне откроется Telegram) и отправьте боту команду, которая подставится автоматически. После этого уведомления начнут приходить.</div>
+      <div class="row" style="margin-top:6px">
+        ${link?`<a class="btn btn-primary" href="${esc(link)}" target="_blank" rel="noopener">Подключить в Telegram</a>`:'<span class="msg err">Бот не настроен</span>'}
+        <button class="btn btn-ghost" onclick="loadTelegram()">Проверить статус</button>
+      </div>
+      ${link?`<div class="mono" style="margin-top:10px">${esc(link)}</div>`:''}`;
+  }
+}
+async function unlinkTg(){
+  const r=await api('/api/account/telegram/unlink',{method:'POST'});
+  const msg=document.getElementById('tgMsg');
+  if(r.ok){loadTelegram();}else if(msg){msg.className='msg err';msg.textContent=r.data.error||'Ошибка';}
+}
+
+// ── Журналы ──
+let TAB='logs', logsOff=0, notifOff=0;
+function switchTab(t){
+  TAB=t;
+  document.getElementById('tabLogs').classList.toggle('on',t==='logs');
+  document.getElementById('tabNotif').classList.toggle('on',t==='notif');
+  document.getElementById('tabBody').innerHTML='<div class="spin"></div>';
+  if(t==='logs'){logsOff=0;loadLogs(true);}else{notifOff=0;loadNotif(true);}
+}
+const ACT_RU={LOGIN_SUCCESS:'Вход',LOGIN_2FA_SUCCESS:'Вход (2ФА)',LOGOUT:'Выход',SELF_PROFILE_UPDATED:'Изменил имя',SELF_PASSWORD_CHANGED:'Сменил пароль',SELF_PASSWORD_FAIL:'Неудачная смена пароля',TOTP_ENABLED:'Включил 2ФА',SELF_TELEGRAM_UNLINKED:'Отвязал Telegram',TOTP_FAIL:'Ошибка 2ФА',LOGIN_FAIL:'Неудачный вход'};
+async function loadLogs(reset){
+  const r=await api('/api/account/logs?limit=50&offset='+logsOff);
+  const body=document.getElementById('tabBody');
+  if(!r.ok){body.innerHTML='<div class="empty">Не удалось загрузить</div>';return;}
+  const rows=r.data.logs||[];
+  if(reset&&!rows.length){body.innerHTML='<div class="empty">Пока нет записей</div>';return;}
+  const html=rows.map(l=>`<tr><td><b>${esc(ACT_RU[l.action]||l.action)}</b></td><td>${l.ticket_id?('#'+l.ticket_id):'—'}</td><td>${esc(l.ip||'—')}</td><td>${fmtDate(l.created_at)}</td></tr>`).join('');
+  if(reset){body.innerHTML=`<table><thead><tr><th>Действие</th><th>Объект</th><th>IP</th><th>Когда</th></tr></thead><tbody id="logsRows">${html}</tbody></table><div class="loadmore" id="logsMore"></div>`;}
+  else{document.getElementById('logsRows').insertAdjacentHTML('beforeend',html);}
+  logsOff+=rows.length;
+  document.getElementById('logsMore').innerHTML=(logsOff<r.data.total)?'<button class="btn" onclick="loadLogs(false)">Показать ещё</button>':`<span class="hint">Всего записей: ${r.data.total}</span>`;
+}
+async function loadNotif(reset){
+  const r=await api('/api/account/notifications?limit=50&offset='+notifOff);
+  const body=document.getElementById('tabBody');
+  if(!r.ok){body.innerHTML='<div class="empty">Не удалось загрузить</div>';return;}
+  if(r.data.noBitrixLink){body.innerHTML='<div class="empty">Учётка не привязана к сотруднику Bitrix — персональных уведомлений пока нет. Обратитесь к администратору.</div>';return;}
+  const rows=r.data.logs||[];
+  if(reset&&!rows.length){body.innerHTML='<div class="empty">Пока нет уведомлений</div>';return;}
+  const html=rows.map(l=>`<tr><td>${fmtDate(l.sent_at)}</td><td>${l.bitrix_item_id?('#'+l.bitrix_item_id):'—'}</td><td><b>${esc(l.reason||'—')}</b></td><td><span class="tag">${esc(l.channel||'—')}</span></td><td>${l.success?'<span class="tag ok">доставлено</span>':'<span class="tag bad">ошибка</span>'}</td></tr>`).join('');
+  if(reset){body.innerHTML=`<table><thead><tr><th>Когда</th><th>Объект</th><th>Причина</th><th>Канал</th><th>Итог</th></tr></thead><tbody id="notifRows">${html}</tbody></table><div class="loadmore" id="notifMore"></div>`;}
+  else{document.getElementById('notifRows').insertAdjacentHTML('beforeend',html);}
+  notifOff+=rows.length;
+  document.getElementById('notifMore').innerHTML=(notifOff<r.data.total)?'<button class="btn" onclick="loadNotif(false)">Показать ещё</button>':`<span class="hint">Всего записей: ${r.data.total}</span>`;
+}
+
+async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
+load();
+</script>
+</body>
+</html>

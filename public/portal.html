@@ -167,6 +167,9 @@ footer{text-align:center;color:var(--text-faint);font-size:11.5px;padding:20px;f
   </div>
 
   <div class="grid" id="grid"></div>
+  <div id="emptyNote" style="display:none;color:var(--text-faint);font-size:13.5px;margin-top:14px;padding:0 4px">
+    Вам пока не назначено ни одного модуля. Доступ выдаёт администратор — обратитесь к нему. Свою учётную запись можно настроить в «Моём кабинете» выше.
+  </div>
 </main>
 
 <footer>ЦУП · ProLabSupport Service Dashboard</footer>
@@ -192,22 +195,30 @@ const MODULES = [
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-function renderGrid(role, overrideModules){
-  const grid = document.getElementById('grid');
-  grid.innerHTML = MODULES.map(m=>{
-    const allowed = overrideModules ? overrideModules.includes(m.code) : m.roles.includes(role);
-    const tag = allowed ? 'a' : 'div';
-    const hrefAttr = allowed ? `href="${m.href}"` : '';
-    return `<${tag} class="card${allowed?'':' locked'}" ${hrefAttr} ${allowed?'':'tabindex="0"'}>
+// Личный кабинет виден ВСЕГДА (личные настройки, не модуль с доступом).
+const ACCOUNT_CARD = { code:'КАБ', name:'Мой кабинет', desc:'Профиль, пароль, 2ФА, Telegram-уведомления, мой журнал действий и лог уведомлений.', href:'/account.html' };
+
+function moduleCard(m){
+  return `<a class="card" href="${m.href}">
       <div class="card-top">
         <span class="card-code">${m.code}</span>
-        <span class="status ${allowed?'online':'locked'}"><span class="dot"></span>${allowed?'доступен':'закрыт'}</span>
+        <span class="status online"><span class="dot"></span>доступен</span>
       </div>
       <div class="card-name">${esc(m.name)}</div>
       <div class="card-desc">${esc(m.desc)}</div>
-      ${allowed?'<div class="card-enter">Открыть <svg viewBox="0 0 12 12" fill="none"><path d="M2 6h8M7 2l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>':''}
-    </${tag}>`;
-  }).join('');
+      <div class="card-enter">Открыть <svg viewBox="0 0 12 12" fill="none"><path d="M2 6h8M7 2l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    </a>`;
+}
+
+// Показываем ТОЛЬКО разрешённые модули (не пойманные — не рендерим вовсе).
+// allowed = список кодов (админу передаём все). Личный кабинет добавляем всегда.
+function renderGrid(allowedCodes){
+  const grid = document.getElementById('grid');
+  const visible = MODULES.filter(m => allowedCodes.includes(m.code));
+  const cards = visible.map(moduleCard).join('') + moduleCard(ACCOUNT_CARD);
+  grid.innerHTML = cards;
+  const note = document.getElementById('emptyNote');
+  if (note) note.style.display = visible.length ? 'none' : '';
 }
 
 function tickClock(){
@@ -237,17 +248,18 @@ async function init(){
     document.getElementById('helloLine').textContent = `${greeting} · роль: ${user.role}`;
     if (user.role === 'admin') document.getElementById('cupAdminLink').style.display = '';
 
-    let overrideModules = null;
+    // Строго по доступам: показываем только выданные админом модули (роль не даёт
+    // модули сама по себе). Админ — все. Не смогли узнать — только личный кабинет.
+    let allowedCodes = [];
     try{
       const ar = await fetch('/api/portal/my-access');
       if (ar.ok) {
         const a = await ar.json();
-        if (a.admin) overrideModules = MODULES.map(m=>m.code); // admin sees everything
-        else if (a.hasOverride) overrideModules = a.modules;
+        allowedCodes = a.admin ? MODULES.map(m=>m.code) : (a.modules || []);
       }
-    }catch(e){ /* fall back to role defaults below */ }
+    }catch(e){ allowedCodes = []; }
 
-    renderGrid(user.role, overrideModules);
+    renderGrid(allowedCodes);
   }catch(e){
     window.location.href='/login.html';
   }

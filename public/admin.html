@@ -286,6 +286,13 @@ tr:hover td{background:#fafbfd;}
         </select>
         <div class="form-hint">Нужно для фильтрации "своих" заявок</div>
       </div>
+      <div class="form-group" id="bitrixUserField">
+        <label class="form-label">Сотрудник Bitrix (для Telegram и уведомлений)</label>
+        <select class="form-select" id="fBitrixUserId">
+          <option value="">— не привязан —</option>
+        </select>
+        <div class="form-hint">Связывает учётку с сотрудником Bitrix: включает персональные Telegram-уведомления и «Мой лог уведомлений» в личном кабинете</div>
+      </div>
       <div class="form-group" id="mailboxField">
         <label class="form-label">Почтовый ящик (модуль "Почта")</label>
         <select class="form-select" id="fMailMailbox">
@@ -339,6 +346,7 @@ async function init() {
     if (d.user.role !== 'admin') { window.location.href = '/'; return; }
     document.getElementById('currentUser').textContent = d.user.displayName + ' · admin';
     loadUsers();
+    loadBitrixEmployees();
     loadTotpStatus(d.user);
   } catch(e) { window.location.href = '/login.html'; }
 }
@@ -422,6 +430,7 @@ function openCreate() {
   document.getElementById('fPassword').value = '';
   document.getElementById('fRole').value = 'viewer';
   document.getElementById('fEngineerName').value = '';
+  document.getElementById('fBitrixUserId').value = '';
   document.getElementById('fMailMailbox').value = '';
   renderKpCategoryChecks([]);
   document.getElementById('fActive').value = 'true';
@@ -441,6 +450,7 @@ function openEdit(u) {
   document.getElementById('fPassword').value = '';
   document.getElementById('fRole').value = u.role;
   document.getElementById('fEngineerName').value = u.engineer_name || '';
+  document.getElementById('fBitrixUserId').value = u.bitrix_user_id != null ? String(u.bitrix_user_id) : '';
   document.getElementById('fMailMailbox').value = u.mail_mailbox || '';
   renderKpCategoryChecks(u.kp_categories || []);
   document.getElementById('fActive').value = String(u.active);
@@ -476,6 +486,20 @@ function toggleEngineerField() {
   document.getElementById('engineerField').style.display = role === 'engineer' ? '' : 'none';
 }
 
+// Список сотрудников Bitrix для привязки учётки (id → имя).
+async function loadBitrixEmployees() {
+  try {
+    const r = await fetch('/admin/tg-links');
+    const d = await r.json();
+    if (!d.ok) return;
+    const sel = document.getElementById('fBitrixUserId');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">— не привязан —</option>' +
+      d.users.map(u => `<option value="${u.id}">${esc(u.name)} (#${u.id})</option>`).join('');
+    sel.value = cur;
+  } catch(e) { /* необязательно */ }
+}
+
 async function saveUser() {
   const id = document.getElementById('editId').value;
   const body = {
@@ -484,6 +508,7 @@ async function saveUser() {
     password: document.getElementById('fPassword').value,
     role: document.getElementById('fRole').value,
     engineerName: document.getElementById('fEngineerName').value || null,
+    bitrixUserId: document.getElementById('fBitrixUserId').value || null,
     mailMailbox: document.getElementById('fMailMailbox').value || null,
     kpCategories: getSelectedKpCategories(),
     active: document.getElementById('fActive').value === 'true',

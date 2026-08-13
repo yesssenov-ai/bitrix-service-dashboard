@@ -40,7 +40,7 @@ router.get('/tg-links', requireAuth(['admin']), async (req, res) => {
 router.get('/users', requireAuth(['admin']), async (req, res) => {
   try {
     const r = await pool.query(
-      'SELECT id,username,display_name,role,totp_enabled,active,engineer_name,mail_mailbox,kp_categories,created_at FROM ticketsmodule_users ORDER BY created_at DESC'
+      'SELECT id,username,display_name,role,totp_enabled,active,engineer_name,mail_mailbox,kp_categories,bitrix_user_id,created_at FROM ticketsmodule_users ORDER BY created_at DESC'
     );
     res.json({ ok: true, users: r.rows });
   } catch(e) { sanitizeError(e, res); }
@@ -49,7 +49,8 @@ router.get('/users', requireAuth(['admin']), async (req, res) => {
 // POST /admin/users
 router.post('/users', requireAuth(['admin']), async (req, res) => {
   try {
-    const { username, displayName, password, role, engineerName, mailMailbox, kpCategories } = req.body;
+    const { username, displayName, password, role, engineerName, mailMailbox, kpCategories, bitrixUserId } = req.body;
+    const bitrixId = (bitrixUserId === '' || bitrixUserId == null) ? null : parseInt(bitrixUserId, 10) || null;
 
     if (!username || !password || !role) {
       return res.status(400).json({ ok: false, error: 'Заполните все обязательные поля' });
@@ -66,9 +67,9 @@ router.post('/users', requireAuth(['admin']), async (req, res) => {
 
     const hash = await bcrypt.hash(password, 12);
     const r = await pool.query(
-      `INSERT INTO ticketsmodule_users (username, display_name, password_hash, role, engineer_name, mail_mailbox, kp_categories)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      [username.trim().toLowerCase(), (displayName || username).trim(), hash, role, engineerName || null, mailMailbox || null, JSON.stringify(kpCategories || [])]
+      `INSERT INTO ticketsmodule_users (username, display_name, password_hash, role, engineer_name, mail_mailbox, kp_categories, bitrix_user_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      [username.trim().toLowerCase(), (displayName || username).trim(), hash, role, engineerName || null, mailMailbox || null, JSON.stringify(kpCategories || []), bitrixId]
     );
     await auditLog(req.user.id, req.user.username, 'USER_CREATED', null,
       { newUser: username, role }, req.ip, req.headers['user-agent']);
@@ -82,9 +83,10 @@ router.post('/users', requireAuth(['admin']), async (req, res) => {
 // PUT /admin/users/:id
 router.put('/users/:id', requireAuth(['admin']), async (req, res) => {
   try {
-    const { displayName, role, active, engineerName, mailMailbox, kpCategories, password, username } = req.body;
+    const { displayName, role, active, engineerName, mailMailbox, kpCategories, password, username, bitrixUserId } = req.body;
     const id = parseInt(req.params.id);
     if (!id) return res.status(400).json({ ok: false, error: 'Неверный ID' });
+    const bitrixId = (bitrixUserId === '' || bitrixUserId == null) ? null : parseInt(bitrixUserId, 10) || null;
 
     if (role && !validateRole(role)) {
       return res.status(400).json({ ok: false, error: 'Недопустимая роль' });
@@ -112,8 +114,8 @@ router.put('/users/:id', requireAuth(['admin']), async (req, res) => {
       await pool.query('UPDATE ticketsmodule_users SET password_hash=$1, updated_at=NOW() WHERE id=$2', [hash, id]);
     }
     await pool.query(
-      `UPDATE ticketsmodule_users SET display_name=$1, role=$2, active=$3, engineer_name=$4, mail_mailbox=$5, kp_categories=$6, updated_at=NOW() WHERE id=$7`,
-      [(displayName||'').trim(), role, Boolean(active), engineerName||null, mailMailbox||null, JSON.stringify(kpCategories || []), id]
+      `UPDATE ticketsmodule_users SET display_name=$1, role=$2, active=$3, engineer_name=$4, mail_mailbox=$5, kp_categories=$6, bitrix_user_id=$7, updated_at=NOW() WHERE id=$8`,
+      [(displayName||'').trim(), role, Boolean(active), engineerName||null, mailMailbox||null, JSON.stringify(kpCategories || []), bitrixId, id]
     );
     await auditLog(req.user.id, req.user.username, 'USER_UPDATED', null,
       { targetId: id, role, active, usernameChanged: !!username?.trim() }, req.ip, req.headers['user-agent']);

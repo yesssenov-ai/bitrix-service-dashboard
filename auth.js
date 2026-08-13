@@ -282,6 +282,10 @@ async function initDB() {
     -- phone and address are fixed company-wide, set directly in the template).
     ALTER TABLE ticketsmodule_users ADD COLUMN IF NOT EXISTS job_title VARCHAR(200);
     ALTER TABLE ticketsmodule_users ADD COLUMN IF NOT EXISTS mobile_phone VARCHAR(50);
+    -- Связка учётки дашборда с сотрудником Bitrix: нужна для персональных
+    -- Telegram-уведомлений и личного лога уведомлений (оба ключуются по Bitrix-ID).
+    -- Назначается администратором в карточке пользователя.
+    ALTER TABLE ticketsmodule_users ADD COLUMN IF NOT EXISTS bitrix_user_id INTEGER;
 
     CREATE TABLE IF NOT EXISTS ticketsmodule_ticket_emails (
       id SERIAL PRIMARY KEY,
