@@ -182,11 +182,17 @@ function byCompany(deals) {
     if (d.instrument) c.instruments[d.instrument] = (c.instruments[d.instrument] || 0) + d.sum;
     if (d.industry && d.industry !== 'Не указана') c.industry = d.industry;
   }
-  return Object.values(by).map(c => ({
-    companyId: c.companyId, name: c.name, industry: c.industry, sum: c.sum, count: c.count,
-    avg: c.count ? c.sum / c.count : 0,
-    byCat: topEntries(c.byCat), byManuf: topEntries(c.byManuf), topInstruments: topEntries(c.instruments).slice(0, 6),
-  })).sort((a, b) => b.sum - a.sum);
+  const CAT_ORDER = ['Приборы', 'Расходники', 'Услуги', 'Обучение'];
+  return Object.values(by).map(c => {
+    const byCat = topEntries(c.byCat);
+    const cats = CAT_ORDER.filter(k => c.byCat[k]); // какие категории покупали (в порядке)
+    return {
+      companyId: c.companyId, name: c.name, industry: c.industry, sum: c.sum, count: c.count,
+      avg: c.count ? c.sum / c.count : 0,
+      byCat, byManuf: topEntries(c.byManuf), topInstruments: topEntries(c.instruments).slice(0, 6),
+      cats, complexity: cats.length, // «в комплексе» = сколько разных категорий брали
+    };
+  }).sort((a, b) => b.sum - a.sum);
 }
 
 // Сферы деятельности — то же по industry

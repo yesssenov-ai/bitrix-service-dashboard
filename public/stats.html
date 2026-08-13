@@ -103,6 +103,10 @@ tbody tr:hover td.l{background:var(--panel-h)}
 .deal .dt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .deal .dc{color:var(--dim);font-size:11px}
 .deal .ds{font-family:var(--fm);color:var(--good);white-space:nowrap}
+.cbadge{display:inline-block;padding:1px 9px;border-radius:20px;font-size:10.5px;font-weight:600;border:1px solid var(--line-2);margin-right:5px;background:rgba(255,255,255,.03)}
+.cx{display:inline-block;padding:1px 8px;border-radius:20px;font-size:10.5px;font-weight:700;background:rgba(255,176,32,.15);color:var(--warn);vertical-align:middle;margin-left:6px}
+.cxbox{background:rgba(53,208,192,.08);border:1px solid rgba(53,208,192,.25);border-radius:10px;padding:10px 14px;margin:14px 0 4px;font-size:13px;color:var(--dim)}
+.cxbox b{color:var(--text)}
 .empty{color:var(--faint);text-align:center;padding:40px;font-size:14px}
 .spin{width:30px;height:30px;border:3px solid var(--line);border-top-color:var(--signal);border-radius:50%;animation:sp 1s linear infinite;margin:60px auto}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -133,7 +137,7 @@ const F=n=>Math.round(n||0).toLocaleString('ru-RU').replace(/,/g,' ');
 const M=n=>{n=n||0;if(Math.abs(n)>=1e9)return (n/1e9).toFixed(2)+' млрд';if(Math.abs(n)>=1e6)return (n/1e6).toFixed(1)+' млн';if(Math.abs(n)>=1e3)return (n/1e3).toFixed(0)+' тыс';return String(Math.round(n));};
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const pct=(v,t)=>t?Math.round(v/t*100):0;
-let BOARD=null, TAB='producers', DEPT='', INSTR='sold', CSEARCH='', EXPANDM={};
+let BOARD=null, TAB='producers', DEPT='', INSTR='sold', CSEARCH='', EXPANDM={}, CX='all';
 
 async function load(force){
   const y=(document.getElementById('year').value)||new Date().getFullYear();
@@ -264,19 +268,29 @@ function renderCompanies(){
   const q=CSEARCH.toLowerCase();
   let list=BOARD.companies;
   if(q)list=list.filter(c=>(c.name||'').toLowerCase().includes(q)||(c.industry||'').toLowerCase().includes(q));
-  const bar=`<div class="toolbar"><input class="search" id="csearch" placeholder="Поиск компании или сферы…" value="${esc(CSEARCH)}" oninput="CSEARCH=this.value;renderTab();refocus()"></div>`;
+  if(CX==='complex')list=list.filter(c=>c.complexity>=2);
+  const complexCount=BOARD.companies.filter(c=>c.complexity>=2).length;
+  const bar=`<div class="toolbar">
+    <input class="search" id="csearch" placeholder="Поиск компании или сферы…" value="${esc(CSEARCH)}" oninput="CSEARCH=this.value;renderTab();refocus()">
+    <div class="seg"><button class="${CX==='all'?'on':''}" onclick="CX='all';renderTab()">Все компании</button><button class="${CX==='complex'?'on':''}" onclick="CX='complex';renderTab()">В комплексе · ${complexCount}</button></div>
+  </div>`;
   if(!list.length)return bar+'<div class="empty">Ничего не найдено.</div>';
+  const catColor={'Приборы':'var(--p10)','Расходники':'var(--good)','Услуги':'var(--warn)','Обучение':'var(--p60)'};
+  const mixBadges=c=>c.cats.map(k=>`<span class="cbadge" style="border-color:${catColor[k]};color:${catColor[k]}">${k}</span>`).join('');
   const rows=list.slice(0,200).map((c,i)=>`<div class="row" id="co${i}">
     <div class="rhead" onclick="document.getElementById('co${i}').classList.toggle('open')">
-      <div><div class="rname">${esc(c.name)}</div><div class="rmeta">${esc(c.industry||'Сфера не указана')} · ${c.count} сделок · чек ${M(c.avg)} ₸</div></div>
+      <div><div class="rname">${esc(c.name)}${c.complexity>=2?` <span class="cx">комплекс ×${c.complexity}</span>`:''}</div>
+        <div class="rmeta">${esc(c.industry||'Сфера не указана')} · ${c.count} сделок · чек ${M(c.avg)} ₸</div>
+        <div style="margin-top:6px">${mixBadges(c)}</div></div>
       <div class="rspacer"></div><div><div class="rsum">${M(c.sum)} ₸</div></div><span class="rcaret">▶</span>
     </div>
     <div class="rbody">
+      ${c.complexity>=2?`<div class="cxbox">📦 Купили в комплексе: <b>${c.cats.join(' + ')}</b> — ${c.cats.length} категории на ${M(c.sum)} ₸</div>`:''}
       <div class="mini">${['Приборы','Расходники','Услуги','Обучение'].map(cat=>{const e=c.byCat.find(x=>x.key===cat);return `<div class="mcell"><div class="mv" style="color:${e?'var(--good)':'var(--faint)'}">${e?M(e.sum)+' ₸':'—'}</div><div class="ml">${cat}</div></div>`;}).join('')}</div>
       <div class="breaks">${brk('Топ приборы',c.topInstruments,c.sum)}${brk('Бренды',c.byManuf.slice(0,6),c.sum)}</div>
     </div>
   </div>`).join('');
-  return bar+`<div class="hint">${list.length} компаний${list.length>200?' (показаны первые 200)':''}. Раскрой компанию — что купила по категориям, топ-приборы, бренды.</div><div class="list">`+rows+'</div>';
+  return bar+`<div class="hint">${list.length} компаний${list.length>200?' (показаны первые 200)':''}. «В комплексе» — компании, бравшие 2+ категории (прибор + расходка + сервис/обучение). Раскрой — разбивка по категориям, топ-приборы, бренды.</div><div class="list">`+rows+'</div>';
 }
 function refocus(){const s=document.getElementById('csearch');if(s){const v=s.value;s.focus();s.setSelectionRange(v.length,v.length);}}
 
