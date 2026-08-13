@@ -55,8 +55,10 @@ router.get('/employee-options', requireAuth(['admin']), async (req, res) => {
 router.get('/users', requireAuth(['admin']), async (req, res) => {
   try {
     const r = await pool.query(
-      'SELECT id,username,display_name,role,totp_enabled,active,engineer_name,mail_mailbox,kp_categories,bitrix_user_id,created_at FROM ticketsmodule_users ORDER BY created_at DESC'
+      'SELECT id,username,display_name,role,totp_enabled,active,engineer_name,mail_mailbox,kp_categories,bitrix_user_id,created_at FROM ticketsmodule_users'
     );
+    // Всегда по алфавиту (кириллица корректно — через localeCompare 'ru').
+    r.rows.sort((a, b) => String(a.display_name || '').localeCompare(String(b.display_name || ''), 'ru', { sensitivity: 'base' }));
     res.json({ ok: true, users: r.rows });
   } catch(e) { sanitizeError(e, res); }
 });

@@ -54,10 +54,17 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
 .card-title{font-size:14px;font-weight:600;}
 
 table{width:100%;border-collapse:collapse;}
-th{padding:10px 16px;text-align:left;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--border);background:var(--bg);white-space:nowrap;}
-td{padding:12px 16px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle;}
+th{padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);background:var(--bg);white-space:nowrap;}
+td{padding:11px 12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle;}
 tr:last-child td{border-bottom:none;}
 tr:hover td{background:#fafbfd;}
+/* Таблицы никогда не должны обрезаться/вылезать за карточку: если не влезают —
+   прокручиваются внутри своей области. Кнопки действий не переносятся. */
+#usersTable,#logsTable,#notifLogTable,#tgLinksTable{overflow-x:auto;}
+td .row-actions{display:flex;gap:6px;justify-content:flex-end;white-space:nowrap;}
+td .row-actions .btn{flex:0 0 auto;}
+.btn-icon{padding:5px 7px;}
+th:last-child,td:last-child{text-align:right;}
 
 .role-badge{display:inline-flex;align-items:center;border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
 .role-admin{background:rgba(220,38,38,.1);color:#dc2626;}
@@ -444,9 +451,9 @@ async function loadUsers() {
       <td style="color:var(--text-3)">${u.mail_mailbox ? esc(u.mail_mailbox) : '—'}</td>
       <td>${u.active ? '<span class="status-on"><span class="dot"></span>Активен</span>' : '<span class="status-off"><span class="dot"></span>Деактивирован</span>'}</td>
       <td class="log-time">${new Date(u.created_at).toLocaleDateString('ru')}</td>
-      <td><div style="display:flex;gap:6px">
-        <button class="btn btn-sm" onclick='openEdit(${JSON.stringify(u)})'>✏️ Изменить</button>
-        ${u.active ? `<button class="btn btn-sm btn-danger" onclick="deactivate(${u.id},'${esc(u.display_name)}')">Деакт.</button>` : ''}
+      <td><div class="row-actions">
+        <button class="btn btn-sm btn-icon" onclick='openEdit(${JSON.stringify(u)})' title="Изменить"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+        ${u.active ? `<button class="btn btn-sm btn-danger" onclick="deactivate(${u.id},'${esc(u.display_name)}')" title="Деактивировать">Деакт.</button>` : ''}
       </div></td>
     </tr>`).join('')}</tbody>
   </table>`;
