@@ -191,4 +191,39 @@ async function fullSync() {
   return total;
 }
 
-module.exports = { syncOneDeal, fullSync, upsertDeal };
+// Инкрементальная синхронизация: тянет из Битрикса только сделки, ИЗМЕНЁННЫЕ
+// после `sinceMs` (по DATE_MODIFY), и апсертит их в зеркало. Идёт быстро, т.к.
+// за день меняется мало сделок. Используется кнопкой «Обновить» в Контрактах.
+// sinceMs — момент в UTC (мс). Overlap-буфер вычитается вызывающим кодом.
+const _toBitrixDT = ms => new Date(ms).toISOString().slice(0, 19) + '+00:00';
+let _incRunning = false;
+async function incrementalSync(sinceMs) {
+  if (_incRunning) { console.log('incrementalSync уже идёт — пропускаю'); return { updated: 0, skipped: true }; }
+  _incRunning = true;
+  const since = _toBitrixDT(sinceMs);
+  let updated = 0;
+  try {
+    for (const categoryId of CATEGORY_IDS) {
+      let start = 0;
+      while (true) {
+        const { result, next } = await b24('crm.deal.list', {
+          filter: { CATEGORY_ID: categoryId, '>=DATE_MODIFY': since },
+          select: SELECT_FIELDS, order: { DATE_MODIFY: 'ASC' }, start,
+        });
+        for (const d of (result || [])) {
+          try { await upsertDeal(d); updated++; }
+          catch (e) { console.error(`  ⚠️ inc upsert #${d.ID}: ${e.message}`); }
+          await sleep(60);
+        }
+        if (next === undefined || next === null) break;
+        start = next;
+      }
+    }
+    console.log(`✅ Инкрементальная синхронизация: обновлено ${updated} сделок (с ${since})`);
+  } finally {
+    _incRunning = false;
+  }
+  return { updated, since };
+}
+
+module.exports = { syncOneDeal, fullSync, upsertDeal, incrementalSync };

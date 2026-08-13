@@ -32,6 +32,11 @@
   .yearsel select{background:transparent;border:0;color:var(--text);font:inherit;font-weight:700;cursor:pointer;outline:none}
   .yearsel select option{background:#121a2e}
   .clock{text-align:right}.clock .c1{font-size:11px;color:var(--dim)}.clock .c2{font-size:16px;font-weight:700;color:#fff}
+  .refresh-btn{display:inline-flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--border);border-radius:11px;padding:8px 13px;font:inherit;font-size:13px;font-weight:700;color:var(--text);cursor:pointer;transition:.15s}
+  .refresh-btn:hover{border-color:var(--accent,#5b8cff);color:#fff}
+  .refresh-btn:disabled{opacity:.6;cursor:default}
+  .refresh-btn.busy .ri{animation:spin360 .9s linear infinite}
+  @keyframes spin360{to{transform:rotate(360deg)}}
   .live{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;color:var(--good);margin-top:2px}
   .live .dot{width:6px;height:6px;border-radius:50%;background:var(--good);animation:pulse 1.8s infinite}
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,201,163,.5)}70%{box-shadow:0 0 0 7px rgba(34,201,163,0)}100%{box-shadow:0 0 0 0 rgba(34,201,163,0)}}
@@ -237,6 +242,10 @@
     </div>
     <div class="hctl">
       <div class="yearsel">Год: <select id="yearSel"></select></div>
+      <button class="refresh-btn" id="refreshBtn" onclick="refreshNow()" title="Подтянуть из Битрикса сделки, изменённые после последнего обновления">
+        <svg class="ri" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+        <span class="rl">Обновить</span>
+      </button>
       <div class="clock">
         <div class="c1">Данные обновлены</div>
         <div class="c2 tabular" id="updated">—</div>
@@ -390,23 +399,47 @@ function confettiBurst(x,y){
 async function init(){
   try{const r=await fetch('/auth/me');if(r.ok){const {user}=await r.json();ROLE=user.role;}}catch(e){}
   if(ROLE==='admin')document.getElementById('planCard').classList.add('editable');
-  load();
+  await load();
+  refreshNow(true); // при открытии сразу тихо подтягиваем изменившиеся сделки
+}
+function paintUpdated(){
+  const u=UPDATED?new Date(UPDATED):null;const p=n=>String(n).padStart(2,'0');
+  document.getElementById('updated').textContent=u?`${p(u.getDate())}.${p(u.getMonth()+1)}.${u.getFullYear()} ${p(u.getHours())}:${p(u.getMinutes())}`:'—';
+}
+function applySummary(d){
+  ALL=d.deals||[];PLAN=d.planMap||{};PIPES=d.pipelines||{};DEPT_ORDER=d.deptOrder||[];UPDATED=d.updatedAt;
+  paintUpdated();
+  buildFilterOptions();
+  renderAll();
+}
+async function fetchSummary(){
+  const r=await fetch('/api/contracts/summary?year='+YEAR);
+  if(!r.ok)throw new Error((await r.json()).error||r.status);
+  return r.json();
 }
 async function load(){
   const L=document.getElementById('loading');L.style.display='grid';L.style.opacity='1';
   try{
-    const r=await fetch('/api/contracts/summary?year='+YEAR);
-    if(!r.ok)throw new Error((await r.json()).error||r.status);
-    const d=await r.json();
-    ALL=d.deals||[];PLAN=d.planMap||{};PIPES=d.pipelines||{};DEPT_ORDER=d.deptOrder||[];UPDATED=d.updatedAt;
-    const u=UPDATED?new Date(UPDATED):null;const p=n=>String(n).padStart(2,'0');
-    document.getElementById('updated').textContent=u?`${p(u.getDate())}.${p(u.getMonth()+1)}.${u.getFullYear()} ${p(u.getHours())}:${p(u.getMinutes())}`:'—';
-    buildFilterOptions();
-    renderAll();
+    applySummary(await fetchSummary());
     loadNews();
   }catch(e){
     document.getElementById('kpis').innerHTML=`<div class="err">Ошибка загрузки: ${esc(e.message)}</div>`;
   }finally{L.style.opacity='0';setTimeout(()=>L.style.display='none',300);}
+}
+// Подтянуть из Битрикса только сделки, изменившиеся после последнего обновления,
+// затем перерисовать. silent=true — фоновой автозапуск при открытии (без ошибок в UI).
+async function refreshNow(silent){
+  const btn=document.getElementById('refreshBtn');
+  if(btn){btn.disabled=true;btn.classList.add('busy');}
+  try{
+    const r=await fetch('/api/contracts/refresh',{method:'POST'});
+    const d=await r.json().catch(()=>({}));
+    if(r.ok){
+      applySummary(await fetchSummary()); // отразить свежие цифры
+      if(!silent&&btn){const rl=btn.querySelector('.rl');if(rl){rl.textContent=d.updated?`Обновлено: ${d.updated}`:'Актуально';setTimeout(()=>{rl.textContent='Обновить';},2500);}}
+    }else if(!silent){alert('Не удалось обновить: '+((d&&d.error)||r.status));}
+  }catch(e){ if(!silent)alert('Ошибка обновления: '+e.message); }
+  finally{ if(btn){btn.disabled=false;btn.classList.remove('busy');} }
 }
 
 // список отделов в порядке DEPT_ORDER, потом остальные

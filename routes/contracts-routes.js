@@ -33,6 +33,32 @@ router.get('/news', requireAuth(VIEW_ROLES), async (req, res) => {
   }
 });
 
+// POST /api/contracts/refresh — инкрементально подтянуть из Битрикса сделки,
+// изменённые ПОСЛЕ последнего обновления зеркала (по DATE_MODIFY). Обновляет общее
+// зеркало ticketsmodule_stat_deals (им же пользуется Статистика). Возвращает,
+// сколько сделок обновлено и новую метку времени.
+let _refreshing = false;
+router.post('/refresh', requireAuth(VIEW_ROLES), async (req, res) => {
+  if (_refreshing) return res.json({ ok: true, running: true, note: 'Обновление уже идёт' });
+  _refreshing = true;
+  try {
+    const { pool } = require('../auth');
+    const { rows } = await pool.query('SELECT MAX(synced_at) AS t FROM ticketsmodule_stat_deals');
+    const last = rows[0] && rows[0].t ? new Date(rows[0].t).getTime() : null;
+    // Буфер 15 мин на рассинхрон часовых поясов/скос — повторный апсерт идемпотентен.
+    const sinceMs = (last || (Date.now() - 7 * 86400 * 1000)) - 15 * 60 * 1000;
+    const { incrementalSync } = require('../stats-sync');
+    const r = await incrementalSync(sinceMs);
+    const { rows: r2 } = await pool.query('SELECT MAX(synced_at) AS t FROM ticketsmodule_stat_deals');
+    res.json({ ok: true, updated: r.updated || 0, updatedAt: r2[0] && r2[0].t ? new Date(r2[0].t).toISOString() : null });
+  } catch (e) {
+    console.error('POST /api/contracts/refresh error:', e.message);
+    res.status(500).json({ error: 'Не удалось обновить: ' + e.message });
+  } finally {
+    _refreshing = false;
+  }
+});
+
 // POST /api/contracts/plan { year, department, amount } — правка плана (admin), ₸.
 router.post('/plan', requireAuth(['admin']), express.json(), async (req, res) => {
   try {
