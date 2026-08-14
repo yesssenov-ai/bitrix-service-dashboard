@@ -231,27 +231,6 @@ async function getMeta(force) {
     getStages(), getSources(), getCurrencies(), iblockOptions(fields[F.vidZakupki]), resolveDocFields(force),
   ]);
   const uploadSlots = UPLOAD_SLOT_DEFS.map(s => ({ key: s.key, code: docFields[s.key], label: s.label }));
-  // «Условия оплаты поставщикам (УС)» → «100% оплата». Резолвим и КОД поля, и ID
-  // значения по названию. Поле может быть enum (f.items) ИЛИ список/iblock (тогда
-  // варианты тянем через lists.element.get). Логируем результат в Railway.
-  let oplataDefault = null;
-  if (process.env.PROC_OPLATA_FIELD && process.env.PROC_OPLATA_VALUE) {
-    oplataDefault = { code: process.env.PROC_OPLATA_FIELD, valueId: String(process.env.PROC_OPLATA_VALUE), label: '100% (env)' };
-    console.log('oplataDefault: из env', oplataDefault.code, '=', oplataDefault.valueId);
-  } else {
-    try {
-      let entry = Object.entries(fields).find(([, f]) => /услови.*оплат.*поставщик/i.test(String(f.title || '')));
-      if (!entry && fields[F.oplataPostavshikam]) entry = [F.oplataPostavshikam, fields[F.oplataPostavshikam]];
-      if (entry) {
-        const [code, f] = entry;
-        let opts = (Array.isArray(f.items) && f.items.length) ? f.items.map(i => ({ id: String(i.ID), label: String(i.VALUE) })) : [];
-        if (!opts.length) { try { opts = await iblockOptions(f); } catch (e) { opts = []; } }
-        const hit = opts.find(o => /(^|\D)100\s*%|100\s*процент/i.test(String(o.label)));
-        console.log(`oplataDefault: поле=${code} type=${f.type} title="${f.title}" вариантов=${opts.length} → ${hit ? hit.id + ' «' + hit.label + '»' : 'нет 100%'}`);
-        if (hit) oplataDefault = { code, valueId: hit.id, label: hit.label };
-      } else { console.log('oplataDefault: поле «Условия оплаты поставщикам» не найдено в crm.item.fields'); }
-    } catch (e) { console.error('oplataDefault resolve:', e.message); }
-  }
   const employees = Object.entries(USERS || {}).map(([id, name]) => ({ id: Number(id), name }))
     .sort((a, b) => String(a.name).localeCompare(String(b.name), 'ru'));
   const defaultAssignee = (employees.find(e => /нурмаганбетов/i.test(e.name)) || {}).id || null;
@@ -277,7 +256,6 @@ async function getMeta(force) {
       needKztin: enumItems(fields[F.needKztin]),
     },
     required: { vidZakupki: !!(fields[F.vidZakupki] && fields[F.vidZakupki].isRequired) },
-    oplataDefault,
     docs: DOCS.map(([label, code]) => ({ label, code })),
     // подсказка по «Внутреннему запросу» — id источника, если найден
     internalSourceId: (sources.find(s => /внутрен/i.test(s.name)) || {}).id || null,
@@ -784,14 +762,14 @@ async function createRequest(payload, bitrixUserId) {
   if (Array.isArray(payload.proizvoditel) && payload.proizvoditel.length) fields[F.proizvoditel] = payload.proizvoditel;
   if (Array.isArray(payload.pribor) && payload.pribor.length) fields[F.pribor] = payload.pribor;
   if (payload.ustanovka) fields[F.ustanovka] = payload.ustanovka;
-  // «Условия оплаты поставщикам (УС)» — всегда «100% оплата» при создании с дашборда.
-  // Код поля и ID значения резолвятся динамически по названию (meta.oplataDefault);
-  // если не нашлось — резерв на исторический код/значение.
-  if (meta.oplataDefault && meta.oplataDefault.code) {
-    fields[meta.oplataDefault.code] = meta.oplataDefault.valueId;
-  } else {
-    fields[F.oplataPostavshikam] = payload.oplataPostavshikam || '83';
-  }
+  // «Условия оплаты поставщикам» = «100% оплата» при создании с дашборда.
+  // На портале ДВА поля (по discovery): заполняем оба, чтобы значение точно село в то,
+  // что видно в карточке:
+  //  • (УС) iblock  ufCrm10_1746431292 → элемент 83 «100% оплата» (видно в карточке)
+  //  • enum         ufCrm10_1744195840932 → 3589 «100% оплата»
+  // (УС)-поле/значение можно переопределить через env PROC_OPLATA_FIELD/PROC_OPLATA_VALUE.
+  fields[process.env.PROC_OPLATA_FIELD || 'ufCrm10_1746431292'] = process.env.PROC_OPLATA_VALUE || '83';
+  fields['ufCrm10_1744195840932'] = '3589';
   if (payload.needKztin) fields[F.needKztin] = payload.needKztin;
   if (payload.kztin) fields[F.kztin] = payload.kztin;
   if (payload.po) fields[F.po] = payload.po;
