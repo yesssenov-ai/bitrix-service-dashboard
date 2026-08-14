@@ -157,14 +157,21 @@ const stageName=id=>{const f=(META.flow||[]).find(x=>x.bitrix===id);if(f)return 
 let MODE='create', EDIT=null, RVIEW='mine', DEALVIEW=null, dvTimer=null;
 const initials=name=>{const p=String(name||'').trim().split(/\s+/).filter(Boolean);return((p[0]||'?')[0]+(p[1]?p[1][0]:'')).toUpperCase();};
 const empName=id=>{const e=(META.employees||[]).find(x=>String(x.id)===String(id));return e?e.name:'';};
+// Завершённая заявка = дошла до «Товар принят» (стадия SUCCESS).
+const isDone=r=>r&&(r.stepKey==='received'||/:SUCCESS$/i.test(String(r.stageId||'')));
+const activeList=()=>LIST.filter(r=>!isDone(r));
+const doneList=()=>LIST.filter(isDone);
 function render(){
   const left=(MODE==='edit'&&EDIT!=null)?editCardHtml():createCardHtml();
+  const nA=activeList().length, nD=doneList().length;
+  const body = RVIEW==='deal' ? dealViewHtml()
+    : (RVIEW==='done' ? listInner(doneList(),'Завершённых заявок пока нет.')
+                      : listInner(activeList(),'Активных заявок нет. Создай первую слева.'));
   const right=`<div class="card" style="padding:0;overflow:hidden">
-    <div style="display:flex;align-items:center;gap:10px;padding:16px 20px 0">
-      <div class="seg2"><button class="${RVIEW==='mine'?'on':''}" onclick="setRView('mine')">Мои заявки</button><button class="${RVIEW==='deal'?'on':''}" onclick="setRView('deal')">По сделке</button></div>
-      <span style="margin-left:auto;color:var(--text-4);font-size:12px">${RVIEW==='mine'?LIST.length+' шт':''}</span>
+    <div style="display:flex;align-items:center;gap:10px;padding:16px 20px 0;flex-wrap:wrap">
+      <div class="seg2"><button class="${RVIEW==='mine'?'on':''}" onclick="setRView('mine')">Мои заявки${nA?' · '+nA:''}</button><button class="${RVIEW==='done'?'on':''}" onclick="setRView('done')">Завершённые${nD?' · '+nD:''}</button><button class="${RVIEW==='deal'?'on':''}" onclick="setRView('deal')">По сделке</button></div>
     </div>
-    <div style="overflow:auto;max-height:78vh;padding:14px 20px 20px" id="rightBody">${RVIEW==='mine'?listInner():dealViewHtml()}</div>
+    <div style="overflow:auto;max-height:78vh;padding:14px 20px 20px" id="rightBody">${body}</div>
   </div>`;
   document.getElementById('root').innerHTML=`<div class="grid">${left}${right}</div>`;
   if(MODE==='edit'&&EDIT!=null) loadDetail(EDIT);
@@ -260,15 +267,12 @@ function editCardHtml(){
       <div id="stepAction"><div class="spin" style="margin:14px auto"></div></div>
     </div>`;
 }
-function listInner(){
-  if(!LIST.length) return '<div class="empty">Пока нет заявок. Создай первую слева.</div>';
-  return `<table><thead><tr><th>Заявка</th><th>Сделка</th><th>Шаг</th><th>Создана</th><th></th></tr></thead><tbody>${LIST.map(rowHtml).join('')}</tbody></table>`;
+function listInner(list,emptyMsg){
+  list = list || LIST;
+  if(!list.length) return '<div class="empty">'+(emptyMsg||'Пока нет заявок. Создай первую слева.')+'</div>';
+  return `<table><thead><tr><th>Заявка</th><th>Сделка</th><th>Шаг</th><th>Создана</th><th></th></tr></thead><tbody>${list.map(rowHtml).join('')}</tbody></table>`;
 }
-function renderList(){
-  const b=document.getElementById('listBody'); if(b)b.innerHTML=listInner();
-  const h=document.getElementById('listHdr'); if(h)h.textContent='Мои заявки ('+LIST.length+')';
-}
-function selectReq(id){ MODE='edit'; EDIT=id; RVIEW='mine'; render(); }
+function selectReq(id){ MODE='edit'; EDIT=id; if(RVIEW==='deal')RVIEW='mine'; render(); }
 function backToCreate(){ MODE='create'; EDIT=null; DEAL=null; render(); }
 
 // ── Представление «По сделке» ───────────────────────────────────────────────
@@ -333,7 +337,7 @@ function rowHtml(r){
     <td>${r.itemUrl?`<a class="lnk" href="${esc(r.itemUrl)}" target="_blank" onclick="event.stopPropagation()">↗</a>`:''}</td>
   </tr>`;
 }
-async function reloadList(){ const l=await fetch('/api/procurement/list'); LIST=(await l.json()).items||[]; if(MODE==='edit') render(); else renderList(); }
+async function reloadList(){ const l=await fetch('/api/procurement/list'); LIST=(await l.json()).items||[]; render(); }
 async function moveStep(id,stageKey){
   try{
     const r=await fetch('/api/procurement/'+id+'/stage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({stageKey})});
