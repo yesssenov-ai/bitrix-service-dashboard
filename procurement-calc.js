@@ -282,8 +282,6 @@ async function searchDeals(q) {
 const BIN_PROVIDERS = [
   process.env.BIN_LOOKUP_URL,
   'https://apiba.prgapp.kz/CompanyFullInfo?id={bin}&lang=ru',
-  'https://pk.uchet.kz/api/ru/company/{bin}/',
-  'https://old.stat.gov.kz/api/juridical/counter/api/?bin={bin}&lang=ru',
 ].filter(Boolean);
 let _fetch = (typeof fetch === 'function') ? fetch : null;
 if (!_fetch) { try { _fetch = require('node-fetch'); } catch (e) { _fetch = null; } }
@@ -302,10 +300,17 @@ async function httpJson(url, ms = 8000) {
   } catch (e) { return { error: (e.name === 'AbortError' ? 'таймаут' : e.message) }; }
   finally { if (t) clearTimeout(t); }
 }
+// Достаём название из значения: строка ИЛИ объект-обёртка { value: '...' }
+// (apiba оборачивает поля как {value,color,...} → имя лежит в basicInfo.titleRu.value).
+function nameFromVal(v) {
+  if (typeof v === 'string') return v.trim() || null;
+  if (v && typeof v === 'object' && typeof v.value === 'string') return v.value.trim() || null;
+  return null;
+}
 function pickCompanyName(o, depth = 0) {
   if (!o || typeof o !== 'object' || depth > 5) return null;
   const keys = ['nameRu', 'nameKz', 'name', 'shortNameRu', 'shortName', 'fullNameRu', 'fullName', 'titleRu', 'titleKz', 'title', 'companyName', 'nameOfCompany'];
-  for (const k of keys) { if (typeof o[k] === 'string' && o[k].trim()) return o[k].trim(); }
+  for (const k of keys) { const n = nameFromVal(o[k]); if (n) return n; }
   for (const nest of ['company', 'result', 'results', 'data', 'basicInfo', 'info', 'obj', 'item', 'items', 'content']) {
     const v = o[nest]; const arr = Array.isArray(v) ? v[0] : v;
     const n = pickCompanyName(arr, depth + 1); if (n) return n;

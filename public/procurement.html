@@ -405,7 +405,7 @@ function approvedBanner(d){
   const nm=empName(ap.approver)||'—';
   return `<div class="proccard" style="border-color:rgba(61,220,132,.45);background:rgba(61,220,132,.08)">
     <div class="pc-row"><div class="avatar av-teal">✓</div><div style="flex:1;min-width:0">
-      <div class="pc-name" style="color:var(--good)">Закупка согласована — можно оплачивать</div>
+      <div class="pc-name" style="color:var(--good)">Закупка согласована</div>
       <div class="hint">Согласовал: <b style="color:var(--text)">${esc(nm)}</b>${ap.decidedAt?` · ${fmtDateTime(ap.decidedAt)}`:''}${ap.comment?`<br>💬 ${esc(ap.comment)}`:''}</div>
     </div></div>
   </div>`;
