@@ -7,7 +7,7 @@ const { b24 } = require('./bitrix');
 const HANDLER_URL = 'https://nms.prolabsupport.kz/webhook/bitrix-update';
 
 async function main() {
-  for (const event of ['ONCRMDEALADD', 'ONCRMDEALUPDATE']) {
+  for (const event of ['ONCRMDEALADD', 'ONCRMDEALUPDATE', 'ONCRMDEALDELETE']) {
     try {
       const { result } = await b24('event.bind', { event, handler: HANDLER_URL });
       console.log(`✅ ${event} зарегистрирован:`, result);

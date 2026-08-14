@@ -199,6 +199,12 @@ async function syncOneDeal(dealId) {
   await invalidateDealDetail(dealId);
 }
 
+// Удаление сделки из операционного зеркала (вебхук ONCRMDEALDELETE).
+async function deleteDeal(dealId) {
+  await pool.query('DELETE FROM ticketsmodule_operational_deals WHERE deal_id=$1', [dealId]).catch(() => {});
+  await invalidateDealDetail(dealId).catch(() => {});
+}
+
 // ── Full reconciliation (nightly / boot / manual button) ─────────────────────
 let syncing = false;
 async function fullSync(opts = {}) {
@@ -295,4 +301,4 @@ async function updateFactoryShipDate(dealId, ymd) {
   return { ok: true, itemId: purchase.id };
 }
 
-module.exports = { syncOneDeal, fullSync, refresh, runAutomationSweep, computeAutomation, updateFactoryShipDate };
+module.exports = { syncOneDeal, deleteDeal, fullSync, refresh, runAutomationSweep, computeAutomation, updateFactoryShipDate };

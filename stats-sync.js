@@ -136,6 +136,41 @@ async function syncOneDeal(dealId) {
   await upsertDeal(result);
 }
 
+// Удаление сделки из зеркала (вызывается из вебхука ONCRMDEALDELETE и реконсиляции).
+async function deleteDeal(dealId) {
+  await pool.query('DELETE FROM ticketsmodule_stat_deals WHERE deal_id=$1', [dealId]);
+  await pool.query('DELETE FROM ticketsmodule_stage_history WHERE deal_id=$1', [dealId]).catch(() => {});
+}
+
+// Реконсиляция удалений: тянет из Битрикса ВСЕ актуальные ID сделок (только поле
+// ID — быстро) и удаляет из зеркала строки, которых в Битриксе больше нет.
+// Безопасность: если сбор ID оборвался ошибкой или пуст — НИЧЕГО не удаляем
+// (иначе временный сбой Битрикса выкосил бы всё зеркало).
+async function reconcileDeletions() {
+  const ids = new Set();
+  for (const categoryId of CATEGORY_IDS) {
+    let start = 0;
+    try {
+      while (true) {
+        const { result, next } = await b24('crm.deal.list', { filter: { CATEGORY_ID: categoryId }, select: ['ID'], start });
+        (result || []).forEach(d => ids.add(Number(d.ID)));
+        if (next === undefined || next === null) break;
+        start = next;
+        await sleep(40);
+      }
+    } catch (e) {
+      console.error('reconcileDeletions: сбор ID прерван — отмена во избежание ложных удалений:', e.message);
+      return { deleted: 0, aborted: true };
+    }
+  }
+  if (!ids.size) return { deleted: 0, aborted: true };
+  const { rows } = await pool.query('SELECT deal_id FROM ticketsmodule_stat_deals');
+  const orphans = rows.map(r => Number(r.deal_id)).filter(id => !ids.has(id));
+  for (const id of orphans) await deleteDeal(id);
+  if (orphans.length) console.log(`🧹 Реконсиляция: удалено ${orphans.length} сделок, которых нет в Битриксе: ${orphans.slice(0, 20).join(', ')}${orphans.length > 20 ? '…' : ''}`);
+  return { deleted: orphans.length, orphans };
+}
+
 async function paginatedDealList(filter) {
   let items = [];
   let start = 0;
@@ -186,6 +221,9 @@ async function fullSync() {
     _fullSyncRunning = false;
   }
 
+  // После полной сверки — убрать из зеркала сделки, удалённые в Битриксе.
+  try { await reconcileDeletions(); } catch (e) { console.error('reconcileDeletions в fullSync:', e.message); }
+
   const totalMin = ((Date.now() - startedAt) / 60000).toFixed(1);
   console.log(`✅ Синхронизировано: ${total} сделок за ${totalMin} мин. Ошибок: ${errors}.`);
   return total;
@@ -226,4 +264,4 @@ async function incrementalSync(sinceMs) {
   return { updated, since };
 }
 
-module.exports = { syncOneDeal, fullSync, upsertDeal, incrementalSync };
+module.exports = { syncOneDeal, deleteDeal, reconcileDeletions, fullSync, upsertDeal, incrementalSync };

@@ -430,13 +430,18 @@ async function load(){
 // затем перерисовать. silent=true — фоновой автозапуск при открытии (без ошибок в UI).
 async function refreshNow(silent){
   const btn=document.getElementById('refreshBtn');
-  if(btn){btn.disabled=true;btn.classList.add('busy');}
+  if(btn){btn.disabled=true;btn.classList.add('busy');const rl=btn.querySelector('.rl');if(rl&&!silent)rl.textContent='Обновляю…';}
   try{
-    const r=await fetch('/api/contracts/refresh',{method:'POST'});
+    // Ручное нажатие: reconcile=true — заодно убрать удалённые в Битриксе сделки.
+    // Автозапуск при открытии (silent): только инкрементальное обновление, без сверки.
+    const r=await fetch('/api/contracts/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reconcile:!silent})});
     const d=await r.json().catch(()=>({}));
     if(r.ok){
       applySummary(await fetchSummary()); // отразить свежие цифры
-      if(!silent&&btn){const rl=btn.querySelector('.rl');if(rl){rl.textContent=d.updated?`Обновлено: ${d.updated}`:'Актуально';setTimeout(()=>{rl.textContent='Обновить';},2500);}}
+      if(!silent&&btn){const rl=btn.querySelector('.rl');if(rl){
+        const parts=[];if(d.updated)parts.push(`обновлено ${d.updated}`);if(d.deleted)parts.push(`удалено ${d.deleted}`);
+        rl.textContent=parts.length?parts.join(', '):'Актуально';setTimeout(()=>{rl.textContent='Обновить';},3000);
+      }}
     }else if(!silent){alert('Не удалось обновить: '+((d&&d.error)||r.status));}
   }catch(e){ if(!silent)alert('Ошибка обновления: '+e.message); }
   finally{ if(btn){btn.disabled=false;btn.classList.remove('busy');} }

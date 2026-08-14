@@ -357,6 +357,20 @@ async function handleBitrixWebhook(req, res) {
       }
     }
 
+    // ── Deal deletion — убрать сделку из зеркал Статистики/Контрактов/Операционки ─
+    if (event === 'ONCRMDEALDELETE' && data) {
+      const dealId = parseInt(data.FIELDS?.ID || data.ID);
+      if (dealId) {
+        res.status(200).send('ok');
+        try { const { deleteDeal } = require('../stats-sync'); await deleteDeal(dealId); }
+        catch (e) { console.error('stats delete webhook error:', e.message); }
+        try { const { deleteDeal: delOp } = require('../operational-sync'); await delOp(dealId); }
+        catch (e) { console.error('operational delete webhook error:', e.message); }
+        console.log(`🗑️ Сделка #${dealId} удалена из зеркал (вебхук ONCRMDEALDELETE)`);
+        return;
+      }
+    }
+
     if (!['ONCRMDYNAMICITEMUPDATE','ONCRMDYNAMICITEMADD'].includes(event) || !data) {
       return res.status(200).send('ok');
     }

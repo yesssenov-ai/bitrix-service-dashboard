@@ -42,13 +42,11 @@ const DEPARTMENT_LABELS = {
   '8384': 'Материаловедение',
 };
 const DEPT_ORDER = ['Элементный', 'Хроматография и клеточный анализ', 'Электрохимия', 'ОРМ', 'Service', 'Training', 'General Lab', 'Complex', 'Материаловедение'];
-// saleType: как в модуле Статистики (stats2-calc.direction) — воронки Расходники/
-// Тренинг/Сервис (категории 1/2/3) считаем ЦЕЛИКОМ по воронке (поле «Отдел» у них
-// часто пустое или чужое → иначе Сервис недосчитывался: было 229 вместо 236).
-// Только Инструменты (категория 0) группируем по полю «Отдел».
-const CAT_DIRECTION = { 1: 'ОРМ', 2: 'Training', 3: 'Service' };
+// saleType: поле «Отдел», КОГДА оно заполнено (сделка идёт в свой отдел — напр.
+// Материаловедение — в какой бы воронке ни была). Если «Отдел» пуст — падаем на
+// короткое имя воронки (Inst/ОРМ/Training/Service), иначе сервис/расходка с пустым
+// отделом терялись бы. Совпадает с Power BI и с модулем «Статистика» (direction).
 function saleType(category, deptId) {
-  if (CAT_DIRECTION[category]) return CAT_DIRECTION[category];
   const dep = DEPARTMENT_LABELS[deptId];
   const merged = (dep === 'Хроматография' || dep === 'Клеточный анализ') ? 'Хроматография и клеточный анализ' : dep;
   return merged || (PIPE_META[category] && PIPE_META[category].short) || 'Прочее';
