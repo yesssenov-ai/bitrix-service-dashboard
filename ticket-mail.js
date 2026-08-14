@@ -34,7 +34,7 @@ function buildSignatureHtml(engineerName, jobTitle, mobilePhone) {
       <div style="margin-top:8px">T: +7 7172 73 49 30</div>
       ${mobileLine}
       <div style="margin-top:8px"><a href="https://www.prolabsupport.kz" style="color:#C53B2F">www.prolabsupport.kz</a></div>
-      <img src="${LOGO_URL}" alt="ProLabSupport" style="height:40px;margin-top:14px;display:block;">
+      <img src="${LOGO_URL}" alt="ProLabSupport" width="340" style="width:340px;max-width:100%;height:auto;margin-top:14px;display:block;">
     </div>`;
 }
 
