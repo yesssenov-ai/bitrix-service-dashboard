@@ -271,13 +271,23 @@ async function searchDeals(q) {
 // резолв БИН через ГБД ЮЛ (внешний реестр РК). Провайдер настраивается через
 // env BIN_LOOKUP_URL с плейсхолдером {bin}; по умолчанию — открытый apiba.
 const BIN_LOOKUP_URL = process.env.BIN_LOOKUP_URL || 'https://apiba.prgapp.kz/CompanyFullInfo?id={bin}&lang=ru';
-async function httpJson(url, ms = 7000) {
-  if (typeof fetch !== 'function') return null; // Node < 18 — внешний резолв недоступен
-  const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), ms);
+// Node 16/18 совместимость: глобальный fetch есть не везде — берём node-fetch
+// (та же зависимость, что и в stagehistory-sync). Без этого внешний резолв БИН
+// молча возвращал null → «компания не найдена».
+let _fetch = (typeof fetch === 'function') ? fetch : null;
+if (!_fetch) { try { _fetch = require('node-fetch'); } catch (e) { _fetch = null; } }
+async function httpJson(url, ms = 8000) {
+  if (!_fetch) { console.error('httpJson: fetch недоступен (нет node-fetch)'); return null; }
+  let ctrl, t;
+  try { ctrl = new AbortController(); t = setTimeout(() => ctrl.abort(), ms); } catch (e) { ctrl = null; }
   try {
-    const r = await fetch(url, { signal: ctrl.signal, headers: { accept: 'application/json', 'user-agent': 'Mozilla/5.0 (PLS-CUP)' } });
-    if (!r.ok) return null; return await r.json();
-  } catch (e) { return null; } finally { clearTimeout(t); }
+    const opts = { headers: { accept: 'application/json', 'user-agent': 'Mozilla/5.0 (PLS-CUP)', referer: 'https://ba.prg.kz/' } };
+    if (ctrl) opts.signal = ctrl.signal;
+    const r = await _fetch(url, opts);
+    if (!r.ok) { console.error('httpJson: HTTP', r.status, 'для', url.slice(0, 80)); return null; }
+    return await r.json();
+  } catch (e) { console.error('httpJson error:', e.message); return null; }
+  finally { if (t) clearTimeout(t); }
 }
 function pickCompanyName(o, depth = 0) {
   if (!o || typeof o !== 'object' || depth > 4) return null;
@@ -451,7 +461,7 @@ async function listByDeal(dealId) {
     while (true) {
       const { result } = await b24('crm.item.list', {
         entityTypeId: ENTITY, filter: { parentId2: dealId },
-        select: ['id', 'title', 'stageId', 'opportunity', 'currencyId', 'xmlId'], start,
+        select: ['id', 'title', 'stageId', 'opportunity', 'currencyId', 'xmlId', 'assignedById'], start,
       });
       const batch = (result && result.items) || [];
       items = items.concat(batch);
@@ -467,6 +477,7 @@ async function listByDeal(dealId) {
       stageId: it.stageId, stageName: smap[it.stageId] || it.stageId,
       sem: SUCCESS_STAGES.test(it.stageId) ? 'ok' : (FAIL_STAGES.test(it.stageId) ? 'fail' : 'work'),
       sum: parseFloat(it.opportunity) || 0, currency: it.currencyId || 'KZT',
+      assignedId: it.assignedById || null, assignedName: it.assignedById ? (USERS[it.assignedById] || ('#' + it.assignedById)) : null,
       url: itemUrl(it.id),
       isOurs: /^PLS-DOP/i.test(String(it.xmlId || '')) || !!localByItem[it.id],
       localId: localByItem[it.id] || null,
@@ -497,6 +508,37 @@ async function moveStage(localId, stageKey) {
   return { stageId: step.bitrix, stepKey: step.key };
 }
 
+// История стадий элемента 1066: когда он входил в каждую стадию (для таймлайна).
+// Порталы капризны к параметрам — пробуем варианты и фильтруем по OWNER_ID.
+async function stageHistory(itemId) {
+  const variants = [
+    { entityTypeId: ENTITY, filter: { OWNER_ID: itemId }, order: { ID: 'ASC' } },
+    { entityTypeId: ENTITY, filter: { ownerId: itemId } },
+    { entityTypeId: ENTITY },
+  ];
+  for (const v of variants) {
+    try {
+      const { result } = await b24('crm.stagehistory.list', { ...v, start: 0 });
+      let items = Array.isArray(result) ? result : ((result && result.items) || []);
+      items = items.filter(h => String(h.OWNER_ID || h.ownerId) === String(itemId));
+      if (items.length) return items;
+    } catch (e) { /* пробуем следующий вариант */ }
+  }
+  return [];
+}
+// Карта «стадия → дата первого входа» (ISO), из истории стадий.
+async function stageDatesFor(itemId) {
+  const out = {};
+  try {
+    const hist = await stageHistory(itemId);
+    hist.forEach(h => {
+      const sid = h.STAGE_ID || h.stageId; const t = h.CREATED_TIME || h.createdTime;
+      if (sid && t && !out[sid]) out[sid] = t;
+    });
+  } catch (e) { /* best-effort */ }
+  return out;
+}
+
 // Детали заявки: документы (приложены?) и статус согласования — из 1066.
 async function getItemDetail(localId) {
   const itemId = await itemIdOf(localId);
@@ -523,8 +565,10 @@ async function getItemDetail(localId) {
       dopy = { files, serviceUrl: o ? `${o}/crm/type/${SERVICE_ENTITY}/details/${sid}/` : null };
     } catch (e) { /* best-effort */ }
   }
+  const stageDates = await stageDatesFor(itemId);
   return {
     stageId: item.stageId,
+    stageDates,
     docs: { invoice: fileInfo(DOC_INVOICE, 'invoice'), pay: fileInfo(DOC_PAY, 'pay'), contract: fileInfo(DOC_CONTRACT, 'contract') },
     dopy,
     approval: {
@@ -534,6 +578,7 @@ async function getItemDetail(localId) {
       approved: String(item[F.preApprove]) === APPROVE_YES,
       requested: !!pl.apRequested,
       decided: !!pl.apDecided,
+      decidedAt: pl.apDecidedAt || null,
     },
   };
 }
@@ -591,7 +636,7 @@ async function setApproval(localId, status, approverId, comment) {
   try {
     const { rows } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
     const pl = (rows[0] && rows[0].payload) || {};
-    pl.apDecided = true; pl.apRequested = false;
+    pl.apDecided = true; pl.apRequested = false; pl.apDecidedAt = new Date().toISOString();
     if (approverId) pl.apApprover = String(approverId);
     await pool.query('UPDATE ticketsmodule_procurement SET payload=$1, updated_at=NOW() WHERE id=$2', [pl, localId]);
   } catch (e) { /* флаг не критичен */ }
