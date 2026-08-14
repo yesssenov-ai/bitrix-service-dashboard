@@ -37,6 +37,16 @@ body{font-family:var(--fb);background:
 .h1{font-family:var(--fd);font-size:27px;font-weight:700}
 .sub{color:var(--dim);font-size:14px;margin:3px 0 18px}
 select{background:var(--panel);border:1px solid var(--line-2);border-radius:10px;color:var(--text);font:inherit;font-size:14px;font-weight:600;padding:9px 12px;cursor:pointer}
+.msel{position:relative;display:inline-block}
+.msel>button{min-width:130px;justify-content:space-between}
+.msel-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:40;background:var(--panel-h);border:1px solid var(--line-2);border-radius:12px;padding:6px;min-width:180px;max-height:300px;overflow:auto;box-shadow:0 16px 40px rgba(0,0,0,.55)}
+.msel-menu label{display:flex;gap:9px;align-items:center;padding:7px 9px;border-radius:8px;cursor:pointer;font-size:13.5px;color:var(--text);font-weight:600}
+.msel-menu label:hover{background:var(--panel)}
+.msel-menu input{width:auto;accent-color:var(--signal)}
+.msel-menu .mline{border-top:1px solid var(--line);margin:5px 2px}
+.msel-menu .mact{display:flex;gap:12px;padding:4px 8px 2px}
+.msel-menu .mact a{color:var(--signal);font-size:12px;cursor:pointer}
+.msel-menu .mact a:hover{text-decoration:underline}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:18px}
 .kpi{background:linear-gradient(160deg,var(--panel),rgba(20,25,36,.5));border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;position:relative;overflow:hidden}
 .kpi::after{content:'';position:absolute;inset:0 0 auto 0;height:3px;background:var(--kc,var(--signal))}
@@ -128,7 +138,10 @@ tbody tr:hover td.l{background:var(--panel-h)}
   <div class="h1">Статистика продаж</div>
   <div class="sub">Продажи, воронка, менеджеры, приборы, компании и сферы — по всем воронкам ProLabSupport.</div>
   <div class="toolbar">
-    <select id="year" onchange="load()"></select>
+    <div class="msel">
+      <button class="btn" type="button" onclick="toggleYearMenu(event)">🗓 <span id="yearLbl">—</span> <span style="color:var(--dim)">▾</span></button>
+      <div class="msel-menu" id="yearMenu" style="display:none"></div>
+    </div>
     <button class="btn btn-p" id="refreshBtn" onclick="refreshNow()" title="Подтянуть из Битрикса сделки, изменённые после последнего обновления (и убрать удалённые)">↻ Обновить</button>
     <button class="btn" id="resyncBtn" style="display:none" onclick="resync()" title="Полная ночная пересинхронизация всех сделок (долго)">⟳ Пересинк из Битрикс</button>
     <span class="hint" style="margin:0">Продано = Контракт…Завершена · КП = стадии P60/P80</span>
@@ -143,33 +156,46 @@ const pct=(v,t)=>t?Math.round(v/t*100):0;
 let BOARD=null, TAB='producers', DEPT='', INSTR='sold', CSEARCH='', EXPANDM={}, CX='all';
 let FDEPT='', FMGR='', FMONTH='', FMANUF='', FINSTR='', IS_ADMIN=false, CONV=null, CONV_POLL=null;
 let CO_YEAR=null, CO_DEPT='', CO_MGR='';
+let YEARS=null, SPH_SCOPE='sold', _yearsAtOpen='';
 const MONTHS_RU=['','января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 const MONTHS_NOM=['','Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 
 async function load(force){
-  const y=(document.getElementById('year').value)||new Date().getFullYear();
+  const years=(YEARS&&YEARS.length)?YEARS.join(','):String(new Date().getFullYear());
   document.getElementById('content').innerHTML='<div class="spin"></div>';
   try{
     const me=await fetch('/auth/me');if(!me.ok){location.href='/login.html';return;}
     const u=await me.json();document.getElementById('who').innerHTML='<b>'+esc(u.user.displayName)+'</b>';
     if(u.user.role==='admin'){IS_ADMIN=true;document.getElementById('resyncBtn').style.display='';}
-    const r=await fetch('/api/stats/board?year='+y+(force?'&force=1':''));
+    const r=await fetch('/api/stats/board?years='+years+(force?'&force=1':''));
     if(!r.ok){document.getElementById('content').innerHTML='<div class="empty">Не удалось загрузить статистику.</div>';return;}
     BOARD=await r.json();
     fillYears();
     render();
   }catch(e){document.getElementById('content').innerHTML='<div class="empty">Ошибка: '+esc(e.message)+'</div>';}
 }
+// Мультивыбор лет: чекбоксы в выпадашке. Применяем при закрытии меню.
 function fillYears(){
-  const sel=document.getElementById('year');if(sel.options.length)return;
-  const years=(BOARD.years&&BOARD.years.length)?BOARD.years.slice():[BOARD.year];
-  if(!years.includes(BOARD.year))years.unshift(BOARD.year);
-  sel.innerHTML=years.map(y=>`<option value="${y}" ${y===BOARD.year?'selected':''}>${y}</option>`).join('');
+  if(!YEARS||!YEARS.length) YEARS=(BOARD.yearsSel&&BOARD.yearsSel.length)?BOARD.yearsSel.slice():[BOARD.year];
+  const avail=(BOARD.years&&BOARD.years.length)?BOARD.years.slice():[BOARD.year];
+  YEARS.forEach(y=>{if(!avail.includes(y))avail.push(y);});
+  avail.sort((a,b)=>b-a);
+  const menu=document.getElementById('yearMenu');
+  menu.innerHTML=`<div class="mact"><a onclick="setYears('all')">Все</a><a onclick="setYears('clear')">Снять</a></div><div class="mline"></div>`
+    +avail.map(y=>`<label><input type="checkbox" value="${y}" ${YEARS.includes(y)?'checked':''} onchange="onYearToggle(${y},this.checked)">${y}</label>`).join('');
+  updateYearLabel();
 }
+function yearsLabel(){ const s=(BOARD&&BOARD.yearsSel?BOARD.yearsSel:(YEARS||[BOARD?BOARD.year:''])).slice().sort((a,b)=>a-b); if(!s.length)return '—'; return s.length===1?String(s[0]):(s.length<=3?s.join(', '):s[0]+'–'+s[s.length-1]); }
+function updateYearLabel(){ const s=(YEARS||[]).slice().sort((a,b)=>a-b); document.getElementById('yearLbl').textContent=s.length?(s.length===1?String(s[0]):(s.length<=3?s.join(', '):s[0]+'–'+s[s.length-1]+' ('+s.length+')')):'—'; }
+function toggleYearMenu(e){ if(e)e.stopPropagation(); const m=document.getElementById('yearMenu'); if(m.style.display==='none'){ m.style.display='block'; _yearsAtOpen=(YEARS||[]).slice().sort().join(','); } else { closeYearMenu(); } }
+function closeYearMenu(){ const m=document.getElementById('yearMenu'); if(!m||m.style.display==='none')return; m.style.display='none'; if(!YEARS||!YEARS.length){ YEARS=[BOARD.year]; fillYears(); } if((YEARS||[]).slice().sort().join(',')!==_yearsAtOpen){ load(); } }
+function onYearToggle(y,on){ YEARS=YEARS||[]; if(on){ if(!YEARS.includes(y))YEARS.push(y); } else { YEARS=YEARS.filter(x=>x!==y); } updateYearLabel(); }
+function setYears(mode){ const avail=(BOARD.years&&BOARD.years.length)?BOARD.years.slice():[BOARD.year]; YEARS=(mode==='all')?avail.slice():[]; fillYears(); }
+document.addEventListener('click',e=>{ if(!e.target.closest('.msel')) closeYearMenu(); });
 function render(){
   const k=BOARD.kpi;
   const kpis=`<div class="kpis">
-    <div class="kpi" style="--kc:var(--good)"><div class="kv">${M(k.soldSum)} ₸</div><div class="kl">Продано за ${BOARD.year}</div><div class="ks">${F(k.soldCount)} сделок</div></div>
+    <div class="kpi" style="--kc:var(--good)"><div class="kv">${M(k.soldSum)} ₸</div><div class="kl">Продано за ${yearsLabel()}</div><div class="ks">${F(k.soldCount)} сделок</div></div>
     <div class="kpi" style="--kc:var(--good)"><div class="kv">${M(k.soldAvg)} ₸</div><div class="kl">Средний чек продажи</div></div>
     <div class="kpi" style="--kc:var(--p60)"><div class="kv">${M(k.kpSum)} ₸</div><div class="kl">Выдано КП (P60/P80)</div><div class="ks">${F(k.kpCount)} сделок</div></div>
     <div class="kpi" style="--kc:var(--signal)"><div class="kv">${F(k.companies)}</div><div class="kl">Компаний-покупателей</div></div>
@@ -377,17 +403,32 @@ function renderCompanies(){
 }
 function refocus(){const s=document.getElementById('csearch');if(s){const v=s.value;s.focus();s.setSelectionRange(v.length,v.length);}}
 
+const SPH_FUNNELS=['Приборы','Расходники','Сервис','Обучение'];
 function renderSpheres(){
-  const list=BOARD.spheres;
-  if(!list.length)return '<div class="empty">Нет данных по сферам.</div>';
+  const scope=SPH_SCOPE;
+  const list=(scope==='sold'?BOARD.spheres:BOARD.spheresPipe)||[];
+  const totalSum=scope==='sold'?BOARD.kpi.soldSum:(BOARD.kpi.pipeSum||0);
+  const toolbar=`<div class="toolbar">
+    <div class="seg"><button class="${scope==='sold'?'on':''}" onclick="SPH_SCOPE='sold';renderTab()">Подписано (контракт–завершена)</button><button class="${scope==='pipe'?'on':''}" onclick="SPH_SCOPE='pipe';renderTab()">В работе (P10–P80)</button></div>
+    <span style="flex:1"></span>
+    <button class="btn btn-p" onclick="exportSpheres()" title="Excel: свод по сферам, по компаниям и детализация сделок (подписанные и в работе)">⤓ Выгрузка в Excel</button>
+  </div>`;
+  if(!list.length)return toolbar+'<div class="empty">Нет данных по сферам за выбранные годы.</div>';
   const rows=list.map((s,i)=>`<div class="row" id="sp${i}">
     <div class="rhead" onclick="document.getElementById('sp${i}').classList.toggle('open')">
       <div><div class="rname">${esc(s.industry)}</div><div class="rmeta">${s.companies} компаний · ${s.count} сделок · чек ${M(s.avg)} ₸</div></div>
-      <div class="rspacer"></div><div><div class="rsum">${M(s.sum)} ₸</div><div class="rsub">${pct(s.sum,BOARD.kpi.soldSum)}% от продаж</div></div><span class="rcaret">▶</span>
+      <div class="rspacer"></div><div><div class="rsum">${M(s.sum)} ₸</div><div class="rsub">${pct(s.sum,totalSum)}% ${scope==='sold'?'от продаж':'в работе'}</div></div><span class="rcaret">▶</span>
     </div>
-    <div class="rbody"><div class="mini" style="margin-top:14px">${['Приборы','Расходники','Услуги','Обучение'].map(cat=>{const e=s.byCat.find(x=>x.key===cat);return `<div class="mcell"><div class="mv" style="color:${e?'var(--good)':'var(--faint)'}">${e?M(e.sum)+' ₸':'—'}</div><div class="ml">${cat}</div></div>`;}).join('')}</div></div>
+    <div class="rbody">
+      <div class="mini" style="margin-top:14px">${SPH_FUNNELS.map(cat=>{const e=s.byCat.find(x=>x.key===cat);return `<div class="mcell"><div class="mv" style="color:${e?'var(--good)':'var(--faint)'}">${e?M(e.sum)+' ₸':'—'}</div><div class="ml">${cat}</div></div>`;}).join('')}</div>
+      ${scope==='pipe'&&s.byStep&&s.byStep.length?`<div class="mini" style="margin-top:10px">${s.byStep.map(st=>`<div class="mcell"><div class="mv" style="color:var(--p60)">${M(st.sum)} ₸</div><div class="ml">${esc(st.label)}</div></div>`).join('')}</div>`:''}
+    </div>
   </div>`).join('');
-  return '<div class="list">'+rows+'</div>';
+  return toolbar+'<div class="list">'+rows+'</div>';
+}
+function exportSpheres(){
+  const years=((BOARD.yearsSel&&BOARD.yearsSel.length)?BOARD.yearsSel:[BOARD.year]).join(',');
+  window.open('/api/stats/sphere-export?years='+encodeURIComponent(years),'_blank');
 }
 
 // ── Фаза 2: Конверсии и тайминги ──────────────────────────────────────────

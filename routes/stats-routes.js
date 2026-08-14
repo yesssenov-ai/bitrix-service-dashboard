@@ -8,22 +8,49 @@ function yearRange(year) {
   return { start: `${year}-01-01`, end: `${year}-12-31` };
 }
 
-// GET /api/stats/board?year=2026 — единый борд новой Статистики (все вкладки).
-// Кэш в процессе на 10 мин по году; ?force=1 пересчитывает.
+// Разбор списка лет из query: ?years=2025,2026 (или один ?year=2026).
+function parseYears(req) {
+  const raw = (req.query.years != null && req.query.years !== '') ? req.query.years : req.query.year;
+  const arr = String(raw || '').split(',').map(s => parseInt(s, 10)).filter(Boolean);
+  return arr.length ? [...new Set(arr)].sort((a, b) => a - b) : [new Date().getFullYear()];
+}
+
+// GET /api/stats/board?years=2025,2026 — единый борд новой Статистики (все вкладки).
+// Мультивыбор лет: данные суммируются. Кэш в процессе на 10 мин по набору лет.
 const _boardCache = new Map();
 router.get('/board', requireAuth(PM_ROLES), async (req, res) => {
   try {
-    const year = parseInt(req.query.year, 10) || new Date().getFullYear();
+    const years = parseYears(req);
+    const key = years.join(',');
     const force = req.query.force === '1';
-    const cached = _boardCache.get(year);
+    const cached = _boardCache.get(key);
     if (cached && !force && Date.now() - cached.at < 10 * 60 * 1000) return res.json(cached.data);
     const { computeBoard } = require('../stats2-calc');
-    const data = await computeBoard(year);
-    _boardCache.set(year, { at: Date.now(), data });
+    const data = await computeBoard(years);
+    _boardCache.set(key, { at: Date.now(), data });
     res.json(data);
   } catch (e) {
     console.error('GET /api/stats/board error:', e.message);
     res.status(500).json({ error: 'Не удалось рассчитать: ' + e.message });
+  }
+});
+
+// GET /api/stats/sphere-export?years=2025,2026[&sphere=Название] — xlsx-выгрузка
+// по сферам: свод, свод по компаниям (широкий) и детализация сделок
+// (подписанные по воронкам + в работе по воронкам и стадиям).
+router.get('/sphere-export', requireAuth(PM_ROLES), async (req, res) => {
+  try {
+    const years = parseYears(req);
+    const sphere = (req.query.sphere && String(req.query.sphere).trim()) || null;
+    const { buildSphereWorkbook } = require('../stats-export');
+    const { buffer, years: sel } = await buildSphereWorkbook(years, sphere);
+    const fname = `spheres_${sel.join('-')}${sphere ? '_' + sphere.replace(/[^\wа-яА-Я0-9]+/g, '_').slice(0, 30) : ''}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fname)}`);
+    res.end(buffer);
+  } catch (e) {
+    console.error('GET /api/stats/sphere-export error:', e.message);
+    res.status(500).json({ error: 'Не удалось сформировать выгрузку: ' + e.message });
   }
 });
 

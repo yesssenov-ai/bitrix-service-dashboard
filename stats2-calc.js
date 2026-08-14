@@ -38,10 +38,18 @@ const RAW = {
 const STAGE_STEP = {};
 for (const [step, ids] of Object.entries(RAW)) ids.forEach(id => { STAGE_STEP[id] = step; });
 const step = s => STAGE_STEP[s] || null;
-const SOLD_STEPS = new Set(['CONTRACT', 'EXEC', 'WON']); // «Продано» = контракт и далее до завершения
+const SOLD_STEPS = new Set(['CONTRACT', 'EXEC', 'WON']); // «Продано» / подписано = контракт и далее до завершения
 const KP_STEPS = new Set(['P60', 'P80']);                // «Выдано КП»
+const PRE_STEPS = new Set(['P10', 'P30', 'P60', 'P80']); // доконтрактные (в работе, ещё не подписаны)
+const PRE_ORDER = ['P10', 'P30', 'P60', 'P80'];
+const PRE_LABELS = { P10: 'P10 · Новый лид', P30: 'P30 · Задача принята', P60: 'P60 · КП выставлено', P80: 'P80 · Покупка ≤3 мес' };
 const isSold = s => SOLD_STEPS.has(step(s));
 const isKp = s => KP_STEPS.has(step(s));
+const isPre = s => PRE_STEPS.has(step(s));
+// 4 воронки Bitrix (по category_id): именно так, как просит бизнес — Сервис, а не «Услуги».
+const FUNNEL = { 0: 'Приборы', 1: 'Расходники', 2: 'Обучение', 3: 'Сервис' };
+const FUNNEL_ORDER = ['Приборы', 'Расходники', 'Сервис', 'Обучение'];
+const funnelName = c => FUNNEL[c] || '—';
 
 // Направление (Отдел) — для разрезов внутри продаж
 const DEPARTMENT_LABELS = {
@@ -84,18 +92,17 @@ const ymd = v => {
 };
 const yr = d => { if (!d) return null; const n = parseInt(String(d).slice(0, 4), 10); return Number.isNaN(n) ? null : n; };
 
-// ── Основной расчёт борда за год ─────────────────────────────────────────────
-async function computeBoard(year) {
+// ── Общий загрузчик: читает зеркало сделок и обогащает (используется бордом и
+// выгрузкой по сферам, чтобы логика классификации была одна). ─────────────────
+async function loadEnriched() {
   const rate = await getTodayRate();
   const kzt = d => (d.currency_id === 'USD' ? (parseFloat(d.opportunity) || 0) * rate : (parseFloat(d.opportunity) || 0));
-
   const { rows } = await pool.query('SELECT * FROM ticketsmodule_stat_deals');
   const indMap = await getIndustryMap();
-
-  // Обогащаем и делим на группы
   const enrich = d => ({
     id: d.deal_id, cat: d.category_id, stage: d.stage_id, step: step(d.stage_id),
     sum: kzt(d), dept: direction(d.category_id, d.department_id), catGroup: CAT_GROUP[d.category_id] || '—',
+    funnel: funnelName(d.category_id),
     managerId: d.assigned_by_id, manager: uname(d.assigned_by_id),
     manufacturer: d.manufacturer && d.manufacturer !== 'Не определено' ? d.manufacturer : 'Не определено',
     instrument: d.instrument_name || '', title: d.deal_title || '',
@@ -104,10 +111,22 @@ async function computeBoard(year) {
     contractDate: ymd(d.contract_date),
     createDate: ymd(d.date_create),
   });
+  return { rate, all: rows.map(enrich) };
+}
 
-  const all = rows.map(enrich);
-  const sold = all.filter(d => isSold(d.stage) && yr(d.contractDate) === year);
-  const kp = all.filter(d => isKp(d.stage) && yr(d.createDate) === year);
+// ── Основной расчёт борда за год(а) ──────────────────────────────────────────
+// year — число ИЛИ массив чисел (мультивыбор). При нескольких годах данные
+// суммируются. Возвращает primary-год (макс) для подписей + список выбранных.
+async function computeBoard(year) {
+  const years = (Array.isArray(year) ? year : [year]).map(y => parseInt(y, 10)).filter(Boolean);
+  const yearsSel = years.length ? [...new Set(years)].sort((a, b) => a - b) : [new Date().getFullYear()];
+  const primary = yearsSel[yearsSel.length - 1];
+  const inSel = y => yearsSel.includes(y);
+
+  const { rate, all } = await loadEnriched();
+  const sold = all.filter(d => isSold(d.stage) && inSel(yr(d.contractDate)));
+  const kp = all.filter(d => isKp(d.stage) && inSel(yr(d.createDate)));
+  const pipe = all.filter(d => isPre(d.stage) && inSel(yr(d.createDate)));
   // Все продажи (любой год) в компактном виде — для клиентской фильтрации
   // вкладки «Компании» по году / отделу / менеджеру.
   const soldAll = all.filter(d => isSold(d.stage)).map(d => ({
@@ -117,15 +136,16 @@ async function computeBoard(year) {
   }));
 
   return {
-    year, rate,
+    year: primary, yearsSel, rate,
     kpi: {
       soldSum: sum(sold), soldCount: sold.length, soldAvg: avg(sold),
       kpSum: sum(kp), kpCount: kp.length, kpAvg: avg(kp),
       companies: new Set(sold.map(d => d.companyId).filter(Boolean)).size,
       managers: new Set(sold.map(d => d.managerId).filter(Boolean)).size,
+      pipeSum: sum(pipe), pipeCount: pipe.length,
     },
-    funnel: snapshotFunnel(all, year),
-    funnelDeals: snapshotDeals(all, year),
+    funnel: snapshotFunnel(all, yearsSel),
+    funnelDeals: snapshotDeals(all, yearsSel),
     producers: byManufacturer(sold),
     departments: [...new Set(sold.map(d => d.dept))].sort((a, b) => a.localeCompare(b, 'ru')),
     managers: byManager(sold),
@@ -134,18 +154,21 @@ async function computeBoard(year) {
     companies: byCompany(sold),
     companyDeals: soldAll,
     spheres: bySphere(sold),
-    years: [...new Set(all.map(d => yr(d.contractDate)).filter(Boolean))].sort((a, b) => b - a),
+    spheresPipe: bySpherePipe(pipe),
+    years: [...new Set(all.map(d => yr(d.contractDate) || yr(d.createDate)).filter(Boolean))].sort((a, b) => b - a),
   };
 }
 
 const sum = arr => arr.reduce((s, d) => s + d.sum, 0);
 const avg = arr => (arr.length ? sum(arr) / arr.length : 0);
 
-// Воронка-снимок: сколько сделок/сумма СЕЙЧАС на каждом шаге (за год по дате создания)
-function snapshotFunnel(all, year) {
+// Воронка-снимок: сколько сделок/сумма СЕЙЧАС на каждом шаге (за выбранные годы
+// по дате создания/контракта). years — массив выбранных лет.
+function snapshotFunnel(all, years) {
+  const inSel = y => years.includes(y);
   const steps = ['P10', 'P30', 'P60', 'P80', 'CONTRACT', 'EXEC', 'WON'];
   const labels = { P10: 'P10 · Новый лид', P30: 'P30 · Задача принята', P60: 'P60 · КП выставлено', P80: 'P80 · Покупка ≤3 мес', CONTRACT: 'Контракт', EXEC: 'Исполнение', WON: 'Завершена' };
-  const inYear = all.filter(d => yr(d.createDate) === year || yr(d.contractDate) === year);
+  const inYear = all.filter(d => inSel(yr(d.createDate)) || inSel(yr(d.contractDate)));
   return steps.map(s => {
     const g = inYear.filter(d => d.step === s);
     return { step: s, label: labels[s], count: g.length, sum: sum(g) };
@@ -155,9 +178,10 @@ function snapshotFunnel(all, year) {
 // Лёгкий срез сделок для клиентской фильтрации воронки
 // (по отделу / менеджеру / месяцу / производителю / прибору).
 const moOf = d => { if (!d) return null; const n = parseInt(String(d).slice(5, 7), 10); return Number.isNaN(n) ? null : n; };
-function snapshotDeals(all, year) {
+function snapshotDeals(all, years) {
+  const inSel = y => years.includes(y);
   return all
-    .filter(d => yr(d.createDate) === year || yr(d.contractDate) === year)
+    .filter(d => inSel(yr(d.createDate)) || inSel(yr(d.contractDate)))
     .map(d => ({
       step: d.step, dept: d.dept, managerId: d.managerId, manager: d.manager,
       manufacturer: d.manufacturer, instrument: d.instrument || '',
@@ -251,7 +275,7 @@ function byCompany(deals) {
   }).sort((a, b) => b.sum - a.sum);
 }
 
-// Сферы деятельности — то же по industry
+// Сферы (подписанные / продано) — разрез по 4 воронкам (Приборы/Расходники/Сервис/Обучение).
 function bySphere(deals) {
   const by = {};
   for (const d of deals) {
@@ -259,12 +283,31 @@ function bySphere(deals) {
     if (!by[k]) by[k] = { industry: k, sum: 0, count: 0, byCat: {}, companies: new Set() };
     const s = by[k];
     s.sum += d.sum; s.count++;
-    s.byCat[d.catGroup] = (s.byCat[d.catGroup] || 0) + d.sum;
+    s.byCat[d.funnel] = (s.byCat[d.funnel] || 0) + d.sum;
     if (d.companyId) s.companies.add(d.companyId);
   }
   return Object.values(by).map(s => ({
     industry: s.industry, sum: s.sum, count: s.count, avg: s.count ? s.sum / s.count : 0,
     companies: s.companies.size, byCat: topEntries(s.byCat),
+  })).sort((a, b) => b.sum - a.sum);
+}
+
+// Сферы (доконтрактные / в работе, P10–P80) — разрез по воронкам и по стадиям.
+function bySpherePipe(deals) {
+  const by = {};
+  for (const d of deals) {
+    const k = d.industry;
+    if (!by[k]) by[k] = { industry: k, sum: 0, count: 0, byCat: {}, byStep: {}, companies: new Set() };
+    const s = by[k];
+    s.sum += d.sum; s.count++;
+    s.byCat[d.funnel] = (s.byCat[d.funnel] || 0) + d.sum;
+    s.byStep[d.step] = (s.byStep[d.step] || 0) + d.sum;
+    if (d.companyId) s.companies.add(d.companyId);
+  }
+  return Object.values(by).map(s => ({
+    industry: s.industry, sum: s.sum, count: s.count, avg: s.count ? s.sum / s.count : 0,
+    companies: s.companies.size, byCat: topEntries(s.byCat),
+    byStep: PRE_ORDER.filter(st => s.byStep[st]).map(st => ({ key: st, label: PRE_LABELS[st], sum: s.byStep[st] })),
   })).sort((a, b) => b.sum - a.sum);
 }
 
@@ -385,4 +428,9 @@ async function computeConversions(year) {
   };
 }
 
-module.exports = { computeBoard, computeConversions };
+module.exports = {
+  computeBoard, computeConversions,
+  // для выгрузки по сферам (stats-export.js)
+  loadEnriched, isSold, isPre, step, yr, funnelName,
+  FUNNEL_ORDER, PRE_ORDER, PRE_LABELS,
+};
