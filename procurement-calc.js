@@ -232,18 +232,26 @@ async function getMeta(force) {
   ]);
   const uploadSlots = UPLOAD_SLOT_DEFS.map(s => ({ key: s.key, code: docFields[s.key], label: s.label }));
   // «Условия оплаты поставщикам (УС)» → «100% оплата». Резолвим и КОД поля, и ID
-  // значения по названию — хардкод-код мог не совпасть с порталом (потому и «не
-  // заполнено»). Берём enum-поле с «…поставщик…» (НЕ «…клиент…») и значение «100%».
+  // значения по названию. Поле может быть enum (f.items) ИЛИ список/iblock (тогда
+  // варианты тянем через lists.element.get). Логируем результат в Railway.
   let oplataDefault = null;
-  try {
-    const entry = Object.entries(fields).find(([, f]) =>
-      /услови.*оплат.*поставщик/i.test(String(f.title || '')) && Array.isArray(f.items) && f.items.length);
-    if (entry) {
-      const [code, f] = entry;
-      const it = (f.items || []).find(i => /100\s*%/.test(String(i.VALUE || ''))) || null;
-      if (it) oplataDefault = { code, valueId: String(it.ID), label: it.VALUE };
-    }
-  } catch (e) { console.error('oplataDefault resolve:', e.message); }
+  if (process.env.PROC_OPLATA_FIELD && process.env.PROC_OPLATA_VALUE) {
+    oplataDefault = { code: process.env.PROC_OPLATA_FIELD, valueId: String(process.env.PROC_OPLATA_VALUE), label: '100% (env)' };
+    console.log('oplataDefault: из env', oplataDefault.code, '=', oplataDefault.valueId);
+  } else {
+    try {
+      let entry = Object.entries(fields).find(([, f]) => /услови.*оплат.*поставщик/i.test(String(f.title || '')));
+      if (!entry && fields[F.oplataPostavshikam]) entry = [F.oplataPostavshikam, fields[F.oplataPostavshikam]];
+      if (entry) {
+        const [code, f] = entry;
+        let opts = (Array.isArray(f.items) && f.items.length) ? f.items.map(i => ({ id: String(i.ID), label: String(i.VALUE) })) : [];
+        if (!opts.length) { try { opts = await iblockOptions(f); } catch (e) { opts = []; } }
+        const hit = opts.find(o => /(^|\D)100\s*%|100\s*процент/i.test(String(o.label)));
+        console.log(`oplataDefault: поле=${code} type=${f.type} title="${f.title}" вариантов=${opts.length} → ${hit ? hit.id + ' «' + hit.label + '»' : 'нет 100%'}`);
+        if (hit) oplataDefault = { code, valueId: hit.id, label: hit.label };
+      } else { console.log('oplataDefault: поле «Условия оплаты поставщикам» не найдено в crm.item.fields'); }
+    } catch (e) { console.error('oplataDefault resolve:', e.message); }
+  }
   const employees = Object.entries(USERS || {}).map(([id, name]) => ({ id: Number(id), name }))
     .sort((a, b) => String(a.name).localeCompare(String(b.name), 'ru'));
   const defaultAssignee = (employees.find(e => /нурмаганбетов/i.test(e.name)) || {}).id || null;
