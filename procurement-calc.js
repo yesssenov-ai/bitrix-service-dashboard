@@ -365,7 +365,9 @@ async function getItemDetail(localId) {
 async function uploadDoc(localId, fieldCode, filename, base64) {
   if (!UPLOAD_CODES.has(fieldCode)) throw new Error('Недопустимое поле для загрузки');
   const itemId = await itemIdOf(localId);
-  await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields: { [fieldCode]: [{ fileData: [filename, base64] }] } });
+  // Формат файла для crm.item: { fileData: [имя, base64] } (без обёртки в массив —
+  // иначе Битрикс принимает запрос, но файл не прикрепляет).
+  await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields: { [fieldCode]: { fileData: [filename, base64] } } });
   if (fieldCode === DOC_PAY) {
     try {
       const ctx = await getRequestContext(localId);
