@@ -741,7 +741,10 @@ async function createRequest(payload, bitrixUserId) {
   if (Array.isArray(payload.proizvoditel) && payload.proizvoditel.length) fields[F.proizvoditel] = payload.proizvoditel;
   if (Array.isArray(payload.pribor) && payload.pribor.length) fields[F.pribor] = payload.pribor;
   if (payload.ustanovka) fields[F.ustanovka] = payload.ustanovka;
-  if (payload.oplataPostavshikam) fields[F.oplataPostavshikam] = payload.oplataPostavshikam;
+  // «Условия оплаты поставщикам (УС)» — всегда «100% оплата» при создании с дашборда.
+  // ID значения резолвим по названию (устойчиво к разным порталам), иначе — 83.
+  const oplata100 = (meta.options && meta.options.oplataPostavshikam || []).find(o => /100\s*%/.test(String(o.label)));
+  fields[F.oplataPostavshikam] = payload.oplataPostavshikam || (oplata100 ? oplata100.id : '83');
   if (payload.needKztin) fields[F.needKztin] = payload.needKztin;
   if (payload.kztin) fields[F.kztin] = payload.kztin;
   if (payload.po) fields[F.po] = payload.po;
