@@ -11,6 +11,16 @@ const APP_BASE = process.env.APP_BASE_URL || 'https://bitrix-service-dashboard-p
 const dashUrl = () => `${APP_BASE}/procurement.html`;
 const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const chiefAccountantId = () => { const e = Object.entries(USERS || {}).find(([, name]) => /зенченко/i.test(name)); return e ? Number(e[0]) : null; };
+const warehouseManagerId = () => { const e = Object.entries(USERS || {}).find(([, name]) => /нурмаганбетов/i.test(name)); return e ? Number(e[0]) : null; };
+
+// Авто-создание из завершённого «подбора допов» (смарт «Заявки на сервис» 1058)
+const SERVICE_ENTITY = 1058;
+const SERVICE_FINAL_STAGE = 'DT1058_11:SUCCESS';          // «Заявка закрыта»
+const SERVICE_DOPY_FIELD = 'ufCrm8_1732856507642';        // «Подбор дополнительного оборудования» (file[])
+const SERVICE_ZAKUPKI_FIELD = 'ufCrmZakupki';             // обратная связь 1058 → Закупки
+const SERVICE_PARENT_DEAL_FIELD = 'ufCrm8_1732856267';    // «Родительский процесс (01 Продажа инструментов)» — сейловая сделка
+const VID_POSTAVKA_KLIENTU = '127';                       // «Вид закупки» = Для поставки клиенту
+const parseDealRef = v => { if (v == null) return null; const s = String(Array.isArray(v) ? v[0] : v); const m = s.match(/^D_?(\d+)$/i) || s.match(/^(\d+)$/); return m ? Number(m[1]) : null; };
 
 const ENTITY = 1066;         // смарт «Закупки»
 const CATEGORY = 13;         // единственная категория «Общая»
@@ -240,7 +250,7 @@ async function listRequests() {
     return {
       id: r.id, bitrixItemId: r.bitrix_item_id, dealId: r.deal_id, title: r.title,
       stageId: r.stage_id, stepIndex, stepKey: stepIndex >= 0 ? FLOW[stepIndex].key : null,
-      accountantBid: r.accountant_bid || null,
+      accountantBid: r.accountant_bid || null, sourceItemId: r.source_item_id || null,
       createdAt: r.created_at, payload: r.payload || {},
       itemUrl: itemUrl(r.bitrix_item_id), dealUrl: dealUrl(r.deal_id),
     };
@@ -319,6 +329,56 @@ async function deleteRequest(localId) {
   return { ok: true };
 }
 
+// Карта стадий 1066 (id → имя), кэш 30 мин — для представления «по сделке».
+let _stageMap = null, _stageMapAt = 0;
+async function stageNameMap() {
+  if (_stageMap && Date.now() - _stageMapAt < 30 * 60 * 1000) return _stageMap;
+  const st = await getStages(); const m = {}; st.forEach(s => { m[s.id] = s.name; });
+  _stageMap = m; _stageMapAt = Date.now();
+  return m;
+}
+const SUCCESS_STAGES = /:SUCCESS$/i;
+const FAIL_STAGES = /:(FAIL|6)$/i;
+
+// Все закупки (1066) по одной сделке (parentId2) + их статусы. Показывает и наши
+// (доп-оборудование из дашборда), и импортные — полная картина по сделке.
+async function listByDeal(dealId) {
+  dealId = Number(dealId);
+  if (!dealId) return { dealId: null, items: [] };
+  const [smap, lr] = await Promise.all([
+    stageNameMap(),
+    pool.query('SELECT bitrix_item_id, id FROM ticketsmodule_procurement WHERE deal_id=$1', [dealId]),
+  ]);
+  const localByItem = {}; lr.rows.forEach(r => { if (r.bitrix_item_id) localByItem[r.bitrix_item_id] = r.id; });
+  let items = [];
+  try {
+    let start = 0;
+    while (true) {
+      const { result } = await b24('crm.item.list', {
+        entityTypeId: ENTITY, filter: { parentId2: dealId },
+        select: ['id', 'title', 'stageId', 'opportunity', 'currencyId', 'xmlId'], start,
+      });
+      const batch = (result && result.items) || [];
+      items = items.concat(batch);
+      const total = result && result.total; start += batch.length;
+      if (!batch.length || (total != null && start >= total) || batch.length < 50) break;
+      if (start > 2000) break;
+    }
+  } catch (e) { console.error('listByDeal error:', e.message); }
+  return {
+    dealId, dealUrl: dealUrl(dealId),
+    items: items.map(it => ({
+      id: it.id, title: it.title || ('#' + it.id),
+      stageId: it.stageId, stageName: smap[it.stageId] || it.stageId,
+      sem: SUCCESS_STAGES.test(it.stageId) ? 'ok' : (FAIL_STAGES.test(it.stageId) ? 'fail' : 'work'),
+      sum: parseFloat(it.opportunity) || 0, currency: it.currencyId || 'KZT',
+      url: itemUrl(it.id),
+      isOurs: /^PLS-DOP/i.test(String(it.xmlId || '')) || !!localByItem[it.id],
+      localId: localByItem[it.id] || null,
+    })),
+  };
+}
+
 // Перевод заявки на шаг процесса → пишет стадию в 1066. С проверкой условий:
 // на нужные шаги нельзя перейти, пока не приложены документы / не согласовано.
 async function moveStage(localId, stageKey) {
@@ -347,15 +407,30 @@ async function getItemDetail(localId) {
   const itemId = await itemIdOf(localId);
   const { result } = await b24('crm.item.get', { entityTypeId: ENTITY, id: itemId });
   const item = (result && result.item) || {};
-  const { rows: lr } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
+  const { rows: lr } = await pool.query('SELECT payload, source_item_id FROM ticketsmodule_procurement WHERE id=$1', [localId]);
   const docNames = ((lr[0] && lr[0].payload) || {}).docNames || {};
+  const sid = lr[0] && lr[0].source_item_id;
   const fileInfo = (code, key) => {
     const v = item[code]; if (!v) return null; const f = Array.isArray(v) ? v[0] : v; if (!f) return null;
     return { name: docNames[key] || f.name || f.NAME || f.originalName || 'файл', url: f.urlMachine || f.url || f.downloadUrl || null };
   };
+  // Файлы допов из подбора (1058) — ссылочно, без копирования
+  let dopy = null;
+  if (sid) {
+    try {
+      const { result: sr } = await b24('crm.item.get', { entityTypeId: SERVICE_ENTITY, id: sid });
+      const sitem = (sr && sr.item) || {};
+      const raw = sitem[SERVICE_DOPY_FIELD];
+      const arr = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+      const files = arr.map(f => ({ name: f.name || f.NAME || 'файл', url: f.urlMachine || f.url || f.downloadUrl || null }));
+      const o = bitrixOrigin();
+      dopy = { files, serviceUrl: o ? `${o}/crm/type/${SERVICE_ENTITY}/details/${sid}/` : null };
+    } catch (e) { /* best-effort */ }
+  }
   return {
     stageId: item.stageId,
     docs: { invoice: fileInfo(DOC_INVOICE, 'invoice'), pay: fileInfo(DOC_PAY, 'pay'), contract: fileInfo(DOC_CONTRACT, 'contract') },
+    dopy,
     approval: {
       status: item[F.preApprove] != null ? String(item[F.preApprove]) : null,
       approver: item[F.preApprover] || null,
@@ -464,8 +539,8 @@ async function createRequest(payload, bitrixUserId) {
 
   // локальная строка сперва — чтобы получить id для тега xmlId
   const ins = await pool.query(
-    'INSERT INTO ticketsmodule_procurement (deal_id, title, created_by, payload) VALUES ($1,$2,$3,$4) RETURNING id',
-    [payload.dealId || null, title, payload._createdBy || null, payload]
+    'INSERT INTO ticketsmodule_procurement (deal_id, title, created_by, payload, source_item_id) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+    [payload.dealId || null, title, payload._createdBy || null, payload, payload.sourceItemId || null]
   );
   const localId = ins.rows[0].id;
   fields.xmlId = `${TAG_PREFIX}-${localId}`;
@@ -486,4 +561,55 @@ async function createRequest(payload, bitrixUserId) {
   return { localId, bitrixItemId: item.id, stageId: item.stageId || null, itemUrl: itemUrl(item.id) };
 }
 
-module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, getMeta, searchDeals, listRequests, createRequest, updateRequest, deleteRequest, moveStage, getItemDetail, uploadDoc, setApproval, requestApproval, setAccountant, itemUrl, dealUrl };
+// ── Авто-создание закупки из завершённого подбора (1058 → 1066) ─────────────
+// Триггер (из вебхука ONCRMDYNAMICITEMUPDATE): элемент 1058 на стадии «Заявка
+// закрыта» И в поле «Подбор дополнительного оборудования» есть файл. Создаём
+// закупку с предзаполнением из сделки, ссылкой на подбор и его файлами. Дедуп
+// по source_item_id — одна закупка на один подбор.
+async function autoCreateFromService(serviceItemId) {
+  if (!serviceItemId) return { skipped: 'no-id' };
+  const { result } = await b24('crm.item.get', { entityTypeId: SERVICE_ENTITY, id: serviceItemId });
+  const item = (result && result.item) || {};
+  if (item.stageId !== SERVICE_FINAL_STAGE) return { skipped: 'stage', stage: item.stageId };
+  if (!fileNonEmpty(item[SERVICE_DOPY_FIELD])) return { skipped: 'no-dopy' };
+  // дедуп
+  const { rows: ex } = await pool.query('SELECT id FROM ticketsmodule_procurement WHERE source_item_id=$1', [serviceItemId]);
+  if (ex.length) return { skipped: 'dup', localId: ex[0].id };
+
+  const dealId = (item.parentId2 ? Number(item.parentId2) : null) || parseDealRef(item[SERVICE_PARENT_DEAL_FIELD]);
+  let title = item.title || '';
+  let companyId = item.companyId ? Number(item.companyId) : null;
+  if (dealId) {
+    try {
+      const { result: dr } = await b24('crm.deal.get', { id: dealId });
+      if (dr) { title = dr.TITLE || title; if (!companyId && dr.COMPANY_ID) companyId = Number(dr.COMPANY_ID); }
+    } catch (e) { /* fallback на данные 1058 */ }
+  }
+  const wm = warehouseManagerId();
+  const payload = {
+    dealId, companyId,
+    title: title ? ('Доп оборудование — ' + title) : 'Доп оборудование (из подбора)',
+    vidZakupki: VID_POSTAVKA_KLIENTU,   // «Для поставки клиенту»
+    assigned: wm,                       // ответственный — менеджер склада (Нурмаганбетов)
+    sourceItemId: serviceItemId,
+  };
+  const out = await createRequest(payload, wm);
+
+  // Обратная связь: привязать созданную закупку к элементу подбора (1058) — best-effort
+  try { await b24('crm.item.update', { entityTypeId: SERVICE_ENTITY, id: serviceItemId, fields: { [SERVICE_ZAKUPKI_FIELD]: out.bitrixItemId } }); } catch (e) { /* необязательно */ }
+
+  // Уведомить менеджера склада о новой авто-заявке — best-effort
+  try {
+    if (wm) {
+      const { notifyPerson, emailHtml } = require('./procurement-notify');
+      const tg = `🆕 <b>Авто-заявка на закуп допов</b>\n📋 ${esc(payload.title)}${dealId ? `\n🔗 Сделка #${dealId}` : ''}\nСоздана из завершённого подбора. Файлы допов внутри.\n<a href="${dashUrl()}">Открыть в дашборде</a>`;
+      const html = emailHtml({ title: 'Авто-заявка на закуп допов', color: '#7c3aed', lines: [['Заявка', '#' + out.bitrixItemId + ' — ' + payload.title], ...(dealId ? [['Сделка', '#' + dealId]] : [])], itemUrl: out.itemUrl, dashUrl: dashUrl() });
+      await notifyPerson(wm, { reason: 'Авто-заявка из подбора', tgText: tg, subject: 'Авто-заявка на закуп допов #' + out.bitrixItemId, html, itemId: out.bitrixItemId });
+    }
+  } catch (e) { /* best-effort */ }
+
+  console.log(`🆕 procurement: авто-заявка #${out.bitrixItemId} из подбора 1058 #${serviceItemId}`);
+  return { created: true, ...out };
+}
+
+module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, getMeta, searchDeals, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, moveStage, getItemDetail, uploadDoc, setApproval, requestApproval, setAccountant, autoCreateFromService, itemUrl, dealUrl };

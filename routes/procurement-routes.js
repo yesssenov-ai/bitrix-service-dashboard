@@ -16,6 +16,17 @@ router.get('/meta', requireAuth(ROLES), async (req, res) => {
   }
 });
 
+// GET /api/procurement/by-deal?dealId=... — все закупки по сделке + статусы
+router.get('/by-deal', requireAuth(ROLES), async (req, res) => {
+  try {
+    const { listByDeal } = require('../procurement-calc');
+    res.json(await listByDeal(req.query.dealId));
+  } catch (e) {
+    console.error('GET /api/procurement/by-deal error:', e.message);
+    res.status(500).json({ error: e.message, items: [] });
+  }
+});
+
 // GET /api/procurement/deals?q=... — поиск сделок для привязки
 router.get('/deals', requireAuth(ROLES), async (req, res) => {
   try {

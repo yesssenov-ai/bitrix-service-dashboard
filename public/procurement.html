@@ -92,6 +92,22 @@ tbody tr:hover td{background:var(--panel-h)}
 .stepper .st.cur::before{background:var(--good)}
 .stepper .st.cur .dot{background:linear-gradient(135deg,var(--brand),var(--brand-h));border-color:transparent;color:#fff;box-shadow:0 0 0 4px rgba(197,59,47,.18)}
 .stepper .st.cur .stlbl{color:var(--text);font-weight:600}
+.seg2{display:inline-flex;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:3px}
+.seg2 button{background:none;border:0;color:var(--text-3);font:inherit;font-size:12.5px;font-weight:600;padding:6px 13px;border-radius:8px;cursor:pointer;transition:.15s}
+.seg2 button.on{background:var(--panel);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.25)}
+.pill{display:inline-block;padding:3px 11px;border-radius:20px;font-size:11.5px;font-weight:600;background:var(--panel-h);border:1px solid var(--border2);color:var(--text-2);white-space:nowrap}
+.pill-ok{background:rgba(61,220,132,.14);border-color:rgba(61,220,132,.45);color:var(--good)}
+.pill-no{background:rgba(255,91,110,.14);border-color:rgba(255,91,110,.45);color:var(--bad)}
+.pill-work{background:rgba(255,176,32,.14);border-color:rgba(255,176,32,.45);color:var(--warn)}
+.pcard{display:flex;align-items:center;gap:12px;background:var(--panel-h);border:1px solid var(--border);border-radius:12px;padding:11px 14px;margin-bottom:9px}
+.pcard-t{font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px}
+.avatar{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--fd);font-weight:700;font-size:13.5px;flex:none;color:#fff}
+.av-brand{background:linear-gradient(135deg,var(--brand),var(--brand-h))}
+.av-teal{background:linear-gradient(135deg,var(--signal),var(--good));color:#04121a}
+.proccard{background:var(--panel-h);border:1px solid var(--border2);border-radius:14px;padding:14px 16px;margin-top:6px}
+.pc-row{display:flex;align-items:center;gap:11px;margin-bottom:8px}
+.pc-name{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-sep{height:1px;background:var(--border);margin:14px 0 6px}
 .spin{width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--signal);border-radius:50%;animation:sp 1s linear infinite;margin:40px auto}
 @keyframes sp{to{transform:rotate(360deg)}}
 </style>
@@ -129,16 +145,23 @@ async function boot(){
 const opt=(arr,ph)=>`<option value="">${ph||'—'}</option>`+(arr||[]).map(o=>`<option value="${esc(o.id)}">${esc(o.label)}</option>`).join('');
 const stageName=id=>{const f=(META.flow||[]).find(x=>x.bitrix===id);if(f)return f.label;const s=(META.stages||[]).find(s=>s.id===id);return s?s.name:(id||'—');};
 
-let MODE='create', EDIT=null;
+let MODE='create', EDIT=null, RVIEW='mine', DEALVIEW=null, dvTimer=null;
+const initials=name=>{const p=String(name||'').trim().split(/\s+/).filter(Boolean);return((p[0]||'?')[0]+(p[1]?p[1][0]:'')).toUpperCase();};
+const empName=id=>{const e=(META.employees||[]).find(x=>String(x.id)===String(id));return e?e.name:'';};
 function render(){
   const left=(MODE==='edit'&&EDIT!=null)?editCardHtml():createCardHtml();
-  document.getElementById('root').innerHTML=`<div class="grid">${left}
-    <div class="card" style="padding:0;overflow:hidden">
-      <h3 style="padding:18px 20px 0" id="listHdr">Мои заявки (${LIST.length})</h3>
-      <div style="overflow:auto;max-height:78vh" id="listBody">${listInner()}</div>
-    </div></div>`;
+  const right=`<div class="card" style="padding:0;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:10px;padding:16px 20px 0">
+      <div class="seg2"><button class="${RVIEW==='mine'?'on':''}" onclick="setRView('mine')">Мои заявки</button><button class="${RVIEW==='deal'?'on':''}" onclick="setRView('deal')">По сделке</button></div>
+      <span style="margin-left:auto;color:var(--text-4);font-size:12px">${RVIEW==='mine'?LIST.length+' шт':''}</span>
+    </div>
+    <div style="overflow:auto;max-height:78vh;padding:14px 20px 20px" id="rightBody">${RVIEW==='mine'?listInner():dealViewHtml()}</div>
+  </div>`;
+  document.getElementById('root').innerHTML=`<div class="grid">${left}${right}</div>`;
   if(MODE==='edit'&&EDIT!=null) loadDetail(EDIT);
+  if(RVIEW==='deal'&&DEALVIEW) loadByDeal(DEALVIEW.id);
 }
+function setRView(v){ RVIEW=v; render(); }
 function createCardHtml(){
   const srcOpts=(META.sources||[]).map(s=>`<option value="${esc(s.id)}" ${s.id===META.internalSourceId?'selected':''}>${esc(s.name)}</option>`).join('');
   const defBid=META.defaultAssignee||((META.me&&META.me.bitrixUserId)||'');
@@ -185,6 +208,7 @@ function editCardHtml(){
       </div>
       <div class="rtitle">${esc(r.title||('Заявка #'+r.bitrixItemId))}</div>
       <div class="hint">#${r.bitrixItemId||'—'}${r.dealId?` · сделка <a class="lnk" href="${esc(r.dealUrl)}" target="_blank">#${r.dealId}</a>`:''}${r.itemUrl?` · <a class="lnk" href="${esc(r.itemUrl)}" target="_blank">в Битриксе ↗</a>`:''}</div>
+      ${r.sourceItemId?`<div class="deth" style="margin-top:14px">Файлы допов (из подбора)</div><div id="dopyBox"><div class="hint">загрузка…</div></div>`:''}
 
       <div id="editFields-${r.id}" style="display:none;margin-top:12px;padding:14px;border:1px solid var(--border2);border-radius:12px;background:var(--bg)">
         <label class="fl">Название</label><input id="e-title" value="${esc(r.title||'')}">
@@ -211,8 +235,50 @@ function renderList(){
   const b=document.getElementById('listBody'); if(b)b.innerHTML=listInner();
   const h=document.getElementById('listHdr'); if(h)h.textContent='Мои заявки ('+LIST.length+')';
 }
-function selectReq(id){ MODE='edit'; EDIT=id; render(); }
+function selectReq(id){ MODE='edit'; EDIT=id; RVIEW='mine'; render(); }
 function backToCreate(){ MODE='create'; EDIT=null; DEAL=null; render(); }
+
+// ── Представление «По сделке» ───────────────────────────────────────────────
+function dealViewHtml(){
+  return `<div class="dealbox"><input id="dvq" placeholder="Сделка: номер или название…" oninput="onDVInput(this.value)" autocomplete="off"><div class="dealres" id="dvres" style="display:none"></div></div>
+    <div id="dvChip" style="margin-top:6px">${DEALVIEW?`<span class="chip">#${DEALVIEW.id} · ${esc(DEALVIEW.title)} <span class="x" onclick="clearDV()">✕</span></span>`:''}</div>
+    <div id="dvResults" style="margin-top:14px">${DEALVIEW?'<div class="spin" style="margin:20px auto"></div>':'<div class="hint">Выбери сделку — покажу все её закупки и статусы.</div>'}</div>`;
+}
+function onDVInput(v){
+  clearTimeout(dvTimer); const box=document.getElementById('dvres');
+  if(!v||v.trim().length<2){box.style.display='none';return;}
+  dvTimer=setTimeout(async()=>{
+    try{ const d=await (await fetch('/api/procurement/deals?q='+encodeURIComponent(v.trim()))).json(); const items=d.items||[];
+      box.innerHTML=items.length?items.map(it=>`<div onclick='pickDV(${JSON.stringify({id:it.id,title:it.title}).replace(/'/g,"&#39;")})'><span class="did">#${it.id}</span> ${esc(it.title)}</div>`).join(''):'<div class="hint" style="padding:9px 12px">Ничего не найдено</div>';
+      box.style.display='block';
+    }catch(e){box.style.display='none';}
+  },300);
+}
+function pickDV(it){ DEALVIEW=it; render(); }
+function clearDV(){ DEALVIEW=null; render(); }
+async function loadByDeal(id){
+  const box=document.getElementById('dvResults'); if(!box)return;
+  try{ const data=await (await fetch('/api/procurement/by-deal?dealId='+id)).json(); renderByDeal(data); }
+  catch(e){ box.innerHTML='<div class="hint">Ошибка: '+esc(e.message)+'</div>'; }
+}
+function renderByDeal(data){
+  const box=document.getElementById('dvResults'); if(!box)return;
+  const items=data.items||[];
+  if(!items.length){ box.innerHTML='<div class="empty">По этой сделке закупок не найдено.</div>'; return; }
+  const total=items.reduce((s,i)=>s+(i.sum||0),0);
+  const pillCls={ok:'pill-ok',fail:'pill-no',work:'pill-work'};
+  box.innerHTML=`<div class="hint" style="margin-bottom:10px">Закупок: <b style="color:var(--text)">${items.length}</b> · сумма ${F(total)} ₸${data.dealUrl?` · <a class="lnk" href="${esc(data.dealUrl)}" target="_blank">сделка ↗</a>`:''}</div>`
+    +items.map(it=>`<div class="pcard">
+      <div style="flex:1;min-width:0"><div class="pcard-t">${esc(it.title)}</div><div class="hint">#${it.id} · ${it.isOurs?'<span style="color:var(--signal)">доп (дашборд)</span>':'импорт'}</div></div>
+      <div style="text-align:right;white-space:nowrap"><span class="pill ${pillCls[it.sem]||''}">${esc(it.stageName)}</span><div class="hint" style="margin-top:5px">${F(it.sum)} ${esc(it.currency)}</div></div>
+      <div style="display:flex;flex-direction:column;gap:5px;margin-left:6px;white-space:nowrap">
+        ${it.url?`<a class="lnk" href="${esc(it.url)}" target="_blank">Б24 ↗</a>`:''}
+        ${it.isOurs&&it.localId?`<span class="lnk" style="cursor:pointer" onclick="openLocal(${it.localId})">Открыть</span>`:''}
+      </div>
+    </div>`).join('');
+}
+function openLocal(localId){ selectReq(localId); }
+document.addEventListener('click',e=>{ if(!e.target.closest('#dvq')&&!e.target.closest('#dvres')){const b=document.getElementById('dvres'); if(b)b.style.display='none';} });
 
 function pickerHtml(key,items,withSearch){
   return `<div class="picker" id="pk-${key}">
@@ -260,21 +326,31 @@ function approvalHtml(id,d){
   const ap=d.approval||{};
   const apOpts=(META.approve.options||[]).map(o=>`<option value="${o.id}" ${String(ap.status)===String(o.id)?'selected':''}>${esc(o.label)}</option>`).join('');
   const defBid=META.defaultAssignee||((META.me&&META.me.bitrixUserId)||'');
-  const apprSel=(META.employees||[]).map(e=>`<option value="${e.id}" ${String(e.id)===String(ap.approver||defBid)?'selected':''}>${esc(e.name)}</option>`).join('');
-  return `<label class="fl">Утверждающий (руководитель)</label><select id="apby-${id}">${apprSel}</select>
-    <button class="btn" style="margin-top:8px" onclick="sendApproval(${id})">Отправить на согласование</button>
-    <label class="fl" style="margin-top:12px">Решение</label><select id="apst-${id}">${apOpts}</select>
-    <label class="fl">Комментарий</label><textarea id="apcm-${id}">${esc(ap.comment||'')}</textarea>
-    <button class="btn" style="margin-top:8px" onclick="saveApproval(${id})">Сохранить решение</button>
-    ${ap.approved?'<div class="hint" style="color:var(--good);margin-top:8px">✓ Согласовано</div>':''}`;
+  const curAppr=ap.approver||defBid;
+  const apprSel=(META.employees||[]).map(e=>`<option value="${e.id}" ${String(e.id)===String(curAppr)?'selected':''}>${esc(e.name)}</option>`).join('');
+  const nm=empName(curAppr)||'Не выбран';
+  const pill=ap.approved?'<span class="pill pill-ok">✓ Согласовано</span>':(ap.status&&String(ap.status)!==String(META.approve.yes)?'<span class="pill pill-no">Отклонено</span>':'<span class="pill pill-work">Ожидает</span>');
+  return `<div class="proccard">
+    <div class="pc-row"><div class="avatar av-brand">${initials(nm)}</div><div style="flex:1;min-width:0"><div class="pc-name">${esc(nm)}</div><div class="hint">Руководитель · согласование</div></div>${pill}</div>
+    <label class="fl">Утверждающий</label><select id="apby-${id}">${apprSel}</select>
+    <button class="btn" style="margin-top:8px;width:100%;justify-content:center" onclick="sendApproval(${id})">📨 Отправить на согласование</button>
+    <div class="pc-sep"></div>
+    <label class="fl">Решение</label><select id="apst-${id}">${apOpts}</select>
+    <label class="fl">Комментарий</label><textarea id="apcm-${id}" placeholder="необязательно">${esc(ap.comment||'')}</textarea>
+    <button class="btn btn-p" style="margin-top:8px;width:100%;justify-content:center" onclick="saveApproval(${id})">Сохранить решение</button>
+  </div>`;
 }
 function accountantHtml(id){
   const r=LIST.find(x=>x.id===id)||{};
   const acc=r.accountantBid||META.chiefAccountant||'';
   const acctSel=(META.employees||[]).map(e=>`<option value="${esc(e.id)}" ${String(e.id)===String(acc)?'selected':''}>${esc(e.name)}</option>`).join('');
-  return `<label class="fl" style="margin-top:14px">Бухгалтер (оплата)</label><select id="acctSel">${acctSel}</select>
+  const nm=empName(acc)||'Наталья Зенченко';
+  return `<div class="proccard" style="margin-top:12px">
+    <div class="pc-row"><div class="avatar av-teal">${initials(nm)}</div><div style="flex:1;min-width:0"><div class="pc-name">${esc(nm)}</div><div class="hint">Бухгалтер · оплата</div></div></div>
+    <label class="fl">Сменить бухгалтера</label><select id="acctSel">${acctSel}</select>
     <div class="hint">По умолчанию — Наталья Зенченко. Смени, если в отпуске.</div>
-    <button class="btn" style="margin-top:8px" onclick="saveAccountant(${id})">Назначить бухгалтера</button>`;
+    <button class="btn" style="margin-top:8px;width:100%;justify-content:center" onclick="saveAccountant(${id})">Назначить бухгалтера</button>
+  </div>`;
 }
 // Показываем на текущем шаге только то, что нужно для перехода на СЛЕДУЮЩИЙ шаг.
 function renderDetail(id,d){
@@ -288,6 +364,8 @@ function renderDetail(id,d){
     return `<div class="slot"><div class="slabel">${esc(DOC_LABELS[k])}</div><div style="flex:1"><a class="lnk" href="${esc(info.url||'#')}" target="_blank">${esc(info.name||'файл')}</a></div><label class="upl">Заменить<input type="file" style="display:none" onchange="doUpload(${id},'${s.code}',this)"></label></div>`;
   }).join('');
   const ds=document.getElementById('docsSummary'); if(ds)ds.innerHTML=summ?`<div class="deth">Приложенные документы</div>${summ}`:'';
+  const db=document.getElementById('dopyBox');
+  if(db){ if(d.dopy){ const fl=(d.dopy.files||[]).map(f=>`<div class="slot"><div class="slabel">Файл</div><div style="flex:1"><a class="lnk" href="${esc(f.url||'#')}" target="_blank">${esc(f.name||'файл')}</a></div></div>`).join(''); db.innerHTML=(fl||'<div class="hint">файлы не найдены</div>')+(d.dopy.serviceUrl?`<div style="margin-top:6px"><a class="lnk" href="${esc(d.dopy.serviceUrl)}" target="_blank">Открыть подбор ↗</a></div>`:''); } else db.innerHTML='<div class="hint">нет данных</div>'; }
   // Активное действие = требование для перехода на следующий шаг
   const nextKey=(ci>=0&&ci+1<flow.length)?flow[ci+1].key:null;
   const nextLabel=(ci>=0&&ci+1<flow.length)?flow[ci+1].label:'';
