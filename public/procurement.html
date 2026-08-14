@@ -172,8 +172,6 @@ function editCardHtml(){
   const pl=r.payload||{};
   const stepper=`<div class="stepper">`+flow.map((s,i)=>`<div class="st ${i<r.stepIndex?'done':''} ${i===r.stepIndex?'cur':''}" title="${esc(s.label)}"><span class="dot">${i+1}</span><span class="stlbl">${esc(s.label)}</span></div>`).join('')+`</div>`;
   const stepSel=`<select onchange="moveStep(${r.id},this.value)">`+flow.map((s,i)=>`<option value="${esc(s.key)}" ${s.key===r.stepKey?'selected':''}>${i+1}. ${esc(s.label)}</option>`).join('')+`</select>`;
-  const acc=r.accountantBid||META.chiefAccountant||'';
-  const acctSel=(META.employees||[]).map(e=>`<option value="${esc(e.id)}" ${String(e.id)===String(acc)?'selected':''}>${esc(e.name)}</option>`).join('');
   const srcOptsE=(META.sources||[]).map(s=>`<option value="${esc(s.id)}" ${String(s.id)===String(pl.source||META.internalSourceId)?'selected':''}>${esc(s.name)}</option>`).join('');
   const empOptsE=(META.employees||[]).map(e=>`<option value="${esc(e.id)}" ${String(e.id)===String(pl.assigned||META.defaultAssignee||'')?'selected':''}>${esc(e.name)}</option>`).join('');
   const vidOptsE=(META.options.vidZakupki||[]).map(o=>`<option value="${esc(o.id)}" ${String(o.id)===String(pl.vidZakupki||'')?'selected':''}>${esc(o.label)}</option>`).join('');
@@ -199,14 +197,9 @@ function editCardHtml(){
 
       ${stepper}
       <label class="fl">Сменить шаг</label>${stepSel}
-      <div class="deth" style="margin-top:18px">Документы</div>
-      <div id="docSlots"><div class="spin" style="margin:14px auto"></div></div>
-      <div class="deth" style="margin-top:18px">Согласование закупки</div>
-      <div id="apBox"><div class="spin" style="margin:14px auto"></div></div>
-      <div class="deth" style="margin-top:18px">Оплата</div>
-      <label class="fl">Бухгалтер (оплата)</label><select id="acctSel">${acctSel}</select>
-      <div class="hint">По умолчанию — Наталья Зенченко. Смени, если она в отпуске.</div>
-      <button class="btn" style="margin-top:8px" onclick="saveAccountant(${r.id})">Назначить бухгалтера</button>
+      <div id="docsSummary" style="margin-top:14px"></div>
+      <div class="deth" style="margin-top:16px" id="actionHdr">Дальнейшее действие</div>
+      <div id="stepAction"><div class="spin" style="margin:14px auto"></div></div>
     </div>`;
 }
 function listInner(){
@@ -254,26 +247,59 @@ async function loadDetail(id){
   try{ const d=await (await fetch('/api/procurement/'+id+'/detail')).json(); renderDetail(id,d); }
   catch(e){ const ds=document.getElementById('docSlots'); if(ds)ds.innerHTML='<div class="hint">Ошибка: '+esc(e.message)+'</div>'; }
 }
-function renderDetail(id,d){
-  const slots=(META.uploadSlots||[]).map(s=>{
-    const info=d.docs&&d.docs[s.key];
-    return `<div class="slot"><div class="slabel">${esc(s.label)}</div>
-      <div style="flex:1">${info?`<a class="lnk" href="${esc(info.url||'#')}" target="_blank">${esc(info.name||'файл')}</a>`:'<span class="hint">не загружено</span>'}</div>
-      <label class="upl">${info?'Заменить':'Загрузить'}<input type="file" style="display:none" onchange="doUpload(${id},'${s.code}',this)"></label></div>`;
-  }).join('');
-  const ds=document.getElementById('docSlots'); if(ds)ds.innerHTML=slots;
+const DOC_LABELS={invoice:'Счет на оплату',pay:'Подтверждение оплаты',contract:'Накладная'};
+function uploadSlotHtml(id,d,key,withReqHint){
+  const s=(META.uploadSlots||[]).find(x=>x.key===key); if(!s) return '';
+  const info=d.docs&&d.docs[key];
+  return `<div class="slot"><div class="slabel">${esc(s.label)}</div>
+    <div style="flex:1">${info?`<a class="lnk" href="${esc(info.url||'#')}" target="_blank">${esc(info.name||'файл')}</a>`:'<span class="hint">не загружено</span>'}</div>
+    <label class="upl">${info?'Заменить':'Загрузить'}<input type="file" style="display:none" onchange="doUpload(${id},'${s.code}',this)"></label></div>`;
+}
+function approvalHtml(id,d){
   const ap=d.approval||{};
   const apOpts=(META.approve.options||[]).map(o=>`<option value="${o.id}" ${String(ap.status)===String(o.id)?'selected':''}>${esc(o.label)}</option>`).join('');
   const defBid=META.defaultAssignee||((META.me&&META.me.bitrixUserId)||'');
   const apprSel=(META.employees||[]).map(e=>`<option value="${e.id}" ${String(e.id)===String(ap.approver||defBid)?'selected':''}>${esc(e.name)}</option>`).join('');
-  const ab=document.getElementById('apBox');
-  if(ab)ab.innerHTML=`
-    <label class="fl">Утверждающий (руководитель)</label><select id="apby-${id}">${apprSel}</select>
+  return `<label class="fl">Утверждающий (руководитель)</label><select id="apby-${id}">${apprSel}</select>
     <button class="btn" style="margin-top:8px" onclick="sendApproval(${id})">Отправить на согласование</button>
     <label class="fl" style="margin-top:12px">Решение</label><select id="apst-${id}">${apOpts}</select>
     <label class="fl">Комментарий</label><textarea id="apcm-${id}">${esc(ap.comment||'')}</textarea>
     <button class="btn" style="margin-top:8px" onclick="saveApproval(${id})">Сохранить решение</button>
     ${ap.approved?'<div class="hint" style="color:var(--good);margin-top:8px">✓ Согласовано</div>':''}`;
+}
+function accountantHtml(id){
+  const r=LIST.find(x=>x.id===id)||{};
+  const acc=r.accountantBid||META.chiefAccountant||'';
+  const acctSel=(META.employees||[]).map(e=>`<option value="${esc(e.id)}" ${String(e.id)===String(acc)?'selected':''}>${esc(e.name)}</option>`).join('');
+  return `<label class="fl" style="margin-top:14px">Бухгалтер (оплата)</label><select id="acctSel">${acctSel}</select>
+    <div class="hint">По умолчанию — Наталья Зенченко. Смени, если в отпуске.</div>
+    <button class="btn" style="margin-top:8px" onclick="saveAccountant(${id})">Назначить бухгалтера</button>`;
+}
+// Показываем на текущем шаге только то, что нужно для перехода на СЛЕДУЮЩИЙ шаг.
+function renderDetail(id,d){
+  const r=LIST.find(x=>x.id===id)||{};
+  const flow=META.flow||[];
+  const ci=(r.stepIndex!=null)?r.stepIndex:-1;
+  // Компактный список уже приложенных документов (история)
+  const summ=['invoice','pay','contract'].map(k=>{
+    const info=d.docs&&d.docs[k]; if(!info) return '';
+    const s=(META.uploadSlots||[]).find(x=>x.key===k);
+    return `<div class="slot"><div class="slabel">${esc(DOC_LABELS[k])}</div><div style="flex:1"><a class="lnk" href="${esc(info.url||'#')}" target="_blank">${esc(info.name||'файл')}</a></div><label class="upl">Заменить<input type="file" style="display:none" onchange="doUpload(${id},'${s.code}',this)"></label></div>`;
+  }).join('');
+  const ds=document.getElementById('docsSummary'); if(ds)ds.innerHTML=summ?`<div class="deth">Приложенные документы</div>${summ}`:'';
+  // Активное действие = требование для перехода на следующий шаг
+  const nextKey=(ci>=0&&ci+1<flow.length)?flow[ci+1].key:null;
+  const nextLabel=(ci>=0&&ci+1<flow.length)?flow[ci+1].label:'';
+  let hdr='Дальнейшее действие', html='';
+  if(nextKey==='invoice'){ hdr='Счёт на оплату'; html=uploadSlotHtml(id,d,'invoice')+`<div class="hint" style="margin-top:6px">Приложите счёт, чтобы перейти на «${esc(nextLabel)}».</div>`; }
+  else if(nextKey==='approve'){ hdr='Согласование закупки'; html=approvalHtml(id,d)+accountantHtml(id); }
+  else if(nextKey==='payment'){ hdr='Оплата закупки'; html=uploadSlotHtml(id,d,'pay')+`<div class="hint" style="margin-top:6px">Приложите подтверждение оплаты, чтобы перейти на «${esc(nextLabel)}».</div>`+accountantHtml(id); }
+  else if(nextKey==='contract'){ hdr='Договор'; html='<div class="hint">Особых условий нет — можно перейти на «Согласование закупки».</div>'; }
+  else if(nextKey==='waiting'){ hdr='Ожидание товара'; html='<div class="hint">Оплата проведена — двигай на «Ожидание товара».</div>'; }
+  else if(nextKey==='received'){ hdr='Товар принят'; html=uploadSlotHtml(id,d,'contract')+`<div class="hint" style="margin-top:6px">Приложите накладную, чтобы отметить «${esc(nextLabel)}».</div>`; }
+  else { hdr='Готово'; html='<div class="hint" style="color:var(--good)">Процесс завершён.</div>'; }
+  const hEl=document.getElementById('actionHdr'); if(hEl)hEl.textContent=hdr;
+  const aEl=document.getElementById('stepAction'); if(aEl)aEl.innerHTML=html;
 }
 function fileToB64(file){return new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(String(fr.result).split(',')[1]);fr.onerror=rej;fr.readAsDataURL(file);});}
 async function doUpload(id,code,input){
