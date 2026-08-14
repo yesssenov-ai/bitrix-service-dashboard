@@ -89,6 +89,7 @@ tbody tr:hover td{background:var(--panel-h)}
 .stepper .st:first-child::before{display:none}
 .stepper .st.done .dot{background:linear-gradient(135deg,var(--signal),var(--good));border-color:transparent;color:#04121a}
 .stepper .st.done::before{background:var(--good)}
+.stepper .st.cur::before{background:var(--good)}
 .stepper .st.cur .dot{background:linear-gradient(135deg,var(--brand),var(--brand-h));border-color:transparent;color:#fff;box-shadow:0 0 0 4px rgba(197,59,47,.18)}
 .stepper .st.cur .stlbl{color:var(--text);font-weight:600}
 .spin{width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--signal);border-radius:50%;animation:sp 1s linear infinite;margin:40px auto}
@@ -309,8 +310,13 @@ async function doUpload(id,code,input){
   try{
     const base64=await fileToB64(file);
     const r=await fetch('/api/procurement/'+id+'/upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fieldCode:code,filename:file.name,base64})});
-    const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка загрузки');}
-    loadDetail(id);
+    const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка загрузки'); loadDetail(id); return;}
+    // авто-переход на следующий шаг, если этот документ его разблокирует
+    const r0=LIST.find(x=>x.id===id)||{}; const flow=META.flow||[]; const ci=(r0.stepIndex!=null)?r0.stepIndex:-1;
+    const nextKey=(ci>=0&&ci+1<flow.length)?flow[ci+1].key:null;
+    const need={invoice:'invoice',payment:'pay',received:'contract'}[nextKey];
+    const slotKey=((META.uploadSlots||[]).find(s=>s.code===code)||{}).key;
+    if(need&&need===slotKey){ await moveStep(id,nextKey); } else { loadDetail(id); }
   }catch(e){alert('Ошибка: '+e.message);}
   finally{input.disabled=false;}
 }
@@ -330,7 +336,10 @@ async function saveApproval(id){
   try{
     const r=await fetch('/api/procurement/'+id+'/approval',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,approverId,comment})});
     const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка');return;}
-    await reloadList();
+    // авто-переход на «Согласование закупки», если согласовано
+    const r0=LIST.find(x=>x.id===id)||{}; const flow=META.flow||[]; const ci=(r0.stepIndex!=null)?r0.stepIndex:-1;
+    const nextKey=(ci>=0&&ci+1<flow.length)?flow[ci+1].key:null;
+    if(String(status)===String(META.approve.yes)&&nextKey==='approve'){ await moveStep(id,'approve'); } else { await reloadList(); }
   }catch(e){alert('Ошибка: '+e.message);}
 }
 async function saveAccountant(id){

@@ -347,10 +347,15 @@ async function getItemDetail(localId) {
   const itemId = await itemIdOf(localId);
   const { result } = await b24('crm.item.get', { entityTypeId: ENTITY, id: itemId });
   const item = (result && result.item) || {};
-  const fileInfo = code => { const v = item[code]; if (!v) return null; const f = Array.isArray(v) ? v[0] : v; return f ? { name: f.name || f.NAME || 'файл', url: f.urlMachine || f.url || f.downloadUrl || null } : null; };
+  const { rows: lr } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
+  const docNames = ((lr[0] && lr[0].payload) || {}).docNames || {};
+  const fileInfo = (code, key) => {
+    const v = item[code]; if (!v) return null; const f = Array.isArray(v) ? v[0] : v; if (!f) return null;
+    return { name: docNames[key] || f.name || f.NAME || f.originalName || 'файл', url: f.urlMachine || f.url || f.downloadUrl || null };
+  };
   return {
     stageId: item.stageId,
-    docs: { invoice: fileInfo(DOC_INVOICE), pay: fileInfo(DOC_PAY), contract: fileInfo(DOC_CONTRACT) },
+    docs: { invoice: fileInfo(DOC_INVOICE, 'invoice'), pay: fileInfo(DOC_PAY, 'pay'), contract: fileInfo(DOC_CONTRACT, 'contract') },
     approval: {
       status: item[F.preApprove] != null ? String(item[F.preApprove]) : null,
       approver: item[F.preApprover] || null,
@@ -368,6 +373,16 @@ async function uploadDoc(localId, fieldCode, filename, base64) {
   // Формат файла для crm.item: { fileData: [имя, base64] } (без обёртки в массив —
   // иначе Битрикс принимает запрос, но файл не прикрепляет).
   await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields: { [fieldCode]: { fileData: [filename, base64] } } });
+  // Сохраняем имя файла локально — crm.item.get не всегда возвращает имя.
+  try {
+    const key = (UPLOAD_SLOTS.find(s => s.code === fieldCode) || {}).key;
+    if (key) {
+      const { rows } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
+      const pl = (rows[0] && rows[0].payload) || {};
+      pl.docNames = Object.assign({}, pl.docNames, { [key]: filename });
+      await pool.query('UPDATE ticketsmodule_procurement SET payload=$1, updated_at=NOW() WHERE id=$2', [pl, localId]);
+    }
+  } catch (e) { /* имя-кэш не критичен */ }
   if (fieldCode === DOC_PAY) {
     try {
       const ctx = await getRequestContext(localId);
