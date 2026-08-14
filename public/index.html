@@ -101,7 +101,9 @@ tr.tr:hover td { background:#fafbfd; }
 /* Cells */
 .idbadge { font-size:11.5px; font-weight:600; color:var(--text-4); font-variant-numeric:tabular-nums; background:var(--bg); border-radius:5px; padding:2px 6px; border:1px solid var(--border); }
 .tname { font-weight:500; color:var(--text); line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; margin-bottom:2px; }
-.tdesc { font-size:12px; color:var(--text-4); display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden; }
+.tdesc { font-size:12px; color:var(--text-4); display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden; cursor:help; }
+#tdesc-tip { position:fixed; z-index:9999; max-width:440px; background:var(--panel,#1a2130); color:var(--text,#eef2f8); border:1px solid var(--line-2,#2f3a4f); border-radius:10px; padding:10px 13px; font-size:13px; line-height:1.5; box-shadow:0 12px 34px rgba(0,0,0,.45); white-space:pre-wrap; word-break:break-word; pointer-events:none; opacity:0; transition:opacity .12s; }
+#tdesc-tip.on { opacity:1; }
 .svc-tags { display:flex; flex-wrap:wrap; gap:4px; }
 .svc-tag { display:inline-block; background:var(--teal-light); color:var(--teal); border:1px solid rgba(15,118,110,.2); border-radius:5px; padding:2px 7px; font-size:11px; font-weight:600; white-space:nowrap; }
 .spill { display:inline-flex; align-items:center; gap:5px; border-radius:6px; padding:4px 9px; font-size:11.5px; font-weight:600; white-space:nowrap; background:var(--pb); color:var(--pf); border:1px solid var(--pbr); }
@@ -561,7 +563,7 @@ function renderTable(items){
     const title=(t.title||'').replace(/^[-\s–—]+/,'').replace(/[-\s–—]+$/,'').trim()||'(без названия)';
     return `<tr class="tr">
       <td><span class="idbadge">${t.id}</span></td>
-      <td><div class="tname">${esc(title)}</div>${t.description?`<div class="tdesc">${esc(t.description)}</div>`:''}</td>
+      <td><div class="tname" title="${esc(title)}">${esc(title)}</div>${t.description?`<div class="tdesc" data-full="${esc(t.description)}">${esc(t.description)}</div>`:''}</td>
       <td>${svcHtml}</td>
       <td>${pill}</td>
       <td style="text-align:center">${daysHtml}</td>
@@ -831,6 +833,28 @@ checkAuth().then(ok => {
     selectPreset('tickets',document.querySelector('[data-preset="tickets"]'));
   }
 });
+
+// Всплывающая подсказка с полным текстом проблемы при наведении на описание заявки.
+(function(){
+  let tip=null;
+  function ensure(){ if(!tip){ tip=document.createElement('div'); tip.id='tdesc-tip'; document.body.appendChild(tip); } return tip; }
+  function place(e){ const t=ensure(); const pad=14, w=t.offsetWidth, h=t.offsetHeight;
+    let x=e.clientX+pad, y=e.clientY+pad;
+    if(x+w>window.innerWidth-8) x=e.clientX-w-pad;
+    if(y+h>window.innerHeight-8) y=e.clientY-h-pad;
+    t.style.left=Math.max(8,x)+'px'; t.style.top=Math.max(8,y)+'px';
+  }
+  document.addEventListener('mouseover',e=>{
+    const el=e.target.closest && e.target.closest('.tdesc[data-full]'); if(!el)return;
+    const full=el.getAttribute('data-full'); if(!full)return;
+    const t=ensure(); t.textContent=full; t.classList.add('on'); place(e);
+  });
+  document.addEventListener('mousemove',e=>{ if(tip&&tip.classList.contains('on')&&e.target.closest&&e.target.closest('.tdesc[data-full]')) place(e); });
+  document.addEventListener('mouseout',e=>{
+    const el=e.target.closest && e.target.closest('.tdesc[data-full]'); if(!el)return;
+    if(tip) tip.classList.remove('on');
+  });
+})();
 </script>
 </body>
 </html>
