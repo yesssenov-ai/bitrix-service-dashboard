@@ -98,33 +98,49 @@ const FLOW = [
 const STAGE_TO_STEP = {}; FLOW.forEach((s, i) => { STAGE_TO_STEP[s.bitrix] = i; });
 const stepIndexForStage = stageId => (STAGE_TO_STEP[stageId] != null ? STAGE_TO_STEP[stageId] : -1);
 
-// Документы под условия переходов
-const DOC_INVOICE = 'ufCrm10_1763537277532';   // Invoice
-const DOC_PAY = 'ufCrm10_1744874990535';       // Подтверждение оплаты
-const DOC_CONTRACT = 'ufCrm10_1732858619051';  // Договор / Спецификация / Appendix
-// Гарантийный сертификат — отдельное файловое поле 1066. Точный код зависит от
-// портала; задаётся через env PROC_WARRANTY_FIELD. По умолчанию — свободное
-// файловое поле «Файл размещения заказа» (чтобы работало сразу); замени на
-// реальное поле «Гарантийный сертификат» после discover-procurement.
-const DOC_WARRANTY = process.env.PROC_WARRANTY_FIELD || 'ufCrm10_1732858487739';
+// ── Документы: 4 файловых поля 1066 ─────────────────────────────────────────
+// Коды полей резолвятся ДИНАМИЧЕСКИ по названию поля (resolveDocFields ниже) —
+// так дашборд сам «привязывается» к полям, которые менеджер создал в Битриксе
+// («Счет на оплату», «Подтверждение оплаты», «Накладная», «Гарантийный
+// сертификат»). Значения ниже — только резерв на случай, если поле не нашлось.
+const DOC_INVOICE = 'ufCrm10_1763537277532';   // резерв
+const DOC_PAY = 'ufCrm10_1744874990535';       // резерв
+const DOC_CONTRACT = 'ufCrm10_1732858619051';  // резерв
+const DOC_WARRANTY = process.env.PROC_WARRANTY_FIELD || 'ufCrm10_1732858487739'; // резерв
 const APPROVE_YES = '1827';                    // «Согласовано» (поле Согласование предоплаты)
-// Разрешённые для загрузки поля (белый список)
-const UPLOAD_SLOTS = [
-  { key: 'invoice',  code: DOC_INVOICE,  label: 'Счет на оплату' },       // → поле Invoice
-  { key: 'pay',      code: DOC_PAY,      label: 'Подтверждение оплаты' },  // → поле Подтверждение оплаты
-  { key: 'contract', code: DOC_CONTRACT, label: 'Накладная' },            // → поле Договор / Спецификация / Appendix
-  { key: 'warranty', code: DOC_WARRANTY, label: 'Гарантийный сертификат' },// → поле Гарантийный сертификат
+// Слоты загрузки: ключ + подпись (код подтягивается динамически по названию).
+const UPLOAD_SLOT_DEFS = [
+  { key: 'invoice',  label: 'Счет на оплату',           re: /сч[её]т.*оплат/i,       fallback: DOC_INVOICE },
+  { key: 'pay',      label: 'Подтверждение оплаты',      re: /подтвержд.*оплат/i,     fallback: DOC_PAY },
+  { key: 'contract', label: 'Накладная',                 re: /накладн/i,              fallback: DOC_CONTRACT },
+  { key: 'warranty', label: 'Гарантийный сертификат',    re: /гаранти.*сертиф/i,      fallback: DOC_WARRANTY },
 ];
-const UPLOAD_CODES = new Set(UPLOAD_SLOTS.map(s => s.code));
-// Условия для перехода НА шаг: документ/согласование прикладывается на ПРЕДЫДУЩЕМ
-// шаге, поэтому гейт стоит на входе в следующий (счёт кладут на «Запрос счёта»,
-// значит он нужен, чтобы уйти на «Договор», и т.д.). Так подсветка змейки и
-// действие всегда совпадают с текущим шагом.
+// Резолв кодов файловых полей по названию (кэш 30 мин). При нескольких полях с
+// одинаковым названием берём НОВЕЙШЕЕ (наибольший числовой суффикс кода) — это и
+// есть только что созданное менеджером поле.
+let _docFields = null, _docAt = 0;
+async function resolveDocFields(force) {
+  if (_docFields && !force && Date.now() - _docAt < 30 * 60 * 1000) return _docFields;
+  const map = {}; UPLOAD_SLOT_DEFS.forEach(s => { map[s.key] = s.fallback; });
+  try {
+    const { result } = await b24('crm.item.fields', { entityTypeId: ENTITY });
+    const fields = (result && result.fields) || {};
+    const fileFields = Object.entries(fields).filter(([, f]) => String(f.type).toLowerCase() === 'file');
+    const codeNum = c => { const m = String(c).match(/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
+    for (const s of UPLOAD_SLOT_DEFS) {
+      const hits = fileFields.filter(([, f]) => s.re.test(String(f.title || '').trim()));
+      if (hits.length) { hits.sort((a, b) => codeNum(b[0]) - codeNum(a[0])); map[s.key] = hits[0][0]; }
+    }
+  } catch (e) { console.error('resolveDocFields:', e.message); }
+  _docFields = map; _docAt = Date.now();
+  return _docFields;
+}
+// Условия для перехода НА шаг (по ключам слотов; коды резолвятся при проверке).
 const REQUIREMENTS = {
-  contract: { kind: 'file', field: DOC_INVOICE, label: 'счёт (Invoice)' },
+  contract: { kind: 'file', slot: 'invoice', label: 'счёт (Invoice)' },
   payment:  { kind: 'approval', label: 'согласование закупки' },
-  waiting:  { kind: 'file', field: DOC_PAY, label: 'подтверждение оплаты' },
-  received: { kind: 'files', fields: [DOC_CONTRACT, DOC_WARRANTY], label: 'накладная и гарантийный сертификат' },
+  waiting:  { kind: 'file', slot: 'pay', label: 'подтверждение оплаты' },
+  received: { kind: 'files', slots: ['contract', 'warranty'], label: 'накладная и гарантийный сертификат' },
 };
 const fileNonEmpty = v => !!(v && (Array.isArray(v) ? v.length : true));
 
@@ -211,9 +227,10 @@ async function getMeta(force) {
   if (_metaCache && !force && Date.now() - _metaAt < 30 * 60 * 1000) return _metaCache;
   const { result } = await b24('crm.item.fields', { entityTypeId: ENTITY });
   const fields = (result && result.fields) || {};
-  const [stages, sources, currencies, vidZakupki] = await Promise.all([
-    getStages(), getSources(), getCurrencies(), iblockOptions(fields[F.vidZakupki]),
+  const [stages, sources, currencies, vidZakupki, docFields] = await Promise.all([
+    getStages(), getSources(), getCurrencies(), iblockOptions(fields[F.vidZakupki]), resolveDocFields(force),
   ]);
+  const uploadSlots = UPLOAD_SLOT_DEFS.map(s => ({ key: s.key, code: docFields[s.key], label: s.label }));
   const employees = Object.entries(USERS || {}).map(([id, name]) => ({ id: Number(id), name }))
     .sort((a, b) => String(a.name).localeCompare(String(b.name), 'ru'));
   const defaultAssignee = (employees.find(e => /нурмаганбетов/i.test(e.name)) || {}).id || null;
@@ -227,7 +244,7 @@ async function getMeta(force) {
     approve: { yes: APPROVE_YES, no: '1828', options: [{ id: '1827', label: 'Согласовано' }, { id: '1828', label: 'Не согласовано' }] },
     chiefAccountant: chiefAccountantId(),
     defaultApprover: defaultApproverId(),
-    uploadSlots: UPLOAD_SLOTS,
+    uploadSlots,
     currencies,
     options: {
       vidZakupki: (vidZakupki && vidZakupki.length) ? vidZakupki : VID_ZAKUPKI_FALLBACK,
@@ -522,12 +539,14 @@ async function moveStage(localId, stageKey) {
   const itemId = await itemIdOf(localId);
   const reqmt = REQUIREMENTS[stageKey];
   if (reqmt) {
-    const { result } = await b24('crm.item.get', { entityTypeId: ENTITY, id: itemId });
+    const [{ result }, docFields] = await Promise.all([
+      b24('crm.item.get', { entityTypeId: ENTITY, id: itemId }), resolveDocFields(),
+    ]);
     const item = (result && result.item) || {};
-    if (reqmt.kind === 'file' && !fileNonEmpty(item[reqmt.field])) {
+    if (reqmt.kind === 'file' && !fileNonEmpty(item[docFields[reqmt.slot]])) {
       const e = new Error(`Нельзя перейти на «${step.label}»: не приложен ${reqmt.label}.`); e.userFacing = true; throw e;
     }
-    if (reqmt.kind === 'files' && !reqmt.fields.every(f => fileNonEmpty(item[f]))) {
+    if (reqmt.kind === 'files' && !reqmt.slots.every(sl => fileNonEmpty(item[docFields[sl]]))) {
       const e = new Error(`Нельзя перейти на «${step.label}»: нужны ${reqmt.label}.`); e.userFacing = true; throw e;
     }
     if (reqmt.kind === 'approval') {
@@ -597,11 +616,11 @@ async function getItemDetail(localId) {
       dopy = { files, serviceUrl: o ? `${o}/crm/type/${SERVICE_ENTITY}/details/${sid}/` : null };
     } catch (e) { /* best-effort */ }
   }
-  const stageDates = await stageDatesFor(itemId);
+  const [stageDates, docFields] = await Promise.all([stageDatesFor(itemId), resolveDocFields()]);
   return {
     stageId: item.stageId,
     stageDates,
-    docs: { invoice: fileInfo(DOC_INVOICE, 'invoice'), pay: fileInfo(DOC_PAY, 'pay'), contract: fileInfo(DOC_CONTRACT, 'contract'), warranty: fileInfo(DOC_WARRANTY, 'warranty') },
+    docs: { invoice: fileInfo(docFields.invoice, 'invoice'), pay: fileInfo(docFields.pay, 'pay'), contract: fileInfo(docFields.contract, 'contract'), warranty: fileInfo(docFields.warranty, 'warranty') },
     dopy,
     approval: {
       status: item[F.preApprove] != null ? String(item[F.preApprove]) : null,
@@ -618,14 +637,16 @@ async function getItemDetail(localId) {
 // Загрузка документа в файловое поле 1066 (перезаписывает поле новым файлом).
 // Если загрузили «Подтверждение оплаты» — уведомляем создателя заявки.
 async function uploadDoc(localId, fieldCode, filename, base64) {
-  if (!UPLOAD_CODES.has(fieldCode)) throw new Error('Недопустимое поле для загрузки');
+  const docFields = await resolveDocFields();
+  const codeToKey = {}; Object.entries(docFields).forEach(([k, code]) => { codeToKey[code] = k; });
+  if (!codeToKey[fieldCode]) throw new Error('Недопустимое поле для загрузки');
   const itemId = await itemIdOf(localId);
   // Формат файла для crm.item: { fileData: [имя, base64] } (без обёртки в массив —
   // иначе Битрикс принимает запрос, но файл не прикрепляет).
   await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields: { [fieldCode]: { fileData: [filename, base64] } } });
   // Сохраняем имя файла локально — crm.item.get не всегда возвращает имя.
   try {
-    const key = (UPLOAD_SLOTS.find(s => s.code === fieldCode) || {}).key;
+    const key = codeToKey[fieldCode];
     if (key) {
       const { rows } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
       const pl = (rows[0] && rows[0].payload) || {};
@@ -633,7 +654,7 @@ async function uploadDoc(localId, fieldCode, filename, base64) {
       await pool.query('UPDATE ticketsmodule_procurement SET payload=$1, updated_at=NOW() WHERE id=$2', [pl, localId]);
     }
   } catch (e) { /* имя-кэш не критичен */ }
-  if (fieldCode === DOC_PAY) {
+  if (codeToKey[fieldCode] === 'pay') {
     try {
       const ctx = await getRequestContext(localId);
       const { notifyPerson, emailHtml } = require('./procurement-notify');
