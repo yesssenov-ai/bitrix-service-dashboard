@@ -83,9 +83,10 @@ tbody tr:hover td{background:var(--panel-h)}
 .rtitle{font-family:var(--fd);font-weight:700;font-size:17px;color:var(--text)}
 .btn-del{color:var(--bad);border-color:rgba(255,91,110,.4)}
 .btn-del:hover{background:rgba(255,91,110,.1);border-color:var(--bad)}
-.stepper{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 6px}
-.stepper .st{flex:1;min-width:70px;display:flex;flex-direction:column;align-items:center;gap:5px;position:relative}
-.stepper .st .dot{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--fm);font-size:12px;font-weight:600;background:var(--panel-h);border:1px solid var(--border2);color:var(--text-3);z-index:1}
+.stepper{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin:14px 0 6px}
+.stepper .st{display:flex;flex-direction:column;align-items:center;gap:5px;position:relative;cursor:pointer}
+.stepper .st .dot{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--fm);font-size:12px;font-weight:600;background:var(--panel-h);border:1px solid var(--border2);color:var(--text-3);z-index:1;transition:.15s}
+.stepper .st:hover .dot{border-color:var(--signal);transform:translateY(-1px)}
 .stepper .st .stlbl{font-size:9.5px;line-height:1.15;color:var(--text-4);text-align:center}
 .stepper .st::before{content:'';position:absolute;top:13px;left:-50%;width:100%;height:2px;background:var(--border);z-index:0}
 .stepper .st:first-child::before{display:none}
@@ -170,6 +171,7 @@ function createCardHtml(){
   const empOpts=(META.employees||[]).map(e=>`<option value="${esc(e.id)}" ${String(e.id)===String(defBid)?'selected':''}>${esc(e.name)}</option>`).join('');
   const vidWarn=(!META.options.vidZakupki||!META.options.vidZakupki.length)
     ? `<div class="hint" style="color:var(--warn)">⚠ Справочник «Вид закупки» не загрузился из Битрикса (нужно право доступа к спискам). Скажи мне — подключим другим способом.</div>` : '';
+  const curOpts=(META.currencies||[{id:'KZT',label:'Тенге'}]).map(c=>`<option value="${esc(c.id)}" ${c.id==='KZT'?'selected':''}>${esc(c.id)}</option>`).join('');
   return `<div class="card">
       <h3>Новая заявка</h3>
       <label class="fl">Сделка (привязка)</label>
@@ -188,6 +190,10 @@ function createCardHtml(){
       <label class="fl">Вид закупки <span class="req">*</span></label>
       <select id="vidZakupki">${opt(META.options.vidZakupki,'— выберите —')}</select>
       ${vidWarn}
+      <div class="row2">
+        <div><label class="fl">Сумма закупки <span class="req">*</span></label><input id="opportunity" type="number" min="0" step="any" inputmode="decimal" placeholder="0"></div>
+        <div><label class="fl">Валюта</label><select id="currency">${curOpts}</select></div>
+      </div>
       <div class="msg" id="msg"></div>
       <button class="btn btn-p" id="createBtn" style="margin-top:14px;width:100%;justify-content:center" onclick="submitReq()">Создать заявку</button>
     </div>`;
@@ -196,7 +202,13 @@ function editCardHtml(){
   const r=LIST.find(x=>x.id===EDIT); if(!r) return createCardHtml();
   const flow=META.flow||[];
   const pl=r.payload||{};
-  const stepper=`<div class="stepper">`+flow.map((s,i)=>`<div class="st ${i<r.stepIndex?'done':''} ${i===r.stepIndex?'cur':''}" title="${esc(s.label)}"><span class="dot">${i+1}</span><span class="stlbl">${esc(s.label)}</span></div>`).join('')+`</div>`;
+  const lastIdx=flow.length-1;
+  const stepper=`<div class="stepper">`+flow.map((s,i)=>{
+    // Терминальный шаг (Товар принят): когда достигнут — зелёный «done», не красный.
+    const done = i<r.stepIndex || (i===r.stepIndex && i===lastIdx);
+    const cur  = i===r.stepIndex && i!==lastIdx;
+    return `<div class="st ${done?'done':''} ${cur?'cur':''}" title="Перейти: ${esc(s.label)}" onclick="moveStep(${r.id},'${s.key}')"><span class="dot">${i+1}</span><span class="stlbl">${esc(s.label)}</span></div>`;
+  }).join('')+`</div>`;
   const stepSel=`<select onchange="moveStep(${r.id},this.value)">`+flow.map((s,i)=>`<option value="${esc(s.key)}" ${s.key===r.stepKey?'selected':''}>${i+1}. ${esc(s.label)}</option>`).join('')+`</select>`;
   const srcOptsE=(META.sources||[]).map(s=>`<option value="${esc(s.id)}" ${String(s.id)===String(pl.source||META.internalSourceId)?'selected':''}>${esc(s.name)}</option>`).join('');
   const empOptsE=(META.employees||[]).map(e=>`<option value="${esc(e.id)}" ${String(e.id)===String(pl.assigned||META.defaultAssignee||'')?'selected':''}>${esc(e.name)}</option>`).join('');
@@ -219,6 +231,10 @@ function editCardHtml(){
           <div><label class="fl">Ответственный</label><select id="e-assigned">${empOptsE}</select></div>
         </div>
         <label class="fl">Вид закупки</label><select id="e-vid">${vidOptsE}</select>
+        <div class="row2">
+          <div><label class="fl">Сумма закупки</label><input id="e-opp" type="number" min="0" step="any" value="${esc(pl.opportunity!=null?pl.opportunity:'')}"></div>
+          <div><label class="fl">Валюта</label><select id="e-cur">${(META.currencies||[{id:'KZT'}]).map(c=>`<option value="${esc(c.id)}" ${String(c.id)===String(pl.currency||'KZT')?'selected':''}>${esc(c.id)}</option>`).join('')}</select></div>
+        </div>
         <button class="btn btn-p" style="margin-top:10px" onclick="saveEdit(${r.id})">Сохранить изменения</button>
       </div>
 
@@ -326,31 +342,57 @@ function uploadSlotHtml(id,d,key,withReqHint){
 }
 function approvalHtml(id,d){
   const ap=d.approval||{};
-  const apOpts=(META.approve.options||[]).map(o=>`<option value="${o.id}" ${String(ap.status)===String(o.id)?'selected':''}>${esc(o.label)}</option>`).join('');
-  const defBid=META.defaultAssignee||((META.me&&META.me.bitrixUserId)||'');
-  const curAppr=ap.approver||defBid;
-  const apprSel=(META.employees||[]).map(e=>`<option value="${e.id}" ${String(e.id)===String(curAppr)?'selected':''}>${esc(e.name)}</option>`).join('');
+  const YES=String(META.approve.yes), NO=String(META.approve.no||'1828');
+  const curAppr=ap.approver||META.defaultApprover||'';
   const nm=empName(curAppr)||'Не выбран';
-  const pill=ap.approved?'<span class="pill pill-ok">✓ Согласовано</span>':(ap.status&&String(ap.status)!==String(META.approve.yes)?'<span class="pill pill-no">Отклонено</span>':'<span class="pill pill-work">Ожидает</span>');
-  return `<div class="proccard">
-    <div class="pc-row"><div class="avatar av-brand">${initials(nm)}</div><div style="flex:1;min-width:0"><div class="pc-name">${esc(nm)}</div><div class="hint">Руководитель · согласование</div></div>${pill}</div>
-    <label class="fl">Утверждающий</label><select id="apby-${id}">${apprSel}</select>
-    <button class="btn" style="margin-top:8px;width:100%;justify-content:center" onclick="sendApproval(${id})">📨 Отправить на согласование</button>
-    <div class="pc-sep"></div>
-    <label class="fl">Решение</label><select id="apst-${id}">${apOpts}</select>
+  const amApprover = ME && curAppr && String(ME.bitrixUserId)===String(curAppr);
+  const rejected = ap.status && String(ap.status)===NO && ap.decided;
+  const approved = !!ap.approved;
+  const decided = approved || rejected;
+  // Статус согласования
+  let pill;
+  if(approved) pill='<span class="pill pill-ok">✓ Согласовано</span>';
+  else if(rejected) pill='<span class="pill pill-no">✕ Отклонено</span>';
+  else if(ap.requested) pill='<span class="pill pill-work">На согласовании</span>';
+  else pill='<span class="pill">Черновик</span>';
+
+  const apprSel=(META.employees||[]).map(e=>`<option value="${e.id}" ${String(e.id)===String(curAppr)?'selected':''}>${esc(e.name)}</option>`).join('');
+  // Блок инициатора: выбрать согласующего и отправить
+  const initiatorBlock=`
+    <label class="fl">Согласующий</label><select id="apby-${id}">${apprSel}</select>
+    <button class="btn" style="margin-top:8px;width:100%;justify-content:center" onclick="sendApproval(${id})">📨 ${ap.requested?'Отправить повторно':'Отправить на согласование'}</button>`;
+  // Блок согласующего: решение + комментарий (кнопки согласовать/отклонить)
+  const approverBlock=`
+    <div class="hint" style="margin-bottom:8px">Требуется ваше решение по этой закупке.</div>
     <label class="fl">Комментарий</label><textarea id="apcm-${id}" placeholder="необязательно">${esc(ap.comment||'')}</textarea>
-    <button class="btn btn-p" style="margin-top:8px;width:100%;justify-content:center" onclick="saveApproval(${id})">Сохранить решение</button>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn" style="flex:1;justify-content:center;border-color:var(--good);color:var(--good)" onclick="decide(${id},'${YES}')">✓ Согласовать</button>
+      <button class="btn" style="flex:1;justify-content:center;border-color:var(--bad);color:var(--bad)" onclick="decide(${id},'${NO}')">✕ Отклонить</button>
+    </div>`;
+  const waitingNote=`<div class="hint" style="margin-top:8px">Отправлено согласующему — ждём решение от <b style="color:var(--text)">${esc(nm)}</b>.</div>`;
+  const decidedNote=`<div class="hint" style="margin-top:8px">${approved?'✅ Закупка согласована':'⛔ Закупка отклонена'} · <b style="color:var(--text)">${esc(nm)}</b>${ap.comment?`<br>💬 ${esc(ap.comment)}`:''}</div>`;
+
+  let body;
+  if(approved) body=decidedNote;
+  else if(rejected) body=decidedNote+initiatorBlock;       // отклонено — можно переотправить
+  else if(ap.requested && amApprover) body=approverBlock;  // я согласующий — решаю
+  else if(ap.requested) body=initiatorBlock+waitingNote;   // отправлено — ждём
+  else body=initiatorBlock;                                // ещё не отправлено
+
+  return `<div class="proccard">
+    <div class="pc-row"><div class="avatar av-brand">${initials(nm)}</div><div style="flex:1;min-width:0"><div class="pc-name">${esc(nm)}</div><div class="hint">Согласующий</div></div>${pill}</div>
+    ${body}
   </div>`;
 }
 function accountantHtml(id){
   const r=LIST.find(x=>x.id===id)||{};
   const acc=r.accountantBid||META.chiefAccountant||'';
   const acctSel=(META.employees||[]).map(e=>`<option value="${esc(e.id)}" ${String(e.id)===String(acc)?'selected':''}>${esc(e.name)}</option>`).join('');
-  const nm=empName(acc)||'Наталья Зенченко';
+  const nm=empName(acc)||'Бухгалтер';
   return `<div class="proccard" style="margin-top:12px">
     <div class="pc-row"><div class="avatar av-teal">${initials(nm)}</div><div style="flex:1;min-width:0"><div class="pc-name">${esc(nm)}</div><div class="hint">Бухгалтер · оплата</div></div></div>
     <label class="fl">Сменить бухгалтера</label><select id="acctSel">${acctSel}</select>
-    <div class="hint">По умолчанию — Наталья Зенченко. Смени, если в отпуске.</div>
+    <div class="hint">Ответственный за оплату. Смени, если он в отпуске.</div>
     <button class="btn" style="margin-top:8px;width:100%;justify-content:center" onclick="saveAccountant(${id})">Назначить бухгалтера</button>
   </div>`;
 }
@@ -368,16 +410,16 @@ function renderDetail(id,d){
   const ds=document.getElementById('docsSummary'); if(ds)ds.innerHTML=summ?`<div class="deth">Приложенные документы</div>${summ}`:'';
   const db=document.getElementById('dopyBox');
   if(db){ if(d.dopy){ const fl=(d.dopy.files||[]).map(f=>`<div class="slot"><div class="slabel">Файл</div><div style="flex:1"><a class="lnk" href="${esc(f.url||'#')}" target="_blank">${esc(f.name||'файл')}</a></div></div>`).join(''); db.innerHTML=(fl||'<div class="hint">файлы не найдены</div>')+(d.dopy.serviceUrl?`<div style="margin-top:6px"><a class="lnk" href="${esc(d.dopy.serviceUrl)}" target="_blank">Открыть подбор ↗</a></div>`:''); } else db.innerHTML='<div class="hint">нет данных</div>'; }
-  // Активное действие = требование для перехода на следующий шаг
-  const nextKey=(ci>=0&&ci+1<flow.length)?flow[ci+1].key:null;
-  const nextLabel=(ci>=0&&ci+1<flow.length)?flow[ci+1].label:'';
+  // Действие = то, что делается на ТЕКУЩЕМ шаге (подсветка змейки = текущий шаг).
+  const curKey=(ci>=0&&ci<flow.length)?flow[ci].key:null;
   let hdr='Дальнейшее действие', html='';
-  if(nextKey==='invoice'){ hdr='Счёт на оплату'; html=uploadSlotHtml(id,d,'invoice')+`<div class="hint" style="margin-top:6px">Приложите счёт, чтобы перейти на «${esc(nextLabel)}».</div>`; }
-  else if(nextKey==='approve'){ hdr='Согласование закупки'; html=approvalHtml(id,d)+accountantHtml(id); }
-  else if(nextKey==='payment'){ hdr='Оплата закупки'; html=uploadSlotHtml(id,d,'pay')+`<div class="hint" style="margin-top:6px">Приложите подтверждение оплаты, чтобы перейти на «${esc(nextLabel)}».</div>`+accountantHtml(id); }
-  else if(nextKey==='contract'){ hdr='Договор'; html='<div class="hint">Особых условий нет — можно перейти на «Согласование закупки».</div>'; }
-  else if(nextKey==='waiting'){ hdr='Ожидание товара'; html='<div class="hint">Оплата проведена — двигай на «Ожидание товара».</div>'; }
-  else if(nextKey==='received'){ hdr='Товар принят'; html=uploadSlotHtml(id,d,'contract')+`<div class="hint" style="margin-top:6px">Приложите накладную, чтобы отметить «${esc(nextLabel)}».</div>`; }
+  if(curKey==='new'){ hdr='Заявка создана'; html='<div class="hint">Запроси счёт и двигай на «Запрос счёта на оплату».</div>'; }
+  else if(curKey==='invoice'){ hdr='Запрос счёта на оплату'; html=uploadSlotHtml(id,d,'invoice')+`<div class="hint" style="margin-top:6px">Приложи счёт (Invoice) — заявка сама уйдёт на «Договор».</div>`; }
+  else if(curKey==='contract'){ hdr='Договор'; html='<div class="hint">Договор — по необходимости. Двигай на «Согласование закупки».</div>'; }
+  else if(curKey==='approve'){ hdr='Согласование закупки'; html=approvalHtml(id,d); }
+  else if(curKey==='payment'){ hdr='Оплата закупки'; html=accountantHtml(id)+`<div style="margin-top:12px"></div>`+uploadSlotHtml(id,d,'pay')+`<div class="hint" style="margin-top:6px">Приложи подтверждение оплаты — заявка уйдёт на «Ожидание товара».</div>`; }
+  else if(curKey==='waiting'){ hdr='Ожидание товара'; html=uploadSlotHtml(id,d,'contract')+`<div class="hint" style="margin-top:6px">Пришёл товар — приложи накладную, заявка отметится «Товар принят».</div>`; }
+  else if(curKey==='received'){ hdr='Товар принят'; html='<div class="hint" style="color:var(--good)">✓ Процесс завершён. Документы — ниже.</div>'; }
   else { hdr='Готово'; html='<div class="hint" style="color:var(--good)">Процесс завершён.</div>'; }
   const hEl=document.getElementById('actionHdr'); if(hEl)hEl.textContent=hdr;
   const aEl=document.getElementById('stepAction'); if(aEl)aEl.innerHTML=html;
@@ -391,35 +433,33 @@ async function doUpload(id,code,input){
     const base64=await fileToB64(file);
     const r=await fetch('/api/procurement/'+id+'/upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fieldCode:code,filename:file.name,base64})});
     const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка загрузки'); loadDetail(id); return;}
-    // авто-переход на следующий шаг, если этот документ его разблокирует
+    // авто-переход: документ, приложенный на текущем шаге, двигает на следующий
     const r0=LIST.find(x=>x.id===id)||{}; const flow=META.flow||[]; const ci=(r0.stepIndex!=null)?r0.stepIndex:-1;
-    const nextKey=(ci>=0&&ci+1<flow.length)?flow[ci+1].key:null;
-    const need={invoice:'invoice',payment:'pay',received:'contract'}[nextKey];
+    const curKey=(ci>=0&&ci<flow.length)?flow[ci].key:null;
+    const adv={ invoice:{slot:'invoice',next:'contract'}, payment:{slot:'pay',next:'waiting'}, waiting:{slot:'contract',next:'received'} };
     const slotKey=((META.uploadSlots||[]).find(s=>s.code===code)||{}).key;
-    if(need&&need===slotKey){ await moveStep(id,nextKey); } else { loadDetail(id); }
+    const rule=adv[curKey];
+    if(rule&&rule.slot===slotKey){ await moveStep(id,rule.next); } else { loadDetail(id); }
   }catch(e){alert('Ошибка: '+e.message);}
   finally{input.disabled=false;}
 }
 async function sendApproval(id){
   const el=document.getElementById('apby-'+id); const approverId=el?el.value:'';
-  if(!approverId){alert('Выберите утверждающего');return;}
+  if(!approverId){alert('Выберите согласующего');return;}
   try{
     const r=await fetch('/api/procurement/'+id+'/request-approval',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({approverId})});
     const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка');return;}
-    alert('Отправлено на согласование.');
+    await reloadList(); // покажет статус «На согласовании»
   }catch(e){alert('Ошибка: '+e.message);}
 }
-async function saveApproval(id){
-  const status=document.getElementById('apst-'+id).value;
-  const approverId=document.getElementById('apby-'+id).value;
+// Решение согласующего: согласовать/отклонить. При согласовании — авто-переход
+// на «Оплата закупки» (тогда подсветка змейки встаёт на этот шаг, а не отстаёт).
+async function decide(id,status){
   const cm=document.getElementById('apcm-'+id); const comment=cm?cm.value:'';
   try{
-    const r=await fetch('/api/procurement/'+id+'/approval',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,approverId,comment})});
+    const r=await fetch('/api/procurement/'+id+'/approval',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,approverId:(ME&&ME.bitrixUserId)||null,comment})});
     const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка');return;}
-    // авто-переход на «Согласование закупки», если согласовано
-    const r0=LIST.find(x=>x.id===id)||{}; const flow=META.flow||[]; const ci=(r0.stepIndex!=null)?r0.stepIndex:-1;
-    const nextKey=(ci>=0&&ci+1<flow.length)?flow[ci+1].key:null;
-    if(String(status)===String(META.approve.yes)&&nextKey==='approve'){ await moveStep(id,'approve'); } else { await reloadList(); }
+    if(String(status)===String(META.approve.yes)){ await moveStep(id,'payment'); } else { await reloadList(); }
   }catch(e){alert('Ошибка: '+e.message);}
 }
 async function saveAccountant(id){
@@ -446,6 +486,8 @@ function toggleEditFields(id){
 async function saveEdit(id){
   const val=i=>{const el=document.getElementById(i);return el?el.value.trim():'';};
   const payload={ title:val('e-title'), source:val('e-source'), assigned:val('e-assigned'), vidZakupki:val('e-vid') };
+  const oppV=val('e-opp'); if(oppV!=='') payload.opportunity=Number(oppV);
+  const curV=val('e-cur'); if(curV) payload.currency=curV;
   try{
     const r=await fetch('/api/procurement/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка сохранения');return;}
@@ -483,10 +525,12 @@ async function submitReq(){
   const vid=document.getElementById('vidZakupki').value;
   if(META.required.vidZakupki && !vid){ msg.className='msg err'; msg.textContent='Заполните обязательное поле «Вид закупки».'; return; }
   const val=id=>{const el=document.getElementById(id);return el?el.value.trim():'';};
+  const opp=val('opportunity');
+  if(opp===''||!(Number(opp)>0)){ msg.className='msg err'; msg.textContent='Заполните обязательное поле «Сумма закупки».'; return; }
   const payload={
     dealId:DEAL?DEAL.id:null,
     title:val('title'), source:val('source'), assigned:val('assigned'),
-    vidZakupki:vid,
+    vidZakupki:vid, opportunity:Number(opp), currency:val('currency')||'KZT',
   };
   const btn=document.getElementById('createBtn'); btn.disabled=true; btn.textContent='Создаю…';
   try{

@@ -10,8 +10,13 @@ const { USERS } = require('./constants');
 const APP_BASE = process.env.APP_BASE_URL || 'https://bitrix-service-dashboard-production.up.railway.app';
 const dashUrl = () => `${APP_BASE}/procurement.html`;
 const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const chiefAccountantId = () => { const e = Object.entries(USERS || {}).find(([, name]) => /зенченко/i.test(name)); return e ? Number(e[0]) : null; };
-const warehouseManagerId = () => { const e = Object.entries(USERS || {}).find(([, name]) => /нурмаганбетов/i.test(name)); return e ? Number(e[0]) : null; };
+const findUserId = re => { const e = Object.entries(USERS || {}).find(([, name]) => re.test(name)); return e ? Number(e[0]) : null; };
+// ВРЕМЕННО (на время настройки модуля): по умолчанию бухгалтер — Куаныш Есенов
+// вместо Натальи Зенченко. Чтобы вернуть Зенченко — замени регэксп на /зенченко/i.
+const chiefAccountantId = () => findUserId(/есенов|yessenov/i) || findUserId(/зенченко/i);
+const warehouseManagerId = () => findUserId(/нурмаганбетов/i);
+// Согласующий по умолчанию — Казиев Исабек (подтягивается из Bitrix при hydrateUsers).
+const defaultApproverId = () => findUserId(/казиев|исабек/i);
 
 // Авто-создание из завершённого «подбора допов» (смарт «Заявки на сервис» 1058)
 const SERVICE_ENTITY = 1058;
@@ -105,12 +110,15 @@ const UPLOAD_SLOTS = [
   { key: 'contract', code: DOC_CONTRACT, label: 'Накладная' },            // → поле Договор / Спецификация / Appendix
 ];
 const UPLOAD_CODES = new Set(UPLOAD_SLOTS.map(s => s.code));
-// Условия для перехода НА шаг: что должно быть заполнено
+// Условия для перехода НА шаг: документ/согласование прикладывается на ПРЕДЫДУЩЕМ
+// шаге, поэтому гейт стоит на входе в следующий (счёт кладут на «Запрос счёта»,
+// значит он нужен, чтобы уйти на «Договор», и т.д.). Так подсветка змейки и
+// действие всегда совпадают с текущим шагом.
 const REQUIREMENTS = {
-  invoice:  { kind: 'file', field: DOC_INVOICE, label: 'счёт (Invoice)' },
-  approve:  { kind: 'approval', label: 'статус «Согласовано» и утверждающий' },
-  payment:  { kind: 'file', field: DOC_PAY, label: 'подтверждение оплаты' },
-  received: { kind: 'file', field: DOC_CONTRACT, label: 'подтверждение (Договор / Спецификация / Appendix)' },
+  contract: { kind: 'file', field: DOC_INVOICE, label: 'счёт (Invoice)' },
+  payment:  { kind: 'approval', label: 'согласование закупки' },
+  waiting:  { kind: 'file', field: DOC_PAY, label: 'подтверждение оплаты' },
+  received: { kind: 'file', field: DOC_CONTRACT, label: 'накладная (Договор / Спецификация / Appendix)' },
 };
 const fileNonEmpty = v => !!(v && (Array.isArray(v) ? v.length : true));
 
@@ -210,8 +218,9 @@ async function getMeta(force) {
     sources,
     employees,
     defaultAssignee,
-    approve: { yes: APPROVE_YES, options: [{ id: '1827', label: 'Согласовано' }, { id: '1828', label: 'Не согласовано' }] },
+    approve: { yes: APPROVE_YES, no: '1828', options: [{ id: '1827', label: 'Согласовано' }, { id: '1828', label: 'Не согласовано' }] },
     chiefAccountant: chiefAccountantId(),
+    defaultApprover: defaultApproverId(),
     uploadSlots: UPLOAD_SLOTS,
     currencies,
     options: {
@@ -313,9 +322,17 @@ async function setAccountant(localId, accountantBid) {
 
 // Отправить закупку на согласование выбранному руководителю (+ уведомить его).
 async function requestApproval(localId, approverId) {
-  if (!approverId) throw new Error('Не выбран утверждающий (руководитель)');
+  if (!approverId) throw new Error('Не выбран согласующий');
   const ctx = await getRequestContext(localId);
   await b24('crm.item.update', { entityTypeId: ENTITY, id: ctx.itemId, fields: { [F.preApprover]: approverId } });
+  // Локальный статус «На согласовании» (в 1066 нет отдельной стадии под это) —
+  // сбрасываем прошлое решение, чтобы pill снова показал ожидание.
+  try {
+    const { rows } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
+    const pl = (rows[0] && rows[0].payload) || {};
+    pl.apRequested = true; pl.apApprover = String(approverId); pl.apDecided = false;
+    await pool.query('UPDATE ticketsmodule_procurement SET payload=$1, updated_at=NOW() WHERE id=$2', [pl, localId]);
+  } catch (e) { /* флаг не критичен */ }
   const { notifyPerson, emailHtml } = require('./procurement-notify');
   const t = ctx.title || ('#' + ctx.itemId);
   const tg = `🟠 <b>Закупка на согласование</b>\n📋 ${esc(t)}${ctx.dealId ? `\n🔗 Сделка #${ctx.dealId}` : ''}\n\nТребуется ваше согласование.\n<a href="${dashUrl()}">Открыть в дашборде</a>${ctx.itemUrl ? ` · <a href="${ctx.itemUrl}">в Битриксе</a>` : ''}`;
@@ -332,6 +349,8 @@ async function updateRequest(localId, payload) {
   if (payload.source) fields[F.source] = payload.source;
   if (payload.assigned) fields[F.assigned] = payload.assigned;
   if (payload.vidZakupki) fields[F.vidZakupki] = payload.vidZakupki;
+  if (payload.opportunity !== undefined && payload.opportunity !== null && payload.opportunity !== '') fields[F.opportunity] = Number(payload.opportunity) || 0;
+  if (payload.currency) fields[F.currency] = payload.currency;
   if (Object.keys(fields).length) await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields });
   // сливаем в снимок payload, чтобы форма редактирования показывала актуальное
   const { rows } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
@@ -428,7 +447,8 @@ async function getItemDetail(localId) {
   const { result } = await b24('crm.item.get', { entityTypeId: ENTITY, id: itemId });
   const item = (result && result.item) || {};
   const { rows: lr } = await pool.query('SELECT payload, source_item_id FROM ticketsmodule_procurement WHERE id=$1', [localId]);
-  const docNames = ((lr[0] && lr[0].payload) || {}).docNames || {};
+  const pl = (lr[0] && lr[0].payload) || {};
+  const docNames = pl.docNames || {};
   const sid = lr[0] && lr[0].source_item_id;
   const fileInfo = (code, key) => {
     const v = item[code]; if (!v) return null; const f = Array.isArray(v) ? v[0] : v; if (!f) return null;
@@ -453,9 +473,11 @@ async function getItemDetail(localId) {
     dopy,
     approval: {
       status: item[F.preApprove] != null ? String(item[F.preApprove]) : null,
-      approver: item[F.preApprover] || null,
+      approver: item[F.preApprover] || pl.apApprover || null,
       comment: item[F.preApproveComment] || '',
       approved: String(item[F.preApprove]) === APPROVE_YES,
+      requested: !!pl.apRequested,
+      decided: !!pl.apDecided,
     },
   };
 }
@@ -481,12 +503,19 @@ async function uploadDoc(localId, fieldCode, filename, base64) {
   if (fieldCode === DOC_PAY) {
     try {
       const ctx = await getRequestContext(localId);
-      if (ctx.creatorBid) {
-        const { notifyPerson, emailHtml } = require('./procurement-notify');
-        const t = ctx.title || ('#' + ctx.itemId);
-        const tg = `💳 <b>Оплата приложена</b>\n📋 ${esc(t)}\n<a href="${dashUrl()}">Открыть</a>`;
-        const html = emailHtml({ title: 'Оплата приложена', color: '#0e7c3f', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')]], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
-        await notifyPerson(ctx.creatorBid, { reason: 'Оплата приложена', tgText: tg, subject: 'Оплата приложена #' + ctx.itemId, html, itemId: ctx.itemId });
+      const { notifyPerson, emailHtml } = require('./procurement-notify');
+      const t = ctx.title || ('#' + ctx.itemId);
+      // Уведомляем инициатора закупки И согласующего (кто утверждал закупку).
+      let approverBid = null;
+      try {
+        const { rows } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
+        approverBid = ((rows[0] && rows[0].payload) || {}).apApprover || null;
+      } catch (e) { /* ignore */ }
+      const targets = [...new Set([ctx.creatorBid, approverBid].filter(Boolean).map(String))];
+      for (const uid of targets) {
+        const tg = `💳 <b>Оплата закупки проведена</b>\n📋 ${esc(t)}\nПриложено подтверждение оплаты.\n<a href="${dashUrl()}">Открыть</a>`;
+        const html = emailHtml({ title: 'Оплата закупки проведена', color: '#0e7c3f', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')]], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
+        await notifyPerson(uid, { reason: 'Оплата приложена', tgText: tg, subject: 'Оплата закупки проведена #' + ctx.itemId, html, itemId: ctx.itemId });
       }
     } catch (e) { /* уведомление best-effort */ }
   }
@@ -502,6 +531,14 @@ async function setApproval(localId, status, approverId, comment) {
   if (approverId) fields[F.preApprover] = approverId;
   if (comment != null) fields[F.preApproveComment] = comment;
   await b24('crm.item.update', { entityTypeId: ENTITY, id: ctx.itemId, fields });
+  // Отметить, что решение принято (снимает статус «На согласовании»).
+  try {
+    const { rows } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
+    const pl = (rows[0] && rows[0].payload) || {};
+    pl.apDecided = true; pl.apRequested = false;
+    if (approverId) pl.apApprover = String(approverId);
+    await pool.query('UPDATE ticketsmodule_procurement SET payload=$1, updated_at=NOW() WHERE id=$2', [pl, localId]);
+  } catch (e) { /* флаг не критичен */ }
 
   const { notifyPerson, emailHtml } = require('./procurement-notify');
   const approved = String(status) === APPROVE_YES;
