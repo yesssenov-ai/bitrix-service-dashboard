@@ -231,6 +231,19 @@ async function getMeta(force) {
     getStages(), getSources(), getCurrencies(), iblockOptions(fields[F.vidZakupki]), resolveDocFields(force),
   ]);
   const uploadSlots = UPLOAD_SLOT_DEFS.map(s => ({ key: s.key, code: docFields[s.key], label: s.label }));
+  // «Условия оплаты поставщикам (УС)» → «100% оплата». Резолвим и КОД поля, и ID
+  // значения по названию — хардкод-код мог не совпасть с порталом (потому и «не
+  // заполнено»). Берём enum-поле с «…поставщик…» (НЕ «…клиент…») и значение «100%».
+  let oplataDefault = null;
+  try {
+    const entry = Object.entries(fields).find(([, f]) =>
+      /услови.*оплат.*поставщик/i.test(String(f.title || '')) && Array.isArray(f.items) && f.items.length);
+    if (entry) {
+      const [code, f] = entry;
+      const it = (f.items || []).find(i => /100\s*%/.test(String(i.VALUE || ''))) || null;
+      if (it) oplataDefault = { code, valueId: String(it.ID), label: it.VALUE };
+    }
+  } catch (e) { console.error('oplataDefault resolve:', e.message); }
   const employees = Object.entries(USERS || {}).map(([id, name]) => ({ id: Number(id), name }))
     .sort((a, b) => String(a.name).localeCompare(String(b.name), 'ru'));
   const defaultAssignee = (employees.find(e => /нурмаганбетов/i.test(e.name)) || {}).id || null;
@@ -256,6 +269,7 @@ async function getMeta(force) {
       needKztin: enumItems(fields[F.needKztin]),
     },
     required: { vidZakupki: !!(fields[F.vidZakupki] && fields[F.vidZakupki].isRequired) },
+    oplataDefault,
     docs: DOCS.map(([label, code]) => ({ label, code })),
     // подсказка по «Внутреннему запросу» — id источника, если найден
     internalSourceId: (sources.find(s => /внутрен/i.test(s.name)) || {}).id || null,
@@ -405,15 +419,24 @@ async function itemIdOf(localId) {
   return itemId;
 }
 
-// Контекст заявки для уведомлений (id элемента, создатель, бухгалтер, ссылки).
+// Контекст заявки для уведомлений (id элемента, инициатор, согласующий, бухгалтер).
+// creatorBid: Bitrix-id инициатора — из аккаунта дашборда, а если он не привязан
+// к Bitrix, берём initiatorBid из payload (сохраняется при создании).
 async function getRequestContext(localId) {
   const { rows } = await pool.query(
-    `SELECT p.bitrix_item_id, p.deal_id, p.title, p.accountant_bid, u.bitrix_user_id AS creator_bid
+    `SELECT p.bitrix_item_id, p.deal_id, p.title, p.accountant_bid, p.payload, u.bitrix_user_id AS creator_bid
        FROM ticketsmodule_procurement p LEFT JOIN ticketsmodule_users u ON u.id = p.created_by
       WHERE p.id=$1`, [localId]);
   const r = rows[0];
   if (!r || !r.bitrix_item_id) throw new Error('Заявка не найдена');
-  return { localId, itemId: r.bitrix_item_id, dealId: r.deal_id, title: r.title, creatorBid: r.creator_bid, accountantBid: r.accountant_bid || null, itemUrl: itemUrl(r.bitrix_item_id), dealUrl: dealUrl(r.deal_id) };
+  const pl = r.payload || {};
+  return {
+    localId, itemId: r.bitrix_item_id, dealId: r.deal_id, title: r.title,
+    creatorBid: r.creator_bid || pl.initiatorBid || null,
+    approverBid: pl.apApprover || null,
+    accountantBid: r.accountant_bid || null,
+    itemUrl: itemUrl(r.bitrix_item_id), dealUrl: dealUrl(r.deal_id),
+  };
 }
 
 // Назначить/сменить бухгалтера, ответственного за оплату (напр. если основной в
@@ -556,6 +579,20 @@ async function moveStage(localId, stageKey) {
   }
   await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields: { stageId: step.bitrix } });
   await pool.query('UPDATE ticketsmodule_procurement SET stage_id=$1, updated_at=NOW() WHERE id=$2', [step.bitrix, localId]);
+  // «Товар принят» — уведомляем согласующего и главбуха (закупка завершена).
+  if (stageKey === 'received') {
+    try {
+      const ctx = await getRequestContext(localId);
+      const { notifyPerson, emailHtml } = require('./procurement-notify');
+      const t = ctx.title || ('#' + ctx.itemId);
+      const targets = [...new Set([ctx.approverBid, ctx.accountantBid || chiefAccountantId()].filter(Boolean).map(String))];
+      for (const uid of targets) {
+        const tg = `📦 <b>Товар принят</b>\n📋 ${esc(t)}\nЗакупка завершена — товар получен.\n<a href="${dashUrl()}">Открыть</a>`;
+        const html = emailHtml({ title: 'Товар принят', color: '#0e7c3f', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ...(ctx.dealId ? [['Сделка', '#' + ctx.dealId]] : [])], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
+        await notifyPerson(uid, { reason: 'Товар принят', tgText: tg, subject: 'Товар принят #' + ctx.itemId, html, itemId: ctx.itemId });
+      }
+    } catch (e) { /* уведомление best-effort */ }
+  }
   return { stageId: step.bitrix, stepKey: step.key };
 }
 
@@ -660,12 +697,7 @@ async function uploadDoc(localId, fieldCode, filename, base64) {
       const { notifyPerson, emailHtml } = require('./procurement-notify');
       const t = ctx.title || ('#' + ctx.itemId);
       // Уведомляем инициатора закупки И согласующего (кто утверждал закупку).
-      let approverBid = null;
-      try {
-        const { rows } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
-        approverBid = ((rows[0] && rows[0].payload) || {}).apApprover || null;
-      } catch (e) { /* ignore */ }
-      const targets = [...new Set([ctx.creatorBid, approverBid].filter(Boolean).map(String))];
+      const targets = [...new Set([ctx.creatorBid, ctx.approverBid].filter(Boolean).map(String))];
       for (const uid of targets) {
         const tg = `💳 <b>Оплата закупки проведена</b>\n📋 ${esc(t)}\nПриложено подтверждение оплаты.\n<a href="${dashUrl()}">Открыть</a>`;
         const html = emailHtml({ title: 'Оплата закупки проведена', color: '#0e7c3f', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')]], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
@@ -724,6 +756,9 @@ async function createRequest(payload, bitrixUserId) {
   await ensureSchema();
   const meta = await getMeta();
   const title = (payload.title && String(payload.title).trim()) || 'Закуп доп оборудования';
+  // Bitrix-id инициатора — чтобы уведомления доходили, даже если аккаунт дашборда
+  // не привязан к Bitrix (тогда берём ответственного, выбранного в форме).
+  payload.initiatorBid = bitrixUserId || payload.assigned || null;
 
   const fields = { categoryId: CATEGORY, opened: 'Y', title };
   // Ответственный: выбранный в форме, иначе — текущий пользователь (менеджер склада).
@@ -742,9 +777,13 @@ async function createRequest(payload, bitrixUserId) {
   if (Array.isArray(payload.pribor) && payload.pribor.length) fields[F.pribor] = payload.pribor;
   if (payload.ustanovka) fields[F.ustanovka] = payload.ustanovka;
   // «Условия оплаты поставщикам (УС)» — всегда «100% оплата» при создании с дашборда.
-  // ID значения резолвим по названию (устойчиво к разным порталам), иначе — 83.
-  const oplata100 = (meta.options && meta.options.oplataPostavshikam || []).find(o => /100\s*%/.test(String(o.label)));
-  fields[F.oplataPostavshikam] = payload.oplataPostavshikam || (oplata100 ? oplata100.id : '83');
+  // Код поля и ID значения резолвятся динамически по названию (meta.oplataDefault);
+  // если не нашлось — резерв на исторический код/значение.
+  if (meta.oplataDefault && meta.oplataDefault.code) {
+    fields[meta.oplataDefault.code] = meta.oplataDefault.valueId;
+  } else {
+    fields[F.oplataPostavshikam] = payload.oplataPostavshikam || '83';
+  }
   if (payload.needKztin) fields[F.needKztin] = payload.needKztin;
   if (payload.kztin) fields[F.kztin] = payload.kztin;
   if (payload.po) fields[F.po] = payload.po;
