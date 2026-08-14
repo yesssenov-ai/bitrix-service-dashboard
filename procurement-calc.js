@@ -7,6 +7,11 @@ const { b24 } = require('./bitrix');
 const { pool } = require('./auth');
 const { USERS } = require('./constants');
 
+const APP_BASE = process.env.APP_BASE_URL || 'https://bitrix-service-dashboard-production.up.railway.app';
+const dashUrl = () => `${APP_BASE}/procurement.html`;
+const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const chiefAccountantId = () => { const e = Object.entries(USERS || {}).find(([, name]) => /зенченко/i.test(name)); return e ? Number(e[0]) : null; };
+
 const ENTITY = 1066;         // смарт «Закупки»
 const CATEGORY = 13;         // единственная категория «Общая»
 const TAG_PREFIX = 'PLS-DOP'; // метка наших заявок в xmlId элемента 1066
@@ -66,9 +71,9 @@ const DOC_CONTRACT = 'ufCrm10_1732858619051';  // Договор / Специф�
 const APPROVE_YES = '1827';                    // «Согласовано» (поле Согласование предоплаты)
 // Разрешённые для загрузки поля (белый список)
 const UPLOAD_SLOTS = [
-  { key: 'invoice',  code: DOC_INVOICE,  label: 'Счёт (Invoice)' },
-  { key: 'pay',      code: DOC_PAY,      label: 'Подтверждение оплаты' },
-  { key: 'contract', code: DOC_CONTRACT, label: 'Договор / Спецификация / Appendix' },
+  { key: 'invoice',  code: DOC_INVOICE,  label: 'Счет на оплату' },       // → поле Invoice
+  { key: 'pay',      code: DOC_PAY,      label: 'Подтверждение оплаты' },  // → поле Подтверждение оплаты
+  { key: 'contract', code: DOC_CONTRACT, label: 'Накладная' },            // → поле Договор / Спецификация / Appendix
 ];
 const UPLOAD_CODES = new Set(UPLOAD_SLOTS.map(s => s.code));
 // Условия для перехода НА шаг: что должно быть заполнено
@@ -177,6 +182,7 @@ async function getMeta(force) {
     employees,
     defaultAssignee,
     approve: { yes: APPROVE_YES, options: [{ id: '1827', label: 'Согласовано' }, { id: '1828', label: 'Не согласовано' }] },
+    chiefAccountant: chiefAccountantId(),
     uploadSlots: UPLOAD_SLOTS,
     currencies,
     options: {
@@ -234,6 +240,7 @@ async function listRequests() {
     return {
       id: r.id, bitrixItemId: r.bitrix_item_id, dealId: r.deal_id, title: r.title,
       stageId: r.stage_id, stepIndex, stepKey: stepIndex >= 0 ? FLOW[stepIndex].key : null,
+      accountantBid: r.accountant_bid || null,
       createdAt: r.created_at, payload: r.payload || {},
       itemUrl: itemUrl(r.bitrix_item_id), dealUrl: dealUrl(r.deal_id),
     };
@@ -245,6 +252,71 @@ async function itemIdOf(localId) {
   const itemId = rows[0] && rows[0].bitrix_item_id;
   if (!itemId) throw new Error('Заявка не найдена');
   return itemId;
+}
+
+// Контекст заявки для уведомлений (id элемента, создатель, бухгалтер, ссылки).
+async function getRequestContext(localId) {
+  const { rows } = await pool.query(
+    `SELECT p.bitrix_item_id, p.deal_id, p.title, p.accountant_bid, u.bitrix_user_id AS creator_bid
+       FROM ticketsmodule_procurement p LEFT JOIN ticketsmodule_users u ON u.id = p.created_by
+      WHERE p.id=$1`, [localId]);
+  const r = rows[0];
+  if (!r || !r.bitrix_item_id) throw new Error('Заявка не найдена');
+  return { localId, itemId: r.bitrix_item_id, dealId: r.deal_id, title: r.title, creatorBid: r.creator_bid, accountantBid: r.accountant_bid || null, itemUrl: itemUrl(r.bitrix_item_id), dealUrl: dealUrl(r.deal_id) };
+}
+
+// Назначить/сменить бухгалтера, ответственного за оплату (напр. если основной в
+// отпуске), и уведомить нового.
+async function setAccountant(localId, accountantBid) {
+  if (!accountantBid) throw new Error('Не выбран бухгалтер');
+  await pool.query('UPDATE ticketsmodule_procurement SET accountant_bid=$1, updated_at=NOW() WHERE id=$2', [accountantBid, localId]);
+  try {
+    const ctx = await getRequestContext(localId);
+    const { notifyPerson, emailHtml } = require('./procurement-notify');
+    const t = ctx.title || ('#' + ctx.itemId);
+    const tg = `👤 <b>Вы назначены на оплату закупки</b>\n📋 ${esc(t)}\n<a href="${dashUrl()}">Открыть в дашборде</a>${ctx.itemUrl ? ` · <a href="${ctx.itemUrl}">в Битриксе</a>` : ''}`;
+    const html = emailHtml({ title: 'Вы назначены на оплату закупки', color: '#0f766e', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')]], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
+    await notifyPerson(accountantBid, { reason: 'Назначен бухгалтер', tgText: tg, subject: 'Вы назначены на оплату закупки #' + ctx.itemId, html, itemId: ctx.itemId });
+  } catch (e) { /* уведомление best-effort */ }
+  return { ok: true };
+}
+
+// Отправить закупку на согласование выбранному руководителю (+ уведомить его).
+async function requestApproval(localId, approverId) {
+  if (!approverId) throw new Error('Не выбран утверждающий (руководитель)');
+  const ctx = await getRequestContext(localId);
+  await b24('crm.item.update', { entityTypeId: ENTITY, id: ctx.itemId, fields: { [F.preApprover]: approverId } });
+  const { notifyPerson, emailHtml } = require('./procurement-notify');
+  const t = ctx.title || ('#' + ctx.itemId);
+  const tg = `🟠 <b>Закупка на согласование</b>\n📋 ${esc(t)}${ctx.dealId ? `\n🔗 Сделка #${ctx.dealId}` : ''}\n\nТребуется ваше согласование.\n<a href="${dashUrl()}">Открыть в дашборде</a>${ctx.itemUrl ? ` · <a href="${ctx.itemUrl}">в Битриксе</a>` : ''}`;
+  const html = emailHtml({ title: 'Закупка на согласование', color: '#d97706', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ...(ctx.dealId ? [['Сделка', '#' + ctx.dealId]] : [])], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
+  await notifyPerson(approverId, { reason: 'Запрос согласования', tgText: tg, subject: 'Закупка на согласование #' + ctx.itemId, html, itemId: ctx.itemId });
+  return { ok: true };
+}
+
+// Редактирование заявки: базовые поля (название, источник, ответственный, вид закупки).
+async function updateRequest(localId, payload) {
+  const itemId = await itemIdOf(localId);
+  const fields = {};
+  if (payload.title != null) fields[F.title] = payload.title;
+  if (payload.source) fields[F.source] = payload.source;
+  if (payload.assigned) fields[F.assigned] = payload.assigned;
+  if (payload.vidZakupki) fields[F.vidZakupki] = payload.vidZakupki;
+  if (Object.keys(fields).length) await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields });
+  // сливаем в снимок payload, чтобы форма редактирования показывала актуальное
+  const { rows } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
+  const merged = Object.assign({}, rows[0] && rows[0].payload || {}, payload);
+  await pool.query('UPDATE ticketsmodule_procurement SET title=$1, payload=$2, updated_at=NOW() WHERE id=$3', [payload.title || null, merged, localId]);
+  return { ok: true };
+}
+
+// Удаление заявки: элемент 1066 + локальная строка.
+async function deleteRequest(localId) {
+  const { rows } = await pool.query('SELECT bitrix_item_id FROM ticketsmodule_procurement WHERE id=$1', [localId]);
+  const itemId = rows[0] && rows[0].bitrix_item_id;
+  if (itemId) { try { await b24('crm.item.delete', { entityTypeId: ENTITY, id: itemId }); } catch (e) { console.error('procurement delete item:', e.message); } }
+  await pool.query('DELETE FROM ticketsmodule_procurement WHERE id=$1', [localId]);
+  return { ok: true };
 }
 
 // Перевод заявки на шаг процесса → пишет стадию в 1066. С проверкой условий:
@@ -279,26 +351,66 @@ async function getItemDetail(localId) {
   return {
     stageId: item.stageId,
     docs: { invoice: fileInfo(DOC_INVOICE), pay: fileInfo(DOC_PAY), contract: fileInfo(DOC_CONTRACT) },
-    approval: { status: item[F.preApprove] != null ? String(item[F.preApprove]) : null, approver: item[F.preApprover] || null, approved: String(item[F.preApprove]) === APPROVE_YES },
+    approval: {
+      status: item[F.preApprove] != null ? String(item[F.preApprove]) : null,
+      approver: item[F.preApprover] || null,
+      comment: item[F.preApproveComment] || '',
+      approved: String(item[F.preApprove]) === APPROVE_YES,
+    },
   };
 }
 
 // Загрузка документа в файловое поле 1066 (перезаписывает поле новым файлом).
+// Если загрузили «Подтверждение оплаты» — уведомляем создателя заявки.
 async function uploadDoc(localId, fieldCode, filename, base64) {
   if (!UPLOAD_CODES.has(fieldCode)) throw new Error('Недопустимое поле для загрузки');
   const itemId = await itemIdOf(localId);
   await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields: { [fieldCode]: [{ fileData: [filename, base64] }] } });
+  if (fieldCode === DOC_PAY) {
+    try {
+      const ctx = await getRequestContext(localId);
+      if (ctx.creatorBid) {
+        const { notifyPerson, emailHtml } = require('./procurement-notify');
+        const t = ctx.title || ('#' + ctx.itemId);
+        const tg = `💳 <b>Оплата приложена</b>\n📋 ${esc(t)}\n<a href="${dashUrl()}">Открыть</a>`;
+        const html = emailHtml({ title: 'Оплата приложена', color: '#0e7c3f', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')]], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
+        await notifyPerson(ctx.creatorBid, { reason: 'Оплата приложена', tgText: tg, subject: 'Оплата приложена #' + ctx.itemId, html, itemId: ctx.itemId });
+      }
+    } catch (e) { /* уведомление best-effort */ }
+  }
   return { ok: true };
 }
 
-// Согласование закупки: статус + утверждающий.
-async function setApproval(localId, status, approverId) {
-  const itemId = await itemIdOf(localId);
+// Согласование закупки: статус + утверждающий + комментарий. Уведомляет создателя
+// о решении, а при «Согласовано» — главбуха о необходимости приложить оплату.
+async function setApproval(localId, status, approverId, comment) {
+  const ctx = await getRequestContext(localId);
   const fields = {};
   if (status) fields[F.preApprove] = status;
   if (approverId) fields[F.preApprover] = approverId;
-  await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields });
-  return { ok: true };
+  if (comment != null) fields[F.preApproveComment] = comment;
+  await b24('crm.item.update', { entityTypeId: ENTITY, id: ctx.itemId, fields });
+
+  const { notifyPerson, emailHtml } = require('./procurement-notify');
+  const approved = String(status) === APPROVE_YES;
+  const t = ctx.title || ('#' + ctx.itemId);
+  // 1) уведомить создателя о решении
+  if (ctx.creatorBid) {
+    const verdict = approved ? 'согласована' : 'отклонена';
+    const tg = `${approved ? '✅' : '⛔'} <b>Закупка ${verdict}</b>\n📋 ${esc(t)}${comment ? `\n💬 ${esc(comment)}` : ''}\n<a href="${dashUrl()}">Открыть</a>`;
+    const html = emailHtml({ title: `Закупка ${verdict}`, color: approved ? '#0e7c3f' : '#b91c1c', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ...(comment ? [['Комментарий', comment]] : [])], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
+    await notifyPerson(ctx.creatorBid, { reason: 'Решение по согласованию', tgText: tg, subject: `Закупка ${verdict} #${ctx.itemId}`, html, itemId: ctx.itemId });
+  }
+  // 2) если согласовано — передать бухгалтеру на оплату (назначенному или главбуху)
+  if (approved) {
+    const chief = ctx.accountantBid || chiefAccountantId();
+    if (chief) {
+      const tg = `💰 <b>Требуется оплата закупки</b>\n📋 ${esc(t)}\nЗакупка согласована. Приложите «Подтверждение оплаты».\n<a href="${dashUrl()}">Открыть в дашборде</a>${ctx.itemUrl ? ` · <a href="${ctx.itemUrl}">в Битриксе</a>` : ''}`;
+      const html = emailHtml({ title: 'Требуется оплата закупки', color: '#0f766e', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ...(ctx.dealId ? [['Сделка', '#' + ctx.dealId]] : [])], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
+      await notifyPerson(chief, { reason: 'Запрос оплаты', tgText: tg, subject: 'Требуется оплата закупки #' + ctx.itemId, html, itemId: ctx.itemId });
+    }
+  }
+  return { ok: true, approved };
 }
 
 // ── Создание заявки: локальная строка + элемент 1066 ────────────────────────
@@ -357,4 +469,4 @@ async function createRequest(payload, bitrixUserId) {
   return { localId, bitrixItemId: item.id, stageId: item.stageId || null, itemUrl: itemUrl(item.id) };
 }
 
-module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, getMeta, searchDeals, listRequests, createRequest, moveStage, getItemDetail, uploadDoc, setApproval, itemUrl, dealUrl };
+module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, getMeta, searchDeals, listRequests, createRequest, updateRequest, deleteRequest, moveStage, getItemDetail, uploadDoc, setApproval, requestApproval, setAccountant, itemUrl, dealUrl };

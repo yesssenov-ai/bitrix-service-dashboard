@@ -77,6 +77,20 @@ tbody tr:hover td{background:var(--panel-h)}
 .slabel{color:var(--text-2);min-width:180px}
 .upl{cursor:pointer;font-size:12px;color:var(--signal);border:1px solid var(--border2);border-radius:8px;padding:5px 10px;white-space:nowrap}
 .upl:hover{background:var(--panel-h)}
+.selrow td{background:var(--panel-h)!important}
+.rtitle{font-family:var(--fd);font-weight:700;font-size:17px;color:var(--text)}
+.btn-del{color:var(--bad);border-color:rgba(255,91,110,.4)}
+.btn-del:hover{background:rgba(255,91,110,.1);border-color:var(--bad)}
+.stepper{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 6px}
+.stepper .st{flex:1;min-width:70px;display:flex;flex-direction:column;align-items:center;gap:5px;position:relative}
+.stepper .st .dot{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--fm);font-size:12px;font-weight:600;background:var(--panel-h);border:1px solid var(--border2);color:var(--text-3);z-index:1}
+.stepper .st .stlbl{font-size:9.5px;line-height:1.15;color:var(--text-4);text-align:center}
+.stepper .st::before{content:'';position:absolute;top:13px;left:-50%;width:100%;height:2px;background:var(--border);z-index:0}
+.stepper .st:first-child::before{display:none}
+.stepper .st.done .dot{background:linear-gradient(135deg,var(--signal),var(--good));border-color:transparent;color:#04121a}
+.stepper .st.done::before{background:var(--good)}
+.stepper .st.cur .dot{background:linear-gradient(135deg,var(--brand),var(--brand-h));border-color:transparent;color:#fff;box-shadow:0 0 0 4px rgba(197,59,47,.18)}
+.stepper .st.cur .stlbl{color:var(--text);font-weight:600}
 .spin{width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--signal);border-radius:50%;animation:sp 1s linear infinite;margin:40px auto}
 @keyframes sp{to{transform:rotate(360deg)}}
 </style>
@@ -114,17 +128,24 @@ async function boot(){
 const opt=(arr,ph)=>`<option value="">${ph||'—'}</option>`+(arr||[]).map(o=>`<option value="${esc(o.id)}">${esc(o.label)}</option>`).join('');
 const stageName=id=>{const f=(META.flow||[]).find(x=>x.bitrix===id);if(f)return f.label;const s=(META.stages||[]).find(s=>s.id===id);return s?s.name:(id||'—');};
 
+let MODE='create', EDIT=null;
 function render(){
+  const left=(MODE==='edit'&&EDIT!=null)?editCardHtml():createCardHtml();
+  document.getElementById('root').innerHTML=`<div class="grid">${left}
+    <div class="card" style="padding:0;overflow:hidden">
+      <h3 style="padding:18px 20px 0" id="listHdr">Мои заявки (${LIST.length})</h3>
+      <div style="overflow:auto;max-height:78vh" id="listBody">${listInner()}</div>
+    </div></div>`;
+  if(MODE==='edit'&&EDIT!=null) loadDetail(EDIT);
+}
+function createCardHtml(){
   const srcOpts=(META.sources||[]).map(s=>`<option value="${esc(s.id)}" ${s.id===META.internalSourceId?'selected':''}>${esc(s.name)}</option>`).join('');
   const defBid=META.defaultAssignee||((META.me&&META.me.bitrixUserId)||'');
   const empOpts=(META.employees||[]).map(e=>`<option value="${esc(e.id)}" ${String(e.id)===String(defBid)?'selected':''}>${esc(e.name)}</option>`).join('');
   const vidWarn=(!META.options.vidZakupki||!META.options.vidZakupki.length)
     ? `<div class="hint" style="color:var(--warn)">⚠ Справочник «Вид закупки» не загрузился из Битрикса (нужно право доступа к спискам). Скажи мне — подключим другим способом.</div>` : '';
-  document.getElementById('root').innerHTML=`
-  <div class="grid">
-    <div class="card">
+  return `<div class="card">
       <h3>Новая заявка</h3>
-
       <label class="fl">Сделка (привязка)</label>
       <div class="dealbox">
         <input id="dealq" placeholder="Номер или название сделки…" oninput="onDealInput(this.value)" autocomplete="off">
@@ -132,37 +153,72 @@ function render(){
       </div>
       <div id="dealchip"></div>
       <div class="hint">Можно оставить пустым (закуп на склад без сделки).</div>
-
       <label class="fl">Название заявки</label>
       <input id="title" placeholder="Напр.: Доп оборудование — …">
-
       <div class="row2">
         <div><label class="fl">Источник</label><select id="source">${srcOpts}</select></div>
         <div><label class="fl">Ответственный</label><select id="assigned">${empOpts}</select></div>
       </div>
-
       <label class="fl">Вид закупки <span class="req">*</span></label>
       <select id="vidZakupki">${opt(META.options.vidZakupki,'— выберите —')}</select>
       ${vidWarn}
-
       <div class="msg" id="msg"></div>
       <button class="btn btn-p" id="createBtn" style="margin-top:14px;width:100%;justify-content:center" onclick="submitReq()">Создать заявку</button>
-    </div>
+    </div>`;
+}
+function editCardHtml(){
+  const r=LIST.find(x=>x.id===EDIT); if(!r) return createCardHtml();
+  const flow=META.flow||[];
+  const pl=r.payload||{};
+  const stepper=`<div class="stepper">`+flow.map((s,i)=>`<div class="st ${i<r.stepIndex?'done':''} ${i===r.stepIndex?'cur':''}" title="${esc(s.label)}"><span class="dot">${i+1}</span><span class="stlbl">${esc(s.label)}</span></div>`).join('')+`</div>`;
+  const stepSel=`<select onchange="moveStep(${r.id},this.value)">`+flow.map((s,i)=>`<option value="${esc(s.key)}" ${s.key===r.stepKey?'selected':''}>${i+1}. ${esc(s.label)}</option>`).join('')+`</select>`;
+  const acc=r.accountantBid||META.chiefAccountant||'';
+  const acctSel=(META.employees||[]).map(e=>`<option value="${esc(e.id)}" ${String(e.id)===String(acc)?'selected':''}>${esc(e.name)}</option>`).join('');
+  const srcOptsE=(META.sources||[]).map(s=>`<option value="${esc(s.id)}" ${String(s.id)===String(pl.source||META.internalSourceId)?'selected':''}>${esc(s.name)}</option>`).join('');
+  const empOptsE=(META.employees||[]).map(e=>`<option value="${esc(e.id)}" ${String(e.id)===String(pl.assigned||META.defaultAssignee||'')?'selected':''}>${esc(e.name)}</option>`).join('');
+  const vidOptsE=(META.options.vidZakupki||[]).map(o=>`<option value="${esc(o.id)}" ${String(o.id)===String(pl.vidZakupki||'')?'selected':''}>${esc(o.label)}</option>`).join('');
+  return `<div class="card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <button class="btn" onclick="backToCreate()">← Новая заявка</button>
+        <span style="margin-left:auto"></span>
+        <button class="btn" onclick="toggleEditFields(${r.id})">✎ Изменить</button>
+        <button class="btn btn-del" onclick="deleteReq(${r.id})">🗑 Удалить</button>
+      </div>
+      <div class="rtitle">${esc(r.title||('Заявка #'+r.bitrixItemId))}</div>
+      <div class="hint">#${r.bitrixItemId||'—'}${r.dealId?` · сделка <a class="lnk" href="${esc(r.dealUrl)}" target="_blank">#${r.dealId}</a>`:''}${r.itemUrl?` · <a class="lnk" href="${esc(r.itemUrl)}" target="_blank">в Битриксе ↗</a>`:''}</div>
 
-    <div class="card" style="padding:0;overflow:hidden">
-      <h3 style="padding:18px 20px 0" id="listHdr">Мои заявки (${LIST.length})</h3>
-      <div style="overflow:auto;max-height:72vh" id="listBody">${listInner()}</div>
-    </div>
-  </div>`;
+      <div id="editFields-${r.id}" style="display:none;margin-top:12px;padding:14px;border:1px solid var(--border2);border-radius:12px;background:var(--bg)">
+        <label class="fl">Название</label><input id="e-title" value="${esc(r.title||'')}">
+        <div class="row2">
+          <div><label class="fl">Источник</label><select id="e-source">${srcOptsE}</select></div>
+          <div><label class="fl">Ответственный</label><select id="e-assigned">${empOptsE}</select></div>
+        </div>
+        <label class="fl">Вид закупки</label><select id="e-vid">${vidOptsE}</select>
+        <button class="btn btn-p" style="margin-top:10px" onclick="saveEdit(${r.id})">Сохранить изменения</button>
+      </div>
+
+      ${stepper}
+      <label class="fl">Сменить шаг</label>${stepSel}
+      <div class="deth" style="margin-top:18px">Документы</div>
+      <div id="docSlots"><div class="spin" style="margin:14px auto"></div></div>
+      <div class="deth" style="margin-top:18px">Согласование закупки</div>
+      <div id="apBox"><div class="spin" style="margin:14px auto"></div></div>
+      <div class="deth" style="margin-top:18px">Оплата</div>
+      <label class="fl">Бухгалтер (оплата)</label><select id="acctSel">${acctSel}</select>
+      <div class="hint">По умолчанию — Наталья Зенченко. Смени, если она в отпуске.</div>
+      <button class="btn" style="margin-top:8px" onclick="saveAccountant(${r.id})">Назначить бухгалтера</button>
+    </div>`;
 }
 function listInner(){
   if(!LIST.length) return '<div class="empty">Пока нет заявок. Создай первую слева.</div>';
-  return `<table><thead><tr><th>Заявка</th><th>Сделка</th><th>Шаг процесса</th><th>Создана</th><th>Битрикс</th></tr></thead><tbody>${LIST.map(rowHtml).join('')}</tbody></table>`;
+  return `<table><thead><tr><th>Заявка</th><th>Сделка</th><th>Шаг</th><th>Создана</th><th></th></tr></thead><tbody>${LIST.map(rowHtml).join('')}</tbody></table>`;
 }
 function renderList(){
   const b=document.getElementById('listBody'); if(b)b.innerHTML=listInner();
   const h=document.getElementById('listHdr'); if(h)h.textContent='Мои заявки ('+LIST.length+')';
 }
+function selectReq(id){ MODE='edit'; EDIT=id; render(); }
+function backToCreate(){ MODE='create'; EDIT=null; DEAL=null; render(); }
 
 function pickerHtml(key,items,withSearch){
   return `<div class="picker" id="pk-${key}">
@@ -175,65 +231,49 @@ function toggleSel(key,id,on){ if(on)SEL[key].add(String(id)); else SEL[key].del
 function filterPicker(key,q){ q=(q||'').toLowerCase(); document.querySelectorAll(`#pkbody-${key} label`).forEach(l=>{l.style.display=l.dataset.lab.includes(q)?'':'none';}); }
 
 function rowHtml(r){
-  const flow=META.flow||[];
-  const cur=r.stepKey||'';
-  const stepSel=`<select onchange="moveStep(${r.id},this.value)" style="font-size:12.5px;padding:6px 9px">`
-    +flow.map((s,i)=>`<option value="${esc(s.key)}" ${s.key===cur?'selected':''}>${i+1}. ${esc(s.label)}</option>`).join('')
-    +`</select>`;
   const badge=`<span class="stg">${r.stepIndex>=0?(r.stepIndex+1)+'. ':''}${esc(stageName(r.stageId))}</span>`;
-  return `<tr>
-    <td><span class="dtog" onclick="toggleDetail(${r.id})">▸</span> <b>${esc(r.title||'—')}</b><div class="hint">#${r.bitrixItemId||'—'}</div></td>
-    <td>${r.dealId?`<a class="lnk" href="${esc(r.dealUrl)}" target="_blank">#${r.dealId}</a>`:'—'}</td>
-    <td>${badge}<div style="margin-top:6px">${stepSel}</div></td>
-    <td class="hint">${r.createdAt?new Date(r.createdAt).toLocaleString('ru-RU'):'—'}</td>
-    <td>${r.itemUrl?`<a class="lnk" href="${esc(r.itemUrl)}" target="_blank">↗</a>`:''}</td>
-  </tr>
-  <tr class="detail" id="det-${r.id}" style="display:none"><td colspan="5"><div class="detbody">Загрузка…</div></td></tr>`;
+  return `<tr class="${EDIT===r.id?'selrow':''}" style="cursor:pointer" onclick="selectReq(${r.id})">
+    <td><b>${esc(r.title||'—')}</b><div class="hint">#${r.bitrixItemId||'—'}</div></td>
+    <td>${r.dealId?`<a class="lnk" href="${esc(r.dealUrl)}" target="_blank" onclick="event.stopPropagation()">#${r.dealId}</a>`:'—'}</td>
+    <td>${badge}</td>
+    <td class="hint">${r.createdAt?new Date(r.createdAt).toLocaleDateString('ru-RU'):'—'}</td>
+    <td>${r.itemUrl?`<a class="lnk" href="${esc(r.itemUrl)}" target="_blank" onclick="event.stopPropagation()">↗</a>`:''}</td>
+  </tr>`;
 }
-async function reloadList(){ const l=await fetch('/api/procurement/list'); LIST=(await l.json()).items||[]; renderList(); }
+async function reloadList(){ const l=await fetch('/api/procurement/list'); LIST=(await l.json()).items||[]; if(MODE==='edit') render(); else renderList(); }
 async function moveStep(id,stageKey){
   try{
     const r=await fetch('/api/procurement/'+id+'/stage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({stageKey})});
     const d=await r.json();
-    if(!r.ok){alert(d.error||'Ошибка смены стадии'); await reloadList(); return;}
+    if(!r.ok){alert(d.error||'Ошибка смены стадии');}
     await reloadList();
   }catch(e){alert('Ошибка: '+e.message); await reloadList();}
 }
-
-// ── Детали заявки: документы + согласование ─────────────────────────────────
-function toggleDetail(id){
-  const tr=document.getElementById('det-'+id); if(!tr)return;
-  const tog=document.querySelector('#listBody .dtog[onclick="toggleDetail('+id+')"]');
-  if(tr.style.display==='table-row'){ tr.style.display='none'; if(tog)tog.textContent='▸'; return; }
-  tr.style.display='table-row'; if(tog)tog.textContent='▾';
-  tr.querySelector('.detbody').innerHTML='<div class="spin" style="margin:14px auto"></div>';
-  loadDetail(id);
-}
+// Документы + согласование грузятся в левую карточку (docSlots / apBox)
 async function loadDetail(id){
-  const tr=document.getElementById('det-'+id); if(!tr)return;
   try{ const d=await (await fetch('/api/procurement/'+id+'/detail')).json(); renderDetail(id,d); }
-  catch(e){ tr.querySelector('.detbody').innerHTML='<div class="hint" style="padding:10px">Ошибка: '+esc(e.message)+'</div>'; }
+  catch(e){ const ds=document.getElementById('docSlots'); if(ds)ds.innerHTML='<div class="hint">Ошибка: '+esc(e.message)+'</div>'; }
 }
 function renderDetail(id,d){
-  const tr=document.getElementById('det-'+id); if(!tr)return;
   const slots=(META.uploadSlots||[]).map(s=>{
     const info=d.docs&&d.docs[s.key];
     return `<div class="slot"><div class="slabel">${esc(s.label)}</div>
       <div style="flex:1">${info?`<a class="lnk" href="${esc(info.url||'#')}" target="_blank">${esc(info.name||'файл')}</a>`:'<span class="hint">не загружено</span>'}</div>
       <label class="upl">${info?'Заменить':'Загрузить'}<input type="file" style="display:none" onchange="doUpload(${id},'${s.code}',this)"></label></div>`;
   }).join('');
+  const ds=document.getElementById('docSlots'); if(ds)ds.innerHTML=slots;
   const ap=d.approval||{};
   const apOpts=(META.approve.options||[]).map(o=>`<option value="${o.id}" ${String(ap.status)===String(o.id)?'selected':''}>${esc(o.label)}</option>`).join('');
   const defBid=META.defaultAssignee||((META.me&&META.me.bitrixUserId)||'');
   const apprSel=(META.employees||[]).map(e=>`<option value="${e.id}" ${String(e.id)===String(ap.approver||defBid)?'selected':''}>${esc(e.name)}</option>`).join('');
-  tr.querySelector('.detbody').innerHTML=`<div class="detwrap">
-    <div class="detcol"><div class="deth">Документы</div>${slots}</div>
-    <div class="detcol"><div class="deth">Согласование закупки</div>
-      <label class="fl">Статус</label><select id="apst-${id}">${apOpts}</select>
-      <label class="fl">Утверждающий</label><select id="apby-${id}">${apprSel}</select>
-      <button class="btn" style="margin-top:10px" onclick="saveApproval(${id})">Сохранить согласование</button>
-      ${ap.approved?'<div class="hint" style="color:var(--good);margin-top:8px">✓ Согласовано</div>':''}
-    </div></div>`;
+  const ab=document.getElementById('apBox');
+  if(ab)ab.innerHTML=`
+    <label class="fl">Утверждающий (руководитель)</label><select id="apby-${id}">${apprSel}</select>
+    <button class="btn" style="margin-top:8px" onclick="sendApproval(${id})">Отправить на согласование</button>
+    <label class="fl" style="margin-top:12px">Решение</label><select id="apst-${id}">${apOpts}</select>
+    <label class="fl">Комментарий</label><textarea id="apcm-${id}">${esc(ap.comment||'')}</textarea>
+    <button class="btn" style="margin-top:8px" onclick="saveApproval(${id})">Сохранить решение</button>
+    ${ap.approved?'<div class="hint" style="color:var(--good);margin-top:8px">✓ Согласовано</div>':''}`;
 }
 function fileToB64(file){return new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(String(fr.result).split(',')[1]);fr.onerror=rej;fr.readAsDataURL(file);});}
 async function doUpload(id,code,input){
@@ -248,13 +288,53 @@ async function doUpload(id,code,input){
   }catch(e){alert('Ошибка: '+e.message);}
   finally{input.disabled=false;}
 }
+async function sendApproval(id){
+  const el=document.getElementById('apby-'+id); const approverId=el?el.value:'';
+  if(!approverId){alert('Выберите утверждающего');return;}
+  try{
+    const r=await fetch('/api/procurement/'+id+'/request-approval',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({approverId})});
+    const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка');return;}
+    alert('Отправлено на согласование.');
+  }catch(e){alert('Ошибка: '+e.message);}
+}
 async function saveApproval(id){
   const status=document.getElementById('apst-'+id).value;
   const approverId=document.getElementById('apby-'+id).value;
+  const cm=document.getElementById('apcm-'+id); const comment=cm?cm.value:'';
   try{
-    const r=await fetch('/api/procurement/'+id+'/approval',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,approverId})});
+    const r=await fetch('/api/procurement/'+id+'/approval',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,approverId,comment})});
     const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка');return;}
-    loadDetail(id);
+    await reloadList();
+  }catch(e){alert('Ошибка: '+e.message);}
+}
+async function saveAccountant(id){
+  const bid=document.getElementById('acctSel').value;
+  if(!bid){alert('Выберите бухгалтера');return;}
+  try{
+    const r=await fetch('/api/procurement/'+id+'/accountant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accountantBid:bid})});
+    const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка');return;}
+    alert('Бухгалтер назначен и уведомлён.');
+  }catch(e){alert('Ошибка: '+e.message);}
+}
+async function deleteReq(id){
+  if(!confirm('Удалить заявку и связанный элемент в «Закупках» Битрикса? Это необратимо.'))return;
+  try{
+    const r=await fetch('/api/procurement/'+id,{method:'DELETE'});
+    const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка удаления');return;}
+    backToCreate(); await reloadList();
+  }catch(e){alert('Ошибка: '+e.message);}
+}
+function toggleEditFields(id){
+  const box=document.getElementById('editFields-'+id); if(!box)return;
+  box.style.display=box.style.display==='none'?'block':'none';
+}
+async function saveEdit(id){
+  const val=i=>{const el=document.getElementById(i);return el?el.value.trim():'';};
+  const payload={ title:val('e-title'), source:val('e-source'), assigned:val('e-assigned'), vidZakupki:val('e-vid') };
+  try{
+    const r=await fetch('/api/procurement/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка сохранения');return;}
+    await reloadList();
   }catch(e){alert('Ошибка: '+e.message);}
 }
 

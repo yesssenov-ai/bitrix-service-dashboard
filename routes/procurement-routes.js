@@ -65,6 +65,28 @@ router.post('/:id/stage', requireAuth(ROLES), express.json(), async (req, res) =
   }
 });
 
+// PUT /api/procurement/:id — редактирование базовых полей заявки
+router.put('/:id', requireAuth(ROLES), express.json(), async (req, res) => {
+  try {
+    const { updateRequest } = require('../procurement-calc');
+    res.json(await updateRequest(parseInt(req.params.id, 10), req.body || {}));
+  } catch (e) {
+    console.error('PUT /api/procurement/:id error:', e.message);
+    res.status(500).json({ error: 'Не удалось сохранить: ' + e.message });
+  }
+});
+
+// DELETE /api/procurement/:id — удалить заявку и элемент 1066
+router.delete('/:id', requireAuth(ROLES), async (req, res) => {
+  try {
+    const { deleteRequest } = require('../procurement-calc');
+    res.json(await deleteRequest(parseInt(req.params.id, 10)));
+  } catch (e) {
+    console.error('DELETE /api/procurement/:id error:', e.message);
+    res.status(500).json({ error: 'Не удалось удалить: ' + e.message });
+  }
+});
+
 // GET /api/procurement/:id/detail — документы + согласование (из 1066)
 router.get('/:id/detail', requireAuth(ROLES), async (req, res) => {
   try {
@@ -89,15 +111,37 @@ router.post('/:id/upload', requireAuth(ROLES), express.json({ limit: '25mb' }), 
   }
 });
 
-// POST /api/procurement/:id/approval { status, approverId } — согласование закупки
+// POST /api/procurement/:id/request-approval { approverId } — отправить на согласование
+router.post('/:id/request-approval', requireAuth(ROLES), express.json(), async (req, res) => {
+  try {
+    const { requestApproval } = require('../procurement-calc');
+    res.json(await requestApproval(parseInt(req.params.id, 10), (req.body || {}).approverId));
+  } catch (e) {
+    console.error('POST /api/procurement/:id/request-approval error:', e.message);
+    res.status(500).json({ error: 'Не удалось отправить на согласование: ' + e.message });
+  }
+});
+
+// POST /api/procurement/:id/approval { status, approverId, comment } — решение по согласованию
 router.post('/:id/approval', requireAuth(ROLES), express.json(), async (req, res) => {
   try {
     const { setApproval } = require('../procurement-calc');
-    const { status, approverId } = req.body || {};
-    res.json(await setApproval(parseInt(req.params.id, 10), status, approverId));
+    const { status, approverId, comment } = req.body || {};
+    res.json(await setApproval(parseInt(req.params.id, 10), status, approverId, comment));
   } catch (e) {
     console.error('POST /api/procurement/:id/approval error:', e.message);
     res.status(500).json({ error: 'Не удалось сохранить согласование: ' + e.message });
+  }
+});
+
+// POST /api/procurement/:id/accountant { accountantBid } — сменить бухгалтера на оплату
+router.post('/:id/accountant', requireAuth(ROLES), express.json(), async (req, res) => {
+  try {
+    const { setAccountant } = require('../procurement-calc');
+    res.json(await setAccountant(parseInt(req.params.id, 10), (req.body || {}).accountantBid));
+  } catch (e) {
+    console.error('POST /api/procurement/:id/accountant error:', e.message);
+    res.status(500).json({ error: 'Не удалось сменить бухгалтера: ' + e.message });
   }
 });
 
