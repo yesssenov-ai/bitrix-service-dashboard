@@ -59,6 +59,27 @@ const FLOW = [
 const STAGE_TO_STEP = {}; FLOW.forEach((s, i) => { STAGE_TO_STEP[s.bitrix] = i; });
 const stepIndexForStage = stageId => (STAGE_TO_STEP[stageId] != null ? STAGE_TO_STEP[stageId] : -1);
 
+// Документы под условия переходов
+const DOC_INVOICE = 'ufCrm10_1763537277532';   // Invoice
+const DOC_PAY = 'ufCrm10_1744874990535';       // Подтверждение оплаты
+const DOC_CONTRACT = 'ufCrm10_1732858619051';  // Договор / Спецификация / Appendix
+const APPROVE_YES = '1827';                    // «Согласовано» (поле Согласование предоплаты)
+// Разрешённые для загрузки поля (белый список)
+const UPLOAD_SLOTS = [
+  { key: 'invoice',  code: DOC_INVOICE,  label: 'Счёт (Invoice)' },
+  { key: 'pay',      code: DOC_PAY,      label: 'Подтверждение оплаты' },
+  { key: 'contract', code: DOC_CONTRACT, label: 'Договор / Спецификация / Appendix' },
+];
+const UPLOAD_CODES = new Set(UPLOAD_SLOTS.map(s => s.code));
+// Условия для перехода НА шаг: что должно быть заполнено
+const REQUIREMENTS = {
+  invoice:  { kind: 'file', field: DOC_INVOICE, label: 'счёт (Invoice)' },
+  approve:  { kind: 'approval', label: 'статус «Согласовано» и утверждающий' },
+  payment:  { kind: 'file', field: DOC_PAY, label: 'подтверждение оплаты' },
+  received: { kind: 'file', field: DOC_CONTRACT, label: 'подтверждение (Договор / Спецификация / Appendix)' },
+};
+const fileNonEmpty = v => !!(v && (Array.isArray(v) ? v.length : true));
+
 // Резерв значений «Вид закупки (УС)» (iblock 1066) на случай, если у вебхука нет
 // права на lists.element.get. ID — реальные элементы списка, в Битрикс садится
 // именно выбранный. Основной источник — динамический fetch ниже.
@@ -145,12 +166,18 @@ async function getMeta(force) {
   const [stages, sources, currencies, vidZakupki] = await Promise.all([
     getStages(), getSources(), getCurrencies(), iblockOptions(fields[F.vidZakupki]),
   ]);
+  const employees = Object.entries(USERS || {}).map(([id, name]) => ({ id: Number(id), name }))
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), 'ru'));
+  const defaultAssignee = (employees.find(e => /нурмаганбетов/i.test(e.name)) || {}).id || null;
   const meta = {
     entity: ENTITY, category: CATEGORY,
     stages,
     flow: FLOW.map(s => ({ key: s.key, label: s.label, bitrix: s.bitrix })),
     sources,
-    employees: Object.entries(USERS || {}).map(([id, name]) => ({ id: Number(id), name })).sort((a, b) => String(a.name).localeCompare(String(b.name), 'ru')),
+    employees,
+    defaultAssignee,
+    approve: { yes: APPROVE_YES, options: [{ id: '1827', label: 'Согласовано' }, { id: '1828', label: 'Не согласовано' }] },
+    uploadSlots: UPLOAD_SLOTS,
     currencies,
     options: {
       vidZakupki: (vidZakupki && vidZakupki.length) ? vidZakupki : VID_ZAKUPKI_FALLBACK,
@@ -213,16 +240,65 @@ async function listRequests() {
   });
 }
 
-// Перевод заявки на шаг процесса → пишет соответствующую стадию в 1066.
-async function moveStage(localId, stageKey) {
-  const step = FLOW.find(s => s.key === stageKey);
-  if (!step) throw new Error('Неизвестный шаг процесса');
+async function itemIdOf(localId) {
   const { rows } = await pool.query('SELECT bitrix_item_id FROM ticketsmodule_procurement WHERE id=$1', [localId]);
   const itemId = rows[0] && rows[0].bitrix_item_id;
   if (!itemId) throw new Error('Заявка не найдена');
+  return itemId;
+}
+
+// Перевод заявки на шаг процесса → пишет стадию в 1066. С проверкой условий:
+// на нужные шаги нельзя перейти, пока не приложены документы / не согласовано.
+async function moveStage(localId, stageKey) {
+  const step = FLOW.find(s => s.key === stageKey);
+  if (!step) throw new Error('Неизвестный шаг процесса');
+  const itemId = await itemIdOf(localId);
+  const reqmt = REQUIREMENTS[stageKey];
+  if (reqmt) {
+    const { result } = await b24('crm.item.get', { entityTypeId: ENTITY, id: itemId });
+    const item = (result && result.item) || {};
+    if (reqmt.kind === 'file' && !fileNonEmpty(item[reqmt.field])) {
+      const e = new Error(`Нельзя перейти на «${step.label}»: не приложен ${reqmt.label}.`); e.userFacing = true; throw e;
+    }
+    if (reqmt.kind === 'approval') {
+      const ok = String(item[F.preApprove]) === APPROVE_YES && !!item[F.preApprover];
+      if (!ok) { const e = new Error(`Нельзя перейти на «${step.label}»: нужен ${reqmt.label}.`); e.userFacing = true; throw e; }
+    }
+  }
   await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields: { stageId: step.bitrix } });
   await pool.query('UPDATE ticketsmodule_procurement SET stage_id=$1, updated_at=NOW() WHERE id=$2', [step.bitrix, localId]);
   return { stageId: step.bitrix, stepKey: step.key };
+}
+
+// Детали заявки: документы (приложены?) и статус согласования — из 1066.
+async function getItemDetail(localId) {
+  const itemId = await itemIdOf(localId);
+  const { result } = await b24('crm.item.get', { entityTypeId: ENTITY, id: itemId });
+  const item = (result && result.item) || {};
+  const fileInfo = code => { const v = item[code]; if (!v) return null; const f = Array.isArray(v) ? v[0] : v; return f ? { name: f.name || f.NAME || 'файл', url: f.urlMachine || f.url || f.downloadUrl || null } : null; };
+  return {
+    stageId: item.stageId,
+    docs: { invoice: fileInfo(DOC_INVOICE), pay: fileInfo(DOC_PAY), contract: fileInfo(DOC_CONTRACT) },
+    approval: { status: item[F.preApprove] != null ? String(item[F.preApprove]) : null, approver: item[F.preApprover] || null, approved: String(item[F.preApprove]) === APPROVE_YES },
+  };
+}
+
+// Загрузка документа в файловое поле 1066 (перезаписывает поле новым файлом).
+async function uploadDoc(localId, fieldCode, filename, base64) {
+  if (!UPLOAD_CODES.has(fieldCode)) throw new Error('Недопустимое поле для загрузки');
+  const itemId = await itemIdOf(localId);
+  await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields: { [fieldCode]: [{ fileData: [filename, base64] }] } });
+  return { ok: true };
+}
+
+// Согласование закупки: статус + утверждающий.
+async function setApproval(localId, status, approverId) {
+  const itemId = await itemIdOf(localId);
+  const fields = {};
+  if (status) fields[F.preApprove] = status;
+  if (approverId) fields[F.preApprover] = approverId;
+  await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields });
+  return { ok: true };
 }
 
 // ── Создание заявки: локальная строка + элемент 1066 ────────────────────────
@@ -245,7 +321,7 @@ async function createRequest(payload, bitrixUserId) {
   if (payload.opportunity !== undefined && payload.opportunity !== null && payload.opportunity !== '') fields[F.opportunity] = Number(payload.opportunity) || 0;
   if (payload.currency) fields[F.currency] = payload.currency;
   if (payload.vidZakupki) fields[F.vidZakupki] = payload.vidZakupki;
-  fields[F.typeKP] = payload.typeKP || '5816'; // «Закуп» по умолчанию
+  if (payload.typeKP) fields[F.typeKP] = payload.typeKP;
   if (Array.isArray(payload.proizvoditel) && payload.proizvoditel.length) fields[F.proizvoditel] = payload.proizvoditel;
   if (Array.isArray(payload.pribor) && payload.pribor.length) fields[F.pribor] = payload.pribor;
   if (payload.ustanovka) fields[F.ustanovka] = payload.ustanovka;
@@ -281,4 +357,4 @@ async function createRequest(payload, bitrixUserId) {
   return { localId, bitrixItemId: item.id, stageId: item.stageId || null, itemUrl: itemUrl(item.id) };
 }
 
-module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, getMeta, searchDeals, listRequests, createRequest, moveStage, itemUrl, dealUrl };
+module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, getMeta, searchDeals, listRequests, createRequest, moveStage, getItemDetail, uploadDoc, setApproval, itemUrl, dealUrl };

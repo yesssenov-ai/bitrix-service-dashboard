@@ -65,4 +65,40 @@ router.post('/:id/stage', requireAuth(ROLES), express.json(), async (req, res) =
   }
 });
 
+// GET /api/procurement/:id/detail — документы + согласование (из 1066)
+router.get('/:id/detail', requireAuth(ROLES), async (req, res) => {
+  try {
+    const { getItemDetail } = require('../procurement-calc');
+    res.json(await getItemDetail(parseInt(req.params.id, 10)));
+  } catch (e) {
+    console.error('GET /api/procurement/:id/detail error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/procurement/:id/upload { fieldCode, filename, base64 } — загрузка документа
+router.post('/:id/upload', requireAuth(ROLES), express.json({ limit: '25mb' }), async (req, res) => {
+  try {
+    const { uploadDoc } = require('../procurement-calc');
+    const { fieldCode, filename, base64 } = req.body || {};
+    if (!fieldCode || !base64) return res.status(400).json({ error: 'Нужны fieldCode и base64' });
+    res.json(await uploadDoc(parseInt(req.params.id, 10), fieldCode, filename || 'file', base64));
+  } catch (e) {
+    console.error('POST /api/procurement/:id/upload error:', e.message);
+    res.status(500).json({ error: 'Не удалось загрузить: ' + e.message });
+  }
+});
+
+// POST /api/procurement/:id/approval { status, approverId } — согласование закупки
+router.post('/:id/approval', requireAuth(ROLES), express.json(), async (req, res) => {
+  try {
+    const { setApproval } = require('../procurement-calc');
+    const { status, approverId } = req.body || {};
+    res.json(await setApproval(parseInt(req.params.id, 10), status, approverId));
+  } catch (e) {
+    console.error('POST /api/procurement/:id/approval error:', e.message);
+    res.status(500).json({ error: 'Не удалось сохранить согласование: ' + e.message });
+  }
+});
+
 module.exports = { router };
