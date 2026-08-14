@@ -38,6 +38,28 @@ router.get('/deals', requireAuth(ROLES), async (req, res) => {
   }
 });
 
+// GET /api/procurement/companies?q=... — поиск компаний в CRM (по названию/БИН)
+router.get('/companies', requireAuth(ROLES), async (req, res) => {
+  try {
+    const { searchCompanies } = require('../procurement-calc');
+    res.json({ items: await searchCompanies(req.query.q) });
+  } catch (e) {
+    console.error('GET /api/procurement/companies error:', e.message);
+    res.status(500).json({ error: e.message, items: [] });
+  }
+});
+
+// GET /api/procurement/bin?bin=... — резолв БИН через ГБД ЮЛ + матч в CRM
+router.get('/bin', requireAuth(ROLES), async (req, res) => {
+  try {
+    const { resolveBin } = require('../procurement-calc');
+    res.json(await resolveBin(req.query.bin));
+  } catch (e) {
+    console.error('GET /api/procurement/bin error:', e.message);
+    res.status(500).json({ found: false, error: e.message });
+  }
+});
+
 // GET /api/procurement/list — наши заявки (из локальной таблицы)
 router.get('/list', requireAuth(ROLES), async (req, res) => {
   try {

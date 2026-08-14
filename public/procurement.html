@@ -131,7 +131,7 @@ tbody tr:hover td{background:var(--panel-h)}
 <script>
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const F=n=>Math.round(n||0).toLocaleString('ru-RU').replace(/,/g,' ');
-let META=null, ME=null, DEAL=null, LIST=[];
+let META=null, ME=null, DEAL=null, LIST=[], COMPANY=null;
 const SEL={proizvoditel:new Set(),pribor:new Set()};
 
 async function boot(){
@@ -181,6 +181,15 @@ function createCardHtml(){
       </div>
       <div id="dealchip"></div>
       <div class="hint">Можно оставить пустым (закуп на склад без сделки).</div>
+      <label class="fl">Компания</label>
+      <div class="dealbox">
+        <input id="compq" placeholder="Название компании или БИН…" oninput="onCompanyInput(this.value)" autocomplete="off">
+        <div class="dealres" id="compres" style="display:none"></div>
+      </div>
+      <div id="compchip"></div>
+      <label class="fl">БИН</label>
+      <input id="bin" inputmode="numeric" maxlength="12" placeholder="12 цифр — найдём компанию в ГБД ЮЛ" oninput="onBinInput(this.value)">
+      <div id="binStatus" class="hint"></div>
       <label class="fl">Название заявки</label>
       <input id="title" placeholder="Напр.: Доп оборудование — …">
       <div class="row2">
@@ -345,7 +354,8 @@ function approvalHtml(id,d){
   const YES=String(META.approve.yes), NO=String(META.approve.no||'1828');
   const curAppr=ap.approver||META.defaultApprover||'';
   const nm=empName(curAppr)||'Не выбран';
-  const amApprover = ME && curAppr && String(ME.bitrixUserId)===String(curAppr);
+  const myBid=(META.me&&META.me.bitrixUserId)||null;
+  const amApprover = myBid && curAppr && String(myBid)===String(curAppr);
   const rejected = ap.status && String(ap.status)===NO && ap.decided;
   const approved = !!ap.approved;
   const decided = approved || rejected;
@@ -457,7 +467,7 @@ async function sendApproval(id){
 async function decide(id,status){
   const cm=document.getElementById('apcm-'+id); const comment=cm?cm.value:'';
   try{
-    const r=await fetch('/api/procurement/'+id+'/approval',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,approverId:(ME&&ME.bitrixUserId)||null,comment})});
+    const r=await fetch('/api/procurement/'+id+'/approval',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,approverId:(META.me&&META.me.bitrixUserId)||null,comment})});
     const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка');return;}
     if(String(status)===String(META.approve.yes)){ await moveStep(id,'payment'); } else { await reloadList(); }
   }catch(e){alert('Ошибка: '+e.message);}
@@ -517,7 +527,42 @@ function pickDeal(it){
   if(it.currency){const c=document.getElementById('currency'); if(c)c.value=it.currency;}
 }
 function clearDeal(){ DEAL=null; document.getElementById('dealchip').innerHTML=''; }
-document.addEventListener('click',e=>{ if(!e.target.closest('.dealbox')){const b=document.getElementById('dealres'); if(b)b.style.display='none';} });
+document.addEventListener('click',e=>{ if(!e.target.closest('.dealbox')){['dealres','compres'].forEach(id=>{const b=document.getElementById(id); if(b)b.style.display='none';});} });
+
+// ── Компания + БИН ──────────────────────────────────────────────────────────
+let compTimer=null, binTimer=null;
+function onCompanyInput(v){
+  clearTimeout(compTimer); const box=document.getElementById('compres');
+  if(!v||v.trim().length<2){box.style.display='none';return;}
+  compTimer=setTimeout(async()=>{
+    try{ const d=await (await fetch('/api/procurement/companies?q='+encodeURIComponent(v.trim()))).json(); const items=d.items||[];
+      box.innerHTML=items.length?items.map(it=>`<div onclick='pickCompany(${JSON.stringify(it).replace(/'/g,"&#39;")})'><span class="did">#${it.id}</span> ${esc(it.title)}${it.bin?` · ${esc(it.bin)}`:''}</div>`).join(''):'<div class="hint" style="padding:9px 12px">Ничего не найдено</div>';
+      box.style.display='block';
+    }catch(e){box.style.display='none';}
+  },300);
+}
+function pickCompany(it){
+  COMPANY={id:it.id||null,title:it.title,bin:it.bin||null};
+  const box=document.getElementById('compres'); if(box)box.style.display='none';
+  const q=document.getElementById('compq'); if(q)q.value='';
+  document.getElementById('compchip').innerHTML=`<span class="chip">${it.id?('#'+it.id+' · '):''}${esc(it.title)} <span class="x" onclick="clearCompany()">✕</span></span>`;
+  if(it.bin){ const b=document.getElementById('bin'); if(b&&!b.value)b.value=it.bin; }
+}
+function clearCompany(){ COMPANY=null; document.getElementById('compchip').innerHTML=''; }
+function onBinInput(v){
+  const digits=String(v||'').replace(/\D/g,''); const st=document.getElementById('binStatus');
+  clearTimeout(binTimer);
+  if(digits.length!==12){ if(st){st.textContent=digits.length?('Введите 12 цифр ('+digits.length+'/12)'):''; st.style.color='var(--text-4)';} return; }
+  if(st){ st.textContent='Ищем в ГБД ЮЛ…'; st.style.color='var(--text-4)'; }
+  binTimer=setTimeout(async()=>{
+    try{ const d=await (await fetch('/api/procurement/bin?bin='+digits)).json();
+      if(d&&d.found&&d.name){
+        if(d.bitrixCompanyId){ pickCompany({id:d.bitrixCompanyId,title:d.name,bin:digits}); if(st){st.innerHTML='✓ '+esc(d.name)+' · есть в CRM'; st.style.color='var(--good)';} }
+        else { COMPANY={id:null,title:d.name,bin:digits}; document.getElementById('compchip').innerHTML=`<span class="chip">${esc(d.name)} <span class="x" onclick="clearCompany()">✕</span></span>`; if(st){st.innerHTML='✓ '+esc(d.name)+' · сохраним БИН и название'; st.style.color='var(--good)';} }
+      } else { if(st){ st.textContent='Компания по этому БИН не найдена'; st.style.color='var(--warn)'; } }
+    }catch(e){ if(st){ st.textContent='Ошибка поиска по БИН'; st.style.color='var(--bad)'; } }
+  },400);
+}
 
 // ── Создание ────────────────────────────────────────────────────────────────
 async function submitReq(){
@@ -529,6 +574,7 @@ async function submitReq(){
   if(opp===''||!(Number(opp)>0)){ msg.className='msg err'; msg.textContent='Заполните обязательное поле «Сумма закупки».'; return; }
   const payload={
     dealId:DEAL?DEAL.id:null,
+    companyId:(COMPANY&&COMPANY.id)||null, companyName:(COMPANY&&COMPANY.title)||'', bin:(val('bin').replace(/\D/g,''))||'',
     title:val('title'), source:val('source'), assigned:val('assigned'),
     vidZakupki:vid, opportunity:Number(opp), currency:val('currency')||'KZT',
   };
@@ -540,7 +586,7 @@ async function submitReq(){
       msg.className='msg ok'; msg.innerHTML='Заявка создана в «Закупках» — <a class="lnk" href="'+esc(d.itemUrl)+'" target="_blank">#'+d.bitrixItemId+' ↗</a>';
       const l=await fetch('/api/procurement/list'); LIST=(await l.json()).items||[];
       // сбросить выбор и перерисовать список, сохранив сообщение
-      SEL.proizvoditel.clear(); SEL.pribor.clear(); DEAL=null;
+      SEL.proizvoditel.clear(); SEL.pribor.clear(); DEAL=null; COMPANY=null;
       const saved=msg.outerHTML; render(); document.getElementById('msg').outerHTML=saved;
     }else{ msg.className='msg err'; msg.textContent=d.error||'Ошибка создания'; }
   }catch(e){ msg.className='msg err'; msg.textContent='Ошибка: '+e.message; }

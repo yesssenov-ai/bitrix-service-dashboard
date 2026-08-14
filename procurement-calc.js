@@ -266,6 +266,62 @@ async function searchDeals(q) {
   return out.slice(0, 25);
 }
 
+// ── Компания + БИН ──────────────────────────────────────────────────────────
+// Поиск компаний в CRM (по названию), поиск по БИН в реквизитах Bitrix и
+// резолв БИН через ГБД ЮЛ (внешний реестр РК). Провайдер настраивается через
+// env BIN_LOOKUP_URL с плейсхолдером {bin}; по умолчанию — открытый apiba.
+const BIN_LOOKUP_URL = process.env.BIN_LOOKUP_URL || 'https://apiba.prgapp.kz/CompanyFullInfo?id={bin}&lang=ru';
+async function httpJson(url, ms = 7000) {
+  if (typeof fetch !== 'function') return null; // Node < 18 — внешний резолв недоступен
+  const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const r = await fetch(url, { signal: ctrl.signal, headers: { accept: 'application/json', 'user-agent': 'Mozilla/5.0 (PLS-CUP)' } });
+    if (!r.ok) return null; return await r.json();
+  } catch (e) { return null; } finally { clearTimeout(t); }
+}
+function pickCompanyName(o, depth = 0) {
+  if (!o || typeof o !== 'object' || depth > 4) return null;
+  const keys = ['nameRu', 'nameKz', 'name', 'shortNameRu', 'shortName', 'fullNameRu', 'fullName', 'titleRu', 'title', 'companyName'];
+  for (const k of keys) { if (typeof o[k] === 'string' && o[k].trim()) return o[k].trim(); }
+  for (const nest of ['company', 'result', 'data', 'basicInfo', 'info']) {
+    const n = pickCompanyName(o[nest], depth + 1); if (n) return n;
+  }
+  return null;
+}
+async function lookupBinExternal(bin) {
+  const j = await httpJson(BIN_LOOKUP_URL.replace('{bin}', encodeURIComponent(bin)));
+  const name = pickCompanyName(j);
+  return name ? { name } : null;
+}
+// Найти компанию Bitrix по БИН через реквизиты (RQ_BIN). Может 403, если у
+// вебхука нет доступа к crm.requisite — тогда просто вернём null.
+async function bitrixCompanyByBin(bin) {
+  try {
+    const { result } = await b24('crm.requisite.list', { filter: { RQ_BIN: bin }, select: ['ID', 'ENTITY_ID', 'ENTITY_TYPE_ID'] });
+    const req = (result || []).find(r => String(r.ENTITY_TYPE_ID) === '4'); // 4 = компания
+    if (!req) return null;
+    const id = Number(req.ENTITY_ID);
+    try { const c = await b24('crm.company.get', { id }); return { id, title: (c.result && (c.result.TITLE || c.result.title)) || ('Компания #' + id) }; }
+    catch (e) { return { id, title: 'Компания #' + id }; }
+  } catch (e) { return null; }
+}
+async function searchCompanies(q) {
+  q = String(q || '').trim(); if (q.length < 2) return [];
+  const out = [], seen = new Set();
+  const add = (id, title, bin) => { id = Number(id); if (!seen.has(id)) { seen.add(id); out.push({ id, title: title || ('Компания #' + id), bin: bin || null }); } };
+  try { const { result } = await b24('crm.company.list', { filter: { '%TITLE': q }, select: ['ID', 'TITLE'], order: { ID: 'DESC' } }); (result || []).forEach(c => add(c.ID, c.TITLE)); }
+  catch (e) { console.error('searchCompanies:', e.message); }
+  if (/^\d{12}$/.test(q)) { const bc = await bitrixCompanyByBin(q); if (bc) add(bc.id, bc.title, q); }
+  return out.slice(0, 20);
+}
+async function resolveBin(bin) {
+  bin = String(bin || '').replace(/\D/g, '');
+  if (!/^\d{12}$/.test(bin)) return { bin, found: false, error: 'БИН должен содержать 12 цифр' };
+  const [bc, ext] = await Promise.all([bitrixCompanyByBin(bin), lookupBinExternal(bin)]);
+  const name = (ext && ext.name) || (bc && bc.title) || null;
+  return { bin, found: !!name, name, bitrixCompanyId: bc ? bc.id : null, source: ext ? 'gbd' : (bc ? 'bitrix' : null) };
+}
+
 // ── Список наших заявок (из локальной таблицы) + актуальная стадия ───────────
 function bitrixOrigin() { try { return new URL(process.env.BITRIX_WEBHOOK).origin; } catch (e) { return null; } }
 function itemUrl(itemId) { const o = bitrixOrigin(); return o && itemId ? `${o}/crm/type/${ENTITY}/details/${itemId}/` : null; }
@@ -593,7 +649,11 @@ async function createRequest(payload, bitrixUserId) {
   if (payload.po) fields[F.po] = payload.po;
   if (Array.isArray(payload.serial) && payload.serial.length) fields[F.serial] = payload.serial;
   if (payload.cityCountry) fields[F.cityCountry] = payload.cityCountry;
-  if (payload.comment) fields[F.comment] = payload.comment;
+  // Комментарий + БИН/название компании (если БИН найден, но компании нет в CRM).
+  const commentParts = [];
+  if (payload.comment) commentParts.push(payload.comment);
+  if (payload.bin) commentParts.push('БИН: ' + payload.bin + (payload.companyName && !payload.companyId ? (' · ' + payload.companyName) : ''));
+  if (commentParts.length) fields[F.comment] = commentParts.join('\n');
 
   // локальная строка сперва — чтобы получить id для тега xmlId
   const ins = await pool.query(
@@ -671,4 +731,4 @@ async function autoCreateFromService(serviceItemId) {
   return { created: true, ...out };
 }
 
-module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, getMeta, searchDeals, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, moveStage, getItemDetail, uploadDoc, setApproval, requestApproval, setAccountant, autoCreateFromService, itemUrl, dealUrl };
+module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, moveStage, getItemDetail, uploadDoc, setApproval, requestApproval, setAccountant, autoCreateFromService, itemUrl, dealUrl };
