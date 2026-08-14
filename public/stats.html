@@ -129,8 +129,8 @@ tbody tr:hover td.l{background:var(--panel-h)}
   <div class="sub">Продажи, воронка, менеджеры, приборы, компании и сферы — по всем воронкам ProLabSupport.</div>
   <div class="toolbar">
     <select id="year" onchange="load()"></select>
-    <button class="btn btn-p" onclick="load(true)">↻ Обновить</button>
-    <button class="btn" id="resyncBtn" style="display:none" onclick="resync()">⟳ Пересинк из Битрикс</button>
+    <button class="btn btn-p" id="refreshBtn" onclick="refreshNow()" title="Подтянуть из Битрикса сделки, изменённые после последнего обновления (и убрать удалённые)">↻ Обновить</button>
+    <button class="btn" id="resyncBtn" style="display:none" onclick="resync()" title="Полная ночная пересинхронизация всех сделок (долго)">⟳ Пересинк из Битрикс</button>
     <span class="hint" style="margin:0">Продано = Контракт…Завершена · КП = стадии P60/P80</span>
   </div>
   <div id="content"><div class="spin"></div></div>
@@ -474,8 +474,27 @@ async function resync(){
   catch(e){alert('Ошибка запуска пересинка');}
   b.disabled=false;b.textContent=old;
 }
+// Инкрементальное обновление: тянет из Битрикса всё, что изменилось после
+// последней синхронизации зеркала, а по ручному нажатию — ещё и убирает
+// удалённые сделки (reconcile). Затем пересчитывает борд. silent=true — тихий
+// автозапуск при открытии (без диалогов, без реренДера, если ничего не менялось).
+async function refreshNow(silent){
+  const b=document.getElementById('refreshBtn');
+  if(b&&!silent){b.disabled=true;b.textContent='Обновляю…';}
+  try{
+    const r=await fetch('/api/stats/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reconcile:!silent})});
+    const d=await r.json().catch(()=>({}));
+    if(r.ok){
+      if(!silent){ CONV=null; await load(true);
+        const parts=[];if(d.updated)parts.push('обновлено '+d.updated);if(d.deleted)parts.push('удалено '+d.deleted);
+        if(b){b.textContent='↻ '+(parts.length?parts.join(', '):'Актуально');setTimeout(()=>{b.textContent='↻ Обновить';},3000);}
+      } else if(d.updated||d.deleted){ CONV=null; await load(true); }
+    } else if(!silent){ alert('Не удалось обновить: '+((d&&d.error)||r.status)); }
+  }catch(e){ if(!silent)alert('Ошибка обновления: '+e.message); }
+  finally{ if(b){b.disabled=false; if(silent&&b.textContent==='Обновляю…')b.textContent='↻ Обновить';} }
+}
 async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
-load();
+load().then(()=>refreshNow(true)); // при открытии сразу тихо подтягиваем изменения
 </script>
 </body>
 </html>

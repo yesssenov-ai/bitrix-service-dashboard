@@ -27,6 +27,38 @@ router.get('/board', requireAuth(PM_ROLES), async (req, res) => {
   }
 });
 
+// POST /api/stats/refresh — инкрементально подтянуть из Битрикса сделки,
+// изменённые ПОСЛЕ последнего обновления зеркала (по DATE_MODIFY), а при ручном
+// нажатии (reconcile:true) ещё и убрать удалённые. То же зеркало, что у Контрактов.
+// Сбрасывает кэш борда/конверсий, чтобы след. запрос пересчитал свежие цифры.
+let _statsRefreshing = false;
+router.post('/refresh', requireAuth(PM_ROLES), express.json(), async (req, res) => {
+  if (_statsRefreshing) return res.json({ ok: true, running: true, note: 'Обновление уже идёт' });
+  _statsRefreshing = true;
+  try {
+    const { pool } = require('../auth');
+    const { rows } = await pool.query('SELECT MAX(synced_at) AS t FROM ticketsmodule_stat_deals');
+    const last = rows[0] && rows[0].t ? new Date(rows[0].t).getTime() : null;
+    const sinceMs = (last || (Date.now() - 7 * 86400 * 1000)) - 15 * 60 * 1000;
+    const { incrementalSync, reconcileDeletions } = require('../stats-sync');
+    const r = await incrementalSync(sinceMs);
+    let deleted = 0;
+    if (req.body && req.body.reconcile) {
+      try { const rc = await reconcileDeletions(); deleted = rc.deleted || 0; }
+      catch (e) { console.error('reconcileDeletions в /stats/refresh:', e.message); }
+    }
+    _boardCache.clear();
+    _convCache.clear();
+    const { rows: r2 } = await pool.query('SELECT MAX(synced_at) AS t FROM ticketsmodule_stat_deals');
+    res.json({ ok: true, updated: r.updated || 0, deleted, updatedAt: r2[0] && r2[0].t ? new Date(r2[0].t).toISOString() : null });
+  } catch (e) {
+    console.error('POST /api/stats/refresh error:', e.message);
+    res.status(500).json({ error: 'Не удалось обновить: ' + e.message });
+  } finally {
+    _statsRefreshing = false;
+  }
+});
+
 // GET /api/stats/conversions?year=2026 — Фаза 2: реальные конверсии и тайминги
 // (кэш 10 мин по году, ?force=1 пересчитывает).
 const _convCache = new Map();
