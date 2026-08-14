@@ -26,6 +26,25 @@ const ENTITY = 1066;         // смарт «Закупки»
 const CATEGORY = 13;         // единственная категория «Общая»
 const TAG_PREFIX = 'PLS-DOP'; // метка наших заявок в xmlId элемента 1066
 
+// Само-починка схемы: гарантируем наличие колонок, даже если миграция initDB
+// (auth.js) не проехала на этом окружении. Выполняется один раз за процесс.
+let _schemaReady = null;
+function ensureSchema() {
+  if (_schemaReady) return _schemaReady;
+  _schemaReady = (async () => {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ticketsmodule_procurement (
+        id SERIAL PRIMARY KEY, bitrix_item_id INTEGER, deal_id INTEGER,
+        title VARCHAR(400), stage_id VARCHAR(60), created_by INTEGER,
+        payload JSONB DEFAULT '{}', created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW());
+      ALTER TABLE ticketsmodule_procurement ADD COLUMN IF NOT EXISTS accountant_bid INTEGER;
+      ALTER TABLE ticketsmodule_procurement ADD COLUMN IF NOT EXISTS source_item_id INTEGER;
+    `);
+  })().catch(e => { _schemaReady = null; throw e; });
+  return _schemaReady;
+}
+
 // ── Коды полей 1066 (из разведки crm.item.fields) ───────────────────────────
 const F = {
   title: 'title',
@@ -244,6 +263,7 @@ function itemUrl(itemId) { const o = bitrixOrigin(); return o && itemId ? `${o}/
 function dealUrl(dealId) { const o = bitrixOrigin(); return o && dealId ? `${o}/crm/deal/details/${dealId}/` : null; }
 
 async function listRequests() {
+  await ensureSchema();
   const { rows } = await pool.query('SELECT * FROM ticketsmodule_procurement ORDER BY created_at DESC');
   return rows.map(r => {
     const stepIndex = stepIndexForStage(r.stage_id);
@@ -510,6 +530,7 @@ async function setApproval(localId, status, approverId, comment) {
 // «Внутренний запрос» (резолвится в мете). Всё, что ввёл менеджер, садится в
 // соответствующие поля 1066. Тегируем через xmlId, чтобы дашборд показывал своё.
 async function createRequest(payload, bitrixUserId) {
+  await ensureSchema();
   const meta = await getMeta();
   const title = (payload.title && String(payload.title).trim()) || 'Закуп доп оборудования';
 
@@ -568,6 +589,7 @@ async function createRequest(payload, bitrixUserId) {
 // по source_item_id — одна закупка на один подбор.
 async function autoCreateFromService(serviceItemId) {
   if (!serviceItemId) return { skipped: 'no-id' };
+  await ensureSchema();
   const { result } = await b24('crm.item.get', { entityTypeId: SERVICE_ENTITY, id: serviceItemId });
   const item = (result && result.item) || {};
   if (item.stageId !== SERVICE_FINAL_STAGE) return { skipped: 'stage', stage: item.stageId };

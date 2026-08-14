@@ -308,6 +308,8 @@ async function initDB() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
     ALTER TABLE ticketsmodule_procurement ADD COLUMN IF NOT EXISTS accountant_bid INTEGER;
+    ALTER TABLE ticketsmodule_procurement ADD COLUMN IF NOT EXISTS source_item_id INTEGER;
+    CREATE INDEX IF NOT EXISTS idx_procurement_source ON ticketsmodule_procurement(source_item_id);
     CREATE INDEX IF NOT EXISTS idx_procurement_bitrix ON ticketsmodule_procurement(bitrix_item_id);
     CREATE INDEX IF NOT EXISTS idx_procurement_deal ON ticketsmodule_procurement(deal_id);
     CREATE INDEX IF NOT EXISTS idx_procurement_creator ON ticketsmodule_procurement(created_by);

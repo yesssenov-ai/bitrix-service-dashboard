@@ -49,6 +49,8 @@ textarea{resize:vertical;min-height:64px}
 .dealres div{padding:9px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)}
 .dealres div:hover{background:var(--panel-h)}
 .dealres .did{font-family:var(--fm);color:var(--signal);font-size:11.5px}
+/* «По сделке»: результаты в потоке (не absolute), иначе overflow #rightBody их обрезает */
+#dvres{position:static;left:auto;right:auto;top:auto;margin-top:6px;max-height:none;box-shadow:none}
 .chip{display:inline-flex;align-items:center;gap:8px;background:rgba(53,208,192,.12);border:1px solid var(--signal);color:var(--signal);border-radius:20px;padding:5px 12px;font-size:12.5px;margin-top:6px}
 .chip .x{cursor:pointer;font-weight:700}
 .picker{border:1px solid var(--border2);border-radius:9px;background:var(--bg);max-height:150px;overflow:auto;padding:4px}
