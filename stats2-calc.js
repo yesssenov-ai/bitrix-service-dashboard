@@ -275,39 +275,44 @@ function byCompany(deals) {
   }).sort((a, b) => b.sum - a.sum);
 }
 
-// Сферы (подписанные / продано) — разрез по 4 воронкам (Приборы/Расходники/Сервис/Обучение).
+// Сферы (подписанные / продано) — разрез по 4 воронкам (Приборы/Расходники/Сервис/Обучение),
+// с суммой И количеством сделок в каждой воронке.
 function bySphere(deals) {
   const by = {};
   for (const d of deals) {
     const k = d.industry;
-    if (!by[k]) by[k] = { industry: k, sum: 0, count: 0, byCat: {}, companies: new Set() };
+    if (!by[k]) by[k] = { industry: k, sum: 0, count: 0, byCat: {}, byCatC: {}, companies: new Set() };
     const s = by[k];
     s.sum += d.sum; s.count++;
     s.byCat[d.funnel] = (s.byCat[d.funnel] || 0) + d.sum;
+    s.byCatC[d.funnel] = (s.byCatC[d.funnel] || 0) + 1;
     if (d.companyId) s.companies.add(d.companyId);
   }
   return Object.values(by).map(s => ({
     industry: s.industry, sum: s.sum, count: s.count, avg: s.count ? s.sum / s.count : 0,
-    companies: s.companies.size, byCat: topEntries(s.byCat),
+    companies: s.companies.size, byCat: topEntries(s.byCat, s.byCatC),
   })).sort((a, b) => b.sum - a.sum);
 }
 
-// Сферы (доконтрактные / в работе, P10–P80) — разрез по воронкам и по стадиям.
+// Сферы (доконтрактные / в работе, P10–P80) — разрез по воронкам и по стадиям,
+// сумма И количество сделок в каждой ячейке.
 function bySpherePipe(deals) {
   const by = {};
   for (const d of deals) {
     const k = d.industry;
-    if (!by[k]) by[k] = { industry: k, sum: 0, count: 0, byCat: {}, byStep: {}, companies: new Set() };
+    if (!by[k]) by[k] = { industry: k, sum: 0, count: 0, byCat: {}, byCatC: {}, byStep: {}, byStepC: {}, companies: new Set() };
     const s = by[k];
     s.sum += d.sum; s.count++;
     s.byCat[d.funnel] = (s.byCat[d.funnel] || 0) + d.sum;
+    s.byCatC[d.funnel] = (s.byCatC[d.funnel] || 0) + 1;
     s.byStep[d.step] = (s.byStep[d.step] || 0) + d.sum;
+    s.byStepC[d.step] = (s.byStepC[d.step] || 0) + 1;
     if (d.companyId) s.companies.add(d.companyId);
   }
   return Object.values(by).map(s => ({
     industry: s.industry, sum: s.sum, count: s.count, avg: s.count ? s.sum / s.count : 0,
-    companies: s.companies.size, byCat: topEntries(s.byCat),
-    byStep: PRE_ORDER.filter(st => s.byStep[st]).map(st => ({ key: st, label: PRE_LABELS[st], sum: s.byStep[st] })),
+    companies: s.companies.size, byCat: topEntries(s.byCat, s.byCatC),
+    byStep: PRE_ORDER.filter(st => s.byStep[st]).map(st => ({ key: st, label: PRE_LABELS[st], sum: s.byStep[st], count: s.byStepC[st] || 0 })),
   })).sort((a, b) => b.sum - a.sum);
 }
 

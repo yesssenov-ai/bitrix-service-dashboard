@@ -420,8 +420,8 @@ function renderSpheres(){
       <div class="rspacer"></div><div><div class="rsum">${M(s.sum)} ₸</div><div class="rsub">${pct(s.sum,totalSum)}% ${scope==='sold'?'от продаж':'в работе'}</div></div><span class="rcaret">▶</span>
     </div>
     <div class="rbody">
-      <div class="mini" style="margin-top:14px">${SPH_FUNNELS.map(cat=>{const e=s.byCat.find(x=>x.key===cat);return `<div class="mcell"><div class="mv" style="color:${e?'var(--good)':'var(--faint)'}">${e?M(e.sum)+' ₸':'—'}</div><div class="ml">${cat}</div></div>`;}).join('')}</div>
-      ${scope==='pipe'&&s.byStep&&s.byStep.length?`<div class="mini" style="margin-top:10px">${s.byStep.map(st=>`<div class="mcell"><div class="mv" style="color:var(--p60)">${M(st.sum)} ₸</div><div class="ml">${esc(st.label)}</div></div>`).join('')}</div>`:''}
+      <div class="mini" style="margin-top:14px">${SPH_FUNNELS.map(cat=>{const e=s.byCat.find(x=>x.key===cat);return `<div class="mcell"><div class="mv" style="color:${e?'var(--good)':'var(--faint)'}">${e?M(e.sum)+' ₸':'—'}</div><div class="ml">${cat}${e&&e.count!=null?` · <b style="color:var(--dim)">${e.count} шт</b>`:''}</div></div>`;}).join('')}</div>
+      ${scope==='pipe'&&s.byStep&&s.byStep.length?`<div class="mini" style="margin-top:10px">${s.byStep.map(st=>`<div class="mcell"><div class="mv" style="color:var(--p60)">${M(st.sum)} ₸</div><div class="ml">${esc(st.label)}${st.count!=null?` · <b style="color:var(--dim)">${st.count} шт</b>`:''}</div></div>`).join('')}</div>`:''}
     </div>
   </div>`).join('');
   return toolbar+'<div class="list">'+rows+'</div>';
