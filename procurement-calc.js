@@ -5,6 +5,7 @@
 // сделок для привязки, и (в следующей фазе) create/update/move.
 const { b24 } = require('./bitrix');
 const { pool } = require('./auth');
+const { USERS } = require('./constants');
 
 const ENTITY = 1066;         // смарт «Закупки»
 const CATEGORY = 13;         // единственная категория «Общая»
@@ -149,6 +150,7 @@ async function getMeta(force) {
     stages,
     flow: FLOW.map(s => ({ key: s.key, label: s.label, bitrix: s.bitrix })),
     sources,
+    employees: Object.entries(USERS || {}).map(([id, name]) => ({ id: Number(id), name })).sort((a, b) => String(a.name).localeCompare(String(b.name), 'ru')),
     currencies,
     options: {
       vidZakupki: (vidZakupki && vidZakupki.length) ? vidZakupki : VID_ZAKUPKI_FALLBACK,
@@ -168,22 +170,29 @@ async function getMeta(force) {
   return meta;
 }
 
-// ── Поиск сделок для привязки (по номеру/названию) ──────────────────────────
+// ── Поиск сделок для привязки: по любому совпадению названия во ВСЕХ воронках,
+// плюс точное совпадение по номеру (ID), если ввели число ────────────────────
+const DEAL_SEL = ['ID', 'TITLE', 'STAGE_ID', 'CATEGORY_ID', 'COMPANY_ID', 'OPPORTUNITY', 'CURRENCY_ID'];
+const mapDeal = d => ({
+  id: Number(d.ID), title: d.TITLE || ('Сделка #' + d.ID), stageId: d.STAGE_ID,
+  categoryId: Number(d.CATEGORY_ID), companyId: d.COMPANY_ID ? Number(d.COMPANY_ID) : null,
+  opportunity: parseFloat(d.OPPORTUNITY) || 0, currency: d.CURRENCY_ID || 'KZT',
+});
 async function searchDeals(q) {
   q = String(q || '').trim();
   if (!q) return [];
-  const filter = /^\d+$/.test(q) ? { ID: q } : { '%TITLE': q };
+  const out = [], seen = new Set();
+  const add = arr => (arr || []).forEach(d => { const id = Number(d.ID); if (!seen.has(id)) { seen.add(id); out.push(mapDeal(d)); } });
+  // 1) подстрока в названии (без фильтра по категории → все воронки)
   try {
-    const { result } = await b24('crm.deal.list', {
-      filter, select: ['ID', 'TITLE', 'STAGE_ID', 'CATEGORY_ID', 'COMPANY_ID', 'OPPORTUNITY', 'CURRENCY_ID'],
-      order: { ID: 'DESC' }, start: 0,
-    });
-    return (result || []).slice(0, 20).map(d => ({
-      id: Number(d.ID), title: d.TITLE || ('Сделка #' + d.ID), stageId: d.STAGE_ID,
-      categoryId: Number(d.CATEGORY_ID), companyId: d.COMPANY_ID ? Number(d.COMPANY_ID) : null,
-      opportunity: parseFloat(d.OPPORTUNITY) || 0, currency: d.CURRENCY_ID || 'KZT',
-    }));
-  } catch (e) { console.error('searchDeals error:', e.message); return []; }
+    const { result } = await b24('crm.deal.list', { filter: { '%TITLE': q }, select: DEAL_SEL, order: { ID: 'DESC' }, start: 0 });
+    add(result);
+  } catch (e) { console.error('searchDeals title:', e.message); }
+  // 2) точное совпадение по ID (если ввели число) — вдруг искали по номеру сделки
+  if (/^\d+$/.test(q)) {
+    try { const { result } = await b24('crm.deal.list', { filter: { ID: q }, select: DEAL_SEL }); add(result); } catch (e) { /* ignore */ }
+  }
+  return out.slice(0, 25);
 }
 
 // ── Список наших заявок (из локальной таблицы) + актуальная стадия ───────────
@@ -225,8 +234,12 @@ async function createRequest(payload, bitrixUserId) {
   const title = (payload.title && String(payload.title).trim()) || 'Закуп доп оборудования';
 
   const fields = { categoryId: CATEGORY, opened: 'Y', title };
-  if (bitrixUserId) fields[F.assigned] = bitrixUserId;
-  if (meta.internalSourceId) fields[F.source] = meta.internalSourceId;
+  // Ответственный: выбранный в форме, иначе — текущий пользователь (менеджер склада).
+  const assigned = payload.assigned || bitrixUserId;
+  if (assigned) fields[F.assigned] = assigned;
+  // Источник: выбранный в форме, иначе — «Внутренний запрос».
+  const source = payload.source || meta.internalSourceId;
+  if (source) fields[F.source] = source;
   if (payload.dealId) fields[F.deal] = Number(payload.dealId);
   if (payload.companyId) fields[F.company] = Number(payload.companyId);
   if (payload.opportunity !== undefined && payload.opportunity !== null && payload.opportunity !== '') fields[F.opportunity] = Number(payload.opportunity) || 0;

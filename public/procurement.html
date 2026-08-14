@@ -104,7 +104,9 @@ const opt=(arr,ph)=>`<option value="">${ph||'—'}</option>`+(arr||[]).map(o=>`<
 const stageName=id=>{const f=(META.flow||[]).find(x=>x.bitrix===id);if(f)return f.label;const s=(META.stages||[]).find(s=>s.id===id);return s?s.name:(id||'—');};
 
 function render(){
-  const srcName=(META.sources.find(s=>s.id===META.internalSourceId)||{}).name||'Внутренний запрос';
+  const srcOpts=(META.sources||[]).map(s=>`<option value="${esc(s.id)}" ${s.id===META.internalSourceId?'selected':''}>${esc(s.name)}</option>`).join('');
+  const meBid=(META.me&&META.me.bitrixUserId)||'';
+  const empOpts=(META.employees||[]).map(e=>`<option value="${esc(e.id)}" ${String(e.id)===String(meBid)?'selected':''}>${esc(e.name)}</option>`).join('');
   const vidWarn=(!META.options.vidZakupki||!META.options.vidZakupki.length)
     ? `<div class="hint" style="color:var(--warn)">⚠ Справочник «Вид закупки» не загрузился из Битрикса (нужно право доступа к спискам). Скажи мне — подключим другим способом.</div>` : '';
   document.getElementById('root').innerHTML=`
@@ -124,8 +126,8 @@ function render(){
       <input id="title" placeholder="Напр.: Доп оборудование — …">
 
       <div class="row2">
-        <div><label class="fl">Ответственный</label><div class="ro" id="respBox">${esc(ME.displayName)}</div></div>
-        <div><label class="fl">Источник</label><div class="ro">${esc(srcName)}</div></div>
+        <div><label class="fl">Источник</label><select id="source">${srcOpts}</select></div>
+        <div><label class="fl">Ответственный</label><select id="assigned">${empOpts}</select></div>
       </div>
 
       <label class="fl">Вид закупки <span class="req">*</span></label>
@@ -140,33 +142,6 @@ function render(){
 
       <label class="fl">Название прибора</label>
       ${pickerHtml('pribor',META.options.pribor,true)}
-
-      <div class="row2">
-        <div><label class="fl">Сумма</label><input id="opportunity" type="number" step="0.01" placeholder="0"></div>
-        <div><label class="fl">Валюта</label><select id="currency">${opt(META.currencies,'—')}</select></div>
-      </div>
-
-      <div class="row2">
-        <div><label class="fl">Требуется установка</label><select id="ustanovka">${opt(META.options.ustanovka,'—')}</select></div>
-        <div><label class="fl">Условия оплаты поставщику</label><select id="oplataPostavshikam">${opt(META.options.oplataPostavshikam,'—')}</select></div>
-      </div>
-
-      <label class="fl">Номер PO</label>
-      <input id="po" placeholder="PO-…">
-
-      <label class="fl">Серийные номера (через запятую)</label>
-      <input id="serial" placeholder="SN1, SN2…">
-
-      <label class="fl">Город / Область / Страна</label>
-      <input id="cityCountry" placeholder="Астана / … / Казахстан">
-
-      <div class="row2">
-        <div><label class="fl">Нужен KZTIN</label><select id="needKztin">${opt(META.options.needKztin,'—')}</select></div>
-        <div><label class="fl">KZTIN</label><input id="kztin" placeholder="—"></div>
-      </div>
-
-      <label class="fl">Комментарий</label>
-      <textarea id="comment" placeholder="Дополнительно…"></textarea>
 
       <div class="msg" id="msg"></div>
       <button class="btn btn-p" id="createBtn" style="margin-top:14px;width:100%;justify-content:center" onclick="submitReq()">Создать заявку</button>
@@ -252,13 +227,10 @@ async function submitReq(){
   if(META.required.vidZakupki && !vid){ msg.className='msg err'; msg.textContent='Заполните обязательное поле «Вид закупки».'; return; }
   const val=id=>{const el=document.getElementById(id);return el?el.value.trim():'';};
   const payload={
-    dealId:DEAL?DEAL.id:null, companyId:DEAL?DEAL.companyId:null,
-    title:val('title'), vidZakupki:vid, typeKP:val('typeKP'),
+    dealId:DEAL?DEAL.id:null,
+    title:val('title'), source:val('source'), assigned:val('assigned'),
+    vidZakupki:vid, typeKP:val('typeKP'),
     proizvoditel:[...SEL.proizvoditel], pribor:[...SEL.pribor],
-    opportunity:val('opportunity'), currency:val('currency'),
-    ustanovka:val('ustanovka'), oplataPostavshikam:val('oplataPostavshikam'),
-    po:val('po'), serial:val('serial')?val('serial').split(',').map(s=>s.trim()).filter(Boolean):[],
-    cityCountry:val('cityCountry'), needKztin:val('needKztin'), kztin:val('kztin'), comment:val('comment'),
   };
   const btn=document.getElementById('createBtn'); btn.disabled=true; btn.textContent='Создаю…';
   try{

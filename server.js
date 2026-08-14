@@ -113,6 +113,7 @@ app.get('/stats.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__d
 app.get('/contracts.html', requirePageAuth(['admin','coordinator']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'contracts.html')));
 app.get('/logistics.html', requirePageAuth(['admin','coordinator']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'logistics.html')));
 app.get('/operational.html', requirePageAuth(['admin','coordinator']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'operational.html')));
+app.get('/procurement.html', requirePageAuth(['admin','coordinator']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'procurement.html')));
 app.get('/cup-admin.html', requirePageAuth(['admin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'cup-admin.html')));
 app.get('/account.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'account.html')));
 // `index:false` — without this, static would auto-serve public/index.html

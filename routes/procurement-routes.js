@@ -8,7 +8,8 @@ const ROLES = ['admin', 'coordinator'];
 router.get('/meta', requireAuth(ROLES), async (req, res) => {
   try {
     const { getMeta } = require('../procurement-calc');
-    res.json(await getMeta(req.query.force === '1'));
+    const meta = await getMeta(req.query.force === '1');
+    res.json({ ...meta, me: { bitrixUserId: req.user.bitrix_user_id || null, name: req.user.display_name } });
   } catch (e) {
     console.error('GET /api/procurement/meta error:', e.message);
     res.status(500).json({ error: 'Не удалось загрузить справочники: ' + e.message });
