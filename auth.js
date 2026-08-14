@@ -292,6 +292,25 @@ async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_stage_hist_deal ON ticketsmodule_stage_history(deal_id);
     CREATE INDEX IF NOT EXISTS idx_stage_hist_created ON ticketsmodule_stage_history(created_time);
 
+    -- ── Модуль «Закуп доп оборудования» ────────────────────────────────────
+    -- Локальные заявки менеджера склада. Каждая создаёт элемент в смарте
+    -- «Закупки» (1066) и хранит его bitrix_item_id + снимок полей. Дашборд
+    -- показывает ТОЛЬКО заявки, созданные через него (по этой таблице).
+    CREATE TABLE IF NOT EXISTS ticketsmodule_procurement (
+      id SERIAL PRIMARY KEY,
+      bitrix_item_id INTEGER,
+      deal_id INTEGER,
+      title VARCHAR(400),
+      stage_id VARCHAR(60),
+      created_by INTEGER,
+      payload JSONB DEFAULT '{}',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_procurement_bitrix ON ticketsmodule_procurement(bitrix_item_id);
+    CREATE INDEX IF NOT EXISTS idx_procurement_deal ON ticketsmodule_procurement(deal_id);
+    CREATE INDEX IF NOT EXISTS idx_procurement_creator ON ticketsmodule_procurement(created_by);
+
     -- ── Переписка с клиентом по заявке (Написать клиенту) ───────────────────
     -- Each engineer stores their own Yandex 360 app password (encrypted) so
     -- outgoing mail can be sent as their real corporate address via SMTP.

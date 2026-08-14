@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ЦУП — Закуп доп оборудования</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0e14;--panel:#141924;--panel-h:#1a2130;--card:#141924;--white:#141924;
+  --line:#232c3d;--line-2:#2f3a4f;--border:#232c3d;--border2:#2f3a4f;
+  --text:#eef2f8;--text-2:#c7d0df;--text-3:#8794ab;--text-4:#5b6884;--text-dim:#8794ab;
+  --brand:#C53B2F;--brand-h:#e0553f;--signal:#35d0c0;--good:#3ddc84;--warn:#ffb020;--bad:#ff5b6e;
+  --fd:'Space Grotesk',sans-serif;--fb:'Inter',system-ui,sans-serif;--fm:'IBM Plex Mono',monospace;--radius:14px;
+}
+html,body{height:100%}
+body{font-family:var(--fb);background:var(--bg);color:var(--text);min-height:100vh}
+.top{display:flex;align-items:center;gap:12px;padding:16px 26px;flex-wrap:wrap;border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:11px}.brand img{height:22px}
+.bn{font-family:var(--fd);font-weight:600;font-size:15px}.bn b{color:var(--brand)}
+.back{display:inline-flex;align-items:center;gap:6px;color:var(--text-3);text-decoration:none;font-size:12.5px;border:1px solid var(--border);padding:7px 12px;border-radius:9px;white-space:nowrap}
+.back:hover{color:var(--text);border-color:var(--border2)}
+.sp{margin-left:auto}
+.who{font-size:13px;color:var(--text-3)}.who b{color:var(--text)}
+.btn{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:8px 13px;font:inherit;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:.15s}
+.btn:hover{background:var(--panel-h);border-color:var(--border2)}
+.btn-p{background:linear-gradient(135deg,var(--brand),var(--brand-h));border-color:transparent;color:#fff}
+.btn-p:disabled{opacity:.55;cursor:default}
+.wrap{max-width:1240px;margin:0 auto;padding:18px 22px 70px}
+.h1{font-family:var(--fd);font-size:26px;font-weight:700}
+.sub{color:var(--text-3);font-size:14px;margin:3px 0 18px}
+.grid{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:18px;align-items:start}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px}
+.card h3{font-family:var(--fd);font-size:14px;font-weight:600;margin-bottom:14px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px}
+label.fl{display:block;font-size:12px;color:var(--text-3);margin:12px 0 5px;font-weight:600}
+label.fl .req{color:var(--bad)}
+input,select,textarea{width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:9px;color:var(--text);font:inherit;font-size:13.5px;padding:9px 11px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--signal)}
+textarea{resize:vertical;min-height:64px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ro{background:var(--panel-h);border:1px solid var(--border);border-radius:9px;padding:9px 11px;font-size:13.5px;color:var(--text-2)}
+.hint{color:var(--text-4);font-size:11.5px;margin-top:5px}
+.dealbox{position:relative}
+.dealres{position:absolute;left:0;right:0;top:calc(100% + 4px);background:var(--panel);border:1px solid var(--border2);border-radius:10px;max-height:280px;overflow:auto;z-index:20;box-shadow:0 14px 34px rgba(0,0,0,.5)}
+.dealres div{padding:9px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)}
+.dealres div:hover{background:var(--panel-h)}
+.dealres .did{font-family:var(--fm);color:var(--signal);font-size:11.5px}
+.chip{display:inline-flex;align-items:center;gap:8px;background:rgba(53,208,192,.12);border:1px solid var(--signal);color:var(--signal);border-radius:20px;padding:5px 12px;font-size:12.5px;margin-top:6px}
+.chip .x{cursor:pointer;font-weight:700}
+.picker{border:1px solid var(--border2);border-radius:9px;background:var(--bg);max-height:150px;overflow:auto;padding:4px}
+.picker label{display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:7px;font-size:13px;cursor:pointer;color:var(--text-2)}
+.picker label:hover{background:var(--panel-h)}
+.picker input{width:auto}
+.pk-search{margin-bottom:4px}
+.msg{margin-top:12px;font-size:13px;padding:9px 12px;border-radius:9px;display:none}
+.msg.ok{display:block;background:rgba(61,220,132,.12);border:1px solid var(--good);color:var(--good)}
+.msg.err{display:block;background:rgba(255,91,110,.12);border:1px solid var(--bad);color:var(--bad)}
+table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
+thead th{position:sticky;top:0;background:var(--panel-h);color:var(--text-3);font-family:var(--fm);font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:600;padding:10px 12px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--border2)}
+tbody td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+tbody tr:hover td{background:var(--panel-h)}
+.stg{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;background:rgba(255,255,255,.05);border:1px solid var(--border2);color:var(--text-2)}
+.lnk{color:var(--signal);text-decoration:none}.lnk:hover{text-decoration:underline}
+.empty{color:var(--text-4);text-align:center;padding:34px;font-size:14px}
+.spin{width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--signal);border-radius:50%;animation:sp 1s linear infinite;margin:40px auto}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="brand"><img src="/assets/logo-icon.png" alt="" onerror="this.style.display='none'"><span class="bn"><b>ЦУП</b> · ProLabSupport</span></div>
+  <a class="back" href="/portal.html">← Все модули</a>
+  <span class="sp"></span>
+  <span class="who" id="who">—</span>
+  <button class="btn" onclick="logout()">Выйти</button>
+</div>
+<div class="wrap">
+  <div class="h1">Закуп доп оборудования</div>
+  <div class="sub">Заявки менеджера склада синхронизируются со смарт-процессом «Закупки» в Bitrix.</div>
+  <div id="root"><div class="spin"></div></div>
+</div>
+<script>
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const F=n=>Math.round(n||0).toLocaleString('ru-RU').replace(/,/g,' ');
+let META=null, ME=null, DEAL=null, LIST=[];
+const SEL={proizvoditel:new Set(),pribor:new Set()};
+
+async function boot(){
+  try{
+    const me=await fetch('/auth/me'); if(!me.ok){location.href='/login.html';return;}
+    ME=(await me.json()).user; document.getElementById('who').innerHTML='<b>'+esc(ME.displayName)+'</b>';
+    const [m,l]=await Promise.all([fetch('/api/procurement/meta'),fetch('/api/procurement/list')]);
+    if(!m.ok){document.getElementById('root').innerHTML='<div class="empty">Не удалось загрузить справочники из Битрикса.</div>';return;}
+    META=await m.json(); LIST=(await l.json()).items||[];
+    render();
+  }catch(e){document.getElementById('root').innerHTML='<div class="empty">Ошибка: '+esc(e.message)+'</div>';}
+}
+
+const opt=(arr,ph)=>`<option value="">${ph||'—'}</option>`+(arr||[]).map(o=>`<option value="${esc(o.id)}">${esc(o.label)}</option>`).join('');
+const stageName=id=>{const f=(META.flow||[]).find(x=>x.bitrix===id);if(f)return f.label;const s=(META.stages||[]).find(s=>s.id===id);return s?s.name:(id||'—');};
+
+function render(){
+  const srcName=(META.sources.find(s=>s.id===META.internalSourceId)||{}).name||'Внутренний запрос';
+  const vidWarn=(!META.options.vidZakupki||!META.options.vidZakupki.length)
+    ? `<div class="hint" style="color:var(--warn)">⚠ Справочник «Вид закупки» не загрузился из Битрикса (нужно право доступа к спискам). Скажи мне — подключим другим способом.</div>` : '';
+  document.getElementById('root').innerHTML=`
+  <div class="grid">
+    <div class="card">
+      <h3>Новая заявка</h3>
+
+      <label class="fl">Сделка (привязка)</label>
+      <div class="dealbox">
+        <input id="dealq" placeholder="Номер или название сделки…" oninput="onDealInput(this.value)" autocomplete="off">
+        <div class="dealres" id="dealres" style="display:none"></div>
+      </div>
+      <div id="dealchip"></div>
+      <div class="hint">Можно оставить пустым (закуп на склад без сделки).</div>
+
+      <label class="fl">Название заявки</label>
+      <input id="title" placeholder="Напр.: Доп оборудование — …">
+
+      <div class="row2">
+        <div><label class="fl">Ответственный</label><div class="ro" id="respBox">${esc(ME.displayName)}</div></div>
+        <div><label class="fl">Источник</label><div class="ro">${esc(srcName)}</div></div>
+      </div>
+
+      <label class="fl">Вид закупки <span class="req">*</span></label>
+      <select id="vidZakupki">${opt(META.options.vidZakupki,'— выберите —')}</select>
+      ${vidWarn}
+
+      <label class="fl">Тип КП / Договора</label>
+      <select id="typeKP">${opt(META.options.typeKP,'—')}</select>
+
+      <label class="fl">Производитель</label>
+      ${pickerHtml('proizvoditel',META.options.proizvoditel,false)}
+
+      <label class="fl">Название прибора</label>
+      ${pickerHtml('pribor',META.options.pribor,true)}
+
+      <div class="row2">
+        <div><label class="fl">Сумма</label><input id="opportunity" type="number" step="0.01" placeholder="0"></div>
+        <div><label class="fl">Валюта</label><select id="currency">${opt(META.currencies,'—')}</select></div>
+      </div>
+
+      <div class="row2">
+        <div><label class="fl">Требуется установка</label><select id="ustanovka">${opt(META.options.ustanovka,'—')}</select></div>
+        <div><label class="fl">Условия оплаты поставщику</label><select id="oplataPostavshikam">${opt(META.options.oplataPostavshikam,'—')}</select></div>
+      </div>
+
+      <label class="fl">Номер PO</label>
+      <input id="po" placeholder="PO-…">
+
+      <label class="fl">Серийные номера (через запятую)</label>
+      <input id="serial" placeholder="SN1, SN2…">
+
+      <label class="fl">Город / Область / Страна</label>
+      <input id="cityCountry" placeholder="Астана / … / Казахстан">
+
+      <div class="row2">
+        <div><label class="fl">Нужен KZTIN</label><select id="needKztin">${opt(META.options.needKztin,'—')}</select></div>
+        <div><label class="fl">KZTIN</label><input id="kztin" placeholder="—"></div>
+      </div>
+
+      <label class="fl">Комментарий</label>
+      <textarea id="comment" placeholder="Дополнительно…"></textarea>
+
+      <div class="msg" id="msg"></div>
+      <button class="btn btn-p" id="createBtn" style="margin-top:14px;width:100%;justify-content:center" onclick="submitReq()">Создать заявку</button>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+      <h3 style="padding:18px 20px 0" id="listHdr">Мои заявки (${LIST.length})</h3>
+      <div style="overflow:auto;max-height:72vh" id="listBody">${listInner()}</div>
+    </div>
+  </div>`;
+}
+function listInner(){
+  if(!LIST.length) return '<div class="empty">Пока нет заявок. Создай первую слева.</div>';
+  return `<table><thead><tr><th>Заявка</th><th>Сделка</th><th>Шаг процесса</th><th>Создана</th><th>Битрикс</th></tr></thead><tbody>${LIST.map(rowHtml).join('')}</tbody></table>`;
+}
+function renderList(){
+  const b=document.getElementById('listBody'); if(b)b.innerHTML=listInner();
+  const h=document.getElementById('listHdr'); if(h)h.textContent='Мои заявки ('+LIST.length+')';
+}
+
+function pickerHtml(key,items,withSearch){
+  return `<div class="picker" id="pk-${key}">
+    ${withSearch?`<input class="pk-search" placeholder="Поиск…" oninput="filterPicker('${key}',this.value)">`:''}
+    <div id="pkbody-${key}">${(items||[]).map(o=>pkRow(key,o)).join('')||'<div class="hint" style="padding:6px">нет значений</div>'}</div>
+  </div>`;
+}
+const pkRow=(key,o)=>`<label data-lab="${esc((o.label||'').toLowerCase())}"><input type="checkbox" value="${esc(o.id)}" ${SEL[key].has(String(o.id))?'checked':''} onchange="toggleSel('${key}','${esc(o.id)}',this.checked)">${esc(o.label)}</label>`;
+function toggleSel(key,id,on){ if(on)SEL[key].add(String(id)); else SEL[key].delete(String(id)); }
+function filterPicker(key,q){ q=(q||'').toLowerCase(); document.querySelectorAll(`#pkbody-${key} label`).forEach(l=>{l.style.display=l.dataset.lab.includes(q)?'':'none';}); }
+
+function rowHtml(r){
+  const flow=META.flow||[];
+  const cur=r.stepKey||'';
+  const stepSel=`<select onchange="moveStep(${r.id},this.value)" style="font-size:12.5px;padding:6px 9px">`
+    +flow.map((s,i)=>`<option value="${esc(s.key)}" ${s.key===cur?'selected':''}>${i+1}. ${esc(s.label)}</option>`).join('')
+    +`</select>`;
+  const badge=`<span class="stg">${r.stepIndex>=0?(r.stepIndex+1)+'. ':''}${esc(stageName(r.stageId))}</span>`;
+  return `<tr>
+    <td><div style="font-weight:600">${esc(r.title||'—')}</div><div class="hint">#${r.bitrixItemId||'—'}</div></td>
+    <td>${r.dealId?`<a class="lnk" href="${esc(r.dealUrl)}" target="_blank">#${r.dealId}</a>`:'—'}</td>
+    <td>${badge}<div style="margin-top:6px">${stepSel}</div></td>
+    <td class="hint">${r.createdAt?new Date(r.createdAt).toLocaleString('ru-RU'):'—'}</td>
+    <td>${r.itemUrl?`<a class="lnk" href="${esc(r.itemUrl)}" target="_blank">↗</a>`:''}</td>
+  </tr>`;
+}
+async function moveStep(id,stageKey){
+  try{
+    const r=await fetch('/api/procurement/'+id+'/stage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({stageKey})});
+    const d=await r.json();
+    if(!r.ok){alert(d.error||'Ошибка смены стадии');return;}
+    const l=await fetch('/api/procurement/list'); LIST=(await l.json()).items||[]; renderList();
+  }catch(e){alert('Ошибка: '+e.message);}
+}
+
+// ── Поиск сделки ────────────────────────────────────────────────────────────
+let dealTimer=null;
+function onDealInput(v){
+  clearTimeout(dealTimer);
+  const box=document.getElementById('dealres');
+  if(!v||v.trim().length<2){box.style.display='none';return;}
+  dealTimer=setTimeout(async()=>{
+    try{
+      const r=await fetch('/api/procurement/deals?q='+encodeURIComponent(v.trim()));
+      const d=await r.json(); const items=d.items||[];
+      box.innerHTML=items.length?items.map(it=>`<div onclick='pickDeal(${JSON.stringify(it).replace(/'/g,"&#39;")})'><span class="did">#${it.id}</span> ${esc(it.title)}</div>`).join(''):'<div class="hint" style="padding:9px 12px">Ничего не найдено</div>';
+      box.style.display='block';
+    }catch(e){box.style.display='none';}
+  },300);
+}
+function pickDeal(it){
+  DEAL=it; document.getElementById('dealres').style.display='none'; document.getElementById('dealq').value='';
+  document.getElementById('dealchip').innerHTML=`<span class="chip">#${it.id} · ${esc(it.title)} <span class="x" onclick="clearDeal()">✕</span></span>`;
+  const t=document.getElementById('title'); if(!t.value)t.value='Доп оборудование — '+it.title;
+  if(it.currency){const c=document.getElementById('currency'); if(c)c.value=it.currency;}
+}
+function clearDeal(){ DEAL=null; document.getElementById('dealchip').innerHTML=''; }
+document.addEventListener('click',e=>{ if(!e.target.closest('.dealbox')){const b=document.getElementById('dealres'); if(b)b.style.display='none';} });
+
+// ── Создание ────────────────────────────────────────────────────────────────
+async function submitReq(){
+  const msg=document.getElementById('msg'); msg.className='msg';
+  const vid=document.getElementById('vidZakupki').value;
+  if(META.required.vidZakupki && !vid){ msg.className='msg err'; msg.textContent='Заполните обязательное поле «Вид закупки».'; return; }
+  const val=id=>{const el=document.getElementById(id);return el?el.value.trim():'';};
+  const payload={
+    dealId:DEAL?DEAL.id:null, companyId:DEAL?DEAL.companyId:null,
+    title:val('title'), vidZakupki:vid, typeKP:val('typeKP'),
+    proizvoditel:[...SEL.proizvoditel], pribor:[...SEL.pribor],
+    opportunity:val('opportunity'), currency:val('currency'),
+    ustanovka:val('ustanovka'), oplataPostavshikam:val('oplataPostavshikam'),
+    po:val('po'), serial:val('serial')?val('serial').split(',').map(s=>s.trim()).filter(Boolean):[],
+    cityCountry:val('cityCountry'), needKztin:val('needKztin'), kztin:val('kztin'), comment:val('comment'),
+  };
+  const btn=document.getElementById('createBtn'); btn.disabled=true; btn.textContent='Создаю…';
+  try{
+    const r=await fetch('/api/procurement/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const d=await r.json();
+    if(r.ok){
+      msg.className='msg ok'; msg.innerHTML='Заявка создана в «Закупках» — <a class="lnk" href="'+esc(d.itemUrl)+'" target="_blank">#'+d.bitrixItemId+' ↗</a>';
+      const l=await fetch('/api/procurement/list'); LIST=(await l.json()).items||[];
+      // сбросить выбор и перерисовать список, сохранив сообщение
+      SEL.proizvoditel.clear(); SEL.pribor.clear(); DEAL=null;
+      const saved=msg.outerHTML; render(); document.getElementById('msg').outerHTML=saved;
+    }else{ msg.className='msg err'; msg.textContent=d.error||'Ошибка создания'; }
+  }catch(e){ msg.className='msg err'; msg.textContent='Ошибка: '+e.message; }
+  finally{ btn.disabled=false; btn.textContent='Создать заявку'; }
+}
+
+async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
+boot();
+</script>
+</body>
+</html>

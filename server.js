@@ -133,6 +133,7 @@ app.use('/api/stats', require('./routes/stats-routes').router);
 app.use('/api/contracts', require('./routes/contracts-routes').router);
 app.use('/api/logistics', require('./routes/logistics-routes').router);
 app.use('/api/operational', require('./routes/operational-routes').router);
+app.use('/api/procurement', require('./routes/procurement-routes').router);
 const { router: relationsRouter, handleBitrixWebhook } = require('./routes/relations-routes');
 app.use('/relations', relationsRouter);
 app.post('/webhook/bitrix-update', express.urlencoded({ extended: true }), handleBitrixWebhook);
