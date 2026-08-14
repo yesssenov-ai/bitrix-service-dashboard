@@ -345,7 +345,7 @@ async function loadDetail(id){
   try{ const d=await (await fetch('/api/procurement/'+id+'/detail')).json(); renderDetail(id,d); }
   catch(e){ const ds=document.getElementById('docSlots'); if(ds)ds.innerHTML='<div class="hint">Ошибка: '+esc(e.message)+'</div>'; }
 }
-const DOC_LABELS={invoice:'Счет на оплату',pay:'Подтверждение оплаты',contract:'Накладная'};
+const DOC_LABELS={invoice:'Счет на оплату',pay:'Подтверждение оплаты',contract:'Накладная',warranty:'Гарантийный сертификат'};
 function uploadSlotHtml(id,d,key,withReqHint){
   const s=(META.uploadSlots||[]).find(x=>x.key===key); if(!s) return '';
   const info=d.docs&&d.docs[key];
@@ -398,6 +398,18 @@ function approvalHtml(id,d){
     ${body}
   </div>`;
 }
+// Баннер «согласовано кем и когда» — показывается бухгалтеру на шаге «Оплата»,
+// чтобы он видел, что закупка согласована, когда и кем.
+function approvedBanner(d){
+  const ap=(d&&d.approval)||{}; if(!ap.approved)return '';
+  const nm=empName(ap.approver)||'—';
+  return `<div class="proccard" style="border-color:rgba(61,220,132,.45);background:rgba(61,220,132,.08)">
+    <div class="pc-row"><div class="avatar av-teal">✓</div><div style="flex:1;min-width:0">
+      <div class="pc-name" style="color:var(--good)">Закупка согласована — можно оплачивать</div>
+      <div class="hint">Согласовал: <b style="color:var(--text)">${esc(nm)}</b>${ap.decidedAt?` · ${fmtDateTime(ap.decidedAt)}`:''}${ap.comment?`<br>💬 ${esc(ap.comment)}`:''}</div>
+    </div></div>
+  </div>`;
+}
 function accountantHtml(id){
   const r=LIST.find(x=>x.id===id)||{};
   const acc=r.accountantBid||META.chiefAccountant||'';
@@ -419,7 +431,7 @@ function renderDetail(id,d){
   const sd=d.stageDates||{};
   flow.forEach((s,i)=>{ const el=document.getElementById('stdate-'+i); if(!el)return; let iso=sd[s.bitrix]; if(!iso&&i===0)iso=r.createdAt; el.textContent=iso?fmtDate(iso):''; });
   // Компактный список уже приложенных документов (история)
-  const summ=['invoice','pay','contract'].map(k=>{
+  const summ=['invoice','pay','contract','warranty'].map(k=>{
     const info=d.docs&&d.docs[k]; if(!info) return '';
     const s=(META.uploadSlots||[]).find(x=>x.key===k);
     return `<div class="slot"><div class="slabel">${esc(DOC_LABELS[k])}</div><div style="flex:1"><a class="lnk" href="${esc(info.url||'#')}" target="_blank">${esc(info.name||'файл')}</a></div><label class="upl">Заменить<input type="file" style="display:none" onchange="doUpload(${id},'${s.code}',this)"></label></div>`;
@@ -434,8 +446,8 @@ function renderDetail(id,d){
   else if(curKey==='invoice'){ hdr='Запрос счёта на оплату'; html=uploadSlotHtml(id,d,'invoice')+`<div class="hint" style="margin-top:6px">Приложи счёт (Invoice) — заявка сама уйдёт на «Договор».</div>`; }
   else if(curKey==='contract'){ hdr='Договор'; html='<div class="hint">Договор — по необходимости. Двигай на «Согласование закупки».</div>'; }
   else if(curKey==='approve'){ hdr='Согласование закупки'; html=approvalHtml(id,d); }
-  else if(curKey==='payment'){ hdr='Оплата закупки'; html=accountantHtml(id)+`<div style="margin-top:12px"></div>`+uploadSlotHtml(id,d,'pay')+`<div class="hint" style="margin-top:6px">Приложи подтверждение оплаты — заявка уйдёт на «Ожидание товара».</div>`; }
-  else if(curKey==='waiting'){ hdr='Ожидание товара'; html=uploadSlotHtml(id,d,'contract')+`<div class="hint" style="margin-top:6px">Пришёл товар — приложи накладную, заявка отметится «Товар принят».</div>`; }
+  else if(curKey==='payment'){ hdr='Оплата закупки'; html=approvedBanner(d)+accountantHtml(id)+`<div style="margin-top:12px"></div>`+uploadSlotHtml(id,d,'pay')+`<div class="hint" style="margin-top:6px">Приложи подтверждение оплаты — заявка уйдёт на «Ожидание товара».</div>`; }
+  else if(curKey==='waiting'){ hdr='Ожидание товара'; html=uploadSlotHtml(id,d,'contract')+uploadSlotHtml(id,d,'warranty')+`<div class="hint" style="margin-top:6px">Пришёл товар — приложи <b>накладную</b> и <b>гарантийный сертификат</b>; после обоих заявка отметится «Товар принят».</div>`; }
   else if(curKey==='received'){ hdr='Товар принят'; html='<div class="hint" style="color:var(--good)">✓ Процесс завершён. Документы — ниже.</div>'; }
   else { hdr='Готово'; html='<div class="hint" style="color:var(--good)">Процесс завершён.</div>'; }
   const hEl=document.getElementById('actionHdr'); if(hEl)hEl.textContent=hdr;
@@ -453,10 +465,16 @@ async function doUpload(id,code,input){
     // авто-переход: документ, приложенный на текущем шаге, двигает на следующий
     const r0=LIST.find(x=>x.id===id)||{}; const flow=META.flow||[]; const ci=(r0.stepIndex!=null)?r0.stepIndex:-1;
     const curKey=(ci>=0&&ci<flow.length)?flow[ci].key:null;
-    const adv={ invoice:{slot:'invoice',next:'contract'}, payment:{slot:'pay',next:'waiting'}, waiting:{slot:'contract',next:'received'} };
     const slotKey=((META.uploadSlots||[]).find(s=>s.code===code)||{}).key;
-    const rule=adv[curKey];
-    if(rule&&rule.slot===slotKey){ await moveStep(id,rule.next); } else { loadDetail(id); }
+    if(curKey==='waiting'&&(slotKey==='contract'||slotKey==='warranty')){
+      // «Товар принят» требует ОБА документа — накладную и гарантийный сертификат.
+      const dd=await (await fetch('/api/procurement/'+id+'/detail')).json();
+      if(dd.docs&&dd.docs.contract&&dd.docs.warranty){ await moveStep(id,'received'); } else { renderDetail(id,dd); }
+    } else {
+      const adv={ invoice:{slot:'invoice',next:'contract'}, payment:{slot:'pay',next:'waiting'} };
+      const rule=adv[curKey];
+      if(rule&&rule.slot===slotKey){ await moveStep(id,rule.next); } else { loadDetail(id); }
+    }
   }catch(e){alert('Ошибка: '+e.message);}
   finally{input.disabled=false;}
 }
@@ -566,7 +584,7 @@ function onBinInput(v){
       if(d&&d.found&&d.name){
         if(d.bitrixCompanyId){ pickCompany({id:d.bitrixCompanyId,title:d.name,bin:digits}); if(st){st.innerHTML='✓ '+esc(d.name)+' · есть в CRM'; st.style.color='var(--good)';} }
         else { COMPANY={id:null,title:d.name,bin:digits}; document.getElementById('compchip').innerHTML=`<span class="chip">${esc(d.name)} <span class="x" onclick="clearCompany()">✕</span></span>`; if(st){st.innerHTML='✓ '+esc(d.name)+' · сохраним БИН и название'; st.style.color='var(--good)';} }
-      } else { if(st){ st.textContent='Компания по этому БИН не найдена'; st.style.color='var(--warn)'; } }
+      } else { if(st){ st.innerHTML='Компания по этому БИН не найдена'+(d&&d.debug?` <span style="color:var(--text-4)">(${esc(d.debug)})</span>`:''); st.style.color='var(--warn)'; } }
     }catch(e){ if(st){ st.textContent='Ошибка поиска по БИН'; st.style.color='var(--bad)'; } }
   },400);
 }

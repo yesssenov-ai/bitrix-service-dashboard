@@ -102,12 +102,18 @@ const stepIndexForStage = stageId => (STAGE_TO_STEP[stageId] != null ? STAGE_TO_
 const DOC_INVOICE = 'ufCrm10_1763537277532';   // Invoice
 const DOC_PAY = 'ufCrm10_1744874990535';       // Подтверждение оплаты
 const DOC_CONTRACT = 'ufCrm10_1732858619051';  // Договор / Спецификация / Appendix
+// Гарантийный сертификат — отдельное файловое поле 1066. Точный код зависит от
+// портала; задаётся через env PROC_WARRANTY_FIELD. По умолчанию — свободное
+// файловое поле «Файл размещения заказа» (чтобы работало сразу); замени на
+// реальное поле «Гарантийный сертификат» после discover-procurement.
+const DOC_WARRANTY = process.env.PROC_WARRANTY_FIELD || 'ufCrm10_1732858487739';
 const APPROVE_YES = '1827';                    // «Согласовано» (поле Согласование предоплаты)
 // Разрешённые для загрузки поля (белый список)
 const UPLOAD_SLOTS = [
   { key: 'invoice',  code: DOC_INVOICE,  label: 'Счет на оплату' },       // → поле Invoice
   { key: 'pay',      code: DOC_PAY,      label: 'Подтверждение оплаты' },  // → поле Подтверждение оплаты
   { key: 'contract', code: DOC_CONTRACT, label: 'Накладная' },            // → поле Договор / Спецификация / Appendix
+  { key: 'warranty', code: DOC_WARRANTY, label: 'Гарантийный сертификат' },// → поле Гарантийный сертификат
 ];
 const UPLOAD_CODES = new Set(UPLOAD_SLOTS.map(s => s.code));
 // Условия для перехода НА шаг: документ/согласование прикладывается на ПРЕДЫДУЩЕМ
@@ -118,7 +124,7 @@ const REQUIREMENTS = {
   contract: { kind: 'file', field: DOC_INVOICE, label: 'счёт (Invoice)' },
   payment:  { kind: 'approval', label: 'согласование закупки' },
   waiting:  { kind: 'file', field: DOC_PAY, label: 'подтверждение оплаты' },
-  received: { kind: 'file', field: DOC_CONTRACT, label: 'накладная (Договор / Спецификация / Appendix)' },
+  received: { kind: 'files', fields: [DOC_CONTRACT, DOC_WARRANTY], label: 'накладная и гарантийный сертификат' },
 };
 const fileNonEmpty = v => !!(v && (Array.isArray(v) ? v.length : true));
 
@@ -270,38 +276,54 @@ async function searchDeals(q) {
 // Поиск компаний в CRM (по названию), поиск по БИН в реквизитах Bitrix и
 // резолв БИН через ГБД ЮЛ (внешний реестр РК). Провайдер настраивается через
 // env BIN_LOOKUP_URL с плейсхолдером {bin}; по умолчанию — открытый apiba.
-const BIN_LOOKUP_URL = process.env.BIN_LOOKUP_URL || 'https://apiba.prgapp.kz/CompanyFullInfo?id={bin}&lang=ru';
-// Node 16/18 совместимость: глобальный fetch есть не везде — берём node-fetch
-// (та же зависимость, что и в stagehistory-sync). Без этого внешний резолв БИН
-// молча возвращал null → «компания не найдена».
+// Провайдеры резолва БИН (ГБД ЮЛ). Пробуем по очереди; env BIN_LOOKUP_URL, если
+// задан, идёт первым. Плейсхолдер {bin}. Возвращаем и диагностику — чтобы было
+// видно, ПОЧЕМУ не нашлось (таймаут / HTTP-код / блок сети на Railway).
+const BIN_PROVIDERS = [
+  process.env.BIN_LOOKUP_URL,
+  'https://apiba.prgapp.kz/CompanyFullInfo?id={bin}&lang=ru',
+  'https://pk.uchet.kz/api/ru/company/{bin}/',
+  'https://old.stat.gov.kz/api/juridical/counter/api/?bin={bin}&lang=ru',
+].filter(Boolean);
 let _fetch = (typeof fetch === 'function') ? fetch : null;
 if (!_fetch) { try { _fetch = require('node-fetch'); } catch (e) { _fetch = null; } }
+// Возвращает { status, json, error } — не бросает.
 async function httpJson(url, ms = 8000) {
-  if (!_fetch) { console.error('httpJson: fetch недоступен (нет node-fetch)'); return null; }
+  if (!_fetch) return { error: 'fetch недоступен' };
   let ctrl, t;
   try { ctrl = new AbortController(); t = setTimeout(() => ctrl.abort(), ms); } catch (e) { ctrl = null; }
   try {
     const opts = { headers: { accept: 'application/json', 'user-agent': 'Mozilla/5.0 (PLS-CUP)', referer: 'https://ba.prg.kz/' } };
     if (ctrl) opts.signal = ctrl.signal;
     const r = await _fetch(url, opts);
-    if (!r.ok) { console.error('httpJson: HTTP', r.status, 'для', url.slice(0, 80)); return null; }
-    return await r.json();
-  } catch (e) { console.error('httpJson error:', e.message); return null; }
+    if (!r.ok) return { status: r.status, error: 'HTTP ' + r.status };
+    let json = null; try { json = await r.json(); } catch (e) { return { status: r.status, error: 'не JSON' }; }
+    return { status: r.status, json };
+  } catch (e) { return { error: (e.name === 'AbortError' ? 'таймаут' : e.message) }; }
   finally { if (t) clearTimeout(t); }
 }
 function pickCompanyName(o, depth = 0) {
-  if (!o || typeof o !== 'object' || depth > 4) return null;
-  const keys = ['nameRu', 'nameKz', 'name', 'shortNameRu', 'shortName', 'fullNameRu', 'fullName', 'titleRu', 'title', 'companyName'];
+  if (!o || typeof o !== 'object' || depth > 5) return null;
+  const keys = ['nameRu', 'nameKz', 'name', 'shortNameRu', 'shortName', 'fullNameRu', 'fullName', 'titleRu', 'titleKz', 'title', 'companyName', 'nameOfCompany'];
   for (const k of keys) { if (typeof o[k] === 'string' && o[k].trim()) return o[k].trim(); }
-  for (const nest of ['company', 'result', 'data', 'basicInfo', 'info']) {
-    const n = pickCompanyName(o[nest], depth + 1); if (n) return n;
+  for (const nest of ['company', 'result', 'results', 'data', 'basicInfo', 'info', 'obj', 'item', 'items', 'content']) {
+    const v = o[nest]; const arr = Array.isArray(v) ? v[0] : v;
+    const n = pickCompanyName(arr, depth + 1); if (n) return n;
   }
   return null;
 }
+// Пробует провайдеров по очереди; возвращает { name, source, debug[] }.
 async function lookupBinExternal(bin) {
-  const j = await httpJson(BIN_LOOKUP_URL.replace('{bin}', encodeURIComponent(bin)));
-  const name = pickCompanyName(j);
-  return name ? { name } : null;
+  const debug = [];
+  for (const tmpl of BIN_PROVIDERS) {
+    const host = (() => { try { return new URL(tmpl).host; } catch (e) { return tmpl.slice(0, 24); } })();
+    const res = await httpJson(tmpl.replace('{bin}', encodeURIComponent(bin)));
+    if (res.error) { debug.push(`${host}: ${res.error}`); continue; }
+    const name = pickCompanyName(res.json);
+    if (name) return { name, source: host, debug };
+    debug.push(`${host}: без имени`);
+  }
+  return { name: null, source: null, debug };
 }
 // Найти компанию Bitrix по БИН через реквизиты (RQ_BIN). Может 403, если у
 // вебхука нет доступа к crm.requisite — тогда просто вернём null.
@@ -329,7 +351,9 @@ async function resolveBin(bin) {
   if (!/^\d{12}$/.test(bin)) return { bin, found: false, error: 'БИН должен содержать 12 цифр' };
   const [bc, ext] = await Promise.all([bitrixCompanyByBin(bin), lookupBinExternal(bin)]);
   const name = (ext && ext.name) || (bc && bc.title) || null;
-  return { bin, found: !!name, name, bitrixCompanyId: bc ? bc.id : null, source: ext ? 'gbd' : (bc ? 'bitrix' : null) };
+  const debug = (ext && ext.debug || []).join(' · ');
+  if (!name) console.error('resolveBin', bin, '→ не найдено. Провайдеры:', debug);
+  return { bin, found: !!name, name, bitrixCompanyId: bc ? bc.id : null, source: name ? (ext && ext.name ? (ext.source || 'gbd') : 'bitrix') : null, debug };
 }
 
 // ── Список наших заявок (из локальной таблицы) + актуальная стадия ───────────
@@ -498,6 +522,9 @@ async function moveStage(localId, stageKey) {
     if (reqmt.kind === 'file' && !fileNonEmpty(item[reqmt.field])) {
       const e = new Error(`Нельзя перейти на «${step.label}»: не приложен ${reqmt.label}.`); e.userFacing = true; throw e;
     }
+    if (reqmt.kind === 'files' && !reqmt.fields.every(f => fileNonEmpty(item[f]))) {
+      const e = new Error(`Нельзя перейти на «${step.label}»: нужны ${reqmt.label}.`); e.userFacing = true; throw e;
+    }
     if (reqmt.kind === 'approval') {
       const ok = String(item[F.preApprove]) === APPROVE_YES && !!item[F.preApprover];
       if (!ok) { const e = new Error(`Нельзя перейти на «${step.label}»: нужен ${reqmt.label}.`); e.userFacing = true; throw e; }
@@ -569,7 +596,7 @@ async function getItemDetail(localId) {
   return {
     stageId: item.stageId,
     stageDates,
-    docs: { invoice: fileInfo(DOC_INVOICE, 'invoice'), pay: fileInfo(DOC_PAY, 'pay'), contract: fileInfo(DOC_CONTRACT, 'contract') },
+    docs: { invoice: fileInfo(DOC_INVOICE, 'invoice'), pay: fileInfo(DOC_PAY, 'pay'), contract: fileInfo(DOC_CONTRACT, 'contract'), warranty: fileInfo(DOC_WARRANTY, 'warranty') },
     dopy,
     approval: {
       status: item[F.preApprove] != null ? String(item[F.preApprove]) : null,

@@ -53,6 +53,17 @@ async function main() {
     });
   } catch (e) { P('  crm.item.fields error:', e.message); }
 
+  // 4b) ТОЛЬКО файловые поля 1066 — чтобы быстро найти «Гарантийный сертификат»
+  P('\n═══ ФАЙЛОВЫЕ ПОЛЯ 1066 (ищи «Гарантийный сертификат») ═══');
+  try {
+    const { result } = await b24('crm.item.fields', { entityTypeId: 1066 });
+    const fields = result?.fields || {};
+    Object.entries(fields)
+      .filter(([, f]) => String(f.type).toLowerCase() === 'file')
+      .sort((a, b) => String(a[1].title || '').localeCompare(String(b[1].title || ''), 'ru'))
+      .forEach(([code, f]) => P(`  ${code}  «${f.title || ''}»${f.isMultiple ? ' []' : ''}`));
+  } catch (e) { P('  file-fields error:', e.message); }
+
   // 5) Пара примеров реальных элементов 1066 (чтобы увидеть заполнение и связь со сделкой)
   P('\n═══ ПРИМЕРЫ ЭЛЕМЕНТОВ 1066 (последние 3) ═══');
   try {
