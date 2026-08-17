@@ -51,3 +51,24 @@ html[data-theme="light"] #themeToggle{
 }
 html[data-theme="light"] #themeToggle:hover{color:#1a1e27; border-color:#c9cfdb}
 @media print{#themeToggle{display:none}}
+
+/* ── Доводка тёмно-захардкоженных элементов под светлую тему ──────────────────
+   Селекторы со специфичностью html[data-theme="light"] всегда переопределяют
+   :root страниц. Тёмные выпадашки/панели/таблицы становятся светлыми, чтобы
+   тёмный текст (var(--text)) снова читался. Тёмную тему не трогаем. */
+
+/* Мультиселекты «ОТДЕЛ/ПРОИЗВОДИТЕЛЬ/МЕСЯЦ» (Контракты, Логистика) */
+html[data-theme="light"] .ms-panel{background:#ffffff; box-shadow:0 20px 50px -18px rgba(18,28,45,.28)}
+html[data-theme="light"] .ms-panel .ms-opt:hover{background:#eef1f6}
+html[data-theme="light"] .ms-search{background:#f1f4f9; color:#1a1e27}
+html[data-theme="light"] .ms-btn:hover{border-color:#c9cfdb}
+html[data-theme="light"] .yearsel select option{background:#ffffff; color:#1a1e27}
+
+/* Логистика: тёмные «липкие» ячейки таблицы */
+html[data-theme="light"] .mtable th,
+html[data-theme="light"] .mtable th.grp,
+html[data-theme="light"] .mtable td.grp{background:#eef1f6}
+html[data-theme="light"] .wp{background:#c3cbdb; border-color:rgba(18,28,45,.20)}
+
+/* Тёмные тултипы — всегда светлый текст (читаемы в обеих темах) */
+.tip{color:#e8edf6}
