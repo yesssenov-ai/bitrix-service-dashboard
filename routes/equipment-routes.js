@@ -24,6 +24,21 @@ let loadError = null;
 let _tablesReady = false;
 async function ensureTables() {
   if (_tablesReady) return;
+  // Миграция: старая версия могла создать таблицу кэша с другой схемой (без item_id).
+  // CREATE IF NOT EXISTS её не чинит — проверяем колонку и при отсутствии пересоздаём
+  // (это лишь зеркало Б24, восстановится полной сборкой).
+  try {
+    const col = await pool.query(
+      `SELECT 1 FROM information_schema.columns WHERE table_name='ticketsmodule_equipment_cache' AND column_name='item_id'`
+    );
+    const tbl = await pool.query(
+      `SELECT 1 FROM information_schema.tables WHERE table_name='ticketsmodule_equipment_cache'`
+    );
+    if (tbl.rows.length && !col.rows.length) {
+      console.log('⚠️ Кэш оборудования со старой схемой — пересоздаю таблицу');
+      await pool.query('DROP TABLE IF EXISTS ticketsmodule_equipment_cache');
+    }
+  } catch (e) { console.error('cache schema check:', e.message); }
   await pool.query(`CREATE TABLE IF NOT EXISTS ticketsmodule_equipment_cache (
     item_id INTEGER PRIMARY KEY, data JSONB, updated_time TIMESTAMPTZ, synced_at TIMESTAMPTZ DEFAULT NOW())`);
   await pool.query(`CREATE TABLE IF NOT EXISTS ticketsmodule_equipment_meta (
