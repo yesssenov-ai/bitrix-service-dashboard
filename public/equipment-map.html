@@ -129,6 +129,8 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
 .tf-chip.on{color:#fff;border-color:transparent;}
 .tf-row{display:flex;align-items:center;gap:7px;padding:4px 4px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--text-2);}
 .tf-row:hover{background:var(--surface2);}
+.tf-row.prio{font-weight:700;color:var(--text);}
+.tf-row.prio .cnt{color:var(--brand);}
 .tf-row input{cursor:pointer;}
 .tf-row .cnt{margin-left:auto;font-size:11px;color:var(--text-4);font-family:var(--font-mono,monospace);}
 .tf-sep{height:1px;background:var(--stroke);margin:8px 0;}
@@ -655,7 +657,8 @@ function renderTicketFilters() {
   }).join('');
   const catRows = ticketCategories.map(c => {
     const on = !ticketCatFilter.has(c.id); // в наборе — СКРЫТЫЕ категории
-    return `<label class="tf-row"><input type="checkbox" ${on?'checked':''} onchange="toggleTicketCat('${esc(c.id)}',this.checked)"><span>${esc(c.name)}</span><span class="cnt">${c.count}</span></label>`;
+    const prio = /тикет/i.test(c.name || ''); // приоритетная категория «Тикеты»
+    return `<label class="tf-row${prio?' prio':''}"><input type="checkbox" ${on?'checked':''} onchange="toggleTicketCat('${esc(c.id)}',this.checked)"><span>${prio?'⭐ ':''}${esc(c.name)}</span><span class="cnt">${c.count}</span></label>`;
   }).join('') || '<div class="cnt" style="padding:4px">нет активных заявок</div>';
   el.innerHTML = `<div class="tf-h">Тип заявки</div>${kindChips}<div class="tf-sep"></div><div class="tf-h">Категории</div>${catRows}`;
 }

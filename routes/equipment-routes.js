@@ -192,7 +192,11 @@ function buildResponse(query) {
     catCounts[t.categoryId] = (catCounts[t.categoryId] || 0) + 1;
     if (kindCounts[t.kind] != null) kindCounts[t.kind]++;
   }));
-  const ticketCategories = Object.entries(catCounts).map(([id, count]) => ({ id, name: serviceCategories[id] || ('Категория ' + id), count })).sort((a, b) => b.count - a.count);
+  // «Тикеты» — приоритетная категория: всегда первой в списке, остальные по количеству.
+  const isTickets = n => /тикет/i.test(n || '');
+  const ticketCategories = Object.entries(catCounts)
+    .map(([id, count]) => ({ id, name: serviceCategories[id] || ('Категория ' + id), count }))
+    .sort((a, b) => (isTickets(b.name) - isTickets(a.name)) || (b.count - a.count));
 
   return { ok: true, items: filtered, stats, manufacturers, deviceNames, cities, companies, ticketCategories, ticketKinds: kindCounts, cachedAt: meta.lastSync, lastFullSync: meta.lastFullSync };
 }
