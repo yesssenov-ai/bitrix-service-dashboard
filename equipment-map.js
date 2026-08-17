@@ -171,7 +171,12 @@ async function resolveUrgentEnumIds(b24call) {
     const data = await b24call('crm.item.fields', { entityTypeId: 1058 });
     const f = data.result?.fields?.[URGENCY_FIELD];
     const ids = [];
-    (f?.items || []).forEach(it => { if (/срочн|^да$|высок|urgent|горящ/i.test(String(it.VALUE || '').trim())) ids.push(String(it.ID)); });
+    (f?.items || []).forEach(it => {
+      const v = String(it.VALUE || '').trim().toLowerCase();
+      if (!v) return;
+      if (/несрочн|не срочн|плановая|планов|обычн|^нет|низк|отсутств/.test(v)) return; // явно НЕ срочные
+      if (/срочн|^да$|высок|urgent|горящ|критич|важн/.test(v)) ids.push(String(it.ID));
+    });
     return ids;
   } catch (e) { console.error('resolveUrgentEnumIds:', e.message); return []; }
 }

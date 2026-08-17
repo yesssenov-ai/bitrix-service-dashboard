@@ -117,7 +117,7 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
 /* MAP */
 .map-wrap{flex:1;position:relative;}
 .map-wrap.fs{position:fixed;inset:0;z-index:9998;}
-.map-fs-btn{position:absolute;right:12px;bottom:26px;z-index:401;width:38px;height:38px;border-radius:9px;background:var(--card);border:1px solid var(--stroke);box-shadow:var(--shadow-1);cursor:pointer;font-size:16px;color:var(--text-2);display:flex;align-items:center;justify-content:center;line-height:1;}
+.map-fs-btn{position:absolute;right:18px;bottom:70px;z-index:401;width:40px;height:40px;border-radius:10px;background:var(--card);border:1px solid var(--stroke);box-shadow:var(--shadow-1);cursor:pointer;font-size:16px;color:var(--text-2);display:flex;align-items:center;justify-content:center;line-height:1;}
 .map-fs-btn:hover{box-shadow:var(--shadow-2);color:var(--text);}
 #map{width:100%;height:100%;}
 .map-overlay{position:absolute;inset:0;background:rgba(250,249,248,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:500;font-size:13px;color:var(--text-2);}
@@ -126,7 +126,14 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
 
 /* Service tickets layer toggle */
 .map-controls{position:absolute;top:12px;right:12px;z-index:400;display:flex;flex-direction:column;gap:6px;align-items:flex-end;}
-.ticket-filters{background:var(--card);border:1px solid var(--stroke);border-radius:10px;padding:10px;box-shadow:var(--shadow-2);width:230px;max-height:60vh;overflow:auto;}
+.ticket-filters{background:var(--card);border:1px solid var(--stroke);border-radius:10px;padding:10px;box-shadow:var(--shadow-2);width:230px;max-height:62vh;overflow:auto;}
+.ticket-filters.collapsed{max-height:none;overflow:visible;padding:6px 10px;width:auto;min-width:180px;}
+.tf-head{display:flex;align-items:center;gap:8px;margin:-2px 0 8px;}
+.ticket-filters.collapsed .tf-head{margin:0;}
+.tf-head b{font-size:12.5px;color:var(--text);}
+.tf-head-n{font-size:11px;font-weight:700;color:#fff;background:var(--brand);border-radius:10px;padding:1px 8px;}
+.tf-collapse{margin-left:auto;border:none;background:transparent;cursor:pointer;font-size:13px;color:var(--text-3);width:22px;height:22px;border-radius:6px;line-height:1;}
+.tf-collapse:hover{background:var(--surface2);color:var(--text);}
 .tf-h{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin:2px 0 6px;}
 .tf-chip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--stroke);border-radius:20px;padding:4px 9px;font-size:11.5px;font-weight:600;cursor:pointer;margin:0 4px 4px 0;color:var(--text-2);user-select:none;transition:.12s;}
 .tf-chip.on{color:#fff;border-color:transparent;}
@@ -310,6 +317,7 @@ let showTickets = false;
 let selectedId = null;
 let allTickets = [], ticketTypes = [], ticketKinds = {};
 let ticketTypeFilter = new Set(), ticketKindFilter = new Set(); // наборы СКРЫТЫХ типов / ВКЛЮЧЁННЫХ видов
+let ticketPanelCollapsed = false;
 const KIND = {
   urgent:  { emoji:'🔥', color:'#e01e45', label:'Срочные' },
   install: { emoji:'🔧', color:'#0f6cbd', label:'Установка' },
@@ -691,8 +699,13 @@ function toggleTicketsLayer() {
     map.addLayer(clusterGroup);
   }
 }
+function toggleTicketPanel(){ ticketPanelCollapsed = !ticketPanelCollapsed; renderTicketFilters(); }
 function renderTicketFilters() {
   const el = document.getElementById('ticketFilters'); if (!el) return;
+  const totalShown = (allTickets || []).filter(t => t.lat && t.lng).filter(ticketPasses).length;
+  const head = `<div class="tf-head"><b>Заявки на сервис</b><span class="tf-head-n">${totalShown}</span><button class="tf-collapse" onclick="toggleTicketPanel()" title="${ticketPanelCollapsed?'Развернуть':'Свернуть'}">${ticketPanelCollapsed?'▸':'▾'}</button></div>`;
+  if (ticketPanelCollapsed) { el.classList.add('collapsed'); el.innerHTML = head; return; }
+  el.classList.remove('collapsed');
   const kindChips = KIND_ORDER.map(k => {
     const m = KIND[k], n = ticketKinds[k] || 0, on = ticketKindFilter.has(k);
     return `<span class="tf-chip ${on?'on':''}" style="${on?`background:${m.color}`:''}" onclick="toggleTicketKind('${k}')">${m.emoji} ${m.label} <b>${n}</b></span>`;
@@ -702,7 +715,7 @@ function renderTicketFilters() {
     const prio = c.isTicket; // «Заявка клиента» (Tickets) — приоритет
     return `<label class="tf-row${prio?' prio':''}"><input type="checkbox" ${on?'checked':''} onchange="toggleTicketType('${esc(c.id)}',this.checked)"><span>${prio?'⭐ ':''}${esc(c.name)}${prio?' <i style="opacity:.6;font-style:normal">(Tickets)</i>':''}</span><span class="cnt">${c.count}</span></label>`;
   }).join('') || '<div class="cnt" style="padding:4px">нет активных заявок</div>';
-  el.innerHTML = `<div class="tf-h">Вид</div>${kindChips}<div class="tf-sep"></div>`
+  el.innerHTML = head + `<div class="tf-h">Вид</div>${kindChips}<div class="tf-sep"></div>`
     + `<div class="tf-h tf-hrow"><span>Тип услуги</span><span class="tf-all"><a onclick="setAllTypes(true)">все</a> · <a onclick="setAllTypes(false)">снять</a></span></div>${typeRows}`;
 }
 function setAllTypes(on){
