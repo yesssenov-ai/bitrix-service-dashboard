@@ -173,8 +173,11 @@
   .newsit .nv{font-size:12px;font-weight:700;color:var(--dim);flex-shrink:0}
   .news-empty{color:var(--dim2);font-size:12.5px;padding:14px 4px}
 
-  .tip{position:fixed;pointer-events:none;background:#0d1424;border:1px solid var(--border);border-radius:9px;padding:7px 10px;font-size:12px;box-shadow:0 12px 30px -8px rgba(0,0,0,.6);opacity:0;transition:opacity .12s;z-index:50}
+  .tip{position:fixed;pointer-events:none;background:#0d1424;border:1px solid #2a3550;border-radius:9px;padding:7px 10px;font-size:12px;color:#e8edf6;box-shadow:0 12px 30px -8px rgba(0,0,0,.6);opacity:0;transition:opacity .12s;z-index:50}
   .tip b{color:#fff}
+  .cmpbtn{margin-left:auto;background:rgba(128,128,128,.08);border:1px solid var(--border);color:var(--dim);font:inherit;font-size:11px;font-weight:600;padding:4px 8px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:.15s}
+  .cmpbtn:hover{color:var(--text)}
+  .cmpbtn.on{background:linear-gradient(135deg,var(--brand),#e01e45);color:#fff;border-color:transparent}
   .loading{position:fixed;inset:0;display:grid;place-items:center;background:rgba(7,11,22,.6);z-index:40;transition:opacity .3s}
   .spin{width:34px;height:34px;border:3px solid rgba(255,255,255,.15);border-top-color:var(--brand);border-radius:50%;animation:sp .8s linear infinite}
   @keyframes sp{to{transform:rotate(360deg)}}
@@ -300,8 +303,8 @@
 
   <div class="grid2">
     <div class="card">
-      <h3><span class="ic">▦</span> Динамика суммы контрактов</h3>
-      <div class="sub">По месяцам, млн ₸</div>
+      <h3><span class="ic">▦</span> Динамика суммы контрактов <button class="cmpbtn" id="cmpBtn" onclick="toggleCompare()" title="Сравнить с прошлыми годами"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="7"/><rect x="12" y="6" width="3" height="11"/><rect x="17" y="13" width="3" height="4"/></svg> Годы</button></h3>
+      <div class="sub" id="barsSub">По месяцам, млн ₸</div>
       <div class="bars" id="bars"></div>
     </div>
     <div class="card">
@@ -451,8 +454,10 @@ async function refreshNow(silent){
 function orderDepts(names){const seen=new Set(names);return [...DEPT_ORDER.filter(d=>seen.has(d)),...names.filter(n=>!DEPT_ORDER.includes(n)).sort()];}
 function toggleFilter(dep){const a=FILT.dept;const i=a.indexOf(dep);if(i>=0)a.splice(i,1);else a.push(dep);renderMS('dept');renderAll();}
 
+let LAST_CONS=[];
 function renderAll(){
   const cons=getFiltered();
+  LAST_CONS=cons;
   renderChip();
   renderKpi(cons);
   renderDonut();
@@ -460,6 +465,48 @@ function renderAll(){
   renderTree(cons);
   renderBars(cons);
   renderArea(cons);
+}
+
+// ── Сравнение по годам в «Динамике суммы контрактов» ──────────────────────────
+let CMP=false, CMPDATA=null;
+function toggleCompare(){
+  CMP=!CMP;
+  const b=document.getElementById('cmpBtn'); if(b)b.classList.toggle('on',CMP);
+  const sub=document.getElementById('barsSub'); if(sub)sub.textContent=CMP?'Сравнение по годам, млн ₸':'По месяцам, млн ₸';
+  renderBars(LAST_CONS);
+}
+async function renderBarsCompare(){
+  const el=document.getElementById('bars');
+  el.style.cssText='display:block;height:auto;padding-top:0';
+  if(!CMPDATA || CMPDATA.baseYear!==YEAR){
+    el.innerHTML='<div style="padding:70px 0;text-align:center;color:var(--dim)">Загрузка по годам…</div>';
+    try{
+      const years=[YEAR,YEAR-1,YEAR-2,YEAR-3];
+      const r=await fetch('/api/contracts/monthly?years='+years.join(','));
+      const d=await r.json();
+      CMPDATA={baseYear:YEAR, years:d.years||years, monthly:d.monthly||{}};
+    }catch(e){ el.innerHTML='<div style="padding:70px 0;text-align:center;color:var(--bad)">Ошибка загрузки</div>'; return; }
+    if(!CMP) return;
+  }
+  drawCompare();
+}
+const cmpColor=y=>{ if(y===YEAR)return '#5b8cff'; return (['#35d0c0','#ffb020','#c06bff','#8592ad'][YEAR-y-1]||'#8592ad'); };
+function drawCompare(){
+  const el=document.getElementById('bars'), mon=CMPDATA.monthly;
+  const years=CMPDATA.years.filter(y=>y===YEAR||(mon[y]||[]).some(v=>v>0)).sort((a,b)=>a-b);
+  const series=years.map(y=>({year:y, mln:(mon[y]||Array(12).fill(0)).map(v=>v/1e6)}));
+  const maxV=Math.max(1,...series.flatMap(s=>s.mln));
+  const W=520,H=190,pad=6;
+  const X=i=>pad+i*(W-2*pad)/11, Y=v=>H-pad-(v/maxV)*(H-2*pad);
+  let grid=''; for(let k=0;k<=3;k++){const gy=pad+k*(H-2*pad)/3;grid+=`<line x1="0" y1="${gy}" x2="${W}" y2="${gy}" stroke="rgba(128,128,128,.14)"/>`;}
+  let paths='';
+  series.forEach(s=>{ const cur=s.year===YEAR; let p=`M${X(0)} ${Y(s.mln[0])}`; s.mln.forEach((v,i)=>p+=` L${X(i)} ${Y(v)}`); paths+=`<path d="${p}" fill="none" stroke="${cmpColor(s.year)}" stroke-width="${cur?3:1.8}" stroke-linecap="round" stroke-linejoin="round" opacity="${cur?1:.85}"/>`; if(cur)s.mln.forEach((v,i)=>{paths+=`<circle cx="${X(i)}" cy="${Y(v)}" r="2.4" fill="${cmpColor(s.year)}"/>`;}); });
+  let labels=''; MONTHS.forEach((m,i)=>labels+=`<text x="${X(i)}" y="${H+2}" fill="#5c6884" font-size="9" text-anchor="middle">${m}</text>`);
+  const legend=series.map(s=>`<span class="al"><i style="background:${cmpColor(s.year)}"></i>${s.year}${s.year===YEAR?' (тек.)':''}</span>`).join('');
+  el.innerHTML=`<div class="area-legend" style="margin-bottom:6px">${legend}</div><svg width="100%" height="200" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="overflow:visible;display:block" id="cmpSvg">${grid}${paths}${labels}</svg>`;
+  const svg=document.getElementById('cmpSvg');
+  svg.addEventListener('mousemove',e=>{ const r=svg.getBoundingClientRect(); let i=Math.round(((e.clientX-r.left)/r.width*W-pad)/((W-2*pad)/11)); i=Math.max(0,Math.min(11,i)); const rows=series.map(s=>`<span style="color:${cmpColor(s.year)}">■</span> ${s.year}: ${fmt(s.mln[i])} млн`).join('<br>'); showTip(`<b>${MONTHS[i]}</b><br>${rows}`,e.clientX,e.clientY); });
+  svg.addEventListener('mouseleave',hideTip);
 }
 
 function renderChip(){
@@ -588,6 +635,8 @@ function tGrp(i){openGrp.has(i)?openGrp.delete(i):openGrp.add(i);renderAll();}
 function tStage(id){openStage.has(id)?openStage.delete(id):openStage.add(id);renderAll();}
 
 function renderBars(deals){
+  if(CMP){ renderBarsCompare(); return; }
+  const el=document.getElementById('bars'); if(el)el.style.cssText=''; // вернуть стандартную вёрстку баров
   // помесячно, с разбивкой по отделам (стек в цветах отделов)
   const byMonth=Array.from({length:12},()=>({}));
   deals.forEach(d=>{if(d.month!=null){const o=byMonth[d.month];o[d.saleType]=(o[d.saleType]||0)+d.sumKzt/1e6;}});

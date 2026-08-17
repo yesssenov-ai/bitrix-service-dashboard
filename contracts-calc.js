@@ -246,4 +246,18 @@ async function getLatestContracts(limit = 3) {
   return latestCache;
 }
 
-module.exports = { getContractsSummary, getPlan, setPlan, getRecentNews, getLatestContracts, DEPT_ORDER };
+// Помесячные суммы контрактов (₸) по нескольким годам — для сравнения год-к-году
+// в «Динамике суммы контрактов». Итоги по месяцам (без клиентских фильтров).
+async function getMonthlyByYears(years) {
+  const list = [...new Set((years || []).map(y => parseInt(y, 10)).filter(Boolean))].sort((a, b) => a - b);
+  const monthly = {};
+  for (const y of list) {
+    const deals = await loadDeals(y);
+    const m = Array(12).fill(0);
+    deals.forEach(d => { if (d.month != null) m[d.month] += d.sumKzt; });
+    monthly[y] = m;
+  }
+  return { years: list, monthly };
+}
+
+module.exports = { getContractsSummary, getPlan, setPlan, getRecentNews, getLatestContracts, getMonthlyByYears, DEPT_ORDER };

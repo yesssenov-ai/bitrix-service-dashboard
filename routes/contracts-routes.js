@@ -16,6 +16,18 @@ router.get('/summary', requireAuth(VIEW_ROLES), async (req, res) => {
   }
 });
 
+// GET /api/contracts/monthly?years=2023,2024,2025,2026 — помесячные суммы (₸) по годам.
+router.get('/monthly', requireAuth(VIEW_ROLES), async (req, res) => {
+  try {
+    const years = String(req.query.years || '').split(',').map(s => parseInt(s, 10)).filter(Boolean);
+    const { getMonthlyByYears } = require('../contracts-calc');
+    res.json(await getMonthlyByYears(years.length ? years : [new Date().getFullYear()]));
+  } catch (e) {
+    console.error('GET /api/contracts/monthly error:', e.message);
+    res.status(500).json({ error: 'Не удалось получить данные по годам: ' + e.message });
+  }
+});
+
 // GET /api/contracts/news?mode=latest&limit=3 — самые свежие заключённые контракты;
 // ?mode=window&days=3 — все заходы в «Контракт»/«Завершена» за N дней (по убыванию).
 router.get('/news', requireAuth(VIEW_ROLES), async (req, res) => {
