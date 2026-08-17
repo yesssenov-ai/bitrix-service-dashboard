@@ -76,6 +76,9 @@ async function computeReport({ commit = false } = {}) {
 
   const cnt = f => rows.filter(r => r.flags.includes(f)).length;
   const counts = { red: cnt('red'), overdue: cnt('overdue'), late: cnt('late-ship'), task: cnt('overdue-task'), bp: cnt('open-bp'), stale: cnt('stale') };
+  // «Под флагами» в KPI — только реально помеченные красным флагом сделки.
+  const redRows = rows.filter(r => r.flags.includes('red'));
+  const redSum = redRows.reduce((a, r) => a + r.opportunity, 0);
   const atRiskSum = flagged.reduce((a, r) => a + r.opportunity, 0);
   const status = (counts.red || counts.overdue) ? 'red' : (counts.late || counts.task || counts.bp || counts.stale) ? 'amber' : 'green';
 
@@ -119,7 +122,7 @@ async function computeReport({ commit = false } = {}) {
   return {
     generatedAt: d.toISOString(),
     dateLabel: `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`,
-    status, counts, atRiskSum, firstRun,
+    status, counts, atRiskSum, redCount: redRows.length, redSum, firstRun,
     kpi: {
       totalSum: rows.reduce((a, r) => a + r.opportunity, 0),
       dealCount: rows.length, activeCount: active.length,
@@ -151,9 +154,13 @@ function renderHtml(rep) {
   const sm = STATUS_META[rep.status];
   const attnTop = rep.attn.slice(0, 18);
   const cellB = 'padding:8px 8px;border-bottom:1px solid #eef0f4;vertical-align:top;word-break:break-word;overflow-wrap:anywhere';
+  const anyRed = attnTop.some(r => r.flags.includes('red'));
+  let divDone = false;
   const attnRows = attnTop.map(r => {
     const pf = primaryFlag(r.flags);
-    return `<tr>
+    let divider = '';
+    if (anyRed && !divDone && !r.flags.includes('red')) { divDone = true; divider = `<tr><td colspan="5" style="padding:6px 8px;background:#faf7f7;color:#8a93a6;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;font-weight:700">Просрочено / не выполнено</td></tr>`; }
+    return divider + `<tr>
       <td style="${cellB}">${flagDot(pf)}<b>${esc(r.company || '—')}</b><div style="color:#8a93a6;font-size:11px">${esc(r.contractNo || ('#' + r.id))}</div></td>
       <td style="${cellB};font-size:12px">${esc(r.stageName || '')}</td>
       <td style="${cellB};font-size:12px">${esc(r.manager || '—')}${r.engineer ? `<div style="color:#8a93a6;font-size:11px">инж.: ${esc(r.engineer)}</div>` : ''}</td>
@@ -206,7 +213,7 @@ function renderHtml(rep) {
   <table style="width:100%;border-collapse:separate;border-spacing:8px 0;margin-bottom:14px"><tr>
     ${kpiCell(fmtMln(rep.kpi.totalSum) + ' млн ₸', 'Портфель · ' + rep.kpi.dealCount + ' сделок')}
     ${kpiCell(rep.kpi.activeCount, 'Активных сделок')}
-    ${kpiCell(fmtMln(rep.atRiskSum) + ' млн ₸', 'Под флагами · ' + rep.attn.length + ' сделок', rep.atRiskSum ? '#C53B2F' : '#20242e')}
+    ${kpiCell(fmtMln(rep.redSum) + ' млн ₸', '🔴 Красные флаги · ' + rep.redCount + ' сделок', rep.redCount ? '#C53B2F' : '#20242e')}
     ${kpiCell(rep.kpi.doneCount, 'Завершено')}
   </tr></table>
 
@@ -256,7 +263,7 @@ function buildPdf(rep) {
   content.push({ columns: [
     kpi(`${fmtMln(rep.kpi.totalSum)} млн ₸`, `Портфель · ${rep.kpi.dealCount} сделок`),
     kpi(String(rep.kpi.activeCount), 'Активных'),
-    kpi(`${fmtMln(rep.atRiskSum)} млн ₸`, `Под флагами · ${rep.attn.length}`),
+    kpi(`${fmtMln(rep.redSum)} млн ₸`, `Красные флаги · ${rep.redCount}`),
     kpi(String(rep.kpi.doneCount), 'Завершено'),
   ], columnGap: 6, margin: [0, 0, 0, 12] });
 
@@ -275,7 +282,9 @@ function buildPdf(rep) {
       { text: '', style: 'th' }, { text: 'Компания / договор', style: 'th' }, { text: 'Стадия', style: 'th' },
       { text: 'Ответственный', style: 'th' }, { text: 'Сумма', style: 'th', alignment: 'right' }, { text: 'Флаги / что нужно', style: 'th' },
     ]];
+    const anyRedPdf = rep.attn.some(r => r.flags.includes('red')); let pdfDiv = false;
     rep.attn.forEach(r => {
+      if (anyRedPdf && !pdfDiv && !r.flags.includes('red')) { pdfDiv = true; body.push([{ text: 'Просрочено / не выполнено', colSpan: 6, fillColor: '#f2ede9', color: '#8a7d76', bold: true, fontSize: 7.5, margin: [2, 2, 2, 2] }, {}, {}, {}, {}, {}]); }
       const pf = primaryFlag(r.flags);
       body.push([
         { text: '●', color: FLAG_COLOR[pf] || '#999', alignment: 'center', fontSize: 9 },
