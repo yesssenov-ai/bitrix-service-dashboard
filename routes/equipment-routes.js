@@ -2,17 +2,20 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth, pool } = require('../auth');
 const {
-  fetchAllEquipment, fetchAndLinkTickets, fetchServiceCategories, fetchCompanyNames,
-  geocodeEquipment, fetchDeviceNames, MANUFACTURERS,
+  fetchAllEquipment, fetchTickets, positionTickets, fetchServiceCategories, fetchCompanyNames,
+  geocodeEquipment, fetchDeviceNames, MANUFACTURERS, SERVICE_TYPE_MAP,
 } = require('../equipment-map');
+
+const CLIENT_REQUEST_TYPE = '619'; // «Заявка клиента» → Tickets (приоритет в фильтре)
 
 let b24callFn = null;
 function setB24(fn) { b24callFn = fn; }
 
 // ── Состояние в памяти (наполняется из БД на старте — карта открывается сразу) ─
 let cache = null;              // массив обогащённых приборов
+let ticketsCache = [];         // позиционированные сервисные заявки (1058)
 let deviceNamesCache = {};
-let serviceCategories = {};    // id → имя категории заявок (Тикеты, Обязательства…)
+let serviceCategories = {};    // id → имя категории заявок
 let meta = { lastFullSync: null, lastSync: null };
 let isLoading = false;
 let loadError = null;
@@ -26,8 +29,12 @@ async function ensureTables() {
   await pool.query(`CREATE TABLE IF NOT EXISTS ticketsmodule_equipment_meta (
     id INTEGER PRIMARY KEY, last_full_sync TIMESTAMPTZ, last_sync TIMESTAMPTZ, device_names JSONB)`);
   await pool.query(`ALTER TABLE ticketsmodule_equipment_meta ADD COLUMN IF NOT EXISTS service_categories JSONB`);
+  await pool.query(`ALTER TABLE ticketsmodule_equipment_meta ADD COLUMN IF NOT EXISTS tickets JSONB`);
   await pool.query(`CREATE TABLE IF NOT EXISTS ticketsmodule_equipment_geo (
     item_id INTEGER PRIMARY KEY, address VARCHAR(300), lat DOUBLE PRECISION, lng DOUBLE PRECISION,
+    geocode_failed BOOLEAN DEFAULT false, geocoded_at TIMESTAMPTZ DEFAULT NOW())`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS ticketsmodule_place_geo (
+    place VARCHAR(300) PRIMARY KEY, lat DOUBLE PRECISION, lng DOUBLE PRECISION,
     geocode_failed BOOLEAN DEFAULT false, geocoded_at TIMESTAMPTZ DEFAULT NOW())`);
   _tablesReady = true;
 }
@@ -66,11 +73,12 @@ async function loadFromDb() {
   try {
     const { rows } = await pool.query('SELECT data FROM ticketsmodule_equipment_cache');
     cache = rows.map(r => r.data);
-    const m = await pool.query('SELECT last_full_sync, last_sync, device_names, service_categories FROM ticketsmodule_equipment_meta WHERE id=1');
+    const m = await pool.query('SELECT last_full_sync, last_sync, device_names, service_categories, tickets FROM ticketsmodule_equipment_meta WHERE id=1');
     if (m.rows.length) {
       meta.lastFullSync = m.rows[0].last_full_sync; meta.lastSync = m.rows[0].last_sync;
       deviceNamesCache = m.rows[0].device_names || {};
       serviceCategories = m.rows[0].service_categories || {};
+      ticketsCache = m.rows[0].tickets || [];
     }
     console.log(`✅ Equipment cache из БД: ${cache.length} приборов (last_sync ${meta.lastSync || '—'})`);
   } catch (e) { console.error('equipment loadFromDb error:', e.message); }
@@ -85,9 +93,7 @@ async function buildFull() {
   try {
     await ensureTables();
     const rawItems = await fetchAllEquipment(b24callFn);
-    const map = {}; rawItems.forEach(it => { map[it.id] = it; });
     try { serviceCategories = await fetchServiceCategories(b24callFn); } catch (e) {}
-    try { await fetchAndLinkTickets(map, b24callFn, serviceCategories); } catch (e) { console.error('tickets:', e.message); }
     try {
       const ids = [...new Set(rawItems.map(e => e.companyId).filter(Boolean))];
       const names = await fetchCompanyNames(ids, b24callFn);
@@ -97,9 +103,14 @@ async function buildFull() {
     let withCoords = rawItems;
     try { withCoords = await geocodeEquipment(rawItems, pool); } catch (e) { console.error('geocode:', e.message); }
     cache = withCoords;
+    // Заявки позиционируем ПОСЛЕ геокодирования оборудования (нужны координаты приборов).
+    try {
+      const raw = await fetchTickets(b24callFn, serviceCategories);
+      ticketsCache = await positionTickets(raw, cache, pool);
+    } catch (e) { console.error('tickets:', e.message); ticketsCache = []; }
     await persistAll(cache);
     const now = new Date();
-    await setMeta({ last_full_sync: now, last_sync: now, device_names: JSON.stringify(deviceNamesCache), service_categories: JSON.stringify(serviceCategories) });
+    await setMeta({ last_full_sync: now, last_sync: now, device_names: JSON.stringify(deviceNamesCache), service_categories: JSON.stringify(serviceCategories), tickets: JSON.stringify(ticketsCache) });
     meta.lastFullSync = now.toISOString(); meta.lastSync = now.toISOString();
     console.log(`✅ Equipment полная сборка: ${cache.length} приборов за ${Math.round((Date.now() - t0) / 1000)}с`);
     return { ok: true, count: cache.length };
@@ -133,14 +144,17 @@ async function buildIncremental() {
     } catch (e) { console.error('inc companies:', e.message); }
     // Геокодируем только изменённые (кэш по item_id — быстро для неизменных).
     try { const g = await geocodeEquipment(changed.map(c => map[c.id]), pool); g.forEach(x => { map[x.id] = x; }); } catch (e) { console.error('inc geocode:', e.message); }
-    // Пере-привязываем активные заявки ко всему набору (открытых заявок немного).
-    Object.values(map).forEach(it => { it.activeTickets = []; it.hasProblems = false; });
-    try { if (!Object.keys(serviceCategories).length) serviceCategories = await fetchServiceCategories(b24callFn); } catch (e) {}
-    try { await fetchAndLinkTickets(map, b24callFn, serviceCategories); } catch (e) { console.error('inc tickets:', e.message); }
+    // Пере-позиционируем все активные заявки (их немного) на обновлённый набор.
+    Object.values(map).forEach(it => { it.hasProblems = false; it.activeTickets = []; });
     cache = Object.values(map);
+    try { if (!Object.keys(serviceCategories).length) serviceCategories = await fetchServiceCategories(b24callFn); } catch (e) {}
+    try {
+      const raw = await fetchTickets(b24callFn, serviceCategories);
+      ticketsCache = await positionTickets(raw, cache, pool);
+    } catch (e) { console.error('inc tickets:', e.message); }
     await persistAll(cache);
     const now = new Date();
-    await setMeta({ last_sync: now, service_categories: JSON.stringify(serviceCategories) });
+    await setMeta({ last_sync: now, service_categories: JSON.stringify(serviceCategories), tickets: JSON.stringify(ticketsCache) });
     meta.lastSync = now.toISOString();
     console.log(`✅ Equipment инкремент: изменено ${changed.length}, всего ${cache.length} за ${Math.round((Date.now() - t0) / 1000)}с`);
     return { ok: true, changed: changed.length, count: cache.length };
@@ -186,19 +200,25 @@ function buildResponse(query) {
   const companyMap = {}; all.forEach(it => { if (it.companyId && it.companyName) companyMap[it.companyId] = it.companyName; });
   const companies = Object.entries(companyMap).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
 
-  // Категории заявок на сервис (для фильтра слоя заявок) + сводка по типам.
-  const catCounts = {}, kindCounts = { urgent: 0, install: 0, service: 0 };
-  all.forEach(it => (it.activeTickets || []).forEach(t => {
-    catCounts[t.categoryId] = (catCounts[t.categoryId] || 0) + 1;
+  // Слой сервисных заявок: только позиционированные (есть координаты).
+  const placedTickets = (ticketsCache || []).filter(t => t.lat && t.lng);
+  const kindCounts = { urgent: 0, install: 0, service: 0 };
+  const typeCounts = {};
+  placedTickets.forEach(t => {
     if (kindCounts[t.kind] != null) kindCounts[t.kind]++;
-  }));
-  // «Тикеты» — приоритетная категория: всегда первой в списке, остальные по количеству.
-  const isTickets = n => /тикет/i.test(n || '');
-  const ticketCategories = Object.entries(catCounts)
-    .map(([id, count]) => ({ id, name: serviceCategories[id] || ('Категория ' + id), count }))
-    .sort((a, b) => (isTickets(b.name) - isTickets(a.name)) || (b.count - a.count));
+    (t.serviceTypeIds && t.serviceTypeIds.length ? t.serviceTypeIds : ['0']).forEach(id => { typeCounts[id] = (typeCounts[id] || 0) + 1; });
+  });
+  // Типы услуг для фильтра: «Заявка клиента» (Tickets) — всегда первой.
+  const ticketTypes = Object.entries(typeCounts)
+    .map(([id, count]) => ({ id, name: id === '0' ? 'Без типа' : (SERVICE_TYPE_MAP[id] || ('Тип ' + id)), count, isTicket: id === CLIENT_REQUEST_TYPE }))
+    .sort((a, b) => (b.isTicket - a.isTicket) || (b.count - a.count));
 
-  return { ok: true, items: filtered, stats, manufacturers, deviceNames, cities, companies, ticketCategories, ticketKinds: kindCounts, cachedAt: meta.lastSync, lastFullSync: meta.lastFullSync };
+  return {
+    ok: true, items: filtered, stats, manufacturers, deviceNames, cities, companies,
+    tickets: placedTickets, ticketTypes, ticketKinds: kindCounts,
+    ticketsTotal: (ticketsCache || []).length, ticketsPlaced: placedTickets.length,
+    cachedAt: meta.lastSync, lastFullSync: meta.lastFullSync,
+  };
 }
 
 // GET /equipment/status

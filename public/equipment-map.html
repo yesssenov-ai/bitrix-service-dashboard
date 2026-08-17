@@ -301,8 +301,8 @@ let mode = 'equipment';
 let curMfr = '', curModel = '', curStatus = '', curCity = '', curCompany = '';
 let showTickets = false;
 let selectedId = null;
-let ticketCategories = [], ticketKinds = {};
-let ticketCatFilter = new Set(), ticketKindFilter = new Set();
+let allTickets = [], ticketTypes = [], ticketKinds = {};
+let ticketTypeFilter = new Set(), ticketKindFilter = new Set(); // наборы СКРЫТЫХ типов / ВКЛЮЧЁННЫХ видов
 const KIND = {
   urgent:  { emoji:'🔥', color:'#e01e45', label:'Срочные' },
   install: { emoji:'🔧', color:'#0f6cbd', label:'Установка' },
@@ -425,7 +425,8 @@ function applyData(d) {
   deviceNames = d.deviceNames || [];
   cities = d.cities || [];
   companies = d.companies || [];
-  ticketCategories = d.ticketCategories || [];
+  allTickets = d.tickets || [];
+  ticketTypes = d.ticketTypes || [];
   ticketKinds = d.ticketKinds || {};
   updateStats(d.stats);
   buildMfrChips();
@@ -655,60 +656,46 @@ function renderTicketFilters() {
     const m = KIND[k], n = ticketKinds[k] || 0, on = ticketKindFilter.has(k);
     return `<span class="tf-chip ${on?'on':''}" style="${on?`background:${m.color}`:''}" onclick="toggleTicketKind('${k}')">${m.emoji} ${m.label} <b>${n}</b></span>`;
   }).join('');
-  const catRows = ticketCategories.map(c => {
-    const on = !ticketCatFilter.has(c.id); // в наборе — СКРЫТЫЕ категории
-    const prio = /тикет/i.test(c.name || ''); // приоритетная категория «Тикеты»
-    return `<label class="tf-row${prio?' prio':''}"><input type="checkbox" ${on?'checked':''} onchange="toggleTicketCat('${esc(c.id)}',this.checked)"><span>${prio?'⭐ ':''}${esc(c.name)}</span><span class="cnt">${c.count}</span></label>`;
+  const typeRows = ticketTypes.map(c => {
+    const on = !ticketTypeFilter.has(c.id); // в наборе — СКРЫТЫЕ типы
+    const prio = c.isTicket; // «Заявка клиента» (Tickets) — приоритет
+    return `<label class="tf-row${prio?' prio':''}"><input type="checkbox" ${on?'checked':''} onchange="toggleTicketType('${esc(c.id)}',this.checked)"><span>${prio?'⭐ ':''}${esc(c.name)}${prio?' <i style="opacity:.6;font-style:normal">(Tickets)</i>':''}</span><span class="cnt">${c.count}</span></label>`;
   }).join('') || '<div class="cnt" style="padding:4px">нет активных заявок</div>';
-  el.innerHTML = `<div class="tf-h">Тип заявки</div>${kindChips}<div class="tf-sep"></div><div class="tf-h">Категории</div>${catRows}`;
+  el.innerHTML = `<div class="tf-h">Вид</div>${kindChips}<div class="tf-sep"></div><div class="tf-h">Тип услуги</div>${typeRows}`;
 }
 function toggleTicketKind(k){ if(ticketKindFilter.has(k))ticketKindFilter.delete(k); else ticketKindFilter.add(k); renderTicketFilters(); renderTicketsLayer(); }
-function toggleTicketCat(id,on){ if(on)ticketCatFilter.delete(id); else ticketCatFilter.add(id);
+function toggleTicketType(id,on){ if(on)ticketTypeFilter.delete(id); else ticketTypeFilter.add(id);
   // Пустой набор = показываем все; если сняли часть — храним «скрытые».
   renderTicketsLayer(); }
 function ticketPasses(t){
   if(ticketKindFilter.size && !ticketKindFilter.has(t.kind)) return false;
-  if(ticketCatFilter.has(t.categoryId)) return false; // скрытые категории
+  // тип услуги: заявка проходит, если ХОТЯ БЫ один её тип не скрыт
+  const ids = (t.serviceTypeIds && t.serviceTypeIds.length) ? t.serviceTypeIds.map(String) : ['0'];
+  if(ticketTypeFilter.size && ids.every(id => ticketTypeFilter.has(id))) return false;
   return true;
 }
 
 function renderTicketsLayer() {
   ticketLayer.clearLayers();
 
-  // Check data is loaded
-  if (!allItems.length) {
-    showToast('Данные ещё загружаются, подождите немного');
-    showTickets = false;
-    document.getElementById('btnTickets').classList.remove('on');
-    map.addLayer(clusterGroup);
+  const passing = (allTickets || []).filter(t => t.lat && t.lng).filter(ticketPasses);
+  if (!passing.length) {
+    if ((allTickets || []).length) showToast('По выбранным фильтрам заявок нет.');
+    else showToast('Активных заявок на карте не найдено');
     return;
   }
 
-  const ticketsByCity = {};
-  let totalPassing = 0;
-  for (const item of allItems) {
-    if (!item.activeTickets?.length) continue;
-    const lat = item.lat, lng = item.lng;
-    if (!lat || !lng) continue;
-    const passing = item.activeTickets.filter(ticketPasses);
-    if (!passing.length) continue;
-    totalPassing += passing.length;
-    const key = item.city || `${lat.toFixed(3)},${lng.toFixed(3)}`;
-    if (!ticketsByCity[key]) ticketsByCity[key] = { lat, lng, tickets: [], city: item.city };
-    // прикрепим прибор к тикету, чтобы показать в попапе
-    passing.forEach(t => ticketsByCity[key].tickets.push({ ...t, eqTitle: item.title }));
+  // группируем по локации (город или координаты)
+  const byLoc = {};
+  for (const t of passing) {
+    const key = t.city || `${t.lat.toFixed(3)},${t.lng.toFixed(3)}`;
+    if (!byLoc[key]) byLoc[key] = { lat: t.lat, lng: t.lng, city: t.city, tickets: [] };
+    byLoc[key].tickets.push(t);
   }
-
-  const locs = Object.values(ticketsByCity);
-  if (!locs.length) {
-    const totalTickets = allItems.reduce((s, i) => s + (i.activeTickets?.length || 0), 0);
-    if (totalTickets > 0) showToast('По выбранным фильтрам заявок нет (или у связанного оборудования нет координат).');
-    else showToast('Активных заявок не найдено');
-    return;
-  }
+  const locs = Object.values(byLoc);
 
   for (const loc of locs) {
-    // доминирующий тип для стиля маркера (срочные > установка > сервис)
+    // доминирующий вид для стиля маркера (срочные > установка > сервис)
     const kc = { urgent: 0, install: 0, service: 0 };
     loc.tickets.forEach(t => { if (kc[t.kind] != null) kc[t.kind]++; });
     const dom = KIND_ORDER.find(k => kc[k] > 0) || 'service';
@@ -720,23 +707,21 @@ function renderTicketsLayer() {
       className: '', iconAnchor: [26, 16],
     });
 
-    // сводка по типам
+    // сводка по видам
     const kindRows = KIND_ORDER.filter(k => kc[k]).map(k => `<span style="display:inline-block;background:${KIND[k].color};color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:700;margin:0 4px 4px 0">${KIND[k].emoji} ${KIND[k].label}: ${kc[k]}</span>`).join('');
-    // по категориям
-    const byCat = {}; loc.tickets.forEach(t => { byCat[t.categoryName] = (byCat[t.categoryName] || 0) + 1; });
-    const catRows = Object.entries(byCat).map(([n, c]) => `<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:11px;color:#605e5c"><span>${esc(n)}</span><b style="color:#201f1e">${c}</b></div>`).join('');
-    // список заявок (до 12)
-    const list = loc.tickets.slice(0, 12).map(t => `<div style="padding:4px 0;border-top:1px solid #f0f0f0;font-size:11px">
-        <a href="${t.url}" target="_blank" style="color:${KIND[t.kind].color};font-weight:700;text-decoration:none">${KIND[t.kind].emoji} ${esc(t.title || ('Заявка #'+t.id))}</a>
-        <div style="color:#8a8886">${esc(t.categoryName)}${t.serviceTypeLabel ? ' · ' + esc(t.serviceTypeLabel) : ''} · ${esc(STAGE_NAMES[t.stageId] || t.stageId)}</div>
+    // список заявок (до 14) — приоритет: срочные и Tickets выше
+    const rank = t => (t.kind === 'urgent' ? 0 : t.isTicket ? 1 : 2);
+    const sorted = loc.tickets.slice().sort((a, b) => rank(a) - rank(b));
+    const list = sorted.slice(0, 14).map(t => `<div style="padding:4px 0;border-top:1px solid #f0f0f0;font-size:11px">
+        <a href="${t.url}" target="_blank" style="color:${KIND[t.kind].color};font-weight:700;text-decoration:none">${KIND[t.kind].emoji} ${t.isTicket ? '⭐ ' : ''}${esc(t.title || ('Заявка #'+t.id))}</a>
+        <div style="color:#8a8886">${esc(t.serviceTypeLabel || '—')} · ${esc(STAGE_NAMES[t.stageId] || t.stageId)}${t.eqTitle ? ' · 🔬 ' + esc(t.eqTitle) : ''}</div>
       </div>`).join('');
-    const more = loc.tickets.length > 12 ? `<div style="font-size:11px;color:#8a8886;padding-top:4px">…и ещё ${loc.tickets.length - 12}</div>` : '';
+    const more = sorted.length > 14 ? `<div style="font-size:11px;color:#8a8886;padding-top:4px">…и ещё ${sorted.length - 14}</div>` : '';
 
-    const popup = L.popup({ maxWidth: 320 }).setContent(
-      `<div style="font-family:Inter,sans-serif;font-size:12px;min-width:230px">
+    const popup = L.popup({ maxWidth: 340 }).setContent(
+      `<div style="font-family:Inter,sans-serif;font-size:12px;min-width:240px">
         <div style="font-weight:700;font-size:13px;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid #f0f0f0">📍 ${esc(loc.city || 'Локация')} · ${cnt} заявок</div>
         <div style="margin-bottom:6px">${kindRows}</div>
-        <div style="margin-bottom:6px">${catRows}</div>
         ${list}${more}
       </div>`
     );

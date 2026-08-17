@@ -17,7 +17,10 @@ const F42 = {
   serviceEnd:   'ufCrm4_1732874679233',
 };
 
-const F58_EQUIPMENT_LINK = 'ufCrm8_1732855747';
+// Связь заявки (1058) с оборудованием (1042) и локацией:
+const EQ_LINK_MULTI  = 'ufCrm8_1761652570';   // «Учёт оборудования клиентов (мнж)»  (crm, множ)
+const EQ_LINK_SINGLE = 'ufCrm8_1732855706';   // «Учёт оборудования клиентов (немнж)» (crm)
+const PLACE_FIELD    = 'ufCrm8_1732855494458'; // «Место проведения работ» (текст: город/локация)
 
 const DEVICE_TYPE = { '2110':'Основное', '2111':'Периферийное' };
 const WARRANTY    = { '2361':'Есть',     '2362':'Нет' };
@@ -155,9 +158,16 @@ async function fetchDeviceNames(b24call) {
 
 // ── Сервисные заявки (1058) → тип/срочность/категория ────────────────────────
 const SERVICE_TYPE_FIELD = 'ufCrm8_1744300223';       // «Тип оказываемых услуг (УС)»
-const URGENT_FIELD = 'ufCrm8_1732856215147';          // срочность/просрочка (Да=1807)
+const URGENT_FIELD = 'ufCrm8_1732856215147';          // «Заявка просрочена» (Да=1807) → горящие
 const URGENT_YES = '1807';
 const INSTALL_TYPE_ID = '103';                        // «Установка»
+const CLIENT_REQUEST_TYPE = '619';                    // «Заявка клиента» → Tickets (приоритет)
+
+// crm-поля возвращают ссылки строкой ("1042_1607", "T4c_1042_1607" и т.п.) —
+// берём завершающие цифры как id элемента 1042.
+function extractIds(val) {
+  return toArray(val).map(v => { const m = String(v).match(/(\d+)\s*$/); return m ? Number(m[1]) : null; }).filter(Boolean);
+}
 const SERVICE_TYPE_MAP = {
   '103': 'Установка', '104': 'Техническое обслуживание', '105': 'Диагностика', '106': 'Ремонт',
   '107': 'Методическое сопровождение', '108': 'Обучение сервисного отдела', '109': 'Обучение ТЦ',
@@ -177,51 +187,95 @@ async function fetchServiceCategories(b24call) {
   } catch (e) { console.error('fetchServiceCategories:', e.message); return {}; }
 }
 
-// ── Привязка заявок к оборудованию (по полю оборудования или по компании) ─────
-// Тянем ВСЕ незавершённые заявки по всем категориям; каждую размечаем типом
-// (установка/сервис) и срочностью — фронт рисует горящие/установку/сервис.
-async function fetchAndLinkTickets(equipmentMap, b24call, categoryNames = {}) {
-  const companyToEquipment = {};
-  for (const item of Object.values(equipmentMap)) {
-    if (!item.companyId) continue;
-    (companyToEquipment[item.companyId] = companyToEquipment[item.companyId] || []).push(item.id);
-  }
-
+// ── Тянем ВСЕ незавершённые заявки (1058), размечаем тип/срочность/связь ──────
+// Каждая заявка: kind (горящая/установка/сервис), список типов услуг, ссылки на
+// оборудование (Учёт оборудования клиентов) и «Место проведения работ» — позже
+// позиционируем на карте.
+async function fetchTickets(b24call, categoryNames = {}) {
+  const tickets = [];
   let start = 0;
   while (true) {
     const data = await b24call('crm.item.list', {
       entityTypeId: 1058,
-      select: ['id','title','stageId','companyId','categoryId', F58_EQUIPMENT_LINK, URGENT_FIELD, SERVICE_TYPE_FIELD],
-      order: { id: 'DESC' },
-      start,
+      select: ['id','title','stageId','companyId','categoryId',
+        SERVICE_TYPE_FIELD, URGENT_FIELD, EQ_LINK_MULTI, EQ_LINK_SINGLE, PLACE_FIELD],
+      order: { id: 'DESC' }, start,
     });
     const batch = data.result?.items || [];
     if (!batch.length) break;
-
     for (const t of batch) {
       if (isFinalStage(t.stageId)) continue;
       const serviceTypeIds = toArray(t[SERVICE_TYPE_FIELD]);
-      const serviceTypeLabel = serviceTypeIds.map(id => SERVICE_TYPE_MAP[id] || `#${id}`).join(', ');
+      const serviceTypeLabel = serviceTypeIds.map(id => SERVICE_TYPE_MAP[id] || `#${id}`).join(', ') || '—';
       const urgent = String(t[URGENT_FIELD]) === URGENT_YES;
       const isInstall = serviceTypeIds.includes(INSTALL_TYPE_ID);
+      const isTicket = serviceTypeIds.includes(CLIENT_REQUEST_TYPE);
       const kind = urgent ? 'urgent' : (isInstall ? 'install' : 'service');
+      const eqLinkIds = [...new Set([...extractIds(t[EQ_LINK_MULTI]), ...extractIds(t[EQ_LINK_SINGLE])])];
       const catId = String(t.categoryId);
-      const ticket = {
-        id: t.id, title: t.title, stageId: t.stageId,
+      tickets.push({
+        id: t.id, title: t.title, stageId: t.stageId, companyId: t.companyId,
         categoryId: catId, categoryName: categoryNames[catId] || ('Категория ' + catId),
-        serviceTypeIds, serviceTypeLabel, urgent, isOverdue: urgent, kind,
+        serviceTypeIds, serviceTypeLabel, urgent, isTicket, kind, eqLinkIds,
+        placeText: (t[PLACE_FIELD] || '').trim() || null,
+        lat: null, lng: null, city: null, eqTitle: null, via: null,
         url: `https://crm.prolabsupport.kz/crm/type/1058/details/${t.id}/`,
-      };
-      const attach = eqId => { const e = equipmentMap[eqId]; if (!e) return; e.activeTickets.push(ticket); if (urgent) e.hasProblems = true; };
-      const linkedIds = toArray(t[F58_EQUIPMENT_LINK]).map(Number).filter(Boolean);
-      if (linkedIds.length) { linkedIds.forEach(attach); continue; }
-      if (t.companyId && companyToEquipment[t.companyId]) attach(companyToEquipment[t.companyId][0]);
+      });
     }
-
     const total = data.total ?? (start + batch.length);
     start += batch.length;
     if (!data.next || start >= total) break;
   }
+  return tickets;
+}
+
+// ── Позиционируем заявки на карте ────────────────────────────────────────────
+// Приоритет локации: (1) привязанное оборудование → его координаты;
+// (2) «Место проведения работ» → геокодируем; (3) компания → её оборудование.
+// Заодно помечаем оборудование hasProblems, если на него висит горящая заявка.
+async function positionTickets(tickets, equipmentArray, pool) {
+  const eqById = {}, companyEq = {};
+  for (const e of equipmentArray) {
+    eqById[e.id] = e;
+    if (e.companyId) (companyEq[e.companyId] = companyEq[e.companyId] || []).push(e);
+  }
+  const pickCoordEq = list => list.find(e => e.lat && e.lng) || null;
+  const pushT = (e, t) => { if (!e) return; (e.activeTickets = e.activeTickets || []).push({ id: t.id, title: t.title, stageId: t.stageId, isOverdue: t.urgent, kind: t.kind, url: t.url }); };
+
+  // 1) оборудование по ссылке — привязываем заявку ко ВСЕМ связанным приборам,
+  //    координаты берём с первого прибора, у которого они есть.
+  const placesToGeocode = new Set();
+  for (const t of tickets) {
+    for (const id of t.eqLinkIds) {
+      const e = eqById[id];
+      if (!e) continue;
+      pushT(e, t);
+      if (!t.eqTitle) { t.eqTitle = e.title; t.city = t.city || e.city; }
+      if (!t.lat && e.lat && e.lng) { t.lat = e.lat; t.lng = e.lng; t.city = e.city; t.via = 'equipment'; }
+    }
+    if (!t.lat && t.placeText) placesToGeocode.add(t.placeText.toLowerCase());
+  }
+
+  // 2) геокодируем «Место проведения работ»
+  const placeCoords = await geocodePlaces([...placesToGeocode], pool);
+
+  // 3) добиваем: место → компания
+  for (const t of tickets) {
+    if (!t.lat && t.placeText) {
+      const c = placeCoords[t.placeText.toLowerCase()];
+      if (c) { t.lat = c.lat; t.lng = c.lng; t.city = t.city || t.placeText; t.via = 'place'; }
+    }
+    if (!t.lat && t.companyId && companyEq[t.companyId]) {
+      const e = pickCoordEq(companyEq[t.companyId]);
+      if (e) { t.lat = e.lat; t.lng = e.lng; t.city = e.city; t.eqTitle = t.eqTitle || e.title; t.via = 'company'; if (!t.eqLinkIds.length) pushT(e, t); }
+    }
+    // отметить связанное оборудование как проблемное, если заявка горящая
+    if (t.urgent) {
+      t.eqLinkIds.forEach(id => { const e = eqById[id]; if (e) e.hasProblems = true; });
+      if (t.via === 'company' && companyEq[t.companyId]) { const e = pickCoordEq(companyEq[t.companyId]); if (e) e.hasProblems = true; }
+    }
+  }
+  return tickets;
 }
 
 // ── Fetch company names ────────────────────────────────────────────────────────
@@ -246,8 +300,13 @@ const cityCoordCache = {};
 const COUNTRY_MAP = {
   'узбекистан': 'Uzbekistan',
   'кыргызстан': 'Kyrgyzstan',
+  'киргизия': 'Kyrgyzstan',
   'таджикистан': 'Tajikistan',
+  'туркменистан': 'Turkmenistan',
   'россия': 'Russia',
+  'азербайджан': 'Azerbaijan',
+  'грузия': 'Georgia',
+  'монголия': 'Mongolia',
 };
 
 function detectCountry(address) {
@@ -311,7 +370,34 @@ async function geocodeEquipment(items, pool) {
   return results;
 }
 
+// ── Геокодирование «Место проведения работ» (текст: город/локация) ───────────
+// Кэш в таблице ticketsmodule_place_geo (ключ — нормализованный текст места).
+async function geocodePlaces(places, pool) {
+  const out = {};
+  for (const place of places) {
+    if (!place) continue;
+    const key = String(place).toLowerCase().trim();
+    if (!key) continue;
+    try {
+      const cached = await pool.query('SELECT lat, lng FROM ticketsmodule_place_geo WHERE place=$1', [key]);
+      if (cached.rows.length) { const r = cached.rows[0]; if (r.lat != null) out[key] = { lat: r.lat, lng: r.lng }; continue; }
+    } catch (e) { /* таблицы может не быть на первом прогоне — создаётся в routes */ }
+    const country = detectCountry(key);
+    await new Promise(r => setTimeout(r, 1100));
+    const coords = await geocodeCity(place, country);
+    try {
+      await pool.query(
+        `INSERT INTO ticketsmodule_place_geo (place, lat, lng, geocode_failed) VALUES ($1,$2,$3,$4)
+         ON CONFLICT (place) DO UPDATE SET lat=$2, lng=$3, geocode_failed=$4, geocoded_at=NOW()`,
+        [key, coords?.lat || null, coords?.lng || null, !coords]
+      );
+    } catch (e) {}
+    if (coords) out[key] = coords;
+  }
+  return out;
+}
+
 module.exports = {
-  fetchAllEquipment, fetchAndLinkTickets, fetchServiceCategories, fetchCompanyNames,
-  geocodeEquipment, fetchDeviceNames, MANUFACTURERS, SERVICE_TYPE_MAP, extractCity,
+  fetchAllEquipment, fetchTickets, positionTickets, fetchServiceCategories, fetchCompanyNames,
+  geocodeEquipment, geocodePlaces, fetchDeviceNames, MANUFACTURERS, SERVICE_TYPE_MAP, extractCity,
 };
