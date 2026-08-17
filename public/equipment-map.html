@@ -391,6 +391,13 @@ async function loadData(force = false) {
 
     applyData(d);
     document.getElementById('mapOverlay').style.display = 'none';
+
+    if (d.building) {
+      showToast('Идёт пересборка карты и заявок — подождите ~1–2 мин и нажмите «Обновить» ещё раз.', 6000);
+      setTimeout(pollStatus, 4000);
+    } else if (force) {
+      showToast(`Заявки на сервис: на карте ${d.ticketsPlaced || 0} из ${d.ticketsTotal || 0} активных.`, 6000);
+    }
   } catch(e) {
     document.getElementById('loadMsg').textContent = 'Ошибка загрузки: ' + e.message;
   }
@@ -400,19 +407,22 @@ async function pollStatus() {
   try {
     const r = await fetch('/equipment/status');
     const d = await r.json();
-    if (d.isReady) {
-      document.getElementById('loadMsg').textContent = 'Готово! Загружаем данные…';
+    if (d.error) { document.getElementById('loadMsg').textContent = 'Ошибка: ' + d.error; return; }
+    // Пока идёт сборка (полная/фоновая достройка заявок) — ждём, не подхватываем пустой слой.
+    if (d.isReady && !d.isLoading) {
       const r2 = await fetch('/equipment/map-data');
       const d2 = await r2.json();
-      if (d2.ok && !d2.loading) {
+      if (d2.ok && !d2.loading && !d2.building) {
         applyData(d2);
         document.getElementById('mapOverlay').style.display = 'none';
+        if (d2.ticketsTotal != null) showToast(`Заявки на сервис: на карте ${d2.ticketsPlaced || 0} из ${d2.ticketsTotal || 0} активных.`, 6000);
         return;
       }
     }
-    if (d.error) { document.getElementById('loadMsg').textContent = 'Ошибка: ' + d.error; return; }
     const count = d.count || 0;
-    document.getElementById('loadMsg').textContent = `Загружаем… ${count > 0 ? count + ' приборов' : ''}`;
+    document.getElementById('loadMsg').textContent = d.isLoading
+      ? `Собираем карту и заявки… ${count > 0 ? count + ' приборов' : ''}`
+      : `Загружаем… ${count > 0 ? count + ' приборов' : ''}`;
     setTimeout(pollStatus, 3000);
   } catch(e) {
     setTimeout(pollStatus, 5000);
@@ -447,6 +457,18 @@ function updateStats(s) {
   document.getElementById('sMapped').textContent = s.mapped;
   document.getElementById('sWarr').textContent = s.warranty;
   document.getElementById('sProb').textContent = s.problems;
+}
+// Карточки считаем по ТЕКУЩЕЙ выборке (фильтры/город/клиент), а не по всему парку.
+function updateStatsDynamic() {
+  const list = filteredItems || [];
+  const now = new Date();
+  const mapped = list.filter(e => e.lat && e.lng).length;
+  const warr = list.filter(e => e.hasWarranty === 'Есть' && e.warrantyEnd && new Date(e.warrantyEnd) > now).length;
+  const prob = list.filter(e => e.hasProblems).length;
+  document.getElementById('sTotal').textContent = list.length;
+  document.getElementById('sMapped').textContent = mapped;
+  document.getElementById('sWarr').textContent = warr;
+  document.getElementById('sProb').textContent = prob;
 }
 
 // ── Filter builders ───────────────────────────────────────────────────────────
@@ -582,6 +604,8 @@ function applyFilters() {
     if (curCompany && String(item.companyId) !== curCompany) return false;
     return true;
   });
+
+  updateStatsDynamic();
 
   if (mode === 'equipment' || mode === 'city' || mode === 'company') {
     document.getElementById('modelSel').value = curModel;

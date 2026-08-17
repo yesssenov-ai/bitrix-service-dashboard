@@ -217,7 +217,7 @@ function buildResponse(query) {
     ok: true, items: filtered, stats, manufacturers, deviceNames, cities, companies,
     tickets: placedTickets, ticketTypes, ticketKinds: kindCounts,
     ticketsTotal: (ticketsCache || []).length, ticketsPlaced: placedTickets.length,
-    cachedAt: meta.lastSync, lastFullSync: meta.lastFullSync,
+    isLoading, cachedAt: meta.lastSync, lastFullSync: meta.lastFullSync,
   };
 }
 
@@ -229,12 +229,24 @@ router.get('/status', requireAuth(), (req, res) => {
 // GET /equipment/map-data — из кэша мгновенно; ?refresh=1 — инкрементальная подгрузка.
 router.get('/map-data', requireAuth(), async (req, res) => {
   try {
-    if (req.query.refresh === '1') { await buildIncremental(); }
+    if (req.query.refresh === '1') {
+      const out = await buildIncremental();
+      // Уже идёт сборка (полная/ночная) — сообщаем клиенту, чтобы опросил статус.
+      if (out && out.skipped && cache && cache.length) {
+        return res.json({ ...buildResponse(req.query), building: true });
+      }
+    }
     if ((!cache || !cache.length)) {
       if (isLoading) return res.json({ ok: true, loading: true, items: [], stats: { total: 0, mapped: 0, warranty: 0, problems: 0 }, manufacturers: [], deviceNames: [], cities: [], companies: [] });
       if (loadError) return res.status(500).json({ ok: false, error: loadError });
       buildFull().catch(() => {});
       return res.json({ ok: true, loading: true, items: [], stats: { total: 0, mapped: 0, warranty: 0, problems: 0 }, manufacturers: [], deviceNames: [], cities: [], companies: [] });
+    }
+    // Кэш оборудования есть, а заявки ещё не собраны (после обновления кода) —
+    // достраиваем слой заявок в фоне, чтобы при следующем обновлении они появились.
+    if (cache && cache.length && !(ticketsCache && ticketsCache.length) && !isLoading) {
+      buildIncremental().catch(e => console.error('bg tickets build:', e.message));
+      return res.json({ ...buildResponse(req.query), building: true });
     }
     res.json(buildResponse(req.query));
   } catch (e) { console.error('equipment/map-data error:', e.message); res.status(500).json({ ok: false, error: e.message }); }
