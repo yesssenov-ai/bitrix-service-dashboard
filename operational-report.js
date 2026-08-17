@@ -35,6 +35,8 @@ const FLAG_ASK = {
   stale: 'нет движения больше 14 дней — проверить статус',
 };
 const primaryFlag = flags => { let best = null, bs = 99; (flags || []).forEach(f => { const s = SEV[f] ?? 9; if (s < bs) { bs = s; best = f; } }); return best; };
+// «Расходники»/«Расходка»/«Spares» → «ОРМ» (везде в отчёте).
+const RENAME = s => (/расходник|расходка|^\s*spares\s*$/i.test(String(s || '')) ? 'ОРМ' : String(s || ''));
 
 // ── Снимок для дельт «что изменилось» ────────────────────────────────────────
 let _snapReady = false;
@@ -102,6 +104,15 @@ async function computeReport({ commit = false } = {}) {
     .map(r => ({ r, days: Math.ceil((new Date(r.deliveryBy).getTime() - now) / 86400000) }))
     .filter(x => x.days >= 0 && x.days <= 14).sort((a, b) => a.days - b.days);
 
+  // Инструменты — отдельно, с разбивкой по отделам.
+  const instrRows = rows.filter(r => /инструмент/i.test(String(r.pipelineName || '')) || Number(r.categoryId) === 0);
+  const byDept = {};
+  instrRows.forEach(r => { const d = RENAME(r.department) || 'Не указан'; (byDept[d] = byDept[d] || { sum: 0, count: 0 }); byDept[d].sum += r.opportunity; byDept[d].count++; });
+  const instruments = {
+    sum: instrRows.reduce((a, r) => a + r.opportunity, 0), count: instrRows.length,
+    byDept: Object.entries(byDept).map(([name, v]) => ({ name, sum: v.sum, count: v.count })).sort((a, b) => b.sum - a.sum),
+  };
+
   if (commit) await commitSnapshot(rows);
 
   const d = new Date();
@@ -113,8 +124,9 @@ async function computeReport({ commit = false } = {}) {
       totalSum: rows.reduce((a, r) => a + r.opportunity, 0),
       dealCount: rows.length, activeCount: active.length,
       doneCount: rows.filter(r => r.isDone).length,
-      funnel: (board.funnel && board.funnel.cells) || [],
+      funnel: ((board.funnel && board.funnel.cells) || []).map(c => ({ ...c, name: RENAME(c.name) })),
     },
+    instruments,
     attn, changes, watch,
   };
 }
@@ -138,14 +150,15 @@ function flagPills(flags) { return (flags || []).slice().sort((a, b) => (SEV[a] 
 function renderHtml(rep) {
   const sm = STATUS_META[rep.status];
   const attnTop = rep.attn.slice(0, 18);
+  const cellB = 'padding:8px 8px;border-bottom:1px solid #eef0f4;vertical-align:top;word-break:break-word;overflow-wrap:anywhere';
   const attnRows = attnTop.map(r => {
     const pf = primaryFlag(r.flags);
     return `<tr>
-      <td style="padding:8px 8px;border-bottom:1px solid #eef0f4;white-space:nowrap">${flagDot(pf)}<b>${esc(r.company || '—')}</b><div style="color:#8a93a6;font-size:11px">${esc(r.contractNo || ('#' + r.id))}</div></td>
-      <td style="padding:8px 8px;border-bottom:1px solid #eef0f4;font-size:12px">${esc(r.stageName || '')}</td>
-      <td style="padding:8px 8px;border-bottom:1px solid #eef0f4;font-size:12px">${esc(r.manager || '—')}${r.engineer ? `<div style="color:#8a93a6;font-size:11px">инж.: ${esc(r.engineer)}</div>` : ''}</td>
-      <td style="padding:8px 8px;border-bottom:1px solid #eef0f4;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums"><b>${money(r.opportunity)}</b> ₸${r.deliveryBy ? `<div style="color:#8a93a6;font-size:11px">пост.: ${fmtDate(r.deliveryBy)}</div>` : ''}</td>
-      <td style="padding:8px 8px;border-bottom:1px solid #eef0f4;font-size:11.5px">${flagPills(r.flags)}${r.comment ? `<div style="color:#5b667d;font-size:11px;margin-top:3px">💬 ${esc(String(r.comment).slice(0, 160))}</div>` : `<div style="color:#8a93a6;font-size:11px;margin-top:2px">${esc(FLAG_ASK[pf] || '')}</div>`}</td>
+      <td style="${cellB}">${flagDot(pf)}<b>${esc(r.company || '—')}</b><div style="color:#8a93a6;font-size:11px">${esc(r.contractNo || ('#' + r.id))}</div></td>
+      <td style="${cellB};font-size:12px">${esc(r.stageName || '')}</td>
+      <td style="${cellB};font-size:12px">${esc(r.manager || '—')}${r.engineer ? `<div style="color:#8a93a6;font-size:11px">инж.: ${esc(r.engineer)}</div>` : ''}</td>
+      <td style="${cellB};text-align:right;font-variant-numeric:tabular-nums"><b>${money(r.opportunity)}</b>&nbsp;₸${r.deliveryBy ? `<div style="color:#8a93a6;font-size:11px">пост.: ${fmtDate(r.deliveryBy)}</div>` : ''}</td>
+      <td style="${cellB};font-size:11.5px">${flagPills(r.flags)}${r.comment ? `<div style="color:#5b667d;font-size:11px;margin-top:3px">💬 ${esc(String(r.comment).slice(0, 160))}</div>` : `<div style="color:#8a93a6;font-size:11px;margin-top:2px">${esc(FLAG_ASK[pf] || '')}</div>`}</td>
     </tr>`;
   }).join('');
 
@@ -199,9 +212,14 @@ function renderHtml(rep) {
 
   ${funnelHtml ? `<div style="background:#fff;border:1px solid #eceef2;border-radius:12px;padding:12px 14px;margin-bottom:14px"><div style="font-weight:700;font-size:12.5px;color:#5b667d;margin-bottom:8px">Воронка</div>${funnelHtml}</div>` : ''}
 
+  ${(rep.instruments && rep.instruments.byDept.length) ? `<div style="background:#fff;border:1px solid #eceef2;border-radius:12px;padding:12px 14px;margin-bottom:14px">
+    <div style="font-weight:700;font-size:12.5px;color:#5b667d;margin-bottom:8px">Инструменты по отделам · ${fmtMln(rep.instruments.sum)} млн ₸ · ${rep.instruments.count} шт.</div>
+    <table style="width:100%;border-collapse:separate;border-spacing:6px 0"><tr>${rep.instruments.byDept.map(x => `<td style="background:#f6f7f9;border:1px solid #eceef2;border-radius:9px;padding:7px 9px;text-align:center;vertical-align:top"><div style="font-size:11px;color:#5b667d;font-weight:700">${esc(x.name)}</div><div style="font-size:13px;font-weight:800;color:#20242e">${fmtMln(x.sum)} млн</div><div style="font-size:10.5px;color:#8a93a6">${x.count} шт.</div></td>`).join('')}</tr></table>
+  </div>` : ''}
+
   <div style="background:#fff;border:1px solid #eceef2;border-radius:12px;padding:14px;margin-bottom:14px">
     <div style="font-weight:800;font-size:14px;margin-bottom:8px">🔴 Требуют внимания <span style="color:#8a93a6;font-weight:600;font-size:12px">· ${rep.attn.length}</span></div>
-    ${rep.attn.length ? `<table style="width:100%;border-collapse:collapse"><thead><tr style="text-align:left;color:#8a93a6;font-size:10.5px;text-transform:uppercase">
+    ${rep.attn.length ? `<table style="width:100%;border-collapse:collapse;table-layout:fixed"><colgroup><col style="width:23%"><col style="width:13%"><col style="width:16%"><col style="width:15%"><col style="width:33%"></colgroup><thead><tr style="text-align:left;color:#8a93a6;font-size:10.5px;text-transform:uppercase">
       <th style="padding:4px 8px">Компания / договор</th><th style="padding:4px 8px">Стадия</th><th style="padding:4px 8px">Ответственный</th><th style="padding:4px 8px;text-align:right">Сумма</th><th style="padding:4px 8px">Флаги / что нужно</th></tr></thead>
       <tbody>${attnRows}</tbody></table>${rep.attn.length > 18 ? `<div style="color:#8a93a6;font-size:11px;margin-top:6px">…и ещё ${rep.attn.length - 18} — см. модуль / PDF</div>` : ''}` : `<div style="color:#2e9e5b;font-size:13px">✓ Нет сделок с критическими флагами.</div>`}
   </div>
@@ -241,6 +259,14 @@ function buildPdf(rep) {
     kpi(`${fmtMln(rep.atRiskSum)} млн ₸`, `Под флагами · ${rep.attn.length}`),
     kpi(String(rep.kpi.doneCount), 'Завершено'),
   ], columnGap: 6, margin: [0, 0, 0, 12] });
+
+  // Инструменты по отделам
+  if (rep.instruments && rep.instruments.byDept.length) {
+    content.push({ text: `Инструменты по отделам · ${fmtMln(rep.instruments.sum)} млн ₸ · ${rep.instruments.count} шт.`, bold: true, fontSize: 11, color: BR, margin: [0, 0, 0, 4] });
+    const ib = [[{ text: 'Отдел', style: 'th' }, { text: 'Сумма, млн ₸', style: 'th', alignment: 'right' }, { text: 'Сделок', style: 'th', alignment: 'right' }]];
+    rep.instruments.byDept.forEach(x => ib.push([{ text: x.name, fontSize: 8.5 }, { text: fmtMln(x.sum), alignment: 'right', fontSize: 8.5 }, { text: String(x.count), alignment: 'right', fontSize: 8.5 }]));
+    content.push({ table: { headerRows: 1, widths: ['*', 80, 50], body: ib }, layout: { fillColor: i => i === 0 ? '#20242e' : (i % 2 === 0 ? '#f6f7f9' : null), hLineColor: () => LINE, vLineColor: () => LINE, hLineWidth: () => 0.5, vLineWidth: () => 0.5, paddingTop: () => 3, paddingBottom: () => 3, paddingLeft: () => 5, paddingRight: () => 5 }, margin: [0, 0, 0, 12] });
+  }
 
   // Attention table
   content.push({ text: `Требуют внимания · ${rep.attn.length}`, bold: true, fontSize: 12, color: BR, margin: [0, 0, 0, 5] });
