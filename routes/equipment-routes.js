@@ -76,7 +76,7 @@ async function setMeta(fields) {
   const cols = Object.keys(fields);
   const sets = cols.map((c, i) => `${c}=$${i + 2}`).join(',');
   await pool.query(
-    `INSERT INTO ticketsmodule_equipment_meta (id, ${cols.join(',')}) VALUES (1, ${cols.map((_, i) => '$' + (i + 2)).join(',')})
+    `INSERT INTO ticketsmodule_equipment_meta (id, ${cols.join(',')}) VALUES ($1, ${cols.map((_, i) => '$' + (i + 2)).join(',')})
      ON CONFLICT (id) DO UPDATE SET ${sets}`,
     [1, ...cols.map(c => fields[c])]
   );
