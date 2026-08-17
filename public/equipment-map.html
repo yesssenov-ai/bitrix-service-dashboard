@@ -116,6 +116,9 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
 
 /* MAP */
 .map-wrap{flex:1;position:relative;}
+.map-wrap.fs{position:fixed;inset:0;z-index:9998;}
+.map-fs-btn{position:absolute;right:12px;bottom:26px;z-index:401;width:38px;height:38px;border-radius:9px;background:var(--card);border:1px solid var(--stroke);box-shadow:var(--shadow-1);cursor:pointer;font-size:16px;color:var(--text-2);display:flex;align-items:center;justify-content:center;line-height:1;}
+.map-fs-btn:hover{box-shadow:var(--shadow-2);color:var(--text);}
 #map{width:100%;height:100%;}
 .map-overlay{position:absolute;inset:0;background:rgba(250,249,248,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:500;font-size:13px;color:var(--text-2);}
 .spinner{width:32px;height:32px;border:3px solid var(--stroke);border-top-color:var(--brand);border-radius:50%;animation:spin .8s linear infinite;}
@@ -134,6 +137,9 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
 .tf-row input{cursor:pointer;}
 .tf-row .cnt{margin-left:auto;font-size:11px;color:var(--text-4);font-family:var(--font-mono,monospace);}
 .tf-sep{height:1px;background:var(--stroke);margin:8px 0;}
+.tf-hrow{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.tf-all a{cursor:pointer;color:var(--brand);font-weight:600;text-transform:none;letter-spacing:0;}
+.tf-all a:hover{text-decoration:underline;}
 .map-updated{position:absolute;left:12px;bottom:12px;z-index:400;background:var(--card);border:1px solid var(--stroke);border-radius:8px;padding:6px 11px;font-size:11.5px;color:var(--text-3);box-shadow:var(--shadow-1);}
 .map-updated b{color:var(--text-2);font-weight:600;}
 @keyframes tkpulse{0%{box-shadow:0 0 0 0 rgba(224,30,69,.55)}70%{box-shadow:0 0 0 12px rgba(224,30,69,0)}100%{box-shadow:0 0 0 0 rgba(224,30,69,0)}}
@@ -280,6 +286,7 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
       <div id="ticketFilters" class="ticket-filters" style="display:none"></div>
     </div>
     <div id="lastUpd" class="map-updated"></div>
+    <button class="map-fs-btn" id="fsBtn" onclick="toggleMapFull()" title="На весь экран">⛶</button>
 
     <div class="dp" id="dp">
       <div class="dp-head">
@@ -449,6 +456,16 @@ function applyData(d) {
   if (showTickets) { renderTicketFilters(); renderTicketsLayer(); }
 }
 function fmtUpd(iso){ try{ const d=new Date(iso); if(isNaN(d))return String(iso); return d.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch(e){ return String(iso); } }
+function toggleMapFull(){
+  const w = document.querySelector('.map-wrap');
+  const on = w.classList.toggle('fs');
+  const b = document.getElementById('fsBtn');
+  if (b){ b.textContent = on ? '✕' : '⛶'; b.title = on ? 'Свернуть' : 'На весь экран'; }
+  setTimeout(() => { try { if (map) map.invalidateSize(); } catch(e){} }, 120);
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape'){ const w = document.querySelector('.map-wrap'); if (w && w.classList.contains('fs')) toggleMapFull(); }
+});
 
 async function refreshData() { await loadData(true); }
 
@@ -685,7 +702,13 @@ function renderTicketFilters() {
     const prio = c.isTicket; // «Заявка клиента» (Tickets) — приоритет
     return `<label class="tf-row${prio?' prio':''}"><input type="checkbox" ${on?'checked':''} onchange="toggleTicketType('${esc(c.id)}',this.checked)"><span>${prio?'⭐ ':''}${esc(c.name)}${prio?' <i style="opacity:.6;font-style:normal">(Tickets)</i>':''}</span><span class="cnt">${c.count}</span></label>`;
   }).join('') || '<div class="cnt" style="padding:4px">нет активных заявок</div>';
-  el.innerHTML = `<div class="tf-h">Вид</div>${kindChips}<div class="tf-sep"></div><div class="tf-h">Тип услуги</div>${typeRows}`;
+  el.innerHTML = `<div class="tf-h">Вид</div>${kindChips}<div class="tf-sep"></div>`
+    + `<div class="tf-h tf-hrow"><span>Тип услуги</span><span class="tf-all"><a onclick="setAllTypes(true)">все</a> · <a onclick="setAllTypes(false)">снять</a></span></div>${typeRows}`;
+}
+function setAllTypes(on){
+  ticketTypeFilter.clear();
+  if(!on) ticketTypes.forEach(c => ticketTypeFilter.add(String(c.id))); // скрыть все
+  renderTicketFilters(); renderTicketsLayer();
 }
 function toggleTicketKind(k){ if(ticketKindFilter.has(k))ticketKindFilter.delete(k); else ticketKindFilter.add(k); renderTicketFilters(); renderTicketsLayer(); }
 function toggleTicketType(id,on){ if(on)ticketTypeFilter.delete(id); else ticketTypeFilter.add(id);

@@ -3,7 +3,7 @@ const router = express.Router();
 const { requireAuth, pool } = require('../auth');
 const {
   fetchAllEquipment, fetchTickets, positionTickets, fetchServiceCategories, fetchCompanyNames,
-  geocodeEquipment, fetchDeviceNames, MANUFACTURERS, SERVICE_TYPE_MAP,
+  resolveUrgentEnumIds, geocodeEquipment, fetchDeviceNames, MANUFACTURERS, SERVICE_TYPE_MAP,
 } = require('../equipment-map');
 
 const CLIENT_REQUEST_TYPE = '619'; // «Заявка клиента» → Tickets (приоритет в фильтре)
@@ -120,7 +120,8 @@ async function buildFull() {
     cache = withCoords;
     // Заявки позиционируем ПОСЛЕ геокодирования оборудования (нужны координаты приборов).
     try {
-      const raw = await fetchTickets(b24callFn, serviceCategories);
+      const urgentIds = await resolveUrgentEnumIds(b24callFn);
+      const raw = await fetchTickets(b24callFn, serviceCategories, urgentIds);
       ticketsCache = await positionTickets(raw, cache, pool);
     } catch (e) { console.error('tickets:', e.message); ticketsCache = []; }
     await persistAll(cache);
@@ -164,7 +165,8 @@ async function buildIncremental() {
     cache = Object.values(map);
     try { if (!Object.keys(serviceCategories).length) serviceCategories = await fetchServiceCategories(b24callFn); } catch (e) {}
     try {
-      const raw = await fetchTickets(b24callFn, serviceCategories);
+      const urgentIds = await resolveUrgentEnumIds(b24callFn);
+      const raw = await fetchTickets(b24callFn, serviceCategories, urgentIds);
       ticketsCache = await positionTickets(raw, cache, pool);
     } catch (e) { console.error('inc tickets:', e.message); }
     await persistAll(cache);

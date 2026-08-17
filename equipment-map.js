@@ -158,10 +158,23 @@ async function fetchDeviceNames(b24call) {
 
 // ── Сервисные заявки (1058) → тип/срочность/категория ────────────────────────
 const SERVICE_TYPE_FIELD = 'ufCrm8_1744300223';       // «Тип оказываемых услуг (УС)»
-const URGENT_FIELD = 'ufCrm8_1732856215147';          // «Заявка просрочена» (Да=1807) → горящие
+const URGENT_FIELD = 'ufCrm8_1732856215147';          // «Заявка просрочена» (Да=1807)
 const URGENT_YES = '1807';
+const URGENCY_FIELD = 'ufCrm8_1732856252874';         // «Срочность заявки / обучения» (enum)
 const INSTALL_TYPE_ID = '103';                        // «Установка»
 const CLIENT_REQUEST_TYPE = '619';                    // «Заявка клиента» → Tickets (приоритет)
+
+// Значения enum «Срочность заявки», которые считаем срочными (Да/Срочно/Высокая).
+// Разрешаем динамически по подписи, чтобы не зависеть от жёстких id.
+async function resolveUrgentEnumIds(b24call) {
+  try {
+    const data = await b24call('crm.item.fields', { entityTypeId: 1058 });
+    const f = data.result?.fields?.[URGENCY_FIELD];
+    const ids = [];
+    (f?.items || []).forEach(it => { if (/срочн|^да$|высок|urgent|горящ/i.test(String(it.VALUE || '').trim())) ids.push(String(it.ID)); });
+    return ids;
+  } catch (e) { console.error('resolveUrgentEnumIds:', e.message); return []; }
+}
 
 // crm-поля возвращают ссылки строкой ("1042_1607", "T4c_1042_1607" и т.п.) —
 // берём завершающие цифры как id элемента 1042.
@@ -191,14 +204,14 @@ async function fetchServiceCategories(b24call) {
 // Каждая заявка: kind (горящая/установка/сервис), список типов услуг, ссылки на
 // оборудование (Учёт оборудования клиентов) и «Место проведения работ» — позже
 // позиционируем на карте.
-async function fetchTickets(b24call, categoryNames = {}) {
+async function fetchTickets(b24call, categoryNames = {}, urgentEnumIds = []) {
   const tickets = [];
   let start = 0;
   while (true) {
     const data = await b24call('crm.item.list', {
       entityTypeId: 1058,
       select: ['id','title','stageId','companyId','categoryId',
-        SERVICE_TYPE_FIELD, URGENT_FIELD, EQ_LINK_MULTI, EQ_LINK_SINGLE, PLACE_FIELD],
+        SERVICE_TYPE_FIELD, URGENT_FIELD, URGENCY_FIELD, EQ_LINK_MULTI, EQ_LINK_SINGLE, PLACE_FIELD],
       order: { id: 'DESC' }, start,
     });
     const batch = data.result?.items || [];
@@ -207,7 +220,10 @@ async function fetchTickets(b24call, categoryNames = {}) {
       if (isFinalStage(t.stageId)) continue;
       const serviceTypeIds = toArray(t[SERVICE_TYPE_FIELD]);
       const serviceTypeLabel = serviceTypeIds.map(id => SERVICE_TYPE_MAP[id] || `#${id}`).join(', ') || '—';
-      const urgent = String(t[URGENT_FIELD]) === URGENT_YES;
+      // Красный маркер: просроченные ИЛИ срочные (по полю «Срочность заявки»).
+      const overdue = String(t[URGENT_FIELD]) === URGENT_YES;
+      const isRushed = urgentEnumIds.length && toArray(t[URGENCY_FIELD]).some(v => urgentEnumIds.includes(String(v)));
+      const urgent = overdue || isRushed;
       const isInstall = serviceTypeIds.includes(INSTALL_TYPE_ID);
       const isTicket = serviceTypeIds.includes(CLIENT_REQUEST_TYPE);
       const kind = urgent ? 'urgent' : (isInstall ? 'install' : 'service');
@@ -399,5 +415,6 @@ async function geocodePlaces(places, pool) {
 
 module.exports = {
   fetchAllEquipment, fetchTickets, positionTickets, fetchServiceCategories, fetchCompanyNames,
-  geocodeEquipment, geocodePlaces, fetchDeviceNames, MANUFACTURERS, SERVICE_TYPE_MAP, extractCity,
+  resolveUrgentEnumIds, geocodeEquipment, geocodePlaces, fetchDeviceNames,
+  MANUFACTURERS, SERVICE_TYPE_MAP, extractCity,
 };
