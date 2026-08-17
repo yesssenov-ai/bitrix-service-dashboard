@@ -569,6 +569,8 @@ initDB().then(() => {
     // приходят через вебхук ONCRMDEALADD/UPDATE (см. relations-routes).
     const { fullSync: operationalFullSync } = require('./operational-sync');
     setTimeout(() => operationalFullSync({ source: 'boot' }).catch(e => console.error('operational boot sync error:', e.message)), 20000);
+    // Авто-рассылка операционного отчёта руководству (вт 18:00 Алматы = 13:00 UTC).
+    try { require('./ops-report-scheduler').startOpsReportScheduler(); } catch (e) { console.error('ops-report scheduler start error:', e.message); }
     // Логистика: считается тяжело (~1 мин), поэтому НЕ на каждый заход страницы, а
     // в фоне — прогрев кэша на старте + освежение раз в час. Страница отдаёт кэш
     // мгновенно; кнопка «Обновить» пересчитывает по требованию.

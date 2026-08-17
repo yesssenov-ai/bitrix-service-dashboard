@@ -311,6 +311,16 @@ body.meeting .chk-label{font-size:15px;}
       <button class="reset-btn" id="accessBtn" onclick="openAccess()" title="Права ролей в модуле" style="display:none">⚙ Доступ</button>
       <button class="reset-btn" id="resetBtn" onclick="resetFilters()" title="Сбросить все фильтры">↺ Сброс</button>
       <div class="export-wrap">
+        <button class="reset-btn" id="reportBtn" onclick="toggleReportMenu(event)" title="Сводка для руководства по оперативке">📋 Отчёт руководству</button>
+        <div class="export-menu" id="reportMenu">
+          <div class="export-grp">Экзекьютив-сводка</div>
+          <a href="#" onclick="return openReport()">📄 Открыть (HTML)</a>
+          <a href="#" onclick="return openReport('pdf')">⬇ Скачать PDF</a>
+          <div class="export-grp">Рассылка</div>
+          <a href="#" onclick="return sendReport()" id="sendReportLink">📧 Отправить руководству сейчас</a>
+        </div>
+      </div>
+      <div class="export-wrap">
         <button class="reset-btn" id="exportBtn" onclick="toggleExportMenu(event)" title="Экспорт отфильтрованных данных">⬇ Экспорт</button>
         <div class="export-menu" id="exportMenu">
           <div class="export-grp">PDF · как дашборд</div>
@@ -484,7 +494,32 @@ function renderAsOf(d){
 }
 
 function toggleExportMenu(e){ if(e)e.stopPropagation(); document.getElementById('exportMenu').classList.toggle('open'); }
-document.addEventListener('click',e=>{ const w=document.querySelector('.export-wrap'); if(w&&!w.contains(e.target)) document.getElementById('exportMenu').classList.remove('open'); });
+document.addEventListener('click',e=>{ document.querySelectorAll('.export-wrap').forEach(w=>{ if(!w.contains(e.target)) w.querySelector('.export-menu').classList.remove('open'); }); });
+
+// ── Отчёт для руководства ─────────────────────────────────────────────────────
+function toggleReportMenu(e){ if(e)e.stopPropagation(); document.getElementById('reportMenu').classList.toggle('open');
+  const l=document.getElementById('sendReportLink'); if(l&&!window.IS_ADMIN){ l.style.opacity='.5'; l.title='Только администратор'; } }
+function openReport(format){
+  document.getElementById('reportMenu').classList.remove('open');
+  const url='/api/operational/report'+(format==='pdf'?'?format=pdf':'');
+  if(format==='pdf'){ const a=document.createElement('a'); a.href=url; a.download=''; document.body.appendChild(a); a.click(); a.remove(); }
+  else window.open(url,'_blank');
+  return false;
+}
+async function sendReport(){
+  document.getElementById('reportMenu').classList.remove('open');
+  if(!window.IS_ADMIN){ alert('Отправку руководству может запускать только администратор.'); return false; }
+  if(!confirm('Отправить операционный отчёт руководству сейчас?\n\nОтчёт уйдёт на адреса из настройки OPS_REPORT_RECIPIENTS. Также зафиксируется снимок для раздела «Изменения» следующего отчёта.'))return false;
+  const btn=document.getElementById('reportBtn'); const old=btn.textContent; btn.textContent='⏳ Отправляю…'; btn.disabled=true;
+  try{
+    const r=await fetch('/api/operational/report/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+    const d=await r.json();
+    if(r.ok&&d.ok) alert('Отправлено ('+d.status+') → '+(d.sentTo||[]).join(', '));
+    else alert('Не удалось отправить: '+((d&&d.error)||r.status));
+  }catch(e){ alert('Ошибка: '+e.message); }
+  finally{ btn.textContent=old; btn.disabled=false; }
+  return false;
+}
 function doExport(format,type){
   document.getElementById('exportMenu').classList.remove('open');
   const q=getFilters();

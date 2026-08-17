@@ -158,6 +158,46 @@ router.get('/export', requireCap('view'), async (req, res) => {
   }
 });
 
+// ── Отчёт для руководства («отчёт по оперативке») ────────────────────────────
+// GET /api/operational/report?format=html|pdf — экзекьютив-сводка (RAG, флаги,
+// изменения, ближайшие поставки). HTML открывается в браузере, PDF скачивается.
+router.get('/report', requireCap('view'), async (req, res) => {
+  try {
+    const { computeReport, renderHtml, buildPdf } = require('../operational-report');
+    const rep = await computeReport({ commit: false });
+    if (req.query.format === 'pdf') {
+      const buf = await buildPdf(rep);
+      const fname = `Операционный_отчёт_${new Date().toISOString().slice(0, 10)}.pdf`;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fname)}`);
+      return res.send(buf);
+    }
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(renderHtml(rep));
+  } catch (e) {
+    console.error('GET /api/operational/report error:', e.message);
+    res.status(500).send('Не удалось сформировать отчёт: ' + e.message);
+  }
+});
+
+// POST /api/operational/report/send — собрать отчёт, зафиксировать снимок (для
+// дельт следующего отчёта) и разослать руководству (Resend, HTML + PDF). Тело:
+// { recipients?: "a@b,c@d" } — иначе берём OPS_REPORT_RECIPIENTS.
+router.post('/report/send', requireAuth(['admin']), express.json(), async (req, res) => {
+  try {
+    const { computeReport, renderHtml, buildPdf, sendReportEmail, recipientsFromEnv } = require('../operational-report');
+    const recipients = (req.body && req.body.recipients ? String(req.body.recipients).split(',').map(s => s.trim()).filter(Boolean) : null) || recipientsFromEnv();
+    const rep = await computeReport({ commit: true });
+    const [html, pdf] = await Promise.all([Promise.resolve(renderHtml(rep)), buildPdf(rep)]);
+    const out = await sendReportEmail(recipients, rep, html, pdf);
+    if (!out.ok) return res.status(500).json({ ok: false, error: out.error });
+    res.json({ ok: true, sentTo: out.to, status: rep.status });
+  } catch (e) {
+    console.error('POST /api/operational/report/send error:', e.message);
+    res.status(500).json({ ok: false, error: 'Не удалось отправить отчёт: ' + e.message });
+  }
+});
+
 // ── Admin edit actions ───────────────────────────────────────────────────────
 // GET /api/operational/meta — stage + user options for the admin edit forms.
 router.get('/meta', requireCap('view'), async (req, res) => {
