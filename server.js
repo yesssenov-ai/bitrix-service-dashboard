@@ -581,7 +581,10 @@ initDB().then(() => {
       .catch(e => console.error(`logistics ${tag} refresh/alert error:`, e.message));
     setTimeout(() => refreshAndAlert('boot'), 25000);
     setInterval(() => refreshAndAlert('hourly'), 60 * 60 * 1000);
-    let lastOpSyncDate = null;
+    // Карта оборудования: кэш в БД, карта открывается мгновенно. Поднимаем кэш из
+    // БД на старте; если пусто — полная сборка в фоне.
+    setTimeout(() => equipmentRoutes.bootPreload().catch(e => console.error('equipment bootPreload error:', e.message)), 30000);
+    let lastOpSyncDate = null, lastEquipSyncDate = null;
     setInterval(() => {
       const now = new Date();
       const dateKey = now.toISOString().slice(0, 10);
@@ -593,6 +596,11 @@ initDB().then(() => {
           .catch(e => console.error('operational nightly sync error:', e.message))
           .then(() => fullSyncStatsDeals().catch(e => console.error('stats nightly sync error:', e.message)))
           .then(() => refreshAndAlert('nightly'));
+      }
+      // 03:00 Алматы (UTC+5) = 22:00 UTC — полная сборка Карты оборудования + геокодирование.
+      if (now.getUTCHours() === 22 && lastEquipSyncDate !== dateKey) {
+        lastEquipSyncDate = dateKey;
+        equipmentRoutes.nightlyFullSync().catch(e => console.error('equipment nightly full sync error:', e.message));
       }
     }, 5 * 60 * 1000);
     // Planner ↔ Bitrix reconciliation — webhooks are best-effort, this catches

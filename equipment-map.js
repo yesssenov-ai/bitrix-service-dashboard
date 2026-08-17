@@ -101,6 +101,7 @@ function enrichEquipment(item) {
     serviceStart: item[F42.serviceStart] || null,
     serviceEnd: item[F42.serviceEnd] || null,
     stageId: item.stageId,
+    updatedTime: item.updatedTime || null,
     url: `https://crm.prolabsupport.kz/crm/type/1042/details/${item.id}/`,
     activeTickets: [],
     hasProblems: false,
@@ -108,21 +109,24 @@ function enrichEquipment(item) {
   };
 }
 
-// ── Fetch all equipment (1042) ─────────────────────────────────────────────────
-async function fetchAllEquipment(b24call) {
+// ── Fetch equipment (1042). extraFilter — для инкрементальной подгрузки
+// (напр. { '>updatedTime': '2026-08-01T00:00:00' } — только изменённые). ─────────
+async function fetchAllEquipment(b24call, extraFilter) {
   const items = [];
   let start = 0;
   while (true) {
-    const data = await b24call('crm.item.list', {
+    const params = {
       entityTypeId: 1042,
-      select: ['id','title','companyId','stageId',
+      select: ['id','title','companyId','stageId','updatedTime',
         F42.address, F42.deviceType, F42.catalogNum, F42.serialNum,
         F42.manufacturer, F42.deviceName, F42.hasWarranty,
         F42.warrantyStart, F42.warrantyEnd, F42.seller,
         F42.serviceStart, F42.serviceEnd],
       order: { id: 'ASC' },
       start,
-    });
+    };
+    if (extraFilter) params.filter = extraFilter;
+    const data = await b24call('crm.item.list', params);
     const batch = data.result?.items || [];
     if (!batch.length) break;
     items.push(...batch.map(enrichEquipment));
