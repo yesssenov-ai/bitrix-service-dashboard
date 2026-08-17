@@ -122,7 +122,20 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
 @keyframes spin{to{transform:rotate(360deg);}}
 
 /* Service tickets layer toggle */
-.map-controls{position:absolute;top:12px;right:12px;z-index:400;display:flex;flex-direction:column;gap:6px;}
+.map-controls{position:absolute;top:12px;right:12px;z-index:400;display:flex;flex-direction:column;gap:6px;align-items:flex-end;}
+.ticket-filters{background:var(--card);border:1px solid var(--stroke);border-radius:10px;padding:10px;box-shadow:var(--shadow-2);width:230px;max-height:60vh;overflow:auto;}
+.tf-h{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin:2px 0 6px;}
+.tf-chip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--stroke);border-radius:20px;padding:4px 9px;font-size:11.5px;font-weight:600;cursor:pointer;margin:0 4px 4px 0;color:var(--text-2);user-select:none;transition:.12s;}
+.tf-chip.on{color:#fff;border-color:transparent;}
+.tf-row{display:flex;align-items:center;gap:7px;padding:4px 4px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--text-2);}
+.tf-row:hover{background:var(--surface2);}
+.tf-row input{cursor:pointer;}
+.tf-row .cnt{margin-left:auto;font-size:11px;color:var(--text-4);font-family:var(--font-mono,monospace);}
+.tf-sep{height:1px;background:var(--stroke);margin:8px 0;}
+.map-updated{position:absolute;left:12px;bottom:12px;z-index:400;background:var(--card);border:1px solid var(--stroke);border-radius:8px;padding:6px 11px;font-size:11.5px;color:var(--text-3);box-shadow:var(--shadow-1);}
+.map-updated b{color:var(--text-2);font-weight:600;}
+@keyframes tkpulse{0%{box-shadow:0 0 0 0 rgba(224,30,69,.55)}70%{box-shadow:0 0 0 12px rgba(224,30,69,0)}100%{box-shadow:0 0 0 0 rgba(224,30,69,0)}}
+.tk-burning{animation:tkpulse 1.4s infinite;}
 .map-btn{background:var(--card);border:1px solid var(--stroke);border-radius:8px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:var(--shadow-1);color:var(--text-2);font-family:var(--font);transition:all .15s;white-space:nowrap;}
 .map-btn:hover{box-shadow:var(--shadow-2);}
 .map-btn.on{background:var(--brand);color:#fff;border-color:var(--brand);}
@@ -262,7 +275,9 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
       <button class="map-btn refresh" onclick="refreshData()">
         ↻ Обновить
       </button>
+      <div id="ticketFilters" class="ticket-filters" style="display:none"></div>
     </div>
+    <div id="lastUpd" class="map-updated"></div>
 
     <div class="dp" id="dp">
       <div class="dp-head">
@@ -284,6 +299,14 @@ let mode = 'equipment';
 let curMfr = '', curModel = '', curStatus = '', curCity = '', curCompany = '';
 let showTickets = false;
 let selectedId = null;
+let ticketCategories = [], ticketKinds = {};
+let ticketCatFilter = new Set(), ticketKindFilter = new Set();
+const KIND = {
+  urgent:  { emoji:'🔥', color:'#e01e45', label:'Срочные' },
+  install: { emoji:'🔧', color:'#0f6cbd', label:'Установка' },
+  service: { emoji:'🛠', color:'#f59e0b', label:'Сервис' },
+};
+const KIND_ORDER = ['urgent','install','service'];
 let map, clusterGroup, ticketLayer;
 let markers = {};
 let debT = null;
@@ -400,11 +423,19 @@ function applyData(d) {
   deviceNames = d.deviceNames || [];
   cities = d.cities || [];
   companies = d.companies || [];
+  ticketCategories = d.ticketCategories || [];
+  ticketKinds = d.ticketKinds || {};
   updateStats(d.stats);
   buildMfrChips();
   buildModelSelect();
   applyFilters();
+  // Когда обновлялись данные по приборам (последняя полная сборка).
+  const upd = d.lastFullSync || d.cachedAt;
+  const el = document.getElementById('lastUpd');
+  if (el) el.innerHTML = upd ? `🕒 Оборудование обновлено: <b>${fmtUpd(upd)}</b>` : '';
+  if (showTickets) { renderTicketFilters(); renderTicketsLayer(); }
 }
+function fmtUpd(iso){ try{ const d=new Date(iso); if(isNaN(d))return String(iso); return d.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch(e){ return String(iso); } }
 
 async function refreshData() { await loadData(true); }
 
@@ -602,15 +633,40 @@ function toggleTicketsLayer() {
   showTickets = !showTickets;
   const btn = document.getElementById('btnTickets');
   btn.classList.toggle('on', showTickets);
+  const panel = document.getElementById('ticketFilters');
   if (showTickets) {
+    panel.style.display = 'block';
+    renderTicketFilters();
     map.removeLayer(clusterGroup);
     renderTicketsLayer();
     map.addLayer(ticketLayer);
   } else {
+    panel.style.display = 'none';
     ticketLayer.clearLayers();
     map.removeLayer(ticketLayer);
     map.addLayer(clusterGroup);
   }
+}
+function renderTicketFilters() {
+  const el = document.getElementById('ticketFilters'); if (!el) return;
+  const kindChips = KIND_ORDER.map(k => {
+    const m = KIND[k], n = ticketKinds[k] || 0, on = ticketKindFilter.has(k);
+    return `<span class="tf-chip ${on?'on':''}" style="${on?`background:${m.color}`:''}" onclick="toggleTicketKind('${k}')">${m.emoji} ${m.label} <b>${n}</b></span>`;
+  }).join('');
+  const catRows = ticketCategories.map(c => {
+    const on = !ticketCatFilter.has(c.id); // в наборе — СКРЫТЫЕ категории
+    return `<label class="tf-row"><input type="checkbox" ${on?'checked':''} onchange="toggleTicketCat('${esc(c.id)}',this.checked)"><span>${esc(c.name)}</span><span class="cnt">${c.count}</span></label>`;
+  }).join('') || '<div class="cnt" style="padding:4px">нет активных заявок</div>';
+  el.innerHTML = `<div class="tf-h">Тип заявки</div>${kindChips}<div class="tf-sep"></div><div class="tf-h">Категории</div>${catRows}`;
+}
+function toggleTicketKind(k){ if(ticketKindFilter.has(k))ticketKindFilter.delete(k); else ticketKindFilter.add(k); renderTicketFilters(); renderTicketsLayer(); }
+function toggleTicketCat(id,on){ if(on)ticketCatFilter.delete(id); else ticketCatFilter.add(id);
+  // Пустой набор = показываем все; если сняли часть — храним «скрытые».
+  renderTicketsLayer(); }
+function ticketPasses(t){
+  if(ticketKindFilter.size && !ticketKindFilter.has(t.kind)) return false;
+  if(ticketCatFilter.has(t.categoryId)) return false; // скрытые категории
+  return true;
 }
 
 function renderTicketsLayer() {
@@ -626,74 +682,64 @@ function renderTicketsLayer() {
   }
 
   const ticketsByCity = {};
-
+  let totalPassing = 0;
   for (const item of allItems) {
     if (!item.activeTickets?.length) continue;
-
-    // Need coordinates — from item directly
-    const lat = item.lat;
-    const lng = item.lng;
+    const lat = item.lat, lng = item.lng;
     if (!lat || !lng) continue;
-
+    const passing = item.activeTickets.filter(ticketPasses);
+    if (!passing.length) continue;
+    totalPassing += passing.length;
     const key = item.city || `${lat.toFixed(3)},${lng.toFixed(3)}`;
-    if (!ticketsByCity[key]) {
-      ticketsByCity[key] = { lat, lng, tickets: [], city: item.city };
-    }
-    ticketsByCity[key].tickets.push(...item.activeTickets);
+    if (!ticketsByCity[key]) ticketsByCity[key] = { lat, lng, tickets: [], city: item.city };
+    // прикрепим прибор к тикету, чтобы показать в попапе
+    passing.forEach(t => ticketsByCity[key].tickets.push({ ...t, eqTitle: item.title }));
   }
 
   const locs = Object.values(ticketsByCity);
-
   if (!locs.length) {
-    // No tickets with coordinates found — show info
-    const totalTickets = allItems.reduce((s, i) => s + (i.activeTickets?.length||0), 0);
-    const msg = totalTickets > 0
-      ? `Найдено ${totalTickets} активных заявок, но у связанного оборудования нет координат на карте. Сначала дождитесь завершения геокодирования.`
-      : 'Активных заявок не найдено';
-    alert(msg);
-    showTickets = false;
-    document.getElementById('btnTickets').classList.remove('on');
-    map.addLayer(clusterGroup);
+    const totalTickets = allItems.reduce((s, i) => s + (i.activeTickets?.length || 0), 0);
+    if (totalTickets > 0) showToast('По выбранным фильтрам заявок нет (или у связанного оборудования нет координат).');
+    else showToast('Активных заявок не найдено');
     return;
   }
 
   for (const loc of locs) {
-    const hasOv = loc.tickets.some(t => t.isOverdue);
-    const color = hasOv ? '#c4314b' : '#FF6B35';
+    // доминирующий тип для стиля маркера (срочные > установка > сервис)
+    const kc = { urgent: 0, install: 0, service: 0 };
+    loc.tickets.forEach(t => { if (kc[t.kind] != null) kc[t.kind]++; });
+    const dom = KIND_ORDER.find(k => kc[k] > 0) || 'service';
+    const m = KIND[dom];
     const cnt = loc.tickets.length;
-
+    const burning = dom === 'urgent';
     const icon = L.divIcon({
-      html: `<div style="background:${color};color:#fff;border-radius:10px;padding:5px 11px;font-size:12px;font-weight:700;box-shadow:0 3px 10px rgba(0,0,0,.3);border:2px solid #fff;white-space:nowrap">🔔 ${cnt}</div>`,
-      className: '', iconAnchor: [30, 16],
+      html: `<div class="${burning ? 'tk-burning' : ''}" style="background:${m.color};color:#fff;border-radius:12px;padding:5px 11px;font-size:12px;font-weight:800;box-shadow:0 3px 10px rgba(0,0,0,.3);border:2px solid #fff;white-space:nowrap">${m.emoji} ${cnt}</div>`,
+      className: '', iconAnchor: [26, 16],
     });
 
-    const byStage = {};
-    for (const t of loc.tickets) byStage[t.stageId] = (byStage[t.stageId]||0)+1;
+    // сводка по типам
+    const kindRows = KIND_ORDER.filter(k => kc[k]).map(k => `<span style="display:inline-block;background:${KIND[k].color};color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:700;margin:0 4px 4px 0">${KIND[k].emoji} ${KIND[k].label}: ${kc[k]}</span>`).join('');
+    // по категориям
+    const byCat = {}; loc.tickets.forEach(t => { byCat[t.categoryName] = (byCat[t.categoryName] || 0) + 1; });
+    const catRows = Object.entries(byCat).map(([n, c]) => `<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:11px;color:#605e5c"><span>${esc(n)}</span><b style="color:#201f1e">${c}</b></div>`).join('');
+    // список заявок (до 12)
+    const list = loc.tickets.slice(0, 12).map(t => `<div style="padding:4px 0;border-top:1px solid #f0f0f0;font-size:11px">
+        <a href="${t.url}" target="_blank" style="color:${KIND[t.kind].color};font-weight:700;text-decoration:none">${KIND[t.kind].emoji} ${esc(t.title || ('Заявка #'+t.id))}</a>
+        <div style="color:#8a8886">${esc(t.categoryName)}${t.serviceTypeLabel ? ' · ' + esc(t.serviceTypeLabel) : ''} · ${esc(STAGE_NAMES[t.stageId] || t.stageId)}</div>
+      </div>`).join('');
+    const more = loc.tickets.length > 12 ? `<div style="font-size:11px;color:#8a8886;padding-top:4px">…и ещё ${loc.tickets.length - 12}</div>` : '';
 
-    const stageRows = Object.entries(byStage).map(([s, c]) => {
-      const clr = s.includes(':1') ? '#FF6B35' : (s.includes('NEW') || s.includes('UC_N8')) ? '#22B9FF' : '#605e5c';
-      return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #f0f0f0">
-        <span style="color:${clr};font-weight:600;font-size:11px">${esc(STAGE_NAMES[s]||s)}</span>
-        <span style="font-weight:700">${c}</span>
-      </div>`;
-    }).join('');
-
-    const popup = L.popup({ maxWidth: 280 }).setContent(
-      `<div style="font-family:Inter,sans-serif;font-size:12px;min-width:200px">
-        <div style="font-weight:700;font-size:13px;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid #f0f0f0">
-          📍 ${esc(loc.city||'Локация')}
-        </div>
-        <div style="margin-bottom:8px;color:#605e5c">
-          Активных заявок: <strong style="color:#201f1e">${cnt}</strong>
-          ${hasOv ? ' <span style="color:#c4314b">⚠ есть просроченные</span>' : ''}
-        </div>
-        <div>${stageRows}</div>
+    const popup = L.popup({ maxWidth: 320 }).setContent(
+      `<div style="font-family:Inter,sans-serif;font-size:12px;min-width:230px">
+        <div style="font-weight:700;font-size:13px;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid #f0f0f0">📍 ${esc(loc.city || 'Локация')} · ${cnt} заявок</div>
+        <div style="margin-bottom:6px">${kindRows}</div>
+        <div style="margin-bottom:6px">${catRows}</div>
+        ${list}${more}
       </div>`
     );
     L.marker([loc.lat, loc.lng], { icon }).bindPopup(popup).addTo(ticketLayer);
   }
 
-  // Fit map to ticket markers
   if (locs.length > 0) {
     const bounds = L.latLngBounds(locs.map(l => [l.lat, l.lng]));
     map.fitBounds(bounds, { padding: [40, 40] });

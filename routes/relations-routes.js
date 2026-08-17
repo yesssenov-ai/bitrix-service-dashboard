@@ -389,6 +389,9 @@ async function handleBitrixWebhook(req, res) {
     // ── Case 0: Sync into the planner (Заявка на сервис only) ──────────────
     if (entityTypeId === 1058) {
       await syncPlannerEvent(item, itemId);
+      // Авто-создание закупки из завершённого «подбора допов» (best-effort, с дедупом)
+      try { const { autoCreateFromService } = require('../procurement-calc'); await autoCreateFromService(itemId); }
+      catch (e) { console.error('procurement auto-create error:', e.message); }
     }
 
     // ── Case 1: Engineer assigned (only for Заявка на сервис, 1058) ────────────

@@ -153,24 +153,45 @@ async function fetchDeviceNames(b24call) {
   }
 }
 
-// ── Link tickets to equipment via ufCrm8_1732855747 (or fallback by companyId) ──
-async function fetchAndLinkTickets(equipmentMap, b24call) {
-  const FINAL = new Set(['DT1058_11:SUCCESS','DT1058_11:FAIL','DT1058_11:4']);
+// ── Сервисные заявки (1058) → тип/срочность/категория ────────────────────────
+const SERVICE_TYPE_FIELD = 'ufCrm8_1744300223';       // «Тип оказываемых услуг (УС)»
+const URGENT_FIELD = 'ufCrm8_1732856215147';          // срочность/просрочка (Да=1807)
+const URGENT_YES = '1807';
+const INSTALL_TYPE_ID = '103';                        // «Установка»
+const SERVICE_TYPE_MAP = {
+  '103': 'Установка', '104': 'Техническое обслуживание', '105': 'Диагностика', '106': 'Ремонт',
+  '107': 'Методическое сопровождение', '108': 'Обучение сервисного отдела', '109': 'Обучение ТЦ',
+  '110': 'Квалификация', '111': 'Подбор дополнительного оборудования',
+  '112': 'Подбор расходки / запасных частей', '113': 'Претензия',
+  '114': 'Другое', '402': 'Подготовка документов', '619': 'Заявка клиента',
+};
+const isFinalStage = s => /:(SUCCESS|FAIL)$/i.test(String(s || '')) || s === 'DT1058_11:4';
 
-  // Build company → equipment index for fallback
+// Категории 1058 (id → имя): Тикеты, Обязательства, Заявка на сервис и т.д. — для фильтра.
+async function fetchServiceCategories(b24call) {
+  try {
+    const data = await b24call('crm.category.list', { entityTypeId: 1058 });
+    const map = {};
+    (data.result?.categories || []).forEach(c => { map[String(c.id)] = c.name; });
+    return map;
+  } catch (e) { console.error('fetchServiceCategories:', e.message); return {}; }
+}
+
+// ── Привязка заявок к оборудованию (по полю оборудования или по компании) ─────
+// Тянем ВСЕ незавершённые заявки по всем категориям; каждую размечаем типом
+// (установка/сервис) и срочностью — фронт рисует горящие/установку/сервис.
+async function fetchAndLinkTickets(equipmentMap, b24call, categoryNames = {}) {
   const companyToEquipment = {};
   for (const item of Object.values(equipmentMap)) {
     if (!item.companyId) continue;
-    if (!companyToEquipment[item.companyId]) companyToEquipment[item.companyId] = [];
-    companyToEquipment[item.companyId].push(item.id);
+    (companyToEquipment[item.companyId] = companyToEquipment[item.companyId] || []).push(item.id);
   }
 
   let start = 0;
   while (true) {
     const data = await b24call('crm.item.list', {
       entityTypeId: 1058,
-      filter: { categoryId: 11 },
-      select: ['id','title','stageId','companyId', F58_EQUIPMENT_LINK, 'ufCrm8_1732856215147'],
+      select: ['id','title','stageId','companyId','categoryId', F58_EQUIPMENT_LINK, URGENT_FIELD, SERVICE_TYPE_FIELD],
       order: { id: 'DESC' },
       start,
     });
@@ -178,32 +199,23 @@ async function fetchAndLinkTickets(equipmentMap, b24call) {
     if (!batch.length) break;
 
     for (const t of batch) {
-      if (FINAL.has(t.stageId)) continue;
+      if (isFinalStage(t.stageId)) continue;
+      const serviceTypeIds = toArray(t[SERVICE_TYPE_FIELD]);
+      const serviceTypeLabel = serviceTypeIds.map(id => SERVICE_TYPE_MAP[id] || `#${id}`).join(', ');
+      const urgent = String(t[URGENT_FIELD]) === URGENT_YES;
+      const isInstall = serviceTypeIds.includes(INSTALL_TYPE_ID);
+      const kind = urgent ? 'urgent' : (isInstall ? 'install' : 'service');
+      const catId = String(t.categoryId);
       const ticket = {
         id: t.id, title: t.title, stageId: t.stageId,
-        isOverdue: t.ufCrm8_1732856215147 === '1807',
+        categoryId: catId, categoryName: categoryNames[catId] || ('Категория ' + catId),
+        serviceTypeIds, serviceTypeLabel, urgent, isOverdue: urgent, kind,
         url: `https://crm.prolabsupport.kz/crm/type/1058/details/${t.id}/`,
       };
-
-      // Primary: link via equipment field
+      const attach = eqId => { const e = equipmentMap[eqId]; if (!e) return; e.activeTickets.push(ticket); if (urgent) e.hasProblems = true; };
       const linkedIds = toArray(t[F58_EQUIPMENT_LINK]).map(Number).filter(Boolean);
-      if (linkedIds.length) {
-        for (const eqId of linkedIds) {
-          if (!equipmentMap[eqId]) continue;
-          equipmentMap[eqId].activeTickets.push(ticket);
-          if (ticket.isOverdue) equipmentMap[eqId].hasProblems = true;
-        }
-        continue;
-      }
-
-      // Fallback: link via companyId — attach to first equipment of that company
-      if (t.companyId && companyToEquipment[t.companyId]) {
-        const eqId = companyToEquipment[t.companyId][0]; // first equipment of company
-        if (equipmentMap[eqId]) {
-          equipmentMap[eqId].activeTickets.push(ticket);
-          if (ticket.isOverdue) equipmentMap[eqId].hasProblems = true;
-        }
-      }
+      if (linkedIds.length) { linkedIds.forEach(attach); continue; }
+      if (t.companyId && companyToEquipment[t.companyId]) attach(companyToEquipment[t.companyId][0]);
     }
 
     const total = data.total ?? (start + batch.length);
@@ -300,6 +312,6 @@ async function geocodeEquipment(items, pool) {
 }
 
 module.exports = {
-  fetchAllEquipment, fetchAndLinkTickets, fetchCompanyNames,
-  geocodeEquipment, fetchDeviceNames, MANUFACTURERS, extractCity,
+  fetchAllEquipment, fetchAndLinkTickets, fetchServiceCategories, fetchCompanyNames,
+  geocodeEquipment, fetchDeviceNames, MANUFACTURERS, SERVICE_TYPE_MAP, extractCity,
 };

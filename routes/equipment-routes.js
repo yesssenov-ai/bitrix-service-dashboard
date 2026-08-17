@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth, pool } = require('../auth');
 const {
-  fetchAllEquipment, fetchAndLinkTickets, fetchCompanyNames,
+  fetchAllEquipment, fetchAndLinkTickets, fetchServiceCategories, fetchCompanyNames,
   geocodeEquipment, fetchDeviceNames, MANUFACTURERS,
 } = require('../equipment-map');
 
@@ -12,6 +12,7 @@ function setB24(fn) { b24callFn = fn; }
 // ── Состояние в памяти (наполняется из БД на старте — карта открывается сразу) ─
 let cache = null;              // массив обогащённых приборов
 let deviceNamesCache = {};
+let serviceCategories = {};    // id → имя категории заявок (Тикеты, Обязательства…)
 let meta = { lastFullSync: null, lastSync: null };
 let isLoading = false;
 let loadError = null;
@@ -24,6 +25,7 @@ async function ensureTables() {
     item_id INTEGER PRIMARY KEY, data JSONB, updated_time TIMESTAMPTZ, synced_at TIMESTAMPTZ DEFAULT NOW())`);
   await pool.query(`CREATE TABLE IF NOT EXISTS ticketsmodule_equipment_meta (
     id INTEGER PRIMARY KEY, last_full_sync TIMESTAMPTZ, last_sync TIMESTAMPTZ, device_names JSONB)`);
+  await pool.query(`ALTER TABLE ticketsmodule_equipment_meta ADD COLUMN IF NOT EXISTS service_categories JSONB`);
   await pool.query(`CREATE TABLE IF NOT EXISTS ticketsmodule_equipment_geo (
     item_id INTEGER PRIMARY KEY, address VARCHAR(300), lat DOUBLE PRECISION, lng DOUBLE PRECISION,
     geocode_failed BOOLEAN DEFAULT false, geocoded_at TIMESTAMPTZ DEFAULT NOW())`);
@@ -64,10 +66,11 @@ async function loadFromDb() {
   try {
     const { rows } = await pool.query('SELECT data FROM ticketsmodule_equipment_cache');
     cache = rows.map(r => r.data);
-    const m = await pool.query('SELECT last_full_sync, last_sync, device_names FROM ticketsmodule_equipment_meta WHERE id=1');
+    const m = await pool.query('SELECT last_full_sync, last_sync, device_names, service_categories FROM ticketsmodule_equipment_meta WHERE id=1');
     if (m.rows.length) {
       meta.lastFullSync = m.rows[0].last_full_sync; meta.lastSync = m.rows[0].last_sync;
       deviceNamesCache = m.rows[0].device_names || {};
+      serviceCategories = m.rows[0].service_categories || {};
     }
     console.log(`✅ Equipment cache из БД: ${cache.length} приборов (last_sync ${meta.lastSync || '—'})`);
   } catch (e) { console.error('equipment loadFromDb error:', e.message); }
@@ -83,7 +86,8 @@ async function buildFull() {
     await ensureTables();
     const rawItems = await fetchAllEquipment(b24callFn);
     const map = {}; rawItems.forEach(it => { map[it.id] = it; });
-    try { await fetchAndLinkTickets(map, b24callFn); } catch (e) { console.error('tickets:', e.message); }
+    try { serviceCategories = await fetchServiceCategories(b24callFn); } catch (e) {}
+    try { await fetchAndLinkTickets(map, b24callFn, serviceCategories); } catch (e) { console.error('tickets:', e.message); }
     try {
       const ids = [...new Set(rawItems.map(e => e.companyId).filter(Boolean))];
       const names = await fetchCompanyNames(ids, b24callFn);
@@ -95,7 +99,7 @@ async function buildFull() {
     cache = withCoords;
     await persistAll(cache);
     const now = new Date();
-    await setMeta({ last_full_sync: now, last_sync: now, device_names: JSON.stringify(deviceNamesCache) });
+    await setMeta({ last_full_sync: now, last_sync: now, device_names: JSON.stringify(deviceNamesCache), service_categories: JSON.stringify(serviceCategories) });
     meta.lastFullSync = now.toISOString(); meta.lastSync = now.toISOString();
     console.log(`✅ Equipment полная сборка: ${cache.length} приборов за ${Math.round((Date.now() - t0) / 1000)}с`);
     return { ok: true, count: cache.length };
@@ -131,11 +135,12 @@ async function buildIncremental() {
     try { const g = await geocodeEquipment(changed.map(c => map[c.id]), pool); g.forEach(x => { map[x.id] = x; }); } catch (e) { console.error('inc geocode:', e.message); }
     // Пере-привязываем активные заявки ко всему набору (открытых заявок немного).
     Object.values(map).forEach(it => { it.activeTickets = []; it.hasProblems = false; });
-    try { await fetchAndLinkTickets(map, b24callFn); } catch (e) { console.error('inc tickets:', e.message); }
+    try { if (!Object.keys(serviceCategories).length) serviceCategories = await fetchServiceCategories(b24callFn); } catch (e) {}
+    try { await fetchAndLinkTickets(map, b24callFn, serviceCategories); } catch (e) { console.error('inc tickets:', e.message); }
     cache = Object.values(map);
     await persistAll(cache);
     const now = new Date();
-    await setMeta({ last_sync: now });
+    await setMeta({ last_sync: now, service_categories: JSON.stringify(serviceCategories) });
     meta.lastSync = now.toISOString();
     console.log(`✅ Equipment инкремент: изменено ${changed.length}, всего ${cache.length} за ${Math.round((Date.now() - t0) / 1000)}с`);
     return { ok: true, changed: changed.length, count: cache.length };
@@ -181,7 +186,15 @@ function buildResponse(query) {
   const companyMap = {}; all.forEach(it => { if (it.companyId && it.companyName) companyMap[it.companyId] = it.companyName; });
   const companies = Object.entries(companyMap).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
 
-  return { ok: true, items: filtered, stats, manufacturers, deviceNames, cities, companies, cachedAt: meta.lastSync, lastFullSync: meta.lastFullSync };
+  // Категории заявок на сервис (для фильтра слоя заявок) + сводка по типам.
+  const catCounts = {}, kindCounts = { urgent: 0, install: 0, service: 0 };
+  all.forEach(it => (it.activeTickets || []).forEach(t => {
+    catCounts[t.categoryId] = (catCounts[t.categoryId] || 0) + 1;
+    if (kindCounts[t.kind] != null) kindCounts[t.kind]++;
+  }));
+  const ticketCategories = Object.entries(catCounts).map(([id, count]) => ({ id, name: serviceCategories[id] || ('Категория ' + id), count })).sort((a, b) => b.count - a.count);
+
+  return { ok: true, items: filtered, stats, manufacturers, deviceNames, cities, companies, ticketCategories, ticketKinds: kindCounts, cachedAt: meta.lastSync, lastFullSync: meta.lastFullSync };
 }
 
 // GET /equipment/status
