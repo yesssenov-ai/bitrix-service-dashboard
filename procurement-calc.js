@@ -59,6 +59,7 @@ function ensureSchema() {
         comment TEXT,
         uploaded_by INTEGER,
         uploaded_at TIMESTAMPTZ DEFAULT NOW());
+      ALTER TABLE ticketsmodule_procurement_files ADD COLUMN IF NOT EXISTS bitrix_file_id INTEGER;
       CREATE INDEX IF NOT EXISTS idx_proc_files_req ON ticketsmodule_procurement_files(request_id);
       -- Отгрузка по сделке: менеджер склада фиксирует «всё отправлено клиенту».
       CREATE TABLE IF NOT EXISTS ticketsmodule_procurement_deal_ship (
@@ -135,16 +136,18 @@ const stepIndexForStage = stageId => (STAGE_TO_STEP[stageId] != null ? STAGE_TO_
 // так дашборд сам «привязывается» к полям, которые менеджер создал в Битриксе
 // («Счет на оплату», «Подтверждение оплаты», «Накладная», «Гарантийный
 // сертификат»). Значения ниже — только резерв на случай, если поле не нашлось.
-const DOC_INVOICE = 'ufCrm10_1763537277532';   // резерв
-const DOC_PAY = 'ufCrm10_1744874990535';       // резерв
-const DOC_CONTRACT = 'ufCrm10_1732858619051';  // резерв
-const DOC_WARRANTY = process.env.PROC_WARRANTY_FIELD || 'ufCrm10_1732858487739'; // резерв
+// Резервные коды (точные, подтверждены discovery 1066). Основной способ —
+// динамический резолв по названию (resolveDocFields), это лишь fallback.
+const DOC_INVOICE = 'ufCrm10_1786717634809';   // «Счет на оплату»
+const DOC_PAY = 'ufCrm10_1786717656594';       // «Подтверждение оплаты» (новое)
+const DOC_CONTRACT = 'ufCrm10_1786717668866';  // «Накладная»
+const DOC_WARRANTY = process.env.PROC_WARRANTY_FIELD || 'ufCrm10_1786717682346'; // «Гарантийный сертификат»
 const APPROVE_YES = '1827';                    // «Согласовано» (поле Согласование предоплаты)
 // Слоты загрузки: ключ + подпись (код подтягивается динамически по названию).
 const UPLOAD_SLOT_DEFS = [
   { key: 'invoice',  label: 'Счет на оплату',           re: /сч[её]т.*оплат/i,       fallback: DOC_INVOICE },
   { key: 'pay',      label: 'Подтверждение оплаты',      re: /подтвержд.*оплат/i,     fallback: DOC_PAY },
-  { key: 'poa',      label: 'Доверенность',              re: /доверенн/i,             fallback: process.env.PROC_POA_FIELD || '' },
+  { key: 'poa',      label: 'Доверенность',              re: /доверенн/i,             fallback: process.env.PROC_POA_FIELD || 'ufCrm10_1787059241414' },
   { key: 'contract', label: 'Накладная',                 re: /накладн/i,              fallback: DOC_CONTRACT },
   { key: 'warranty', label: 'Гарантийный сертификат',    re: /гаранти.*сертиф/i,      fallback: DOC_WARRANTY },
 ];
@@ -949,34 +952,55 @@ const SLOT_KEYS = ['invoice', 'pay', 'poa', 'contract', 'warranty'];
 const SLOT_LABELS = { invoice: 'Счет на оплату', pay: 'Подтверждение оплаты', poa: 'Доверенность', contract: 'Накладная', warranty: 'Гарантийный сертификат' };
 function userFacing(msg) { const e = new Error(msg); e.userFacing = true; return e; }
 
-// Отправить ВСЕ файлы слота в файловое поле 1066 (best-effort; если поле в
-// Битриксе одиночное — примет последний, дашборд всё равно хранит все).
-async function pushSlotToBitrix(localId, slot) {
+// node-fetch (или глобальный fetch) для выгрузки байтов файла из Битрикса.
+async function fetchUrlBuffer(url) {
+  if (!_fetch || !url) return null;
   try {
-    const itemId = await itemIdOf(localId);
-    const docFields = await resolveDocFields();
-    const code = docFields[slot]; if (!code) return;
-    const { rows } = await pool.query(
-      'SELECT filename, content_b64 FROM ticketsmodule_procurement_files WHERE request_id=$1 AND slot=$2 ORDER BY id', [localId, slot]);
-    const val = rows.filter(r => r.content_b64).map(r => ({ fileData: [r.filename || 'file', r.content_b64] }));
-    await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields: { [code]: val.length ? val : '' } });
-  } catch (e) { console.error('pushSlotToBitrix', slot, e.message); }
+    const r = await _fetch(url);
+    if (!r.ok) { console.error('fetchUrlBuffer HTTP', r.status); return null; }
+    const ab = await r.arrayBuffer();
+    return Buffer.from(ab);
+  } catch (e) { console.error('fetchUrlBuffer:', e.message); return null; }
 }
 
-// Добавить файл в слот (+ метаданные накладной). Возвращает { id, first }.
+// Файловые объекты слота из СВЕЖЕГО crm.item.get: [{ id, urlMachine }].
+async function bitrixSlotFiles(itemId, slot, itemCache) {
+  const docFields = await resolveDocFields();
+  const code = docFields[slot]; if (!code) return [];
+  let item = itemCache;
+  if (!item) { const { result } = await b24('crm.item.get', { entityTypeId: ENTITY, id: itemId }); item = (result && result.item) || {}; }
+  const v = item[code];
+  const arr = Array.isArray(v) ? v : (v ? [v] : []);
+  return arr.map(f => ({ id: Number(f.id || f.ID), urlMachine: f.urlMachine || f.downloadUrl || f.url || null }));
+}
+
+// Добавить файл в слот: кладём в поле Битрикса (дописываем, не перезаписывая),
+// в ЦУПе храним только метаданные (имя, id файла Битрикса, склад/дата/коммент).
+// Возвращает { id, first }.
 async function addFile(localId, slot, { filename, mime, base64, warehouse, acceptDate, comment } = {}, uploadedBy) {
   await ensureSchema();
   if (!SLOT_KEYS.includes(slot)) throw new Error('Недопустимый слот файла');
+  if (!base64) throw userFacing('Не приложен файл');
+  const itemId = await itemIdOf(localId);
+  const docFields = await resolveDocFields();
+  const code = docFields[slot];
+  if (!code) throw userFacing('В Битриксе не найдено поле для «' + (SLOT_LABELS[slot] || slot) + '»');
   const before = await pool.query('SELECT COUNT(*)::int AS n FROM ticketsmodule_procurement_files WHERE request_id=$1 AND slot=$2', [localId, slot]);
   const first = (before.rows[0].n || 0) === 0;
+  // Существующие файлы поля (по id) — чтобы ДОПИСАТЬ новый, а не заменить весь набор.
+  let beforeIds = [];
+  try { beforeIds = (await bitrixSlotFiles(itemId, slot)).map(f => f.id).filter(Boolean); } catch (e) { /* поле могло быть пустым */ }
+  const value = [...beforeIds, { fileData: [filename || 'file', base64] }];
+  await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields: { [code]: value } });
+  // Узнаём id только что добавленного файла.
+  let newId = null;
+  try { const after = await bitrixSlotFiles(itemId, slot); const nf = after.find(f => !beforeIds.includes(f.id)) || after[after.length - 1]; newId = nf ? nf.id : null; } catch (e) { /* некритично */ }
   const ins = await pool.query(
-    `INSERT INTO ticketsmodule_procurement_files (request_id, slot, filename, mime, content_b64, warehouse, accept_date, comment, uploaded_by)
+    `INSERT INTO ticketsmodule_procurement_files (request_id, slot, filename, mime, bitrix_file_id, warehouse, accept_date, comment, uploaded_by)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-    [localId, slot, filename || 'file', mime || null, base64 || null, warehouse || null, acceptDate || null, comment || null, uploadedBy || null]);
-  // best-effort зеркалирование в Битрикс
-  pushSlotToBitrix(localId, slot).catch(() => {});
+    [localId, slot, filename || 'file', mime || null, newId, warehouse || null, acceptDate || null, comment || null, uploadedBy || null]);
   // «Подтверждение оплаты» (первый файл) → уведомляем инициатора и согласующего,
-  // с вложением самих платёжек.
+  // с вложением самих платёжек (тянем байты из Битрикса).
   if (slot === 'pay' && first) {
     try {
       const ctx = await getRequestContext(localId);
@@ -1013,27 +1037,63 @@ async function filesFor(localId) {
   return bySlot;
 }
 
-// Вложения для письма: [{ filename, content(base64) }] по слотам.
+// Вложения для письма: [{ filename, content(base64) }] — байты берём из Битрикса.
 async function slotAttachments(localId, slots) {
   const arr = Array.isArray(slots) ? slots : [slots];
+  const itemId = await itemIdOf(localId);
+  // имена файлов по id (Битрикс имя не возвращает — берём из ЦУП-метаданных)
   const { rows } = await pool.query(
-    'SELECT filename, content_b64 FROM ticketsmodule_procurement_files WHERE request_id=$1 AND slot = ANY($2) ORDER BY id', [localId, arr]);
-  return rows.filter(r => r.content_b64).map(r => ({ filename: r.filename || 'file', content: r.content_b64 }));
+    'SELECT slot, filename, bitrix_file_id FROM ticketsmodule_procurement_files WHERE request_id=$1 AND slot = ANY($2) ORDER BY id', [localId, arr]);
+  const nameById = {}; rows.forEach(r => { if (r.bitrix_file_id) nameById[r.bitrix_file_id] = r.filename; });
+  // один crm.item.get на всё
+  let item = {};
+  try { const { result } = await b24('crm.item.get', { entityTypeId: ENTITY, id: itemId }); item = (result && result.item) || {}; } catch (e) { return []; }
+  const out = [];
+  for (const slot of arr) {
+    let files = [];
+    try { files = await bitrixSlotFiles(itemId, slot, item); } catch (e) { continue; }
+    for (const f of files) {
+      if (!f.urlMachine) continue;
+      const buf = await fetchUrlBuffer(f.urlMachine);
+      if (!buf) continue;
+      out.push({ filename: nameById[f.id] || (SLOT_LABELS[slot] || slot) + '-' + f.id, content: buf.toString('base64') });
+    }
+  }
+  return out;
 }
 
-// Байты файла для скачивания.
+// Байты файла для скачивания из ЦУП — прокси из Битрикса (ничего не храним).
 async function getFileBytes(localId, fileId) {
   const { rows } = await pool.query(
-    'SELECT filename, mime, content_b64 FROM ticketsmodule_procurement_files WHERE id=$1 AND request_id=$2', [fileId, localId]);
-  if (!rows.length || !rows[0].content_b64) return null;
-  return { filename: rows[0].filename || 'file', mime: rows[0].mime || 'application/octet-stream', buffer: Buffer.from(rows[0].content_b64, 'base64') };
+    'SELECT slot, filename, mime, bitrix_file_id FROM ticketsmodule_procurement_files WHERE id=$1 AND request_id=$2', [fileId, localId]);
+  if (!rows.length) return null;
+  const r = rows[0];
+  const itemId = await itemIdOf(localId);
+  let files = [];
+  try { files = await bitrixSlotFiles(itemId, r.slot); } catch (e) { return null; }
+  const match = files.find(f => Number(f.id) === Number(r.bitrix_file_id)) || files[0];
+  if (!match || !match.urlMachine) return null;
+  const buf = await fetchUrlBuffer(match.urlMachine);
+  if (!buf) return null;
+  return { filename: r.filename || 'file', mime: r.mime || 'application/octet-stream', buffer: buf };
 }
 
-// Удалить файл слота.
+// Удалить файл слота: убираем из поля Битрикса (пересобираем набор без него) + локально.
 async function removeFile(localId, fileId) {
-  const { rows } = await pool.query('SELECT slot FROM ticketsmodule_procurement_files WHERE id=$1 AND request_id=$2', [fileId, localId]);
+  const { rows } = await pool.query('SELECT slot, bitrix_file_id FROM ticketsmodule_procurement_files WHERE id=$1 AND request_id=$2', [fileId, localId]);
+  if (rows.length && rows[0].bitrix_file_id) {
+    try {
+      const itemId = await itemIdOf(localId);
+      const docFields = await resolveDocFields();
+      const code = docFields[rows[0].slot];
+      if (code) {
+        const files = await bitrixSlotFiles(itemId, rows[0].slot);
+        const keep = files.filter(f => Number(f.id) !== Number(rows[0].bitrix_file_id)).map(f => f.id);
+        await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields: { [code]: keep.length ? keep : '' } });
+      }
+    } catch (e) { console.error('removeFile bitrix:', e.message); }
+  }
   await pool.query('DELETE FROM ticketsmodule_procurement_files WHERE id=$1 AND request_id=$2', [fileId, localId]);
-  if (rows.length) pushSlotToBitrix(localId, rows[0].slot).catch(() => {});
   return { ok: true };
 }
 
