@@ -546,9 +546,13 @@ function dbRowToBoard(r, stageMeta, userMap = {}) {
 
 async function getSyncMeta() {
   try {
-    const { rows } = await pool.query('SELECT last_full_sync, deal_count, last_source FROM ticketsmodule_operational_meta WHERE id=1');
+    const { rows } = await pool.query('SELECT last_full_sync, deal_count, last_source, last_started_at, last_error, last_error_at, last_ok_at FROM ticketsmodule_operational_meta WHERE id=1');
     if (!rows.length) return { lastFullSync: null, dealCount: 0, source: null };
-    return { lastFullSync: rows[0].last_full_sync, dealCount: rows[0].deal_count, source: rows[0].last_source };
+    const r = rows[0];
+    return {
+      lastFullSync: r.last_full_sync, dealCount: r.deal_count, source: r.last_source,
+      lastStartedAt: r.last_started_at, lastError: r.last_error, lastErrorAt: r.last_error_at, lastOkAt: r.last_ok_at,
+    };
   } catch (e) { return { lastFullSync: null, dealCount: 0, source: null }; }
 }
 

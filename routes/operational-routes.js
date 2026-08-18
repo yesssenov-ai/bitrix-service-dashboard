@@ -108,7 +108,15 @@ router.post('/refresh', requireCap('view'), async (req, res) => {
   try {
     const result = await refreshOperationalCache();
     const board = await getBoard(parseFilters(req.query));
-    res.json({ ok: true, refreshed: result, ...board });
+    // Явно сообщаем фронту исход: обновилось / уже идёт / ошибка — чтобы кнопка
+    // не выглядела «нерабочей», когда синк пропущен или упал.
+    if (result && result.error) {
+      return res.json({ ok: true, refreshStatus: 'error', refreshError: result.error, ...board });
+    }
+    if (result && result.skipped) {
+      return res.json({ ok: true, refreshStatus: 'running', ...board });
+    }
+    res.json({ ok: true, refreshStatus: 'done', refreshedCount: result && result.count, ...board });
   } catch (e) {
     console.error('POST /api/operational/refresh error:', e.message);
     res.status(500).json({ ok: false, error: 'Не удалось обновить данные: ' + e.message });

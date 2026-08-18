@@ -567,7 +567,8 @@ initDB().then(() => {
     // полный прогон при старте (наполнить кэш после деплоя), затем ночная
     // сверка в 01:00 по Кызылорде (UTC+5) = 20:00 UTC. Живые точечные апдейты
     // приходят через вебхук ONCRMDEALADD/UPDATE (см. relations-routes).
-    const { fullSync: operationalFullSync } = require('./operational-sync');
+    const { fullSync: operationalFullSync, isSyncing: opIsSyncing } = require('./operational-sync');
+    const { getSyncMeta: getOpSyncMeta } = require('./operational');
     setTimeout(() => operationalFullSync({ source: 'boot' }).catch(e => console.error('operational boot sync error:', e.message)), 20000);
     // Авто-рассылка операционного отчёта руководству (вт 18:00 Алматы = 13:00 UTC).
     try { require('./ops-report-scheduler').startOpsReportScheduler(); } catch (e) { console.error('ops-report scheduler start error:', e.message); }
@@ -584,8 +585,8 @@ initDB().then(() => {
     // Карта оборудования: кэш в БД, карта открывается мгновенно. Поднимаем кэш из
     // БД на старте; если пусто — полная сборка в фоне.
     setTimeout(() => equipmentRoutes.bootPreload().catch(e => console.error('equipment bootPreload error:', e.message)), 30000);
-    let lastOpSyncDate = null, lastEquipSyncDate = null;
-    setInterval(() => {
+    let lastOpSyncDate = null, lastEquipSyncDate = null, lastOpCatchup = 0;
+    setInterval(async () => {
       const now = new Date();
       const dateKey = now.toISOString().slice(0, 10);
       if (now.getUTCHours() === 20 && lastOpSyncDate !== dateKey) {
@@ -597,6 +598,21 @@ initDB().then(() => {
           .then(() => fullSyncStatsDeals().catch(e => console.error('stats nightly sync error:', e.message)))
           .then(() => refreshAndAlert('nightly'));
       }
+      // ── Самолечение «Реализации» ─────────────────────────────────────────────
+      // Ночной синк — процессный setInterval: если контейнер в 20:00 UTC спал/
+      // рестартился ИЛИ сверка упала, данные «замирали» (как встали на 11-м).
+      // Догоняем автоматически: последняя УСПЕШНАЯ сверка старше 24ч и синк не
+      // идёт → запускаем (не чаще раза в 25 мин, чтобы не спамить при сбое).
+      try {
+        const meta = await getOpSyncMeta();
+        const okAt = meta.lastOkAt || meta.lastFullSync;
+        const ageH = okAt ? (Date.now() - new Date(okAt).getTime()) / 3600000 : Infinity;
+        if (ageH > 24 && !opIsSyncing() && Date.now() - lastOpCatchup > 25 * 60 * 1000) {
+          lastOpCatchup = Date.now();
+          console.log(`operational: данные старше ${Math.round(ageH)}ч — запускаю догоняющую сверку`);
+          operationalFullSync({ source: 'catchup' }).catch(e => console.error('operational catchup error:', e.message));
+        }
+      } catch (e) { /* мета недоступна — пропускаем */ }
       // 03:00 Алматы (UTC+5) = 22:00 UTC — полная сборка Карты оборудования + геокодирование.
       if (now.getUTCHours() === 22 && lastEquipSyncDate !== dateKey) {
         lastEquipSyncDate = dateKey;

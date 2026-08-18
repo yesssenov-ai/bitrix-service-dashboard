@@ -399,6 +399,10 @@ async function initDB() {
       deal_count INTEGER DEFAULT 0,
       last_source VARCHAR(20)
     );
+    ALTER TABLE ticketsmodule_operational_meta ADD COLUMN IF NOT EXISTS last_started_at TIMESTAMPTZ;
+    ALTER TABLE ticketsmodule_operational_meta ADD COLUMN IF NOT EXISTS last_error TEXT;
+    ALTER TABLE ticketsmodule_operational_meta ADD COLUMN IF NOT EXISTS last_error_at TIMESTAMPTZ;
+    ALTER TABLE ticketsmodule_operational_meta ADD COLUMN IF NOT EXISTS last_ok_at TIMESTAMPTZ;
 
     -- Права ролей внутри модуля «Реализация». admin всегда имеет полный доступ
     -- (в таблице не хранится). Настраивается через внутреннюю админку модуля.

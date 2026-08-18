@@ -54,6 +54,8 @@ main{padding:20px 26px 60px;max-width:1560px;margin:0 auto;}
 .page-head{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;}
 h1{font-family:var(--font-display);font-size:22px;font-weight:600;}
 .asof{font-family:var(--font-mono);font-size:11.5px;color:var(--text-faint);}
+.asof.asof-stale{color:#e0a03a;font-weight:600;}
+.asof.asof-err{color:#e0574a;font-weight:600;}
 
 /* Filters */
 .filters{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px;}
@@ -488,9 +490,18 @@ async function loadBoard(){
 function renderAsOf(d){
   const el=document.getElementById('asof');
   const ls=d.lastSync||{};
-  const src={boot:'старт сервера',nightly:'ночная сверка',manual:'вручную'}[ls.source]||ls.source||'';
+  const src={boot:'старт сервера',nightly:'ночная сверка',manual:'вручную',catchup:'догоняющая',hourly:'ежечасно'}[ls.source]||ls.source||'';
   const when=ls.lastFullSync?new Date(ls.lastFullSync).toLocaleString('ru-RU'):'ещё не синхронизировано';
-  el.textContent=`Кэш обновлён: ${when}${src?' · '+src:''} · сделок в базе: ${ls.dealCount??(d.rows?d.rows.length:0)}`;
+  let txt=`Кэш обновлён: ${when}${src?' · '+src:''} · сделок в базе: ${ls.dealCount??(d.rows?d.rows.length:0)}`;
+  el.classList.remove('asof-stale','asof-err');
+  if(ls.lastError){
+    txt+=` · ⚠ последняя синхронизация упала: ${ls.lastError}`;
+    el.classList.add('asof-err');
+  } else if(ls.lastFullSync){
+    const ageH=(Date.now()-new Date(ls.lastFullSync).getTime())/3600000;
+    if(ageH>26){ txt+=` · ⚠ данные старше ${Math.round(ageH)} ч — обновите`; el.classList.add('asof-stale'); }
+  }
+  el.textContent=txt;
 }
 
 function toggleExportMenu(e){ if(e)e.stopPropagation(); document.getElementById('exportMenu').classList.toggle('open'); }
@@ -540,15 +551,24 @@ function resetFilters(){
 
 async function refreshData(){
   const btn=document.getElementById('refreshBtn');
-  const old=btn.textContent; btn.disabled=true; btn.textContent='⏳ Обновляю…';
+  const old=btn.textContent; btn.disabled=true; btn.textContent='⏳ Обновляю… (до ~1–2 мин)';
   try{
     const r=await fetch('/api/operational/refresh?'+getFilters(),{method:'POST'});
     if(r.status===401){location.href='/login.html';return;}
     const data=await r.json();
     if(!data.ok)throw new Error(data.error||'Ошибка');
     BOARD=data;renderNotice(data);renderFunnel(data.funnel);renderChips(data.summary);populateOptions(data);renderRows(data.rows);renderAsOf(data);
+    if(data.refreshStatus==='running'){
+      alert('Синхронизация уже идёт в фоне. Подождите ~1 минуту и нажмите «Обновить» ещё раз.');
+    }else if(data.refreshStatus==='error'){
+      alert('Обновление завершилось с ошибкой:\n'+(data.refreshError||'')+'\n\nДанные по сделкам могли обновиться частично. Сообщите этот текст разработчику.');
+    }else{
+      btn.textContent='✓ Обновлено'+(data.refreshedCount!=null?' ('+data.refreshedCount+')':'');
+      setTimeout(()=>{btn.textContent=old;},2500);
+      return;
+    }
   }catch(e){ alert('Не удалось обновить: '+e.message); }
-  finally{ btn.disabled=false; btn.textContent=old; }
+  finally{ btn.disabled=false; if(btn.textContent.startsWith('⏳'))btn.textContent=old; }
 }
 
 function renderNotice(d){

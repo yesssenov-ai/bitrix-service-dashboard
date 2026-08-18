@@ -206,13 +206,26 @@ async function deleteDeal(dealId) {
 }
 
 // ── Full reconciliation (nightly / boot / manual button) ─────────────────────
-let syncing = false;
+let syncing = false, syncingSince = 0;
+const LOCK_STALE_MS = 15 * 60 * 1000; // если прошлый синк «завис» дольше — снимаем блокировку
+
+function isSyncing() { return syncing; }
+
 async function fullSync(opts = {}) {
-  if (syncing) { console.log('operational fullSync: already running, skipped'); return { skipped: true }; }
-  syncing = true;
   const source = opts.source || 'nightly';
+  // Снятие «залипшей» блокировки: прошлый запуск умер/завис — не блокируем навсегда.
+  if (syncing && Date.now() - syncingSince > LOCK_STALE_MS) {
+    console.warn('operational fullSync: снимаю зависшую блокировку (прошлый запуск > 15 мин)');
+    syncing = false;
+  }
+  if (syncing) { console.log('operational fullSync: already running, skipped'); return { skipped: true }; }
+  syncing = true; syncingSince = Date.now();
   const withAutomation = opts.withAutomation !== false;
   const startedAt = Date.now();
+  await pool.query(
+    `INSERT INTO ticketsmodule_operational_meta (id, last_started_at, last_source) VALUES (1, NOW(), $1)
+     ON CONFLICT (id) DO UPDATE SET last_started_at=NOW(), last_source=$1`, [source]
+  ).catch(() => {});
   try {
     const cats = Object.keys(PIPELINES).map(Number);
     const stageMeta = {};
@@ -241,6 +254,16 @@ async function fullSync(opts = {}) {
       await pool.query('DELETE FROM ticketsmodule_operational_deals').catch(() => {});
     }
 
+    // ✅ Данные по сделкам уже в базе — фиксируем свежесть СРАЗУ, чтобы медленный
+    // расчёт автоматизаций (ниже) не «прятал» факт успешного обновления и чтобы
+    // сбой на этом этапе не выглядел как «не обновилось вообще».
+    await pool.query(
+      `INSERT INTO ticketsmodule_operational_meta (id, last_full_sync, deal_count, last_source, last_error, last_error_at, last_ok_at)
+       VALUES (1, NOW(), $1, $2, NULL, NULL, NOW())
+       ON CONFLICT (id) DO UPDATE SET last_full_sync=NOW(), deal_count=$1, last_source=$2, last_error=NULL, last_error_at=NULL, last_ok_at=NOW()`,
+      [seen.length, source]
+    ).catch(() => {});
+
     if (withAutomation) {
       // Prefetch bizproc templates + all active instances once, then match per deal.
       let bp = null;
@@ -252,16 +275,19 @@ async function fullSync(opts = {}) {
       }
     }
 
-    await pool.query(
-      `INSERT INTO ticketsmodule_operational_meta (id, last_full_sync, deal_count, last_source)
-       VALUES (1, NOW(), $1, $2)
-       ON CONFLICT (id) DO UPDATE SET last_full_sync=NOW(), deal_count=$1, last_source=$2`,
-      [seen.length, source]
-    ).catch(() => {});
-
     const mins = ((Date.now() - startedAt) / 60000).toFixed(1);
     console.log(`✅ operational fullSync (${source}): ${seen.length} сделок за ${mins} мин${withAutomation ? '' : ' (без автоматизаций)'}`);
     return { count: seen.length };
+  } catch (e) {
+    // Раньше ошибка молча уходила в .catch() у планировщика, и данные «замирали».
+    // Теперь пишем её в мету — видно в модуле и можно точечно чинить причину.
+    console.error(`❌ operational fullSync (${source}) FAILED:`, e.message);
+    await pool.query(
+      `INSERT INTO ticketsmodule_operational_meta (id, last_error, last_error_at, last_source) VALUES (1, $1, NOW(), $2)
+       ON CONFLICT (id) DO UPDATE SET last_error=$1, last_error_at=NOW(), last_source=$2`,
+      [String(e && e.message || e).slice(0, 500), source]
+    ).catch(() => {});
+    return { error: String(e && e.message || e) };
   } finally {
     syncing = false;
   }
@@ -301,4 +327,4 @@ async function updateFactoryShipDate(dealId, ymd) {
   return { ok: true, itemId: purchase.id };
 }
 
-module.exports = { syncOneDeal, deleteDeal, fullSync, refresh, runAutomationSweep, computeAutomation, updateFactoryShipDate };
+module.exports = { syncOneDeal, deleteDeal, fullSync, refresh, runAutomationSweep, computeAutomation, updateFactoryShipDate, isSyncing };
