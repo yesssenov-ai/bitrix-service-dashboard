@@ -1198,6 +1198,19 @@ async function getDealShipment(dealId) {
   };
 }
 
+// Главная закупка сделки — самая ранняя (наименьший id): её сейлз создаёт
+// автоматически в начале. Основную ТТН пишем именно в неё.
+async function findMainProcurementItem(dealId) {
+  try {
+    const { result } = await b24('crm.item.list', {
+      entityTypeId: ENTITY, filter: { parentId2: Number(dealId) },
+      select: ['id'], order: { id: 'ASC' },
+    });
+    const items = (result && result.items) || [];
+    return items.length ? Number(items[0].id) : null;
+  } catch (e) { console.error('findMainProcurementItem:', e.message); return null; }
+}
+
 async function addShipFile(dealId, itemId, { filename, mime, base64 } = {}, byBid) {
   await ensureSchema();
   if (!base64) throw userFacing('Не приложен файл ТТН');
@@ -1205,8 +1218,10 @@ async function addShipFile(dealId, itemId, { filename, mime, base64 } = {}, byBi
     `INSERT INTO ticketsmodule_procurement_ship_files (deal_id, item_id, filename, mime, content_b64, uploaded_by)
      VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
     [Number(dealId), itemId ? Number(itemId) : null, filename || 'ТТН', mime || null, base64, byBid || null]);
-  // ТТН доотправки привязана к конкретной закупке → дублируем в поле «ТТН» в Битриксе.
-  if (itemId) pushTtnToBitrix(Number(itemId), filename || 'ТТН', base64).catch(() => {});
+  // ТТН в поле «ТТН» Битрикса: доотправка → в свою закупку; основная (без itemId)
+  // → в главную закупку сделки. Всё best-effort, источник для дашборда — ЦУП.
+  const target = itemId ? Number(itemId) : await findMainProcurementItem(dealId);
+  if (target) pushTtnToBitrix(target, filename || 'ТТН', base64).catch(() => {});
   return { id: ins.rows[0].id };
 }
 
