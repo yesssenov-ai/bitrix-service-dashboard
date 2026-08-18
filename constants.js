@@ -68,6 +68,9 @@ async function hydrateUsers() {
       const arr = (res && res.result) || [];
       for (const u of arr) {
         const id = String(u.ID);
+        // Почту дозагружаем ВСЕГДА, если её ещё нет в статической карте — иначе
+        // сотрудники, которых нет в USER_EMAILS (напр. Казиев), не получают писем.
+        if (!USER_EMAILS[id] && u.EMAIL && /@/.test(u.EMAIL)) USER_EMAILS[id] = String(u.EMAIL).trim();
         if (USERS[id]) continue; // курируемое имя не трогаем
         const name = [u.LAST_NAME, u.NAME].filter(Boolean).join(' ').trim()
           || u.EMAIL || ('#' + id);

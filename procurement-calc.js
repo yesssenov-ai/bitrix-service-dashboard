@@ -649,6 +649,8 @@ async function moveStage(localId, stageKey, opts = {}) {
     // Откат с «Товар принят» назад — снимаем отметку «полностью принят».
     if (curIdx === FLOW.length - 1) { pl.fullyReceived = false; pl.fullyReceivedAt = null; pl.fullyReceivedBy = null; }
     await pool.query('UPDATE ticketsmodule_procurement SET stage_id=$1, payload=$2, updated_at=NOW() WHERE id=$3', [step.bitrix, pl, localId]);
+    // Уведомляем об откате (с причиной) инициатора, согласующего, бухгалтера.
+    notifyRollback(localId, (curIdx >= 0 ? FLOW[curIdx].label : (curStageId || '—')), step.label, String(opts.reason || '').trim(), opts.byBid ? (USERS[opts.byBid] || ('#' + opts.byBid)) : null).catch(() => {});
   } else {
     await pool.query('UPDATE ticketsmodule_procurement SET stage_id=$1, updated_at=NOW() WHERE id=$2', [step.bitrix, localId]);
   }
@@ -1041,7 +1043,52 @@ async function addFile(localId, slot, { filename, mime, base64, warehouse, accep
   // Уведомление об оплате шлём НЕ при загрузке платёжки, а при переходе на
   // «Ожидание товара» — чтобы в одном письме были и платёжка, и доверенность
   // (см. moveStage → stageKey==='waiting').
+  // Добавили/изменили документ (не первый файл слота) → досылаем его повторно
+  // с уведомлением. Первый файл покрывают уведомления смены стадии.
+  if (!first) notifyFileChanged(localId, slot, filename || 'file', base64).catch(() => {});
   return { id: ins.rows[0].id, first };
+}
+
+// Уведомление «документ добавлен/изменён» — с вложением самого файла.
+// Получатели зависят от типа документа (кому он важен).
+async function notifyFileChanged(localId, slot, filename, base64) {
+  try {
+    const ctx = await getRequestContext(localId);
+    const { notifyPerson, emailHtml } = require('./procurement-notify');
+    const label = SLOT_LABELS[slot] || slot;
+    const t = ctx.title || ('#' + ctx.itemId);
+    const chief = ctx.accountantBid || chiefAccountantId();
+    const recipMap = {
+      invoice: [ctx.approverBid, chief],
+      pay: [ctx.creatorBid, ctx.approverBid],
+      poa: [ctx.creatorBid, ctx.approverBid],
+      contract: [ctx.approverBid, chief],
+      warranty: [ctx.approverBid, chief],
+    };
+    const recip = recipMap[slot] || [ctx.creatorBid, ctx.approverBid];
+    const attachments = base64 ? [{ filename: filename || 'file', content: base64 }] : [];
+    const targets = [...new Set(recip.filter(Boolean).map(String))];
+    for (const uid of targets) {
+      const tg = `📎 <b>Документ обновлён: «${esc(label)}»</b>\n📋 ${esc(t)}\nДобавлен/изменён файл: ${esc(filename || '')} (во вложении).\n<a href="${dashUrl()}">Открыть</a>`;
+      const html = emailHtml({ title: `Документ обновлён: «${label}»`, color: '#7c3aed', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ['Документ', label], ['Файл', filename || '']], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
+      await notifyPerson(uid, { reason: 'Документ обновлён', tgText: tg, subject: `Документ обновлён: ${label} · закупка #${ctx.itemId}`, html, itemId: ctx.itemId, attachments });
+    }
+  } catch (e) { /* best-effort */ }
+}
+
+// Уведомление об откате стадии назад (с причиной) — инициатору, согласующему, бухгалтеру.
+async function notifyRollback(localId, fromLabel, toLabel, reason, byName) {
+  try {
+    const ctx = await getRequestContext(localId);
+    const { notifyPerson, emailHtml } = require('./procurement-notify');
+    const t = ctx.title || ('#' + ctx.itemId);
+    const targets = [...new Set([ctx.creatorBid, ctx.approverBid, ctx.accountantBid || chiefAccountantId()].filter(Boolean).map(String))];
+    for (const uid of targets) {
+      const tg = `↩ <b>Откат стадии закупки</b>\n📋 ${esc(t)}\n${esc(fromLabel)} → ${esc(toLabel)}${byName ? ` · ${esc(byName)}` : ''}\n💬 Причина: ${esc(reason || '—')}\n<a href="${dashUrl()}">Открыть</a>`;
+      const html = emailHtml({ title: 'Откат стадии закупки', color: '#d97706', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ['Откат', fromLabel + ' → ' + toLabel], ...(byName ? [['Кто', byName]] : []), ['Причина', reason || '—']], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
+      await notifyPerson(uid, { reason: 'Откат стадии', tgText: tg, subject: `Откат стадии закупки #${ctx.itemId}`, html, itemId: ctx.itemId });
+    }
+  } catch (e) { /* best-effort */ }
 }
 
 // Уведомление «Оплата проведена» (инициатору и согласующему) с вложением
