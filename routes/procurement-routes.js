@@ -116,6 +116,21 @@ router.post('/:id/files', requireAuth(ROLES), express.json({ limit: '45mb' }), a
   }
 });
 
+// POST /api/procurement/:id/files-batch — загрузить несколько файлов в слот за раз
+router.post('/:id/files-batch', requireAuth(ROLES), express.json({ limit: '90mb' }), async (req, res) => {
+  try {
+    const { addFilesBatch } = require('../procurement-calc');
+    const id = parseInt(req.params.id, 10);
+    const { slot, files } = req.body || {};
+    if (!slot || !Array.isArray(files) || !files.length) return res.status(400).json({ error: 'Нужны slot и files[]' });
+    const out = await addFilesBatch(id, slot, files, req.user.bitrix_user_id || null);
+    res.json({ ok: true, ...out });
+  } catch (e) {
+    console.error('POST /api/procurement/:id/files-batch error:', e.message);
+    res.status(e.userFacing ? 400 : 500).json({ error: 'Не удалось загрузить: ' + e.message });
+  }
+});
+
 // GET /api/procurement/:id/files/:fileId/download — скачать файл
 router.get('/:id/files/:fileId/download', requireAuth(ROLES), async (req, res) => {
   try {

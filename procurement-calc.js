@@ -1003,43 +1003,66 @@ async function resolveTtnField() {
   _ttnField = code; _ttnAt = Date.now();
   return _ttnField;
 }
-// Дописать ТТН в поле «ТТН» конкретной закупки (1066), best-effort.
-async function pushTtnToBitrix(itemId, filename, base64) {
+// Записать НАБОР ТТН (формат B) в поле «ТТН» конкретной закупки (1066), best-effort.
+// pairs — [[имя, base64], ...] всех ТТН, которые должны лежать в этой закупке.
+async function pushTtnPairs(itemId, pairs) {
   try {
-    const code = await resolveTtnField(); if (!code) return;
-    const beforeIds = (await bitrixFieldFiles(itemId, code)).map(f => f.id).filter(Boolean);
-    await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields: { [code]: [...beforeIds, { fileData: [filename || 'ТТН', base64] }] } });
-  } catch (e) { console.error('pushTtnToBitrix:', e.message); }
+    const code = await resolveTtnField(); if (!code || !itemId) return;
+    await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields: { [code]: (pairs && pairs.length) ? pairs : '' } });
+  } catch (e) { console.error('pushTtnPairs:', e.message); }
 }
 
-// Добавить файл в слот: кладём в поле Битрикса (дописываем, не перезаписывая),
-// в ЦУПе храним только метаданные (имя, id файла Битрикса, склад/дата/коммент).
-// Возвращает { id, first }.
+// Пары [имя, base64] для всех текущих файлов слота (для записи в поле Битрикса
+// форматом B — единственным рабочим). Байты берём из локального кэша, а если
+// вычищены — тянем из Битрикса по порядку (индексу).
+async function slotFilePairs(localId, slot) {
+  const itemId = await itemIdOf(localId);
+  const { rows } = await pool.query(
+    'SELECT id, filename, content_b64 FROM ticketsmodule_procurement_files WHERE request_id=$1 AND slot=$2 ORDER BY id', [localId, slot]);
+  let bx = null;
+  const pairs = [];
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    let b64 = r.content_b64;
+    if (!b64) {
+      if (bx === null) { try { bx = await bitrixSlotFiles(itemId, slot); } catch (e) { bx = []; } }
+      const f = bx[i];
+      if (f && f.urlMachine) { const buf = await fetchUrlBuffer(f.urlMachine); if (buf) b64 = buf.toString('base64'); }
+    }
+    if (b64) pairs.push([r.filename || 'file', b64]);
+  }
+  return pairs;
+}
+// Синхронизировать поле слота в Битриксе ВСЕМ набором (формат B: массив пар).
+async function pushSlotFull(localId, slot) {
+  try {
+    const docFields = await resolveDocFields();
+    const code = docFields[slot]; if (!code) return;
+    const itemId = await itemIdOf(localId);
+    const pairs = await slotFilePairs(localId, slot);
+    await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields: { [code]: pairs.length ? pairs : '' } });
+  } catch (e) { console.error('pushSlotFull', slot, e.message); }
+}
+
+// Добавить файл в слот: в ЦУПе — метаданные + временные байты; поле Битрикса
+// пересобираем ВСЕМ набором (дописать по id Битрикс не умеет). Возвращает { id, first }.
 async function addFile(localId, slot, { filename, mime, base64, warehouse, acceptDate, comment } = {}, uploadedBy) {
   await ensureSchema();
   if (!SLOT_KEYS.includes(slot)) throw new Error('Недопустимый слот файла');
   if (!base64) throw userFacing('Не приложен файл');
-  const itemId = await itemIdOf(localId);
   const docFields = await resolveDocFields();
   const code = docFields[slot];
   if (!code) throw userFacing('В Битриксе не найдено поле для «' + (SLOT_LABELS[slot] || slot) + '»');
   const before = await pool.query('SELECT COUNT(*)::int AS n FROM ticketsmodule_procurement_files WHERE request_id=$1 AND slot=$2', [localId, slot]);
   const first = (before.rows[0].n || 0) === 0;
-  // Существующие файлы поля (по id) — чтобы ДОПИСАТЬ новый, а не заменить весь набор.
-  let beforeIds = [];
-  try { beforeIds = (await bitrixSlotFiles(itemId, slot)).map(f => f.id).filter(Boolean); } catch (e) { /* поле могло быть пустым */ }
-  const value = [...beforeIds, { fileData: [filename || 'file', base64] }];
-  await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields: { [code]: value } });
-  // Узнаём id только что добавленного файла.
-  let newId = null;
-  try { const after = await bitrixSlotFiles(itemId, slot); const nf = after.find(f => !beforeIds.includes(f.id)) || after[after.length - 1]; newId = nf ? nf.id : null; } catch (e) { /* некритично */ }
   // Байты кладём во ВРЕМЕННОЕ поле content_b64 — чтобы письма прикладывали файл
-  // надёжно сразу после загрузки. Через 3 дня чистятся (pruneOldFileBytes),
-  // дальше скачивание/вложения тянутся из Битрикса.
+  // надёжно и чтобы пересобирать набор без обращения к Битриксу. Через 3 дня чистятся.
   const ins = await pool.query(
-    `INSERT INTO ticketsmodule_procurement_files (request_id, slot, filename, mime, bitrix_file_id, content_b64, warehouse, accept_date, comment, uploaded_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
-    [localId, slot, filename || 'file', mime || null, newId, base64 || null, warehouse || null, acceptDate || null, comment || null, uploadedBy || null]);
+    `INSERT INTO ticketsmodule_procurement_files (request_id, slot, filename, mime, content_b64, warehouse, accept_date, comment, uploaded_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+    [localId, slot, filename || 'file', mime || null, base64 || null, warehouse || null, acceptDate || null, comment || null, uploadedBy || null]);
+  // Пересобираем поле Битрикса всем набором (формат B).
+  await pushSlotFull(localId, slot);
   // Уведомление об оплате шлём НЕ при загрузке платёжки, а при переходе на
   // «Ожидание товара» — чтобы в одном письме были и платёжка, и доверенность
   // (см. moveStage → stageKey==='waiting').
@@ -1049,10 +1072,36 @@ async function addFile(localId, slot, { filename, mime, base64, warehouse, accep
   return { id: ins.rows[0].id, first };
 }
 
-// Уведомление «документ добавлен/изменён» — с вложением самого файла.
-// Получатели зависят от типа документа (кому он важен).
-async function notifyFileChanged(localId, slot, filename, base64) {
+// Пакетная загрузка нескольких файлов в слот за один вызов: вставляем все
+// локально, ОДИН раз пересобираем поле Битрикса (не N раз), одно письмо.
+async function addFilesBatch(localId, slot, files, uploadedBy) {
+  await ensureSchema();
+  if (!SLOT_KEYS.includes(slot)) throw new Error('Недопустимый слот файла');
+  files = (files || []).filter(f => f && f.base64);
+  if (!files.length) throw userFacing('Файлы не приложены');
+  const code = (await resolveDocFields())[slot];
+  if (!code) throw userFacing('В Битриксе не найдено поле для «' + (SLOT_LABELS[slot] || slot) + '»');
+  const before = (await pool.query('SELECT COUNT(*)::int AS n FROM ticketsmodule_procurement_files WHERE request_id=$1 AND slot=$2', [localId, slot])).rows[0].n || 0;
+  for (const f of files) {
+    await pool.query(
+      `INSERT INTO ticketsmodule_procurement_files (request_id, slot, filename, mime, content_b64, warehouse, accept_date, comment, uploaded_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [localId, slot, f.filename || 'file', f.mime || null, f.base64, f.warehouse || null, f.acceptDate || null, f.comment || null, uploadedBy || null]);
+  }
+  await pushSlotFull(localId, slot); // один раз
+  // Досылаем уведомление, если добавили сверх первого файла слота.
+  if (before > 0 || files.length > 1) {
+    const atts = files.slice(before > 0 ? 0 : 1).map(f => ({ filename: f.filename || 'file', content: f.base64 }));
+    if (atts.length) notifyFilesChanged(localId, slot, atts).catch(() => {});
+  }
+  return { count: files.length, first: before === 0 };
+}
+
+// Уведомление «документ(ы) добавлен(ы)/изменён(ы)» — с вложением самих файлов.
+// attachments: [{ filename, content(base64) }]. Получатели зависят от типа документа.
+async function notifyFilesChanged(localId, slot, attachments) {
   try {
+    if (!attachments || !attachments.length) return;
     const ctx = await getRequestContext(localId);
     const { notifyPerson, emailHtml } = require('./procurement-notify');
     const label = SLOT_LABELS[slot] || slot;
@@ -1066,14 +1115,18 @@ async function notifyFileChanged(localId, slot, filename, base64) {
       warranty: [ctx.approverBid, chief],
     };
     const recip = recipMap[slot] || [ctx.creatorBid, ctx.approverBid];
-    const attachments = base64 ? [{ filename: filename || 'file', content: base64 }] : [];
+    const names = attachments.map(a => a.filename).filter(Boolean).join(', ');
     const targets = [...new Set(recip.filter(Boolean).map(String))];
     for (const uid of targets) {
-      const tg = `📎 <b>Документ обновлён: «${esc(label)}»</b>\n📋 ${esc(t)}\nДобавлен/изменён файл: ${esc(filename || '')} (во вложении).\n<a href="${dashUrl()}">Открыть</a>`;
-      const html = emailHtml({ title: `Документ обновлён: «${label}»`, color: '#7c3aed', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ['Документ', label], ['Файл', filename || '']], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
+      const tg = `📎 <b>Документ обновлён: «${esc(label)}»</b>\n📋 ${esc(t)}\nДобавлено файлов: ${attachments.length} (во вложении):\n${esc(names)}\n<a href="${dashUrl()}">Открыть</a>`;
+      const html = emailHtml({ title: `Документ обновлён: «${label}»`, color: '#7c3aed', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ['Документ', label], ['Файлы', names]], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
       await notifyPerson(uid, { reason: 'Документ обновлён', tgText: tg, subject: `Документ обновлён: ${label} · закупка #${ctx.itemId}`, html, itemId: ctx.itemId, attachments });
     }
   } catch (e) { /* best-effort */ }
+}
+// Совместимость: одиночный файл.
+function notifyFileChanged(localId, slot, filename, base64) {
+  return notifyFilesChanged(localId, slot, base64 ? [{ filename: filename || 'file', content: base64 }] : []);
 }
 
 // Уведомление об откате стадии назад (с причиной) — инициатору, согласующему, бухгалтеру.
@@ -1128,45 +1181,42 @@ async function filesFor(localId) {
 }
 
 // Вложения для письма: [{ filename, content(base64) }].
-// Сначала — из свежих локальных байтов (надёжно), затем — прокси из Битрикса.
+// Байты — из локального кэша; если вычищены, тянем из Битрикса по порядку (индексу).
 async function slotAttachments(localId, slots) {
   const arr = Array.isArray(slots) ? slots : [slots];
-  const { rows } = await pool.query(
-    'SELECT slot, filename, bitrix_file_id, content_b64 FROM ticketsmodule_procurement_files WHERE request_id=$1 AND slot = ANY($2) ORDER BY id', [localId, arr]);
-  if (!rows.length) return [];
   const out = [];
-  let itemId = null, item = null;
-  const ensureItem = async () => {
-    if (item) return item;
-    itemId = itemId || await itemIdOf(localId);
-    try { const { result } = await b24('crm.item.get', { entityTypeId: ENTITY, id: itemId }); item = (result && result.item) || {}; } catch (e) { item = {}; }
-    return item;
-  };
-  for (const r of rows) {
-    if (r.content_b64) { out.push({ filename: r.filename || 'file', content: r.content_b64 }); continue; }
-    if (!r.bitrix_file_id) continue;
-    const it = await ensureItem();
-    let files = [];
-    try { files = await bitrixSlotFiles(itemId, r.slot, it); } catch (e) { continue; }
-    const f = files.find(x => Number(x.id) === Number(r.bitrix_file_id));
-    if (!f || !f.urlMachine) continue;
-    const buf = await fetchUrlBuffer(f.urlMachine);
-    if (buf) out.push({ filename: r.filename || 'file', content: buf.toString('base64') });
+  const itemId = await itemIdOf(localId);
+  for (const slot of arr) {
+    const { rows } = await pool.query(
+      'SELECT id, filename, content_b64 FROM ticketsmodule_procurement_files WHERE request_id=$1 AND slot=$2 ORDER BY id', [localId, slot]);
+    if (!rows.length) continue;
+    let bx = null;
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      if (r.content_b64) { out.push({ filename: r.filename || 'file', content: r.content_b64 }); continue; }
+      if (bx === null) { try { bx = await bitrixSlotFiles(itemId, slot); } catch (e) { bx = []; } }
+      const f = bx[i];
+      if (!f || !f.urlMachine) continue;
+      const buf = await fetchUrlBuffer(f.urlMachine);
+      if (buf) out.push({ filename: r.filename || 'file', content: buf.toString('base64') });
+    }
   }
   return out;
 }
 
-// Байты файла для скачивания из ЦУП — локально если есть, иначе прокси из Битрикса.
+// Байты файла для скачивания из ЦУП — локально если есть, иначе прокси из Битрикса по индексу.
 async function getFileBytes(localId, fileId) {
   const { rows } = await pool.query(
-    'SELECT slot, filename, mime, bitrix_file_id, content_b64 FROM ticketsmodule_procurement_files WHERE id=$1 AND request_id=$2', [fileId, localId]);
+    'SELECT slot, filename, mime, content_b64 FROM ticketsmodule_procurement_files WHERE id=$1 AND request_id=$2', [fileId, localId]);
   if (!rows.length) return null;
   const r = rows[0];
   if (r.content_b64) return { filename: r.filename || 'file', mime: r.mime || 'application/octet-stream', buffer: Buffer.from(r.content_b64, 'base64') };
+  const { rows: sl } = await pool.query('SELECT id FROM ticketsmodule_procurement_files WHERE request_id=$1 AND slot=$2 ORDER BY id', [localId, r.slot]);
+  const idx = sl.findIndex(x => Number(x.id) === Number(fileId));
   const itemId = await itemIdOf(localId);
   let files = [];
   try { files = await bitrixSlotFiles(itemId, r.slot); } catch (e) { return null; }
-  const match = files.find(f => Number(f.id) === Number(r.bitrix_file_id)) || files[0];
+  const match = files[idx];
   if (!match || !match.urlMachine) return null;
   const buf = await fetchUrlBuffer(match.urlMachine);
   if (!buf) return null;
@@ -1184,20 +1234,10 @@ function pruneOldFileBytes() {
 
 // Удалить файл слота: убираем из поля Битрикса (пересобираем набор без него) + локально.
 async function removeFile(localId, fileId) {
-  const { rows } = await pool.query('SELECT slot, bitrix_file_id FROM ticketsmodule_procurement_files WHERE id=$1 AND request_id=$2', [fileId, localId]);
-  if (rows.length && rows[0].bitrix_file_id) {
-    try {
-      const itemId = await itemIdOf(localId);
-      const docFields = await resolveDocFields();
-      const code = docFields[rows[0].slot];
-      if (code) {
-        const files = await bitrixSlotFiles(itemId, rows[0].slot);
-        const keep = files.filter(f => Number(f.id) !== Number(rows[0].bitrix_file_id)).map(f => f.id);
-        await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields: { [code]: keep.length ? keep : '' } });
-      }
-    } catch (e) { console.error('removeFile bitrix:', e.message); }
-  }
+  const { rows } = await pool.query('SELECT slot FROM ticketsmodule_procurement_files WHERE id=$1 AND request_id=$2', [fileId, localId]);
   await pool.query('DELETE FROM ticketsmodule_procurement_files WHERE id=$1 AND request_id=$2', [fileId, localId]);
+  // Пересобираем поле Битрикса оставшимся набором (формат B).
+  if (rows.length) await pushSlotFull(localId, rows[0].slot);
   return { ok: true };
 }
 
@@ -1273,9 +1313,18 @@ async function addShipFile(dealId, itemId, { filename, mime, base64 } = {}, byBi
      VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
     [Number(dealId), itemId ? Number(itemId) : null, filename || 'ТТН', mime || null, base64, byBid || null]);
   // ТТН в поле «ТТН» Битрикса: доотправка → в свою закупку; основная (без itemId)
-  // → в главную закупку сделки. Всё best-effort, источник для дашборда — ЦУП.
-  const target = itemId ? Number(itemId) : await findMainProcurementItem(dealId);
-  if (target) pushTtnToBitrix(target, filename || 'ТТН', base64).catch(() => {});
+  // → в главную закупку сделки. Пишем ВСЕМ набором (формат B). Best-effort.
+  (async () => {
+    try {
+      const target = itemId ? Number(itemId) : await findMainProcurementItem(dealId);
+      if (!target) return;
+      const { rows } = itemId
+        ? await pool.query('SELECT filename, content_b64 FROM ticketsmodule_procurement_ship_files WHERE deal_id=$1 AND item_id=$2 ORDER BY id', [Number(dealId), Number(itemId)])
+        : await pool.query('SELECT filename, content_b64 FROM ticketsmodule_procurement_ship_files WHERE deal_id=$1 AND item_id IS NULL ORDER BY id', [Number(dealId)]);
+      const pairs = rows.filter(r => r.content_b64).map(r => [r.filename || 'ТТН', r.content_b64]);
+      await pushTtnPairs(target, pairs);
+    } catch (e) { console.error('ship ttn push:', e.message); }
+  })().catch(() => {});
   return { id: ins.rows[0].id };
 }
 
@@ -1311,4 +1360,4 @@ async function removeShipFile(dealId, fileId) {
   return { ok: true };
 }
 
-module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, moveStage, getItemDetail, uploadDoc, addFile, filesFor, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, autoCreateFromService, itemUrl, dealUrl };
+module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, autoCreateFromService, itemUrl, dealUrl };
