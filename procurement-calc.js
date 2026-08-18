@@ -421,6 +421,7 @@ function dealUrl(dealId) { const o = bitrixOrigin(); return o && dealId ? `${o}/
 
 async function listRequests() {
   await ensureSchema();
+  pruneOldFileBytes(); // фоновая чистка временных байтов (throttled)
   const { rows } = await pool.query('SELECT * FROM ticketsmodule_procurement ORDER BY created_at DESC');
   return rows.map(r => {
     const stepIndex = stepIndexForStage(r.stage_id);
@@ -545,10 +546,12 @@ async function listByDeal(dealId) {
   if (!dealId) return { dealId: null, items: [] };
   const [smap, lr, shipment] = await Promise.all([
     stageNameMap(),
-    pool.query('SELECT bitrix_item_id, id FROM ticketsmodule_procurement WHERE deal_id=$1', [dealId]),
+    pool.query('SELECT bitrix_item_id, id, title FROM ticketsmodule_procurement WHERE deal_id=$1', [dealId]),
     getDealShipment(dealId),
   ]);
-  const localByItem = {}; lr.rows.forEach(r => { if (r.bitrix_item_id) localByItem[r.bitrix_item_id] = r.id; });
+  const localByItem = {}, localTitleByItem = {};
+  lr.rows.forEach(r => { if (r.bitrix_item_id) { localByItem[r.bitrix_item_id] = r.id; localTitleByItem[r.bitrix_item_id] = r.title; } });
+  const isDashTitle = t => !String(t || '').trim() || /^[\s\-–—]+$/.test(String(t));
   let items = [];
   try {
     let start = 0;
@@ -573,8 +576,12 @@ async function listByDeal(dealId) {
       const createdMs = createdTime ? new Date(createdTime).getTime() : null;
       // «Доотправка» — закупка создана ПОЗЖЕ фиксации «всё отправлено».
       const isReship = closedMs != null && createdMs != null && createdMs > closedMs;
+      // Если в Битриксе заголовок «- - -»/пустой — показываем наше название из ЦУП.
+      let title = it.title || '';
+      if (isDashTitle(title) && localTitleByItem[it.id] && !isDashTitle(localTitleByItem[it.id])) title = localTitleByItem[it.id];
+      if (isDashTitle(title)) title = 'Закупка #' + it.id;
       return {
-        id: it.id, title: it.title || ('#' + it.id),
+        id: it.id, title,
         stageId: it.stageId, stageName: smap[it.stageId] || it.stageId,
         sem: SUCCESS_STAGES.test(it.stageId) ? 'ok' : (FAIL_STAGES.test(it.stageId) ? 'fail' : 'work'),
         sum: parseFloat(it.opportunity) || 0, currency: it.currencyId || 'KZT',
@@ -646,22 +653,8 @@ async function moveStage(localId, stageKey, opts = {}) {
     await pool.query('UPDATE ticketsmodule_procurement SET stage_id=$1, updated_at=NOW() WHERE id=$2', [step.bitrix, localId]);
   }
 
-  // «Товар принят» — уведомляем согласующего и главбуха, с вложением накладной и
-  // гарантийного сертификата.
-  if (stageKey === 'received' && !isBackward) {
-    try {
-      const ctx = await getRequestContext(localId);
-      const { notifyPerson, emailHtml } = require('./procurement-notify');
-      const t = ctx.title || ('#' + ctx.itemId);
-      const attachments = await slotAttachments(localId, ['contract', 'warranty']);
-      const targets = [...new Set([ctx.approverBid, ctx.accountantBid || chiefAccountantId()].filter(Boolean).map(String))];
-      for (const uid of targets) {
-        const tg = `📦 <b>Товар принят</b>\n📋 ${esc(t)}\nЗакупка завершена — товар получен (накладная и гарантийный сертификат во вложении).\n<a href="${dashUrl()}">Открыть</a>`;
-        const html = emailHtml({ title: 'Товар принят', color: '#0e7c3f', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ...(ctx.dealId ? [['Сделка', '#' + ctx.dealId]] : [])], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
-        await notifyPerson(uid, { reason: 'Товар принят', tgText: tg, subject: 'Товар принят #' + ctx.itemId, html, itemId: ctx.itemId, attachments });
-      }
-    } catch (e) { /* уведомление best-effort */ }
-  }
+  // Уведомление «Товар принят» шлём НЕ при входе на стадию (может быть частичная
+  // приёмка), а при отметке «Полностью принят» — см. setFullyReceived.
   return { stageId: step.bitrix, stepKey: step.key };
 }
 
@@ -888,6 +881,15 @@ async function createRequest(payload, bitrixUserId) {
     await pool.query('DELETE FROM ticketsmodule_procurement WHERE id=$1', [localId]).catch(() => {});
     throw e;
   }
+  // Смарт-процесс может авто-генерировать заголовок по шаблону («- - -»),
+  // игнорируя title при создании. Форсируем наше название вторым update.
+  try {
+    const got = String((item && item.title) || '').trim();
+    if (!got || /^[\s\-–—]+$/.test(got) || got !== title) {
+      await b24('crm.item.update', { entityTypeId: ENTITY, id: item.id, fields: { title } });
+      item.title = title;
+    }
+  } catch (e) { /* best-effort */ }
   await pool.query(
     'UPDATE ticketsmodule_procurement SET bitrix_item_id=$1, stage_id=$2, updated_at=NOW() WHERE id=$3',
     [item.id, item.stageId || null, localId]
@@ -952,14 +954,17 @@ const SLOT_KEYS = ['invoice', 'pay', 'poa', 'contract', 'warranty'];
 const SLOT_LABELS = { invoice: 'Счет на оплату', pay: 'Подтверждение оплаты', poa: 'Доверенность', contract: 'Накладная', warranty: 'Гарантийный сертификат' };
 function userFacing(msg) { const e = new Error(msg); e.userFacing = true; return e; }
 
-// node-fetch (или глобальный fetch) для выгрузки байтов файла из Битрикса.
+// Выгрузка байтов файла из Битрикса. Через node-fetch (как в discovery, где
+// скачивание подтвердилось) + .buffer() — надёжнее глобального fetch на Railway.
+const _nodeFetch = (() => { try { return require('node-fetch'); } catch (e) { return null; } })();
 async function fetchUrlBuffer(url) {
-  if (!_fetch || !url) return null;
+  const fn = _nodeFetch || _fetch;
+  if (!fn || !url) return null;
   try {
-    const r = await _fetch(url);
+    const r = await fn(url);
     if (!r.ok) { console.error('fetchUrlBuffer HTTP', r.status); return null; }
-    const ab = await r.arrayBuffer();
-    return Buffer.from(ab);
+    if (typeof r.buffer === 'function') return await r.buffer();
+    return Buffer.from(await r.arrayBuffer());
   } catch (e) { console.error('fetchUrlBuffer:', e.message); return null; }
 }
 
@@ -995,10 +1000,13 @@ async function addFile(localId, slot, { filename, mime, base64, warehouse, accep
   // Узнаём id только что добавленного файла.
   let newId = null;
   try { const after = await bitrixSlotFiles(itemId, slot); const nf = after.find(f => !beforeIds.includes(f.id)) || after[after.length - 1]; newId = nf ? nf.id : null; } catch (e) { /* некритично */ }
+  // Байты кладём во ВРЕМЕННОЕ поле content_b64 — чтобы письма прикладывали файл
+  // надёжно сразу после загрузки. Через 3 дня чистятся (pruneOldFileBytes),
+  // дальше скачивание/вложения тянутся из Битрикса.
   const ins = await pool.query(
-    `INSERT INTO ticketsmodule_procurement_files (request_id, slot, filename, mime, bitrix_file_id, warehouse, accept_date, comment, uploaded_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-    [localId, slot, filename || 'file', mime || null, newId, warehouse || null, acceptDate || null, comment || null, uploadedBy || null]);
+    `INSERT INTO ticketsmodule_procurement_files (request_id, slot, filename, mime, bitrix_file_id, content_b64, warehouse, accept_date, comment, uploaded_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+    [localId, slot, filename || 'file', mime || null, newId, base64 || null, warehouse || null, acceptDate || null, comment || null, uploadedBy || null]);
   // «Подтверждение оплаты» (первый файл) → уведомляем инициатора и согласующего,
   // с вложением самих платёжек (тянем байты из Битрикса).
   if (slot === 'pay' && first) {
@@ -1037,37 +1045,42 @@ async function filesFor(localId) {
   return bySlot;
 }
 
-// Вложения для письма: [{ filename, content(base64) }] — байты берём из Битрикса.
+// Вложения для письма: [{ filename, content(base64) }].
+// Сначала — из свежих локальных байтов (надёжно), затем — прокси из Битрикса.
 async function slotAttachments(localId, slots) {
   const arr = Array.isArray(slots) ? slots : [slots];
-  const itemId = await itemIdOf(localId);
-  // имена файлов по id (Битрикс имя не возвращает — берём из ЦУП-метаданных)
   const { rows } = await pool.query(
-    'SELECT slot, filename, bitrix_file_id FROM ticketsmodule_procurement_files WHERE request_id=$1 AND slot = ANY($2) ORDER BY id', [localId, arr]);
-  const nameById = {}; rows.forEach(r => { if (r.bitrix_file_id) nameById[r.bitrix_file_id] = r.filename; });
-  // один crm.item.get на всё
-  let item = {};
-  try { const { result } = await b24('crm.item.get', { entityTypeId: ENTITY, id: itemId }); item = (result && result.item) || {}; } catch (e) { return []; }
+    'SELECT slot, filename, bitrix_file_id, content_b64 FROM ticketsmodule_procurement_files WHERE request_id=$1 AND slot = ANY($2) ORDER BY id', [localId, arr]);
+  if (!rows.length) return [];
   const out = [];
-  for (const slot of arr) {
+  let itemId = null, item = null;
+  const ensureItem = async () => {
+    if (item) return item;
+    itemId = itemId || await itemIdOf(localId);
+    try { const { result } = await b24('crm.item.get', { entityTypeId: ENTITY, id: itemId }); item = (result && result.item) || {}; } catch (e) { item = {}; }
+    return item;
+  };
+  for (const r of rows) {
+    if (r.content_b64) { out.push({ filename: r.filename || 'file', content: r.content_b64 }); continue; }
+    if (!r.bitrix_file_id) continue;
+    const it = await ensureItem();
     let files = [];
-    try { files = await bitrixSlotFiles(itemId, slot, item); } catch (e) { continue; }
-    for (const f of files) {
-      if (!f.urlMachine) continue;
-      const buf = await fetchUrlBuffer(f.urlMachine);
-      if (!buf) continue;
-      out.push({ filename: nameById[f.id] || (SLOT_LABELS[slot] || slot) + '-' + f.id, content: buf.toString('base64') });
-    }
+    try { files = await bitrixSlotFiles(itemId, r.slot, it); } catch (e) { continue; }
+    const f = files.find(x => Number(x.id) === Number(r.bitrix_file_id));
+    if (!f || !f.urlMachine) continue;
+    const buf = await fetchUrlBuffer(f.urlMachine);
+    if (buf) out.push({ filename: r.filename || 'file', content: buf.toString('base64') });
   }
   return out;
 }
 
-// Байты файла для скачивания из ЦУП — прокси из Битрикса (ничего не храним).
+// Байты файла для скачивания из ЦУП — локально если есть, иначе прокси из Битрикса.
 async function getFileBytes(localId, fileId) {
   const { rows } = await pool.query(
-    'SELECT slot, filename, mime, bitrix_file_id FROM ticketsmodule_procurement_files WHERE id=$1 AND request_id=$2', [fileId, localId]);
+    'SELECT slot, filename, mime, bitrix_file_id, content_b64 FROM ticketsmodule_procurement_files WHERE id=$1 AND request_id=$2', [fileId, localId]);
   if (!rows.length) return null;
   const r = rows[0];
+  if (r.content_b64) return { filename: r.filename || 'file', mime: r.mime || 'application/octet-stream', buffer: Buffer.from(r.content_b64, 'base64') };
   const itemId = await itemIdOf(localId);
   let files = [];
   try { files = await bitrixSlotFiles(itemId, r.slot); } catch (e) { return null; }
@@ -1076,6 +1089,15 @@ async function getFileBytes(localId, fileId) {
   const buf = await fetchUrlBuffer(match.urlMachine);
   if (!buf) return null;
   return { filename: r.filename || 'file', mime: r.mime || 'application/octet-stream', buffer: buf };
+}
+
+// Чистка временных байтов файлов закупок старше 3 дней (файлы живут в Битриксе).
+let _lastPrune = 0;
+function pruneOldFileBytes() {
+  const now = Date.now();
+  if (now - _lastPrune < 60 * 60 * 1000) return; // не чаще раза в час
+  _lastPrune = now;
+  pool.query("UPDATE ticketsmodule_procurement_files SET content_b64=NULL WHERE content_b64 IS NOT NULL AND uploaded_at < NOW() - INTERVAL '3 days'").catch(() => {});
 }
 
 // Удалить файл слота: убираем из поля Битрикса (пересобираем набор без него) + локально.
@@ -1101,10 +1123,27 @@ async function removeFile(localId, fileId) {
 async function setFullyReceived(localId, value, byBid) {
   const { rows } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
   const pl = (rows[0] && rows[0].payload) || {};
+  const was = !!pl.fullyReceived;
   pl.fullyReceived = !!value;
   pl.fullyReceivedAt = value ? new Date().toISOString() : null;
   pl.fullyReceivedBy = value ? (byBid ? (USERS[byBid] || ('#' + byBid)) : null) : null;
   await pool.query('UPDATE ticketsmodule_procurement SET payload=$1, updated_at=NOW() WHERE id=$2', [pl, localId]);
+  // Полная приёмка (переход false→true) = реальное завершение → уведомляем
+  // согласующего и главбуха с вложением накладной и гарантийного сертификата.
+  if (value && !was) {
+    try {
+      const ctx = await getRequestContext(localId);
+      const { notifyPerson, emailHtml } = require('./procurement-notify');
+      const t = ctx.title || ('#' + ctx.itemId);
+      const attachments = await slotAttachments(localId, ['contract', 'warranty']);
+      const targets = [...new Set([ctx.approverBid, ctx.accountantBid || chiefAccountantId()].filter(Boolean).map(String))];
+      for (const uid of targets) {
+        const tg = `📦 <b>Товар принят полностью</b>\n📋 ${esc(t)}\nЗакупка завершена — товар получен (накладная и гарантийный сертификат во вложении).\n<a href="${dashUrl()}">Открыть</a>`;
+        const html = emailHtml({ title: 'Товар принят полностью', color: '#0e7c3f', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ...(ctx.dealId ? [['Сделка', '#' + ctx.dealId]] : [])], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
+        await notifyPerson(uid, { reason: 'Товар принят', tgText: tg, subject: 'Товар принят #' + ctx.itemId, html, itemId: ctx.itemId, attachments });
+      }
+    } catch (e) { /* уведомление best-effort */ }
+  }
   return { ok: true, fullyReceived: !!value };
 }
 

@@ -646,7 +646,12 @@ function renderDetail(id,d){
   else if(curKey==='invoice'){ hdr='Запрос счёта на оплату'; html=filesSlotHtml(id,d,'invoice')+`<div class="hint" style="margin-top:6px">Приложи счёт (Invoice) — заявка сама уйдёт на «Договор». Можно несколько файлов.</div>`; }
   else if(curKey==='contract'){ hdr='Договор'; html='<div class="hint">Договор — по необходимости. Двигай на «Согласование закупки».</div>'; }
   else if(curKey==='approve'){ hdr='Согласование закупки'; html=approvalHtml(id,d); }
-  else if(curKey==='payment'){ hdr='Оплата закупки'; html=approvedBanner(d)+accountantHtml(id)+`<div style="margin-top:12px"></div>`+filesSlotHtml(id,d,'pay')+filesSlotHtml(id,d,'poa',true)+`<div class="hint" style="margin-top:6px">Приложи подтверждение оплаты (можно несколько) — заявка уйдёт на «Ожидание товара». Доверенность — по необходимости.</div>`; }
+  else if(curKey==='payment'){
+    hdr='Оплата закупки';
+    const hasPay=((d.files&&d.files.pay)||[]).length>0;
+    const nextBtn=`<button class="btn btn-p" style="margin-top:10px;width:100%;justify-content:center" ${hasPay?'':'disabled'} onclick="moveStep(${id},'waiting')">Перейти к ожиданию товара →</button>`;
+    html=approvedBanner(d)+accountantHtml(id)+`<div style="margin-top:12px"></div>`+filesSlotHtml(id,d,'pay')+filesSlotHtml(id,d,'poa',true)+`<div class="hint" style="margin-top:6px">Приложи подтверждение оплаты (можно несколько) и, при необходимости, доверенность. Когда всё готово — нажми кнопку ниже.</div>`+nextBtn;
+  }
   else if(curKey==='waiting'){ hdr='Ожидание / приёмка товара'; html=goodsBlockHtml(id,d); }
   else if(curKey==='received'){ hdr='Товар принят'; html=goodsBlockHtml(id,d); }
   else { hdr='Готово'; html='<div class="hint" style="color:var(--good)">Процесс завершён.</div>'; }
@@ -671,8 +676,9 @@ async function addSimpleFile(id,slot,input){
     const d=await postFile(id,slot,file); if(!d){loadDetail(id);return;}
     const r0=LIST.find(x=>x.id===id)||{}; const flow=META.flow||[]; const ci=(r0.stepIndex!=null)?r0.stepIndex:-1;
     const curKey=(ci>=0&&ci<flow.length)?flow[ci].key:null;
+    // Автопереход только со счёта (единственный документ шага). На оплате НЕ прыгаем
+    // автоматически — чтобы успеть приложить доверенность; переход — кнопкой.
     if(d.first&&curKey==='invoice'&&slot==='invoice'){ await moveStep(id,'contract'); }
-    else if(d.first&&curKey==='payment'&&slot==='pay'){ await moveStep(id,'waiting'); }
     else { loadDetail(id); }
   }catch(e){alert('Ошибка: '+e.message); loadDetail(id);}
   finally{input.disabled=false;}
@@ -690,9 +696,18 @@ async function delFile(id,fileId){
   try{ const r=await fetch('/api/procurement/'+id+'/files/'+fileId,{method:'DELETE'}); const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка');return;} loadDetail(id); }
   catch(e){alert('Ошибка: '+e.message);}
 }
-// «Полностью принят» → перекрашивает финальный шаг (зелёный/красный).
+// «Полностью принят»: если ещё не на «Товар принят» — сначала переводим туда
+// (нужны накладная + гарантийный), затем ставим отметку и красим шаг зелёным.
 async function toggleFully(id,checked){
   try{
+    if(checked){
+      const r0=LIST.find(x=>x.id===id)||{};
+      if(r0.stepKey!=='received'){
+        await moveStep(id,'received');   // gate: накладная+гарантийный (иначе покажет причину)
+        const cur=LIST.find(x=>x.id===id);
+        if(!cur||cur.stepKey!=='received'){ loadDetail(id); return; } // не перешли — не ставим отметку
+      }
+    }
     const r=await fetch('/api/procurement/'+id+'/fully-received',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({value:checked})});
     const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка');return;}
     await reloadList(); // обновит цвет змейки; затем detail подтянется
