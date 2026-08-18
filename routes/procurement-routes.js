@@ -71,6 +71,17 @@ router.get('/list', requireAuth(ROLES), async (req, res) => {
   }
 });
 
+// GET /api/procurement/deletions — журнал удалённых закупок (админ)
+router.get('/deletions', requireAuth(['admin']), async (req, res) => {
+  try {
+    const { listDeletions } = require('../procurement-calc');
+    res.json({ items: await listDeletions(req.query.limit) });
+  } catch (e) {
+    console.error('GET /api/procurement/deletions error:', e.message);
+    res.status(500).json({ error: e.message, items: [] });
+  }
+});
+
 // POST /api/procurement/create — создать заявку: локально + элемент в 1066
 router.post('/create', requireAuth(ROLES), express.json(), async (req, res) => {
   try {
@@ -233,7 +244,7 @@ router.put('/:id', requireAuth(ROLES), express.json(), async (req, res) => {
 router.delete('/:id', requireAuth(ROLES), async (req, res) => {
   try {
     const { deleteRequest } = require('../procurement-calc');
-    res.json(await deleteRequest(parseInt(req.params.id, 10)));
+    res.json(await deleteRequest(parseInt(req.params.id, 10), req.user.bitrix_user_id || null));
   } catch (e) {
     console.error('DELETE /api/procurement/:id error:', e.message);
     res.status(500).json({ error: 'Не удалось удалить: ' + e.message });

@@ -246,18 +246,39 @@ const doneList=()=>LIST.filter(isDone);
 function render(){
   const left=(MODE==='edit'&&EDIT!=null)?editCardHtml():createCardHtml();
   const nA=activeList().length, nD=doneList().length;
+  const isAdmin = ME && ME.role==='admin';
   const body = RVIEW==='deal' ? dealViewHtml()
+    : RVIEW==='deleted' ? '<div class="spin" style="margin:24px auto"></div>'
     : (RVIEW==='done' ? listInner(doneList(),'Завершённых заявок пока нет.')
                       : listInner(activeList(),'Активных заявок нет. Создай первую слева.'));
   const right=`<div class="card" style="padding:0;overflow:hidden">
     <div style="display:flex;align-items:center;gap:10px;padding:16px 20px 0;flex-wrap:wrap">
-      <div class="seg2"><button class="${RVIEW==='mine'?'on':''}" onclick="setRView('mine')">Мои заявки${nA?' · '+nA:''}</button><button class="${RVIEW==='done'?'on':''}" onclick="setRView('done')">Завершённые${nD?' · '+nD:''}</button><button class="${RVIEW==='deal'?'on':''}" onclick="setRView('deal')">По сделке</button></div>
+      <div class="seg2"><button class="${RVIEW==='mine'?'on':''}" onclick="setRView('mine')">Мои заявки${nA?' · '+nA:''}</button><button class="${RVIEW==='done'?'on':''}" onclick="setRView('done')">Завершённые${nD?' · '+nD:''}</button><button class="${RVIEW==='deal'?'on':''}" onclick="setRView('deal')">По сделке</button>${isAdmin?`<button class="${RVIEW==='deleted'?'on':''}" onclick="setRView('deleted')">Удалённые</button>`:''}</div>
     </div>
     <div style="overflow:auto;max-height:78vh;padding:14px 20px 20px" id="rightBody">${body}</div>
   </div>`;
   document.getElementById('root').innerHTML=`<div class="grid">${left}${right}</div>`;
   if(MODE==='edit'&&EDIT!=null) loadDetail(EDIT);
   if(RVIEW==='deal'&&DEALVIEW) loadByDeal(DEALVIEW.id);
+  if(RVIEW==='deleted') loadDeletions();
+}
+async function loadDeletions(){
+  const box=document.getElementById('rightBody'); if(!box)return;
+  try{
+    const d=await (await fetch('/api/procurement/deletions')).json();
+    const items=d.items||[];
+    if(!items.length){ box.innerHTML='<div class="empty">Удалённых закупок пока нет.</div>'; return; }
+    box.innerHTML=`<div class="hint" style="margin-bottom:10px">Журнал удалённых закупок · ${items.length}</div>`
+      +`<div class="tbl-wrap"><table><thead><tr><th>Заявка</th><th>Сделка</th><th>Стадия</th><th>Файлы</th><th>Кто удалил</th><th>Когда</th></tr></thead><tbody>`
+      +items.map(r=>`<tr>
+        <td><b>${esc(r.title||('#'+(r.bitrixItemId||r.requestId||'')))}</b><div class="hint">${r.bitrixItemId?('Б24 #'+r.bitrixItemId):''}${(r.opportunity!=null)?(' · '+F(r.opportunity)+' '+esc(r.currency||'')):''}</div></td>
+        <td>${r.dealId?`<a class="lnk" href="${esc(r.dealUrl||'#')}" target="_blank">#${r.dealId}</a>`:'—'}</td>
+        <td>${esc(r.stageName||'—')}</td>
+        <td>${r.filesCount||0}${r.filesCount?` <span class="hint" title="${esc((r.files||[]).map(f=>f.name).join(', '))}">📎</span>`:''}</td>
+        <td>${esc(r.actorName||'—')}</td>
+        <td class="hint">${r.at?fmtDateTime(r.at):'—'}</td>
+      </tr>`).join('')+`</tbody></table></div>`;
+  }catch(e){ box.innerHTML='<div class="empty">Не удалось загрузить журнал: '+esc(e.message)+'</div>'; }
 }
 function setRView(v){ RVIEW=v; render(); }
 function createCardHtml(){

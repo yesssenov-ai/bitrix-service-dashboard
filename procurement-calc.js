@@ -78,6 +78,23 @@ function ensureSchema() {
         uploaded_by INTEGER,
         uploaded_at TIMESTAMPTZ DEFAULT NOW());
       CREATE INDEX IF NOT EXISTS idx_proc_ship_files_deal ON ticketsmodule_procurement_ship_files(deal_id);
+      -- Аудит удалённых закупок: кто, когда, что удалил (снимок на момент удаления).
+      CREATE TABLE IF NOT EXISTS ticketsmodule_procurement_audit (
+        id SERIAL PRIMARY KEY,
+        action VARCHAR(20) DEFAULT 'delete',
+        request_id INTEGER,
+        bitrix_item_id INTEGER,
+        deal_id INTEGER,
+        title VARCHAR(400),
+        stage_id VARCHAR(60),
+        opportunity DOUBLE PRECISION,
+        currency VARCHAR(10),
+        files JSONB,
+        snapshot JSONB,
+        actor_bid INTEGER,
+        actor_name VARCHAR(200),
+        at TIMESTAMPTZ DEFAULT NOW());
+      CREATE INDEX IF NOT EXISTS idx_proc_audit_at ON ticketsmodule_procurement_audit(at DESC);
     `);
   })().catch(e => { _schemaReady = null; throw e; });
   return _schemaReady;
@@ -520,12 +537,49 @@ async function updateRequest(localId, payload) {
 }
 
 // Удаление заявки: элемент 1066 + локальная строка.
-async function deleteRequest(localId) {
-  const { rows } = await pool.query('SELECT bitrix_item_id FROM ticketsmodule_procurement WHERE id=$1', [localId]);
-  const itemId = rows[0] && rows[0].bitrix_item_id;
+async function deleteRequest(localId, byBid) {
+  await ensureSchema();
+  const { rows } = await pool.query('SELECT * FROM ticketsmodule_procurement WHERE id=$1', [localId]);
+  const r = rows[0];
+  const itemId = r && r.bitrix_item_id;
+  // Снимок приложенных файлов (метаданные) для аудита.
+  let filesSnap = [];
+  try {
+    const fr = await pool.query('SELECT slot, filename, warehouse, accept_date, comment, uploaded_at FROM ticketsmodule_procurement_files WHERE request_id=$1 ORDER BY id', [localId]);
+    filesSnap = fr.rows.map(f => ({ slot: f.slot, name: f.filename, warehouse: f.warehouse, acceptDate: f.accept_date, comment: f.comment, uploadedAt: f.uploaded_at }));
+  } catch (e) { /* некритично */ }
+  // Пишем аудит ДО удаления.
+  try {
+    const pl = (r && r.payload) || {};
+    await pool.query(
+      `INSERT INTO ticketsmodule_procurement_audit (action, request_id, bitrix_item_id, deal_id, title, stage_id, opportunity, currency, files, snapshot, actor_bid, actor_name)
+       VALUES ('delete',$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [localId, itemId || null, (r && r.deal_id) || null, (r && r.title) || null, (r && r.stage_id) || null,
+       pl.opportunity != null ? Number(pl.opportunity) : null, pl.currency || null,
+       JSON.stringify(filesSnap), JSON.stringify(pl),
+       byBid || null, byBid ? (USERS[byBid] || ('#' + byBid)) : null]);
+  } catch (e) { console.error('procurement audit write:', e.message); }
   if (itemId) { try { await b24('crm.item.delete', { entityTypeId: ENTITY, id: itemId }); } catch (e) { console.error('procurement delete item:', e.message); } }
+  await pool.query('DELETE FROM ticketsmodule_procurement_files WHERE request_id=$1', [localId]).catch(() => {});
   await pool.query('DELETE FROM ticketsmodule_procurement WHERE id=$1', [localId]);
   return { ok: true };
+}
+
+// Журнал удалённых закупок (для админа).
+async function listDeletions(limit) {
+  await ensureSchema();
+  const { rows } = await pool.query(
+    `SELECT request_id, bitrix_item_id, deal_id, title, stage_id, opportunity, currency, files, actor_name, at
+       FROM ticketsmodule_procurement_audit WHERE action='delete' ORDER BY at DESC LIMIT $1`, [Math.min(Number(limit) || 200, 1000)]);
+  const sName = {}; try { (await getStages()).forEach(s => { sName[s.id] = s.name; }); } catch (e) {}
+  return rows.map(r => ({
+    requestId: r.request_id, bitrixItemId: r.bitrix_item_id, dealId: r.deal_id,
+    title: r.title, stageId: r.stage_id, stageName: sName[r.stage_id] || r.stage_id,
+    opportunity: r.opportunity, currency: r.currency,
+    files: r.files || [], filesCount: Array.isArray(r.files) ? r.files.length : 0,
+    actorName: r.actor_name, at: r.at,
+    dealUrl: dealUrl(r.deal_id),
+  }));
 }
 
 // Карта стадий 1066 (id → имя), кэш 30 мин — для представления «по сделке».
@@ -1360,4 +1414,4 @@ async function removeShipFile(dealId, fileId) {
   return { ok: true };
 }
 
-module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, autoCreateFromService, itemUrl, dealUrl };
+module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, listDeletions, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, autoCreateFromService, itemUrl, dealUrl };
