@@ -968,15 +968,43 @@ async function fetchUrlBuffer(url) {
   } catch (e) { console.error('fetchUrlBuffer:', e.message); return null; }
 }
 
-// Файловые объекты слота из СВЕЖЕГО crm.item.get: [{ id, urlMachine }].
-async function bitrixSlotFiles(itemId, slot, itemCache) {
-  const docFields = await resolveDocFields();
-  const code = docFields[slot]; if (!code) return [];
+// Файловые объекты произвольного файлового поля: [{ id, urlMachine }].
+async function bitrixFieldFiles(itemId, code, itemCache) {
+  if (!code) return [];
   let item = itemCache;
   if (!item) { const { result } = await b24('crm.item.get', { entityTypeId: ENTITY, id: itemId }); item = (result && result.item) || {}; }
   const v = item[code];
   const arr = Array.isArray(v) ? v : (v ? [v] : []);
   return arr.map(f => ({ id: Number(f.id || f.ID), urlMachine: f.urlMachine || f.downloadUrl || f.url || null }));
+}
+async function bitrixSlotFiles(itemId, slot, itemCache) {
+  const docFields = await resolveDocFields();
+  return bitrixFieldFiles(itemId, docFields[slot], itemCache);
+}
+
+// Код файлового поля «ТТН» (резолв по названию, кэш 30 мин).
+let _ttnField = null, _ttnAt = 0;
+async function resolveTtnField() {
+  if (_ttnField !== null && Date.now() - _ttnAt < 30 * 60 * 1000) return _ttnField;
+  let code = process.env.PROC_TTN_FIELD || '';
+  try {
+    const { result } = await b24('crm.item.fields', { entityTypeId: ENTITY });
+    const fields = (result && result.fields) || {};
+    const fileFields = Object.entries(fields).filter(([, f]) => String(f.type).toLowerCase() === 'file');
+    const codeNum = c => { const m = String(c).match(/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
+    const hits = fileFields.filter(([, f]) => /(^|\W)ттн(\W|$)|товарно.*транспортн/i.test(String(f.title || '').trim()));
+    if (hits.length) { hits.sort((a, b) => codeNum(b[0]) - codeNum(a[0])); code = hits[0][0]; }
+  } catch (e) { console.error('resolveTtnField:', e.message); }
+  _ttnField = code; _ttnAt = Date.now();
+  return _ttnField;
+}
+// Дописать ТТН в поле «ТТН» конкретной закупки (1066), best-effort.
+async function pushTtnToBitrix(itemId, filename, base64) {
+  try {
+    const code = await resolveTtnField(); if (!code) return;
+    const beforeIds = (await bitrixFieldFiles(itemId, code)).map(f => f.id).filter(Boolean);
+    await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields: { [code]: [...beforeIds, { fileData: [filename || 'ТТН', base64] }] } });
+  } catch (e) { console.error('pushTtnToBitrix:', e.message); }
 }
 
 // Добавить файл в слот: кладём в поле Битрикса (дописываем, не перезаписывая),
@@ -1177,6 +1205,8 @@ async function addShipFile(dealId, itemId, { filename, mime, base64 } = {}, byBi
     `INSERT INTO ticketsmodule_procurement_ship_files (deal_id, item_id, filename, mime, content_b64, uploaded_by)
      VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
     [Number(dealId), itemId ? Number(itemId) : null, filename || 'ТТН', mime || null, base64, byBid || null]);
+  // ТТН доотправки привязана к конкретной закупке → дублируем в поле «ТТН» в Битриксе.
+  if (itemId) pushTtnToBitrix(Number(itemId), filename || 'ТТН', base64).catch(() => {});
   return { id: ins.rows[0].id };
 }
 

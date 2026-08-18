@@ -548,7 +548,9 @@ function goodsBlockHtml(id,d){
       <div class="fs">${fully?('Отмечено'+(d.fullyReceivedBy?(' · '+esc(d.fullyReceivedBy)):'')+(d.fullyReceivedAt?(' · '+fmtDateTime(d.fullyReceivedAt)):'')):'Пока не отмечено — «Товар принят» остаётся красным (частичная приёмка)'}</div>
     </div>
   </div>`;
-  return waybillsHtml(id,d)+filesSlotHtml(id,d,'warranty')+chk
+  // Доверенность — сквозной документ: показываем и здесь, если не приложили на оплате.
+  const poaBlock=filesSlotHtml(id,d,'poa',true);
+  return waybillsHtml(id,d)+filesSlotHtml(id,d,'warranty')+poaBlock+chk
     +`<div class="hint" style="margin-top:8px">Товар может приходить частями с разными накладными. Отметь «Полностью принят», когда получено всё — тогда шаг «Товар принят» станет зелёным.${(!nakl||!warr)?' Для перехода на «Товар принят» нужны хотя бы одна накладная и гарантийный сертификат.':''}</div>`;
 }
 function approvalHtml(id,d){
@@ -649,8 +651,16 @@ function renderDetail(id,d){
   else if(curKey==='payment'){
     hdr='Оплата закупки';
     const hasPay=((d.files&&d.files.pay)||[]).length>0;
-    const nextBtn=`<button class="btn btn-p" style="margin-top:10px;width:100%;justify-content:center" ${hasPay?'':'disabled'} onclick="moveStep(${id},'waiting')">Перейти к ожиданию товара →</button>`;
-    html=approvedBanner(d)+accountantHtml(id)+`<div style="margin-top:12px"></div>`+filesSlotHtml(id,d,'pay')+filesSlotHtml(id,d,'poa',true)+`<div class="hint" style="margin-top:6px">Приложи подтверждение оплаты (можно несколько) и, при необходимости, доверенность. Когда всё готово — нажми кнопку ниже.</div>`+nextBtn;
+    let body=approvedBanner(d)+accountantHtml(id)+`<div style="margin-top:12px"></div>`+filesSlotHtml(id,d,'pay');
+    if(!hasPay){
+      body+=`<div class="hint" style="margin-top:6px">Приложи подтверждение оплаты (можно несколько). После этого спросим про доверенность.</div>`;
+    } else {
+      // Шаг 2: доверенность. Загрузка ИЛИ «Не требуется» → авто-переход дальше.
+      body+=`<div class="fullybar" style="margin-top:14px;border-color:var(--signal)"><div><div class="ft">Нужна доверенность?</div><div class="fs">Приложи доверенность — заявка уйдёт на «Ожидание товара». Если не нужна — нажми «Не требуется».</div></div></div>`
+        +filesSlotHtml(id,d,'poa',true)
+        +`<button class="btn" style="margin-top:8px;width:100%;justify-content:center" onclick="skipPoa(${id})">Доверенность не требуется — далее →</button>`;
+    }
+    html=body;
   }
   else if(curKey==='waiting'){ hdr='Ожидание / приёмка товара'; html=goodsBlockHtml(id,d); }
   else if(curKey==='received'){ hdr='Товар принят'; html=goodsBlockHtml(id,d); }
@@ -676,9 +686,11 @@ async function addSimpleFile(id,slot,input){
     const d=await postFile(id,slot,file); if(!d){loadDetail(id);return;}
     const r0=LIST.find(x=>x.id===id)||{}; const flow=META.flow||[]; const ci=(r0.stepIndex!=null)?r0.stepIndex:-1;
     const curKey=(ci>=0&&ci<flow.length)?flow[ci].key:null;
-    // Автопереход только со счёта (единственный документ шага). На оплате НЕ прыгаем
-    // автоматически — чтобы успеть приложить доверенность; переход — кнопкой.
+    // Автопереходы: первый счёт → «Договор». На оплате: подтверждение оплаты НЕ
+    // переводит сразу — сперва спрашиваем доверенность (загрузка доверенности
+    // ИЛИ «Не требуется» переводят дальше). Так ничего не застревает и не теряется.
     if(d.first&&curKey==='invoice'&&slot==='invoice'){ await moveStep(id,'contract'); }
+    else if(curKey==='payment'&&slot==='poa'){ await moveStep(id,'waiting'); } // доверенность приложена → далее
     else { loadDetail(id); }
   }catch(e){alert('Ошибка: '+e.message); loadDetail(id);}
   finally{input.disabled=false;}
@@ -691,6 +703,8 @@ async function addWaybill(id){
   try{ const d=await postFile(id,'contract',file,meta); if(d) loadDetail(id); }
   catch(e){alert('Ошибка: '+e.message);}
 }
+// «Доверенность не требуется» → сразу переходим на «Ожидание товара».
+async function skipPoa(id){ await moveStep(id,'waiting'); }
 async function delFile(id,fileId){
   if(!confirm('Удалить этот файл?'))return;
   try{ const r=await fetch('/api/procurement/'+id+'/files/'+fileId,{method:'DELETE'}); const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка');return;} loadDetail(id); }
