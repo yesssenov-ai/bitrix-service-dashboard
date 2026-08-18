@@ -39,7 +39,15 @@ const authLimiter = rateLimit({
 app.use('/api/', apiLimiter);
 app.use('/auth/login', authLimiter);
 app.use('/auth/totp', authLimiter);
-app.use(express.json({ limit: '1mb' }));
+// Крупные загрузки (файлы закупок, ТТН) парсит РОУТ-специфичный express.json
+// (45–90 МБ). Глобальный лимит 1 МБ иначе режет их 413-й до роутов — на iOS это
+// всплывает как «The string did not match the expected pattern». Пропускаем их.
+const _globalJson = express.json({ limit: '1mb' });
+const _bigUploadRe = /\/(files|files-batch|ship-close|ship-file)$/;
+app.use((req, res, next) => {
+  if (req.method === 'POST' && _bigUploadRe.test(req.path)) return next();
+  return _globalJson(req, res, next);
+});
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());
 
