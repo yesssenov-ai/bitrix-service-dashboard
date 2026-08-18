@@ -90,11 +90,116 @@ router.post('/:id/stage', requireAuth(ROLES), express.json(), async (req, res) =
   try {
     const { moveStage } = require('../procurement-calc');
     const id = parseInt(req.params.id, 10);
-    const out = await moveStage(id, req.body && req.body.stageKey);
+    const body = req.body || {};
+    const out = await moveStage(id, body.stageKey, { reason: body.reason, byBid: req.user.bitrix_user_id || null });
     res.json({ ok: true, ...out });
   } catch (e) {
-    console.error('POST /api/procurement/:id/stage error:', e.message);
-    res.status(500).json({ error: 'Не удалось сменить стадию: ' + e.message });
+    // needReason → фронт покажет запрос причины отката (не как обычную ошибку).
+    const status = e.userFacing ? 400 : 500;
+    if (!e.userFacing) console.error('POST /api/procurement/:id/stage error:', e.message);
+    res.status(status).json({ error: e.message, needReason: !!e.needReason });
+  }
+});
+
+// POST /api/procurement/:id/files — добавить файл в слот (множественно) + метаданные накладной
+router.post('/:id/files', requireAuth(ROLES), express.json({ limit: '45mb' }), async (req, res) => {
+  try {
+    const { addFile } = require('../procurement-calc');
+    const id = parseInt(req.params.id, 10);
+    const { slot, filename, base64, mime, warehouse, acceptDate, comment } = req.body || {};
+    if (!slot || !base64) return res.status(400).json({ error: 'Нужны slot и base64' });
+    const out = await addFile(id, slot, { filename: filename || 'file', base64, mime, warehouse, acceptDate, comment }, req.user.bitrix_user_id || null);
+    res.json({ ok: true, ...out });
+  } catch (e) {
+    console.error('POST /api/procurement/:id/files error:', e.message);
+    res.status(e.userFacing ? 400 : 500).json({ error: 'Не удалось загрузить: ' + e.message });
+  }
+});
+
+// GET /api/procurement/:id/files/:fileId/download — скачать файл
+router.get('/:id/files/:fileId/download', requireAuth(ROLES), async (req, res) => {
+  try {
+    const { getFileBytes } = require('../procurement-calc');
+    const f = await getFileBytes(parseInt(req.params.id, 10), parseInt(req.params.fileId, 10));
+    if (!f) return res.status(404).send('Файл не найден');
+    res.setHeader('Content-Type', f.mime);
+    res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(f.filename)}`);
+    res.send(f.buffer);
+  } catch (e) {
+    console.error('GET /api/procurement/:id/files/:fileId/download error:', e.message);
+    res.status(500).send('Ошибка');
+  }
+});
+
+// DELETE /api/procurement/:id/files/:fileId — удалить файл
+router.delete('/:id/files/:fileId', requireAuth(ROLES), async (req, res) => {
+  try {
+    const { removeFile } = require('../procurement-calc');
+    res.json(await removeFile(parseInt(req.params.id, 10), parseInt(req.params.fileId, 10)));
+  } catch (e) {
+    console.error('DELETE /api/procurement/:id/files/:fileId error:', e.message);
+    res.status(500).json({ error: 'Не удалось удалить файл: ' + e.message });
+  }
+});
+
+// ── Отгрузка по сделке (ТТН + доотправка) ────────────────────────────────────
+// POST /api/procurement/deal/:dealId/ship-close { ttn:[{filename,base64,mime}] } — зафиксировать «всё отправлено»
+router.post('/deal/:dealId/ship-close', requireAuth(ROLES), express.json({ limit: '45mb' }), async (req, res) => {
+  try {
+    const { closeDealShipment } = require('../procurement-calc');
+    const ttn = (req.body || {}).ttn || [];
+    res.json(await closeDealShipment(parseInt(req.params.dealId, 10), Array.isArray(ttn) ? ttn : [ttn], req.user.bitrix_user_id || null));
+  } catch (e) {
+    res.status(e.userFacing ? 400 : 500).json({ error: e.message });
+  }
+});
+
+// POST /api/procurement/deal/:dealId/ship-open — снять фиксацию (открыть заново)
+router.post('/deal/:dealId/ship-open', requireAuth(ROLES), express.json(), async (req, res) => {
+  try {
+    const { reopenDealShipment } = require('../procurement-calc');
+    res.json(await reopenDealShipment(parseInt(req.params.dealId, 10)));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/procurement/deal/:dealId/ship-file { itemId?, filename, base64, mime } — добавить ТТН (доотправка/основная)
+router.post('/deal/:dealId/ship-file', requireAuth(ROLES), express.json({ limit: '45mb' }), async (req, res) => {
+  try {
+    const { addShipFile } = require('../procurement-calc');
+    const { itemId, filename, base64, mime } = req.body || {};
+    if (!base64) return res.status(400).json({ error: 'Нужен base64' });
+    res.json(await addShipFile(parseInt(req.params.dealId, 10), itemId || null, { filename, base64, mime }, req.user.bitrix_user_id || null));
+  } catch (e) { res.status(e.userFacing ? 400 : 500).json({ error: e.message }); }
+});
+
+// GET /api/procurement/deal/:dealId/ship-file/:fileId/download — скачать ТТН
+router.get('/deal/:dealId/ship-file/:fileId/download', requireAuth(ROLES), async (req, res) => {
+  try {
+    const { getShipFileBytes } = require('../procurement-calc');
+    const f = await getShipFileBytes(parseInt(req.params.dealId, 10), parseInt(req.params.fileId, 10));
+    if (!f) return res.status(404).send('Файл не найден');
+    res.setHeader('Content-Type', f.mime);
+    res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(f.filename)}`);
+    res.send(f.buffer);
+  } catch (e) { res.status(500).send('Ошибка'); }
+});
+
+// DELETE /api/procurement/deal/:dealId/ship-file/:fileId — удалить ТТН
+router.delete('/deal/:dealId/ship-file/:fileId', requireAuth(ROLES), async (req, res) => {
+  try {
+    const { removeShipFile } = require('../procurement-calc');
+    res.json(await removeShipFile(parseInt(req.params.dealId, 10), parseInt(req.params.fileId, 10)));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/procurement/:id/fully-received { value } — отметка «Полностью принят»
+router.post('/:id/fully-received', requireAuth(ROLES), express.json(), async (req, res) => {
+  try {
+    const { setFullyReceived } = require('../procurement-calc');
+    res.json(await setFullyReceived(parseInt(req.params.id, 10), !!(req.body || {}).value, req.user.bitrix_user_id || null));
+  } catch (e) {
+    console.error('POST /api/procurement/:id/fully-received error:', e.message);
+    res.status(500).json({ error: 'Не удалось сохранить: ' + e.message });
   }
 });
 

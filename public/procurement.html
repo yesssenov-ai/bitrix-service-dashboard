@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ЦУП — Закуп доп оборудования</title>
+<title>ЦУП — Закупки</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -117,6 +117,50 @@ tbody tr:hover td{background:var(--panel-h)}
 .pc-sep{height:1px;background:var(--border);margin:14px 0 6px}
 .spin{width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--signal);border-radius:50%;animation:sp 1s linear infinite;margin:40px auto}
 @keyframes sp{to{transform:rotate(360deg)}}
+/* Множественные файлы, накладные, откаты */
+.docblk{margin-top:12px}
+.docblk .dh{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--text-2);margin-bottom:7px}
+.docblk .dh .cnt{font-family:var(--fm);font-size:11px;color:var(--text-4)}
+.docblk .dh .opt{font-size:10.5px;color:var(--text-4);font-weight:500}
+.fitem{display:flex;align-items:center;gap:9px;padding:7px 9px;background:var(--bg);border:1px solid var(--border);border-radius:9px;margin-bottom:6px;font-size:12.5px}
+.fitem .fn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fitem .fx{cursor:pointer;color:var(--text-4);font-weight:700;flex:none}
+.fitem .fx:hover{color:var(--bad)}
+.fitem .fmeta{color:var(--text-4);font-size:11px;white-space:nowrap}
+.addf{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--signal);border:1px dashed var(--border2);border-radius:8px;padding:6px 11px;margin-top:3px}
+.addf:hover{background:var(--panel-h);border-color:var(--signal)}
+.wbform{border:1px solid var(--border2);border-radius:11px;background:var(--bg);padding:11px 12px;margin-top:8px}
+.wbform .wbrow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.wbform label.fl{margin-top:8px}
+.fullybar{display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:11px;margin-top:12px;border:1px solid var(--border2);background:var(--panel-h)}
+.fullybar.on{border-color:rgba(61,220,132,.5);background:rgba(61,220,132,.08)}
+.fullybar input{width:18px;height:18px;flex:none;cursor:pointer}
+.fullybar .ft{font-weight:600;font-size:13.5px}
+.fullybar .fs{font-size:11.5px;color:var(--text-4)}
+.rbhist{margin-top:14px;border:1px solid rgba(255,176,32,.35);background:rgba(255,176,32,.06);border-radius:11px;padding:11px 13px}
+.rbhist .rh{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--warn);font-weight:700;margin-bottom:8px}
+.rbhist .ri{font-size:12px;padding:6px 0;border-top:1px dashed rgba(255,176,32,.25)}
+.rbhist .ri:first-of-type{border-top:none}
+.rbhist .ri .rt{color:var(--text-2)}
+.rbhist .ri .rm{color:var(--text-4);font-size:11px;margin-top:2px}
+.stepper .st.partial .dot{background:linear-gradient(135deg,var(--brand),var(--brand-h));border-color:transparent;color:#fff}
+.stepper .st.partial::before{background:var(--brand)}
+/* Прогресс готовности закупок по сделке */
+.dvprog{background:var(--panel-h);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px}
+.dvprog .pt{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px}
+.dvprog .pt .pl{font-size:13px;color:var(--text-2)}
+.dvprog .pt .pl b{color:var(--text)}
+.dvprog .pt .pc{font-family:var(--fm);font-weight:700;font-size:15px}
+.pbar{height:9px;border-radius:20px;background:var(--bg);border:1px solid var(--border);overflow:hidden}
+.pbar-fill{height:100%;border-radius:20px;background:linear-gradient(90deg,var(--signal),var(--good));transition:width .4s ease}
+/* Отгрузка клиенту (ТТН) + доотправка */
+.shipcard{border:1px solid var(--border2);background:var(--bg);border-radius:12px;padding:12px 14px;margin-bottom:12px}
+.shipcard.closed{border-color:rgba(61,220,132,.45);background:rgba(61,220,132,.06)}
+.shipcard .sh-t{font-family:var(--fd);font-weight:700;font-size:14px;margin-bottom:4px}
+.shipcard.closed .sh-t{color:var(--good)}
+.reshsep{display:flex;align-items:center;gap:10px;margin:16px 0 10px;color:var(--warn);font-family:var(--fd);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+.reshsep::before,.reshsep::after{content:'';flex:1;height:1px;background:rgba(255,176,32,.4)}
+.ttnrow{display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:rgba(255,176,32,.06);border:1px dashed rgba(255,176,32,.4);border-radius:9px;padding:7px 10px;margin-top:8px;font-size:12.5px}
 </style>
 </head>
 <body>
@@ -128,7 +172,7 @@ tbody tr:hover td{background:var(--panel-h)}
   <button class="btn" onclick="logout()">Выйти</button>
 </div>
 <div class="wrap">
-  <div class="h1">Закуп доп оборудования</div>
+  <div class="h1">Закупки</div>
   <div class="sub">Заявки менеджера склада синхронизируются со смарт-процессом «Закупки» в Bitrix.</div>
   <div id="root"><div class="spin"></div></div>
 </div>
@@ -157,8 +201,9 @@ const stageName=id=>{const f=(META.flow||[]).find(x=>x.bitrix===id);if(f)return 
 let MODE='create', EDIT=null, RVIEW='mine', DEALVIEW=null, dvTimer=null;
 const initials=name=>{const p=String(name||'').trim().split(/\s+/).filter(Boolean);return((p[0]||'?')[0]+(p[1]?p[1][0]:'')).toUpperCase();};
 const empName=id=>{const e=(META.employees||[]).find(x=>String(x.id)===String(id));return e?e.name:'';};
-// Завершённая заявка = дошла до «Товар принят» (стадия SUCCESS).
-const isDone=r=>r&&(r.stepKey==='received'||/:SUCCESS$/i.test(String(r.stageId||'')));
+// Завершённая заявка = дошла до «Товар принят» И отмечена «Полностью принят».
+// Частичная приёмка (без отметки) остаётся в активных.
+const isDone=r=>{ if(!r)return false; const onRecv=(r.stepKey==='received'||/:SUCCESS$/i.test(String(r.stageId||''))); return onRecv && !!(r.payload&&r.payload.fullyReceived); };
 const activeList=()=>LIST.filter(r=>!isDone(r));
 const doneList=()=>LIST.filter(isDone);
 function render(){
@@ -225,11 +270,15 @@ function editCardHtml(){
   const flow=META.flow||[];
   const pl=r.payload||{};
   const lastIdx=flow.length-1;
+  const fully=!!(pl.fullyReceived);
   const stepper=`<div class="stepper">`+flow.map((s,i)=>{
-    // Терминальный шаг (Товар принят): когда достигнут — зелёный «done», не красный.
-    const done = i<r.stepIndex || (i===r.stepIndex && i===lastIdx);
+    // Терминальный шаг (Товар принят): зелёный «done» только когда «Полностью принят»;
+    // пока не отмечено — красный (частичное принятие).
+    const isLastCur = i===lastIdx && i===r.stepIndex;
+    const done = i<r.stepIndex || (isLastCur && fully);
     const cur  = i===r.stepIndex && i!==lastIdx;
-    return `<div class="st ${done?'done':''} ${cur?'cur':''}" title="Перейти: ${esc(s.label)}" onclick="moveStep(${r.id},'${s.key}')"><span class="dot">${i+1}</span><span class="stlbl">${esc(s.label)}</span><span class="stdate" id="stdate-${i}"></span></div>`;
+    const partial = isLastCur && !fully; // на «Товар принят», но не полностью
+    return `<div class="st ${done?'done':''} ${cur?'cur':''} ${partial?'partial':''}" title="Перейти: ${esc(s.label)}" onclick="moveStep(${r.id},'${s.key}')"><span class="dot">${i+1}</span><span class="stlbl">${esc(s.label)}</span><span class="stdate" id="stdate-${i}"></span></div>`;
   }).join('')+`</div>`;
   const stepSel=`<select onchange="moveStep(${r.id},this.value)">`+flow.map((s,i)=>`<option value="${esc(s.key)}" ${s.key===r.stepKey?'selected':''}>${i+1}. ${esc(s.label)}</option>`).join('')+`</select>`;
   const srcOptsE=(META.sources||[]).map(s=>`<option value="${esc(s.id)}" ${String(s.id)===String(pl.source||META.internalSourceId)?'selected':''}>${esc(s.name)}</option>`).join('');
@@ -304,15 +353,88 @@ function renderByDeal(data){
   if(!items.length){ box.innerHTML='<div class="empty">По этой сделке закупок не найдено.</div>'; return; }
   const total=items.reduce((s,i)=>s+(i.sum||0),0);
   const pillCls={ok:'pill-ok',fail:'pill-no',work:'pill-work'};
-  box.innerHTML=`<div class="hint" style="margin-bottom:10px">Закупок: <b style="color:var(--text)">${items.length}</b> · сумма ${F(total)} ₸${data.dealUrl?` · <a class="lnk" href="${esc(data.dealUrl)}" target="_blank">сделка ↗</a>`:''}</div>`
-    +items.map(it=>`<div class="pcard">
-      <div style="flex:1;min-width:0"><div class="pcard-t">${esc(it.title)}</div><div class="hint">#${it.id} · ${it.isOurs?'<span style="color:var(--signal)">доп (дашборд)</span>':'импорт'}${it.assignedName?` · 👤 ${esc(it.assignedName)}`:''}</div></div>
-      <div style="text-align:right;white-space:nowrap"><span class="pill ${pillCls[it.sem]||''}">${esc(it.stageName)}</span><div class="hint" style="margin-top:5px">${F(it.sum)} ${esc(it.currency)}</div></div>
-      <div style="display:flex;flex-direction:column;gap:5px;margin-left:6px;white-space:nowrap">
-        ${it.url?`<a class="lnk" href="${esc(it.url)}" target="_blank">Б24 ↗</a>`:''}
-        ${it.isOurs&&it.localId?`<span class="lnk" style="cursor:pointer" onclick="openLocal(${it.localId})">Открыть</span>`:''}
+  // Прогресс готовности: завершёнными считаем закупки на успешной стадии (sem='ok').
+  const doneN=items.filter(i=>i.sem==='ok').length;
+  const pct=items.length?Math.round(doneN/items.length*100):0;
+  const progress=`<div class="dvprog">
+    <div class="pt"><span class="pl">Готовность закупок: <b>${doneN} из ${items.length}</b> завершено</span><span class="pc" style="color:${pct===100?'var(--good)':(pct>0?'var(--signal)':'var(--text-3)')}">${pct}%</span></div>
+    <div class="pbar"><div class="pbar-fill" style="width:${pct}%"></div></div>
+  </div>`;
+  const main=items.filter(i=>!i.isReship), resh=items.filter(i=>i.isReship);
+  let out=progress+shipHtml(data)
+    +`<div class="hint" style="margin-bottom:10px">Закупок: <b style="color:var(--text)">${items.length}</b> · сумма ${F(total)} ₸${data.dealUrl?` · <a class="lnk" href="${esc(data.dealUrl)}" target="_blank">сделка ↗</a>`:''}</div>`
+    +main.map(it=>dvItemCard(it,data)).join('');
+  if(resh.length){ out+=`<div class="reshsep">доотправка · ${resh.length}</div>`+resh.map(it=>dvItemCard(it,data)).join(''); }
+  box.innerHTML=out;
+}
+const DV_PILL={ok:'pill-ok',fail:'pill-no',work:'pill-work'};
+function dvItemCard(it,data){
+  const did=data.dealId;
+  const ttnLinks=(it.ttn||[]).map(f=>`<a class="lnk" href="${esc(f.url)}" target="_blank">${esc(f.name||'ТТН')}</a> <span class="fx" title="Удалить" onclick="delShipFile(${did},${f.id})">✕</span>`).join(' · ');
+  const ttnRow=it.isReship?`<div style="flex-basis:100%"><div class="ttnrow">🚚 ТТН доотправки: ${ttnLinks||'<span class="hint">не приложена</span>'} <label class="addf" style="padding:4px 9px;margin:0">＋ ТТН<input type="file" style="display:none" onchange="addShipTtn(${did},${it.id},this)"></label></div></div>`:'';
+  return `<div class="pcard" style="flex-wrap:wrap">
+    <div style="flex:1;min-width:0"><div class="pcard-t">${esc(it.title)}</div><div class="hint">#${it.id} · ${it.isOurs?'<span style="color:var(--signal)">доп (дашборд)</span>':'импорт'}${it.assignedName?` · 👤 ${esc(it.assignedName)}`:''}</div></div>
+    <div style="text-align:right;white-space:nowrap"><span class="pill ${DV_PILL[it.sem]||''}">${esc(it.stageName)}</span><div class="hint" style="margin-top:5px">${F(it.sum)} ${esc(it.currency)}</div></div>
+    <div style="display:flex;flex-direction:column;gap:5px;margin-left:6px;white-space:nowrap">
+      ${it.url?`<a class="lnk" href="${esc(it.url)}" target="_blank">Б24 ↗</a>`:''}
+      ${it.isOurs&&it.localId?`<span class="lnk" style="cursor:pointer" onclick="openLocal(${it.localId})">Открыть</span>`:''}
+    </div>
+    ${ttnRow}
+  </div>`;
+}
+// Карточка фиксации отгрузки клиенту (ТТН).
+function shipHtml(data){
+  const s=data.shipment||{}; const did=data.dealId;
+  if(s.closed){
+    const files=(s.files||[]).map(f=>`<a class="lnk" href="${esc(f.url)}" target="_blank">${esc(f.name||'ТТН')}</a> <span class="fx" title="Удалить" onclick="delShipFile(${did},${f.id})">✕</span>`).join(' · ')||'—';
+    return `<div class="shipcard closed">
+      <div class="sh-t">✅ Всё отправлено клиенту</div>
+      <div class="hint">Зафиксировал: <b style="color:var(--text)">${esc(s.closedByName||'—')}</b>${s.closedAt?(' · '+fmtDateTime(s.closedAt)):''}</div>
+      <div style="margin-top:6px;font-size:13px">ТТН: ${files}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px">
+        <label class="addf" style="margin:0">＋ Добавить ТТН<input type="file" style="display:none" onchange="addShipTtn(${did},null,this)"></label>
+        <button class="btn" onclick="reopenShipment(${did})">↩ Открыть заново</button>
       </div>
-    </div>`).join('');
+      <div class="hint" style="margin-top:8px">Закупки, созданные по сделке после этой отметки, показываются ниже как «доотправка» — приложи к каждой ТТН.</div>
+    </div>`;
+  }
+  return `<div class="shipcard">
+    <div class="sh-t">🚚 Отгрузка клиенту</div>
+    <div class="hint">Когда все закупки завершены и товар отправлен клиенту — приложи ТТН и зафиксируй. Всё, что создастся по сделке позже, пойдёт «доотправкой».</div>
+    <input type="file" id="shipttn-${did}" multiple style="margin-top:9px">
+    <button class="btn btn-p" style="margin-top:9px;width:100%;justify-content:center" onclick="closeShipment(${did})">✅ Все закупки завершены — товар отправлен клиенту</button>
+  </div>`;
+}
+async function closeShipment(did){
+  const inp=document.getElementById('shipttn-'+did); const files=inp?Array.from(inp.files||[]):[];
+  if(!files.length){alert('Приложите ТТН — без неё нельзя зафиксировать отгрузку.');return;}
+  try{
+    const ttn=[];
+    for(const f of files){ if(f.size>25*1024*1024){alert('Файл '+f.name+' больше 25 МБ.');return;} ttn.push({filename:f.name,mime:f.type||'',base64:await fileToB64(f)}); }
+    const r=await fetch('/api/procurement/deal/'+did+'/ship-close',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ttn})});
+    const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка');return;}
+    loadByDeal(did);
+  }catch(e){alert('Ошибка: '+e.message);}
+}
+async function addShipTtn(did,itemId,input){
+  const f=input.files&&input.files[0]; if(!f)return; input.disabled=true;
+  try{
+    if(f.size>25*1024*1024){alert('Файл больше 25 МБ.');return;}
+    const base64=await fileToB64(f);
+    const r=await fetch('/api/procurement/deal/'+did+'/ship-file',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({itemId,filename:f.name,mime:f.type||'',base64})});
+    const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка');return;}
+    loadByDeal(did);
+  }catch(e){alert('Ошибка: '+e.message);} finally{input.disabled=false;}
+}
+async function reopenShipment(did){
+  if(!confirm('Открыть отгрузку заново? Отметка «всё отправлено» будет снята.'))return;
+  try{ const r=await fetch('/api/procurement/deal/'+did+'/ship-open',{method:'POST'}); await r.json(); loadByDeal(did); }
+  catch(e){alert('Ошибка: '+e.message);}
+}
+async function delShipFile(did,fileId){
+  if(!confirm('Удалить эту ТТН?'))return;
+  try{ const r=await fetch('/api/procurement/deal/'+did+'/ship-file/'+fileId,{method:'DELETE'}); await r.json(); loadByDeal(did); }
+  catch(e){alert('Ошибка: '+e.message);}
 }
 function openLocal(localId){ selectReq(localId); }
 document.addEventListener('click',e=>{ if(!e.target.closest('#dvq')&&!e.target.closest('#dvres')){const b=document.getElementById('dvres'); if(b)b.style.display='none';} });
@@ -338,11 +460,29 @@ function rowHtml(r){
   </tr>`;
 }
 async function reloadList(){ const l=await fetch('/api/procurement/list'); LIST=(await l.json()).items||[]; render(); }
-async function moveStep(id,stageKey){
+async function moveStep(id,stageKey,reason){
+  const r0=LIST.find(x=>x.id===id)||{}; const flow=META.flow||[];
+  const curIdx=(r0.stepIndex!=null)?r0.stepIndex:-1;
+  const targetIdx=flow.findIndex(s=>s.key===stageKey);
+  // Откат назад (по цифре в таймлайне или из списка) — обязательно спросить причину.
+  if(curIdx>=0 && targetIdx>=0 && targetIdx<curIdx && !reason){
+    const why=prompt('Откат назад на «'+((flow[targetIdx]||{}).label||stageKey)+'».\nУкажите причину отката (обязательно):','');
+    if(why===null) return;                       // нажали «Отмена» — не откатываем
+    if(!String(why).trim()){ alert('Причина отката обязательна — откат не выполнен.'); return; }
+    reason=String(why).trim();
+  }
   try{
-    const r=await fetch('/api/procurement/'+id+'/stage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({stageKey})});
+    const body={stageKey}; if(reason)body.reason=reason;
+    const r=await fetch('/api/procurement/'+id+'/stage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const d=await r.json();
-    if(!r.ok){alert(d.error||'Ошибка смены стадии');}
+    if(!r.ok){
+      if(d.needReason){ // бэкенд-страховка: причина не дошла
+        const why=prompt('Укажите причину отката (обязательно):','');
+        if(why&&String(why).trim()){ return moveStep(id,stageKey,String(why).trim()); }
+        return;
+      }
+      alert(d.error||'Ошибка смены стадии');
+    }
     await reloadList();
   }catch(e){alert('Ошибка: '+e.message); await reloadList();}
 }
@@ -351,13 +491,65 @@ async function loadDetail(id){
   try{ const d=await (await fetch('/api/procurement/'+id+'/detail')).json(); renderDetail(id,d); }
   catch(e){ const ds=document.getElementById('docSlots'); if(ds)ds.innerHTML='<div class="hint">Ошибка: '+esc(e.message)+'</div>'; }
 }
-const DOC_LABELS={invoice:'Счет на оплату',pay:'Подтверждение оплаты',contract:'Накладная',warranty:'Гарантийный сертификат'};
-function uploadSlotHtml(id,d,key,withReqHint){
-  const s=(META.uploadSlots||[]).find(x=>x.key===key); if(!s) return '';
-  const info=d.docs&&d.docs[key];
-  return `<div class="slot"><div class="slabel">${esc(s.label)}</div>
-    <div class="sval" title="${info?esc(info.name||''):''}">${info?`<a class="lnk" href="${esc(info.url||'#')}" target="_blank">${esc(info.name||'файл')}</a>`:'<span class="hint">не загружено</span>'}</div>
-    <label class="upl">${info?'Заменить':'Загрузить'}<input type="file" style="display:none" onchange="doUpload(${id},'${s.code}',this)"></label></div>`;
+const DOC_LABELS={invoice:'Счет на оплату',pay:'Подтверждение оплаты',poa:'Доверенность',contract:'Накладная',warranty:'Гарантийный сертификат'};
+// Файлы слота: полученные из d.files[slot] (массив). Показываем список + «добавить».
+function fileRow(id,slot,f){
+  const meta=[f.warehouse?('🏢 '+esc(f.warehouse)):'',f.acceptDate?('📅 '+fmtDate(f.acceptDate)):'',f.comment?esc(f.comment):''].filter(Boolean).join(' · ');
+  return `<div class="fitem">
+    <a class="lnk fn" href="${esc(f.url||'#')}" target="_blank" title="${esc(f.name||'')}">${esc(f.name||'файл')}</a>
+    ${meta?`<span class="fmeta">${meta}</span>`:''}
+    <span class="fx" title="Удалить" onclick="delFile(${id},${f.id})">✕</span>
+  </div>`;
+}
+// Простой множественный слот (счёт / оплата / доверенность / гарантийный).
+function filesSlotHtml(id,d,slot,opt){
+  const list=(d.files&&d.files[slot])||[];
+  const lbl=DOC_LABELS[slot]||slot;
+  const rows=list.map(f=>fileRow(id,slot,f)).join('')||'<div class="hint" style="padding:2px 0 6px">не загружено</div>';
+  return `<div class="docblk">
+    <div class="dh">${esc(lbl)} <span class="cnt">${list.length||''}</span>${opt?'<span class="opt">(необязательно)</span>':''}</div>
+    ${rows}
+    <label class="addf">＋ Добавить файл<input type="file" style="display:none" onchange="addSimpleFile(${id},'${slot}',this)"></label>
+  </div>`;
+}
+// Накладные (contract) — множественные, с полями Склад / Дата / Наименование.
+function waybillsHtml(id,d){
+  const list=(d.files&&d.files.contract)||[];
+  const rows=list.map(f=>`<div class="fitem" style="flex-wrap:wrap">
+      <a class="lnk fn" href="${esc(f.url||'#')}" target="_blank" title="${esc(f.name||'')}">${esc(f.name||'файл')}</a>
+      <span class="fx" title="Удалить" onclick="delFile(${id},${f.id})">✕</span>
+      <div style="flex-basis:100%;height:0"></div>
+      <span class="fmeta">${f.warehouse?('🏢 '+esc(f.warehouse)):'<span style="color:var(--text-4)">склад —</span>'}${f.acceptDate?(' · 📅 '+fmtDate(f.acceptDate)):''}${f.comment?(' · '+esc(f.comment)):''}</span>
+    </div>`).join('')||'<div class="hint" style="padding:2px 0 6px">накладные ещё не добавлены</div>';
+  return `<div class="docblk">
+    <div class="dh">Накладные <span class="cnt">${list.length||''}</span></div>
+    ${rows}
+    <div class="wbform" id="wbform-${id}">
+      <label class="fl">Файл накладной</label>
+      <input type="file" id="wb-file-${id}">
+      <div class="wbrow">
+        <div><label class="fl">Склад (город)</label><input id="wb-wh-${id}" placeholder="напр.: Алматы"></div>
+        <div><label class="fl">Дата принятия</label><input id="wb-dt-${id}" type="date"></div>
+      </div>
+      <label class="fl">Наименование / Комментарий</label>
+      <input id="wb-cm-${id}" placeholder="что принято / комментарий">
+      <button class="btn btn-p" style="margin-top:10px;width:100%;justify-content:center" onclick="addWaybill(${id})">＋ Добавить накладную</button>
+    </div>
+  </div>`;
+}
+// Блок приёмки товара: накладные + гарантийный + «Полностью принят».
+function goodsBlockHtml(id,d){
+  const fully=!!d.fullyReceived;
+  const nakl=((d.files&&d.files.contract)||[]).length;
+  const warr=((d.files&&d.files.warranty)||[]).length;
+  const chk=`<div class="fullybar ${fully?'on':''}">
+    <input type="checkbox" id="fully-${id}" ${fully?'checked':''} onchange="toggleFully(${id},this.checked)">
+    <div><div class="ft" style="${fully?'color:var(--good)':''}">Полностью принят</div>
+      <div class="fs">${fully?('Отмечено'+(d.fullyReceivedBy?(' · '+esc(d.fullyReceivedBy)):'')+(d.fullyReceivedAt?(' · '+fmtDateTime(d.fullyReceivedAt)):'')):'Пока не отмечено — «Товар принят» остаётся красным (частичная приёмка)'}</div>
+    </div>
+  </div>`;
+  return waybillsHtml(id,d)+filesSlotHtml(id,d,'warranty')+chk
+    +`<div class="hint" style="margin-top:8px">Товар может приходить частями с разными накладными. Отметь «Полностью принят», когда получено всё — тогда шаг «Товар принят» станет зелёным.${(!nakl||!warr)?' Для перехода на «Товар принят» нужны хотя бы одна накладная и гарантийный сертификат.':''}</div>`;
 }
 function approvalHtml(id,d){
   const ap=d.approval||{};
@@ -436,53 +628,75 @@ function renderDetail(id,d){
   // Даты входа в каждый шаг (из истории стадий); для «Новой заявки» — дата создания.
   const sd=d.stageDates||{};
   flow.forEach((s,i)=>{ const el=document.getElementById('stdate-'+i); if(!el)return; let iso=sd[s.bitrix]; if(!iso&&i===0)iso=r.createdAt; el.textContent=iso?fmtDate(iso):''; });
-  // Компактный список уже приложенных документов (история)
-  const summ=['invoice','pay','contract','warranty'].map(k=>{
-    const info=d.docs&&d.docs[k]; if(!info) return '';
-    const s=(META.uploadSlots||[]).find(x=>x.key===k);
-    return `<div class="slot"><div class="slabel">${esc(DOC_LABELS[k])}</div><div class="sval" title="${esc(info.name||'')}"><a class="lnk" href="${esc(info.url||'#')}" target="_blank">${esc(info.name||'файл')}</a></div><label class="upl">Заменить<input type="file" style="display:none" onchange="doUpload(${id},'${s.code}',this)"></label></div>`;
+  // Компактная сводка приложенных документов (все слоты, со счётчиками) + история откатов.
+  const summ=['invoice','pay','poa','contract','warranty'].map(k=>{
+    const list=(d.files&&d.files[k])||[]; if(!list.length) return '';
+    const links=list.map(f=>`<a class="lnk" href="${esc(f.url||'#')}" target="_blank" title="${esc(f.name||'')}">${esc(f.name||'файл')}</a>`).join(', ');
+    return `<div class="slot"><div class="slabel">${esc(DOC_LABELS[k])} ${list.length>1?`(${list.length})`:''}</div><div class="sval">${links}</div></div>`;
   }).join('');
-  const ds=document.getElementById('docsSummary'); if(ds)ds.innerHTML=summ?`<div class="deth">Приложенные документы</div>${summ}`:'';
+  const rb=(d.rollbacks||[]).map(x=>`<div class="ri"><div class="rt"><b>${esc(x.fromLabel||'')}</b> → <b>${esc(x.toLabel||'')}</b>${x.at?` · ${fmtDateTime(x.at)}`:''}${x.byName?` · ${esc(x.byName)}`:''}</div><div class="rm">Причина: ${esc(x.reason||'—')}</div></div>`).join('');
+  const rbBlock=rb?`<div class="rbhist"><div class="rh">↩ Откаты стадий</div>${rb}</div>`:'';
+  const ds=document.getElementById('docsSummary'); if(ds)ds.innerHTML=(summ?`<div class="deth">Приложенные документы</div>${summ}`:'')+rbBlock;
   const db=document.getElementById('dopyBox');
   if(db){ if(d.dopy){ const fl=(d.dopy.files||[]).map(f=>`<div class="slot"><div class="slabel">Файл</div><div class="sval" title="${esc(f.name||'')}"><a class="lnk" href="${esc(f.url||'#')}" target="_blank">${esc(f.name||'файл')}</a></div></div>`).join(''); db.innerHTML=(fl||'<div class="hint">файлы не найдены</div>')+(d.dopy.serviceUrl?`<div style="margin-top:6px"><a class="lnk" href="${esc(d.dopy.serviceUrl)}" target="_blank">Открыть подбор ↗</a></div>`:''); } else db.innerHTML='<div class="hint">нет данных</div>'; }
   // Действие = то, что делается на ТЕКУЩЕМ шаге (подсветка змейки = текущий шаг).
   const curKey=(ci>=0&&ci<flow.length)?flow[ci].key:null;
   let hdr='Дальнейшее действие', html='';
   if(curKey==='new'){ hdr='Заявка создана'; html='<div class="hint">Запроси счёт и двигай на «Запрос счёта на оплату».</div>'; }
-  else if(curKey==='invoice'){ hdr='Запрос счёта на оплату'; html=uploadSlotHtml(id,d,'invoice')+`<div class="hint" style="margin-top:6px">Приложи счёт (Invoice) — заявка сама уйдёт на «Договор».</div>`; }
+  else if(curKey==='invoice'){ hdr='Запрос счёта на оплату'; html=filesSlotHtml(id,d,'invoice')+`<div class="hint" style="margin-top:6px">Приложи счёт (Invoice) — заявка сама уйдёт на «Договор». Можно несколько файлов.</div>`; }
   else if(curKey==='contract'){ hdr='Договор'; html='<div class="hint">Договор — по необходимости. Двигай на «Согласование закупки».</div>'; }
   else if(curKey==='approve'){ hdr='Согласование закупки'; html=approvalHtml(id,d); }
-  else if(curKey==='payment'){ hdr='Оплата закупки'; html=approvedBanner(d)+accountantHtml(id)+`<div style="margin-top:12px"></div>`+uploadSlotHtml(id,d,'pay')+`<div class="hint" style="margin-top:6px">Приложи подтверждение оплаты — заявка уйдёт на «Ожидание товара».</div>`; }
-  else if(curKey==='waiting'){ hdr='Ожидание товара'; html=uploadSlotHtml(id,d,'contract')+uploadSlotHtml(id,d,'warranty')+`<div class="hint" style="margin-top:6px">Пришёл товар — приложи <b>накладную</b> и <b>гарантийный сертификат</b>; после обоих заявка отметится «Товар принят».</div>`; }
-  else if(curKey==='received'){ hdr='Товар принят'; html='<div class="hint" style="color:var(--good)">✓ Процесс завершён. Документы — ниже.</div>'; }
+  else if(curKey==='payment'){ hdr='Оплата закупки'; html=approvedBanner(d)+accountantHtml(id)+`<div style="margin-top:12px"></div>`+filesSlotHtml(id,d,'pay')+filesSlotHtml(id,d,'poa',true)+`<div class="hint" style="margin-top:6px">Приложи подтверждение оплаты (можно несколько) — заявка уйдёт на «Ожидание товара». Доверенность — по необходимости.</div>`; }
+  else if(curKey==='waiting'){ hdr='Ожидание / приёмка товара'; html=goodsBlockHtml(id,d); }
+  else if(curKey==='received'){ hdr='Товар принят'; html=goodsBlockHtml(id,d); }
   else { hdr='Готово'; html='<div class="hint" style="color:var(--good)">Процесс завершён.</div>'; }
   const hEl=document.getElementById('actionHdr'); if(hEl)hEl.textContent=hdr;
   const aEl=document.getElementById('stepAction'); if(aEl)aEl.innerHTML=html;
 }
 function fileToB64(file){return new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(String(fr.result).split(',')[1]);fr.onerror=rej;fr.readAsDataURL(file);});}
-async function doUpload(id,code,input){
-  const file=input.files&&input.files[0]; if(!file)return;
-  if(file.size>24*1024*1024){alert('Файл больше 24 МБ — слишком большой.');return;}
-  input.disabled=true;
+// Добавить файл в слот (множественно). meta — {warehouse,acceptDate,comment} для накладной.
+async function postFile(id,slot,file,meta){
+  if(file.size>25*1024*1024){alert('Файл больше 25 МБ — слишком большой.');return null;}
+  const base64=await fileToB64(file);
+  const body=Object.assign({slot,filename:file.name,base64,mime:file.type||''},meta||{});
+  const r=await fetch('/api/procurement/'+id+'/files',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка загрузки'); return null;}
+  return d;
+}
+// Простые слоты (счёт/оплата/доверенность/гарантийный). Авто-переход: первый счёт
+// → «Договор», первое подтверждение оплаты → «Ожидание товара». Остальное — без перехода.
+async function addSimpleFile(id,slot,input){
+  const file=input.files&&input.files[0]; if(!file)return; input.disabled=true;
   try{
-    const base64=await fileToB64(file);
-    const r=await fetch('/api/procurement/'+id+'/upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fieldCode:code,filename:file.name,base64})});
-    const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка загрузки'); loadDetail(id); return;}
-    // авто-переход: документ, приложенный на текущем шаге, двигает на следующий
+    const d=await postFile(id,slot,file); if(!d){loadDetail(id);return;}
     const r0=LIST.find(x=>x.id===id)||{}; const flow=META.flow||[]; const ci=(r0.stepIndex!=null)?r0.stepIndex:-1;
     const curKey=(ci>=0&&ci<flow.length)?flow[ci].key:null;
-    const slotKey=((META.uploadSlots||[]).find(s=>s.code===code)||{}).key;
-    if(curKey==='waiting'&&(slotKey==='contract'||slotKey==='warranty')){
-      // «Товар принят» требует ОБА документа — накладную и гарантийный сертификат.
-      const dd=await (await fetch('/api/procurement/'+id+'/detail')).json();
-      if(dd.docs&&dd.docs.contract&&dd.docs.warranty){ await moveStep(id,'received'); } else { renderDetail(id,dd); }
-    } else {
-      const adv={ invoice:{slot:'invoice',next:'contract'}, payment:{slot:'pay',next:'waiting'} };
-      const rule=adv[curKey];
-      if(rule&&rule.slot===slotKey){ await moveStep(id,rule.next); } else { loadDetail(id); }
-    }
-  }catch(e){alert('Ошибка: '+e.message);}
+    if(d.first&&curKey==='invoice'&&slot==='invoice'){ await moveStep(id,'contract'); }
+    else if(d.first&&curKey==='payment'&&slot==='pay'){ await moveStep(id,'waiting'); }
+    else { loadDetail(id); }
+  }catch(e){alert('Ошибка: '+e.message); loadDetail(id);}
   finally{input.disabled=false;}
+}
+// Накладная с полями Склад / Дата / Наименование.
+async function addWaybill(id){
+  const fi=document.getElementById('wb-file-'+id); const file=fi&&fi.files&&fi.files[0];
+  if(!file){alert('Выберите файл накладной');return;}
+  const meta={ warehouse:(document.getElementById('wb-wh-'+id)||{}).value||'', acceptDate:(document.getElementById('wb-dt-'+id)||{}).value||'', comment:(document.getElementById('wb-cm-'+id)||{}).value||'' };
+  try{ const d=await postFile(id,'contract',file,meta); if(d) loadDetail(id); }
+  catch(e){alert('Ошибка: '+e.message);}
+}
+async function delFile(id,fileId){
+  if(!confirm('Удалить этот файл?'))return;
+  try{ const r=await fetch('/api/procurement/'+id+'/files/'+fileId,{method:'DELETE'}); const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка');return;} loadDetail(id); }
+  catch(e){alert('Ошибка: '+e.message);}
+}
+// «Полностью принят» → перекрашивает финальный шаг (зелёный/красный).
+async function toggleFully(id,checked){
+  try{
+    const r=await fetch('/api/procurement/'+id+'/fully-received',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({value:checked})});
+    const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка');return;}
+    await reloadList(); // обновит цвет змейки; затем detail подтянется
+  }catch(e){alert('Ошибка: '+e.message);}
 }
 async function sendApproval(id){
   const el=document.getElementById('apby-'+id); const approverId=el?el.value:'';

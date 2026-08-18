@@ -27,12 +27,19 @@ async function sendTg(uid, text) {
     return !!(res.ok && d && d.ok);
   } catch (e) { return false; }
 }
-async function sendEmail(uid, subject, html) {
+async function sendEmail(uid, subject, html, attachments) {
   const email = USER_EMAILS[uid]; if (!email || !RESEND_KEY) return false;
   try {
+    const body = { from: `ProLabSupport <${FROM_EMAIL}>`, to: [email], subject, html };
+    // Вложения Resend: { filename, content } где content — base64-строка.
+    if (Array.isArray(attachments) && attachments.length) {
+      body.attachments = attachments
+        .filter(a => a && a.filename && a.content)
+        .map(a => ({ filename: a.filename, content: a.content }));
+    }
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST', headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: `ProLabSupport <${FROM_EMAIL}>`, to: [email], subject, html }),
+      body: JSON.stringify(body),
     });
     return r.ok;
   } catch (e) { return false; }
@@ -62,15 +69,15 @@ function emailHtml({ title, color, lines, itemUrl, dashUrl }) {
         ${itemUrl ? `<a href="${itemUrl}" style="background:#fff;border:1px solid #d2d0ce;color:#201f1e;padding:9px 16px;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px;margin-left:8px">Открыть в Битриксе</a>` : ''}
       </div>
     </div>
-    <p style="color:#9ca3af;font-size:11.5px;text-align:center;margin-top:12px">ProLabSupport · Закуп доп оборудования</p>
+    <p style="color:#9ca3af;font-size:11.5px;text-align:center;margin-top:12px">ProLabSupport · Закупки</p>
   </div>`;
 }
 
 // Отправить одному человеку по всем каналам (best-effort) + залогировать.
-async function notifyPerson(uid, { reason, tgText, subject, html, itemId }) {
+async function notifyPerson(uid, { reason, tgText, subject, html, itemId, attachments }) {
   if (!uid) return;
   const tg = await sendTg(uid, tgText); await logN(itemId, reason, 'telegram', uid, tg);
-  const em = await sendEmail(uid, subject, html); await logN(itemId, reason, 'email', uid, em);
+  const em = await sendEmail(uid, subject, html, attachments); await logN(itemId, reason, 'email', uid, em);
   const im = await imNotify(uid, String(tgText || '').replace(/<[^>]+>/g, '')); await logN(itemId, reason, 'bitrix', uid, im);
 }
 
