@@ -653,6 +653,9 @@ async function moveStage(localId, stageKey, opts = {}) {
     await pool.query('UPDATE ticketsmodule_procurement SET stage_id=$1, updated_at=NOW() WHERE id=$2', [step.bitrix, localId]);
   }
 
+  // Переход на «Ожидание товара» = оплата завершена → письмо с платёжкой и
+  // доверенностью в одном сообщении.
+  if (stageKey === 'waiting' && !isBackward) { notifyPaymentDone(localId).catch(() => {}); }
   // Уведомление «Товар принят» шлём НЕ при входе на стадию (может быть частичная
   // приёмка), а при отметке «Полностью принят» — см. setFullyReceived.
   return { stageId: step.bitrix, stepKey: step.key };
@@ -1035,23 +1038,27 @@ async function addFile(localId, slot, { filename, mime, base64, warehouse, accep
     `INSERT INTO ticketsmodule_procurement_files (request_id, slot, filename, mime, bitrix_file_id, content_b64, warehouse, accept_date, comment, uploaded_by)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
     [localId, slot, filename || 'file', mime || null, newId, base64 || null, warehouse || null, acceptDate || null, comment || null, uploadedBy || null]);
-  // «Подтверждение оплаты» (первый файл) → уведомляем инициатора и согласующего,
-  // с вложением самих платёжек (тянем байты из Битрикса).
-  if (slot === 'pay' && first) {
-    try {
-      const ctx = await getRequestContext(localId);
-      const { notifyPerson, emailHtml } = require('./procurement-notify');
-      const t = ctx.title || ('#' + ctx.itemId);
-      const attachments = await slotAttachments(localId, ['pay', 'poa']);
-      const targets = [...new Set([ctx.creatorBid, ctx.approverBid].filter(Boolean).map(String))];
-      for (const uid of targets) {
-        const tg = `💳 <b>Оплата закупки проведена</b>\n📋 ${esc(t)}\nПриложено подтверждение оплаты (платёжка и доверенность во вложении).\n<a href="${dashUrl()}">Открыть</a>`;
-        const html = emailHtml({ title: 'Оплата закупки проведена', color: '#0e7c3f', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')]], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
-        await notifyPerson(uid, { reason: 'Оплата приложена', tgText: tg, subject: 'Оплата закупки проведена #' + ctx.itemId, html, itemId: ctx.itemId, attachments });
-      }
-    } catch (e) { /* best-effort */ }
-  }
+  // Уведомление об оплате шлём НЕ при загрузке платёжки, а при переходе на
+  // «Ожидание товара» — чтобы в одном письме были и платёжка, и доверенность
+  // (см. moveStage → stageKey==='waiting').
   return { id: ins.rows[0].id, first };
+}
+
+// Уведомление «Оплата проведена» (инициатору и согласующему) с вложением
+// платёжки и доверенности. Вызывается при переходе на «Ожидание товара».
+async function notifyPaymentDone(localId) {
+  try {
+    const ctx = await getRequestContext(localId);
+    const { notifyPerson, emailHtml } = require('./procurement-notify');
+    const t = ctx.title || ('#' + ctx.itemId);
+    const attachments = await slotAttachments(localId, ['pay', 'poa']);
+    const targets = [...new Set([ctx.creatorBid, ctx.approverBid].filter(Boolean).map(String))];
+    for (const uid of targets) {
+      const tg = `💳 <b>Оплата закупки проведена</b>\n📋 ${esc(t)}\nПриложено подтверждение оплаты${attachments.length > 1 ? ' и доверенность' : ''} (во вложении).\n<a href="${dashUrl()}">Открыть</a>`;
+      const html = emailHtml({ title: 'Оплата закупки проведена', color: '#0e7c3f', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')]], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
+      await notifyPerson(uid, { reason: 'Оплата приложена', tgText: tg, subject: 'Оплата закупки проведена #' + ctx.itemId, html, itemId: ctx.itemId, attachments });
+    }
+  } catch (e) { /* best-effort */ }
 }
 
 // Файлы заявки, сгруппированные по слотам (для дашборда).

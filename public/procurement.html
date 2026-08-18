@@ -41,6 +41,10 @@ label.fl .req{color:var(--bad)}
 input,select,textarea{width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:9px;color:var(--text);font:inherit;font-size:13.5px;padding:9px 11px;outline:none}
 input:focus,select:focus,textarea:focus{border-color:var(--signal)}
 textarea{resize:vertical;min-height:64px}
+/* Тёмная тема для нативных дат: делает иконку календаря видимой на тёмном фоне */
+input[type="date"]{color-scheme:dark}
+input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(.85);opacity:.85;cursor:pointer}
+input[type="date"]::-webkit-calendar-picker-indicator:hover{opacity:1}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .ro{background:var(--panel-h);border:1px solid var(--border);border-radius:9px;padding:9px 11px;font-size:13.5px;color:var(--text-2)}
 .hint{color:var(--text-4);font-size:11.5px;margin-top:5px}
