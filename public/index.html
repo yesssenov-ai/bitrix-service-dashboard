@@ -578,7 +578,7 @@ function renderTable(items){
     const ei=t.engineer?t.engineer.trim().split(' ').map(w=>w[0]||'').join('').slice(0,2):'';
     const engHtml=t.engineer?`<div class="person-row"><div class="eng-av">${esc(ei)}</div><span class="person-name">${esc(t.engineer)}</span></div>`:`<span style="color:var(--text-4);font-size:12px">—</span>`;
     const title=(t.title||'').replace(/^[-\s–—]+/,'').replace(/[-\s–—]+$/,'').trim()||'(без названия)';
-    return `<tr class="tr" id="row-${t.id}">
+    return `<tr class="tr" id="row-${t.id}" data-eng="${esc(t.engineer||'')}">
       <td><span class="idbadge">${t.id}</span></td>
       <td><div class="tname" title="${esc(title)}">${esc(title)}</div>${t.description?`<div class="tdesc" data-full="${esc(t.description)}">${esc(t.description)}</div>`:''}</td>
       <td>${svcHtml}</td>
@@ -614,6 +614,26 @@ function renderTable(items){
     <tbody>${rows}</tbody>
   </table>`;
   focusFromUrl();
+  applyRoleCaps();
+}
+// Гейтинг кнопок действий по роли:
+//  viewer — скрыть правку/напоминания/почту (режим просмотра);
+//  engineer — правка/действия только по СВОИМ заявкам (где он инженер);
+//  admin/manager/logist/coordinator — все действия.
+function applyRoleCaps(){
+  const me = window._me; if(!me) return;
+  const role = me.role;
+  const full = ['admin','manager','logist','coordinator'].includes(role);
+  document.querySelectorAll('tr.tr').forEach(tr => {
+    const btns = tr.querySelectorAll('.act-btn.edit, .act-btn.bell, .act-btn.mail');
+    let show = true;
+    if (role === 'viewer') show = false;
+    else if (role === 'engineer') {
+      const eng = (tr.getAttribute('data-eng')||'').trim();
+      show = !!(me.engineerName && eng && eng === me.engineerName);
+    } else if (!full) show = false;
+    btns.forEach(b => b.style.display = show ? '' : 'none');
+  });
 }
 // Переход из Карты оборудования: ?focus=<id> — подсветить и прокрутить к заявке.
 let _focusDone = false;
@@ -832,14 +852,12 @@ async function checkAuth() {
     if (!d.ok) { window.location.href = '/login.html'; return false; }
     // Show user info
     window._currentUser = d.user;
+    window._me = d.user; // { role, engineerName, ... } — для гейтинга кнопок
     // Ссылки на другие модули из шапки убраны — навигация через «Все модули».
     // Show current user
     const htime = document.getElementById('htime');
     if (htime) htime.textContent = d.user.displayName + ' · ' + d.user.role;
-    // Hide action buttons for viewer role
-    if (d.user.role === 'viewer') {
-      document.querySelectorAll('.act-btn.edit, .act-btn.bell, .act-btn.mail').forEach(b => b.style.display = 'none');
-    }
+    applyRoleCaps();
     return true;
   } catch(e) {
     window.location.href = '/login.html';

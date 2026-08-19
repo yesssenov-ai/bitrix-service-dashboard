@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { pool, requireAuth } = require('../auth');
+const { pool, requireAuth, canEdit, canDelete, auditLog } = require('../auth');
 const { b24 } = require('../bitrix');
 const { getItem } = require('../relations');
 const { getRootDealManager, getContractFromChain, fmtDateOnly, markRecentlyDeleted } = require('../bitrix-lookups');
@@ -101,6 +101,11 @@ router.get('/events', requireAuth(), async (req, res) => {
 router.post('/events', requireAuth(), async (req, res) => {
   const { resource, title, type, start, end, allDay, confirmed, note, fields, clients, coAssignees } = req.body;
   if (!resource || !start || !end) return res.status(400).json({ error: 'resource, start, end are required' });
+
+  // Role gate: viewer — none; engineer — only events assigned to themselves;
+  // admin/manager/logist/coordinator — any. The new event's owner is `resource`.
+  const ownerObj = { engineer: resource, assignedById: await resolveBitrixUserId(resource) };
+  if (!canEdit(req.user, ownerObj)) return res.status(403).json({ error: 'Недостаточно прав' });
 
   const client = await pool.connect();
   try {
@@ -212,6 +217,11 @@ router.put('/events/:id', requireAuth(), async (req, res) => {
     const bitrixItemId = existingRows[0].bitrix_item_id;
     const oldRow = existingRows[0];
 
+    // Role gate: enforce against the EXISTING event's owner (engineer may only
+    // edit their own; viewer none; management any).
+    const ownerObj = { engineer: oldRow.resource, assignedById: await resolveBitrixUserId(oldRow.resource) };
+    if (!canEdit(req.user, ownerObj)) { await client.query('ROLLBACK'); return res.status(403).json({ error: 'Недостаточно прав' }); }
+
     await client.query(
       `UPDATE ticketsmodule_planner_events
        SET resource=$1, title=$2, type=$3,
@@ -273,16 +283,32 @@ router.put('/events/:id', requireAuth(), async (req, res) => {
 
 // ── DELETE /api/planner/events/:id — removes just this one instance ───────
 router.delete('/events/:id', requireAuth(), async (req, res) => {
+  // Deleting in Планировщик is limited to admin and coordinator (this is the
+  // coordinator's module). Every delete is written to the audit log.
+  if (!canDelete(req.user, 'PLN')) return res.status(403).json({ error: 'Недостаточно прав' });
   try {
     const { rows } = await pool.query('SELECT bitrix_item_id FROM ticketsmodule_planner_events WHERE id=$1', [req.params.id]);
     await pool.query('DELETE FROM ticketsmodule_planner_events WHERE id=$1', [req.params.id]);
     if (rows[0]?.bitrix_item_id) markRecentlyDeleted(rows[0].bitrix_item_id);
+    const ip = req.headers['x-forwarded-for'] || req.ip;
+    const ua = req.headers['user-agent'];
+    auditLog(req.user.id, req.user.username, 'PLANNER_EVENT_DELETED', String(req.params.id),
+      { bitrixItemId: rows[0]?.bitrix_item_id || null }, ip, ua).catch(()=>{});
     res.json({ ok: true });
   } catch (e) {
     console.error('DELETE /api/planner/events/:id error:', e.message);
     res.status(500).json({ error: 'Server error' });
   }
 });
+
+// Planner configuration (data fields, config blobs, staff sync) is restricted
+// to admin and coordinator — this is the coordinator's module.
+function requirePlannerAdmin(req, res, next) {
+  if (!['admin', 'coordinator'].includes(req.user.role)) {
+    return res.status(403).json({ error: 'Недостаточно прав' });
+  }
+  next();
+}
 
 // ── Custom Data Fields API (shared, replaces localStorage pls3_df) ────────
 router.get('/datafields', requireAuth(), async (req, res) => {
@@ -295,7 +321,7 @@ router.get('/datafields', requireAuth(), async (req, res) => {
   }
 });
 
-router.post('/datafields', requireAuth(), async (req, res) => {
+router.post('/datafields', requireAuth(), requirePlannerAdmin, async (req, res) => {
   const { name, type, options } = req.body;
   if (!name || !type) return res.status(400).json({ error: 'name and type are required' });
   try {
@@ -314,7 +340,7 @@ router.post('/datafields', requireAuth(), async (req, res) => {
   }
 });
 
-router.put('/datafields/:id', requireAuth(), async (req, res) => {
+router.put('/datafields/:id', requireAuth(), requirePlannerAdmin, async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'name is required' });
   try {
@@ -326,9 +352,13 @@ router.put('/datafields/:id', requireAuth(), async (req, res) => {
   }
 });
 
-router.delete('/datafields/:id', requireAuth(), async (req, res) => {
+router.delete('/datafields/:id', requireAuth(), requirePlannerAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM ticketsmodule_planner_datafields WHERE id=$1', [req.params.id]);
+    const ip = req.headers['x-forwarded-for'] || req.ip;
+    const ua = req.headers['user-agent'];
+    auditLog(req.user.id, req.user.username, 'PLANNER_DATAFIELD_DELETED', String(req.params.id),
+      {}, ip, ua).catch(()=>{});
     res.json({ ok: true });
   } catch (e) {
     console.error('DELETE /api/planner/datafields/:id error:', e.message);
@@ -346,7 +376,7 @@ router.get('/config/:key', requireAuth(), async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 });
-router.put('/config/:key', requireAuth(), async (req, res) => {
+router.put('/config/:key', requireAuth(), requirePlannerAdmin, async (req, res) => {
   try {
     await pool.query(
       `INSERT INTO ticketsmodule_planner_config (key, value, updated_at) VALUES ($1,$2,NOW())
@@ -452,7 +482,7 @@ async function syncStaffFromBitrix() {
   return { added, idBackfilled, reassigned, totalBitrixUsers: users.length };
 }
 
-router.post('/sync-staff', requireAuth(), async (req, res) => {
+router.post('/sync-staff', requireAuth(), requirePlannerAdmin, async (req, res) => {
   try {
     const result = await syncStaffFromBitrix();
     res.json({ ok: true, ...result });

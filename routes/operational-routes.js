@@ -30,13 +30,38 @@ async function getPermsMap() {
 }
 function invalidatePerms() { _permCache = null; }
 
+// Согласовано с глобальной ролевой моделью ЦУП:
+//   admin / manager / logist / coordinator → полный доступ ко всем действиям.
+//   engineer → write-cap разрешён базово, но каждый write-роут дополнительно
+//     проверяет, что сделка «своя» (ASSIGNED_BY_ID === bitrix_user_id).
+//   viewer и прочие → только «view».
 async function userCan(user, cap) {
   if (!user) return false;
   if (user.role === 'admin') return true;
   // Просмотр — всем, кому выдан модуль (страница гейтится грантом requireModule('OPS')).
   if (cap === 'view') return true;
-  const map = await getPermsMap();
-  return !!(map[user.role] && map[user.role][cap]);
+  // Управленческие роли — полный доступ ко всем write-действиям.
+  if (user.role === 'manager' || user.role === 'logist' || user.role === 'coordinator') return true;
+  // Инженер — базово разрешаем write-cap; own-deal ограничение применяется в роутах.
+  if (user.role === 'engineer') return EDIT_CAPS.includes(cap);
+  // viewer и все остальные — без прав на изменение.
+  return false;
+}
+
+// Own-deal gate for engineers: a write is allowed only on a deal the engineer is
+// responsible for in Bitrix. Management roles and admin skip the check. Returns
+// true when the request may proceed; otherwise writes a 403 and returns false.
+async function getDealResponsible(dealId) {
+  const resp = await b24('crm.deal.get', { id: dealId });
+  const d = resp && resp.result;
+  return d && d.ASSIGNED_BY_ID != null ? parseInt(d.ASSIGNED_BY_ID, 10) : null;
+}
+async function ensureOwnDealIfEngineer(req, res, dealId) {
+  if (!req.user || req.user.role !== 'engineer') return true;
+  const respId = await getDealResponsible(dealId);
+  const mine = req.user.bitrix_user_id != null && respId === parseInt(req.user.bitrix_user_id, 10);
+  if (!mine) { res.status(403).json({ ok: false, error: 'Можно менять только свои сделки' }); return false; }
+  return true;
 }
 
 // Middleware: authenticate, then require a module capability.
@@ -266,6 +291,7 @@ router.post('/deal/:id/stage', requireCap('stage'), async (req, res) => {
     const id = parseInt(req.params.id, 10);
     const stageId = req.body.stageId;
     if (!id || !stageId) return res.status(400).json({ ok: false, error: 'Не указаны параметры' });
+    if (!(await ensureOwnDealIfEngineer(req, res, id))) return;
     await b24('crm.deal.update', { id, fields: { STAGE_ID: stageId } });
     await auditLog(req.user.id, req.user.username, 'OP_DEAL_STAGE', id, { stageId }, req.headers['x-forwarded-for'] || req.ip, req.headers['user-agent']);
     await resyncDeal(id);
@@ -279,6 +305,7 @@ router.post('/deal/:id/responsible', requireCap('responsible'), async (req, res)
     const id = parseInt(req.params.id, 10);
     const userId = parseInt(req.body.userId, 10);
     if (!id || !userId) return res.status(400).json({ ok: false, error: 'Не указаны параметры' });
+    if (!(await ensureOwnDealIfEngineer(req, res, id))) return;
     await b24('crm.deal.update', { id, fields: { ASSIGNED_BY_ID: userId } });
     await auditLog(req.user.id, req.user.username, 'OP_DEAL_RESPONSIBLE', id, { userId }, req.headers['x-forwarded-for'] || req.ip, req.headers['user-agent']);
     await resyncDeal(id);
@@ -301,6 +328,7 @@ router.post('/deal/:id/delivery-date', requireCap('dates'), async (req, res) => 
     if (!F.deliveryByDate) return res.status(400).json({ ok: false, error: 'Поле «Поставка по договору» не настроено' });
     const date = normDate(req.body.date);
     if (date === null) return res.status(400).json({ ok: false, error: 'Неверная дата' });
+    if (!(await ensureOwnDealIfEngineer(req, res, id))) return;
     await b24('crm.deal.update', { id, fields: { [F.deliveryByDate]: date } });
     await auditLog(req.user.id, req.user.username, 'OP_DEAL_DELIVERY_DATE', id, { date }, req.headers['x-forwarded-for'] || req.ip, req.headers['user-agent']);
     await resyncDeal(id);
@@ -315,6 +343,7 @@ router.post('/deal/:id/factory-ship', requireCap('dates'), async (req, res) => {
     if (!id) return res.status(400).json({ ok: false, error: 'Неверный ID' });
     const date = normDate(req.body.date);
     if (date === null) return res.status(400).json({ ok: false, error: 'Неверная дата' });
+    if (!(await ensureOwnDealIfEngineer(req, res, id))) return;
     await updateFactoryShipDate(id, date);
     await auditLog(req.user.id, req.user.username, 'OP_DEAL_FACTORY_SHIP', id, { date }, req.headers['x-forwarded-for'] || req.ip, req.headers['user-agent']);
     res.json({ ok: true });
@@ -331,6 +360,7 @@ router.post('/deal/:id/redflag', requireCap('redflag'), async (req, res) => {
     if (!id) return res.status(400).json({ ok: false, error: 'Неверный ID' });
     if (!F.redFlag) return res.status(400).json({ ok: false, error: 'Поле красного флага не настроено' });
     const value = req.body.value === true || req.body.value === 'true' || req.body.value === 1 || req.body.value === '1';
+    if (!(await ensureOwnDealIfEngineer(req, res, id))) return;
     await b24('crm.deal.update', { id, fields: { [F.redFlag]: value ? '1' : '0' } });
     await auditLog(req.user.id, req.user.username, 'OP_DEAL_REDFLAG', id, { value }, req.headers['x-forwarded-for'] || req.ip, req.headers['user-agent']);
     await resyncDeal(id);
@@ -344,6 +374,7 @@ router.post('/deal/:id/comment', requireCap('comment'), async (req, res) => {
     const id = parseInt(req.params.id, 10);
     const text = (req.body.text || '').trim();
     if (!id || !text) return res.status(400).json({ ok: false, error: 'Пустой комментарий' });
+    if (!(await ensureOwnDealIfEngineer(req, res, id))) return;
     await b24('crm.timeline.comment.add', { fields: { ENTITY_ID: id, ENTITY_TYPE: 'deal', COMMENT: `💬 ${req.user.display_name}: ${text}` } });
     await auditLog(req.user.id, req.user.username, 'OP_DEAL_COMMENT', id, { text: text.slice(0, 100) }, req.headers['x-forwarded-for'] || req.ip, req.headers['user-agent']);
     await invalidateDealDetail(id);
@@ -357,6 +388,7 @@ router.post('/deal/:id/task', requireCap('task'), async (req, res) => {
     const id = parseInt(req.params.id, 10);
     const { title, responsibleId, deadline, description } = req.body;
     if (!id || !title) return res.status(400).json({ ok: false, error: 'Не указано название задачи' });
+    if (!(await ensureOwnDealIfEngineer(req, res, id))) return;
     const data = await b24('tasks.task.add', { fields: {
       TITLE: title,
       DESCRIPTION: description || '',

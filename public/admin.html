@@ -12,12 +12,20 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
+  --white:#1b1f27;--bg:#14171d;--border:#2a2f3a;--border2:#363c49;
+  --text:#eef0f3;--text-2:#c3c9d3;--text-3:#8b93a3;--text-4:#616a78;
+  --accent:#e5544a;--accent-h:#C53B2F;--accent-light:rgba(197,59,47,.16);
+  --blue:#4098e6;--green:#3ddc84;--red:#ef5a6a;--orange:#e0a940;--purple:#a78bfa;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.4);--shadow:0 4px 16px rgba(0,0,0,.5);
+  --shadow-lg:0 20px 60px rgba(0,0,0,.6);--radius:10px;--font:'Inter',system-ui,sans-serif;
+}
+html[data-theme="light"]{
   --white:#fff;--bg:#f5f6fa;--border:#e3e6ef;--border2:#d0d4e4;
   --text:#111827;--text-2:#374151;--text-3:#6b7280;--text-4:#9ca3af;
   --accent:#C53B2F;--accent-h:#a83226;--accent-light:rgba(197,59,47,.08);
   --blue:#2563eb;--green:#059669;--red:#dc2626;--orange:#d97706;--purple:#7c3aed;
   --shadow-sm:0 1px 3px rgba(0,0,0,.06);--shadow:0 4px 16px rgba(0,0,0,.07);
-  --shadow-lg:0 20px 60px rgba(0,0,0,.15);--radius:10px;--font:'Inter',system-ui,sans-serif;
+  --shadow-lg:0 20px 60px rgba(0,0,0,.15);
 }
 body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased;}
 .header{background:var(--white);border-bottom:1px solid var(--border);height:60px;display:flex;align-items:center;padding:0 28px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.04);}
@@ -57,7 +65,7 @@ table{width:100%;border-collapse:collapse;}
 th{padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);background:var(--bg);white-space:nowrap;}
 td{padding:11px 12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle;}
 tr:last-child td{border-bottom:none;}
-tr:hover td{background:#fafbfd;}
+tr:hover td{background:var(--bg);}
 /* Таблицы никогда не должны обрезаться/вылезать за карточку: если не влезают —
    прокручиваются внутри своей области. Кнопки действий не переносятся. */
 #usersTable,#logsTable,#notifLogTable,#tgLinksTable{overflow-x:auto;}
@@ -65,7 +73,7 @@ td .row-actions{display:flex;gap:6px;justify-content:flex-end;white-space:nowrap
 td .row-actions .btn{flex:0 0 auto;}
 .btn-icon{padding:5px 7px;}
 .btn-del{color:var(--text-3);}
-.btn-del:hover{color:#c4314b;border-color:#f3c2c9;background:#fdecef;}
+.btn-del:hover{color:var(--red);border-color:var(--red);background:rgba(239,90,106,.14);}
 th:last-child,td:last-child{text-align:right;}
 
 .role-badge{display:inline-flex;align-items:center;border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
@@ -106,13 +114,13 @@ th:last-child,td:last-child{text-align:right;}
 /* TOTP setup */
 .totp-box{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;margin-bottom:16px;}
 .totp-qr img{width:160px;height:160px;}
-.totp-secret{font-family:monospace;font-size:13px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:8px 12px;word-break:break-all;color:var(--text-2);}
+.totp-secret{font-family:monospace;font-size:13px;background:var(--white);border:1px solid var(--border);border-radius:6px;padding:8px 12px;word-break:break-all;color:var(--text-2);}
 
 .pager{display:flex;align-items:center;gap:8px;padding:12px 16px;border-top:1px solid var(--border);}
 .pager-info{font-size:12px;color:var(--text-3);}
 
 .empty{text-align:center;padding:48px 24px;color:var(--text-3);}
-.toast{position:fixed;bottom:24px;right:24px;background:var(--text);color:#fff;border-radius:10px;padding:12px 18px;font-size:13px;font-weight:500;box-shadow:var(--shadow-lg);z-index:2000;transform:translateY(80px);transition:transform .3s;display:flex;align-items:center;gap:8px;}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--text);color:var(--white);border-radius:10px;padding:12px 18px;font-size:13px;font-weight:500;box-shadow:var(--shadow-lg);z-index:2000;transform:translateY(80px);transition:transform .3s;display:flex;align-items:center;gap:8px;}
 .toast.show{transform:translateY(0);}
 .toast.success{background:#059669;}
 .toast.error{background:var(--red);}
@@ -125,7 +133,7 @@ th:last-child,td:last-child{text-align:right;}
     <img src="/assets/logo-icon.png" alt="" style="height:24px;width:auto;">
     ProLabSupport
   </a>
-  <a href="/" style="display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--text-3,#8b93a3);text-decoration:none;border:1px solid var(--line,#e3e6ef);padding:6px 12px;border-radius:7px;margin-left:10px;white-space:nowrap" onmouseover="this.style.borderColor='#C53B2F';this.style.color='#C53B2F'" onmouseout="this.style.borderColor='var(--line,#e3e6ef)';this.style.color='var(--text-3,#8b93a3)'">← Все модули</a>
+  <a href="/" style="display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--text-3,#8b93a3);text-decoration:none;border:1px solid var(--border);padding:6px 12px;border-radius:7px;margin-left:10px;white-space:nowrap" onmouseover="this.style.borderColor='#C53B2F';this.style.color='#C53B2F'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-3,#8b93a3)'">← Все модули</a>
   <div class="hdiv"></div>
   <nav class="h-nav">
     <a href="/">← Дашборд</a>

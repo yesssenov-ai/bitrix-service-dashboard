@@ -316,7 +316,7 @@ app.post('/api/settings/signature', requireAuth(['admin','coordinator','engineer
     res.status(500).json({ ok: false, error: 'Внутренняя ошибка сервера' });
   }
 });
-app.post('/api/ticket-email/send', requireAuth(['admin','coordinator','engineer']), async (req, res) => {
+app.post('/api/ticket-email/send', requireAuth(['admin','coordinator','engineer','manager','logist']), async (req, res) => {
   try {
     const { ticketId, to, cc, subject, bodyHtml } = req.body;
     if (!ticketId || !to || !subject || !bodyHtml) return res.status(400).json({ ok: false, error: 'Заполните все поля' });
@@ -336,7 +336,7 @@ app.post('/api/ticket-email/send', requireAuth(['admin','coordinator','engineer'
     res.status(500).json({ ok: false, error: e.message || 'Не удалось отправить письмо' });
   }
 });
-app.post('/api/ticket-email/poll-now', requireAuth(['admin','coordinator','engineer']), async (req, res) => {
+app.post('/api/ticket-email/poll-now', requireAuth(['admin','coordinator','engineer','manager','logist']), async (req, res) => {
   try {
     const { pollTicketMailbox } = require('./ticket-mail-poller');
     await pollTicketMailbox();
@@ -346,7 +346,7 @@ app.post('/api/ticket-email/poll-now', requireAuth(['admin','coordinator','engin
     res.status(500).json({ ok: false, error: 'Не удалось проверить почту' });
   }
 });
-app.get('/api/ticket-email/:ticketId', requireAuth(['admin','coordinator','engineer']), async (req, res) => {
+app.get('/api/ticket-email/:ticketId', requireAuth(['admin','coordinator','engineer','manager','logist','viewer']), async (req, res) => {
   try {
     const { getTicketEmails } = require('./ticket-mail');
     const emails = await getTicketEmails(req.params.ticketId);
@@ -356,7 +356,7 @@ app.get('/api/ticket-email/:ticketId', requireAuth(['admin','coordinator','engin
     res.status(500).json({ emails: [] });
   }
 });
-app.post('/api/comment', requireAuth(['admin','coordinator','engineer']), async (req, res) => {
+app.post('/api/comment', requireAuth(['admin','coordinator','engineer','manager','logist']), async (req, res) => {
   try {
     const { ticketId, comment, stageId, engineerId, sendTg } = req.body;
     if (!ticketId) return res.status(400).json({ ok: false, error: 'Не указан ID заявки' });
@@ -399,7 +399,7 @@ app.post('/api/comment', requireAuth(['admin','coordinator','engineer']), async 
   }
 });
 // ── POST /api/remind ──────────────────────────────────────────────────────────
-app.post('/api/remind', requireAuth(['admin','coordinator']), async (req, res) => {
+app.post('/api/remind', requireAuth(['admin','coordinator','manager','logist']), async (req, res) => {
   try {
     const { ticketId, message, delayMinutes, targetChat, sendTg } = req.body;
     if (!ticketId) return res.status(400).json({ ok: false, error: 'Не указан ID заявки' });
@@ -426,7 +426,7 @@ app.post('/api/remind', requireAuth(['admin','coordinator']), async (req, res) =
   }
 });
 // ── POST /api/task ────────────────────────────────────────────────────────────
-app.post('/api/task', requireAuth(['admin','coordinator']), async (req, res) => {
+app.post('/api/task', requireAuth(['admin','coordinator','manager','logist']), async (req, res) => {
   try {
     const { ticketId, taskTitle, taskDesc, responsibleId, deadline, sendTg } = req.body;
     if (!ticketId) return res.status(400).json({ ok: false, error: 'Не указан ID заявки' });

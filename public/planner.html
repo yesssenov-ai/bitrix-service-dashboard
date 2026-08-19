@@ -755,12 +755,27 @@ function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
 
 // ── Init ───────────────────────────────────────────────────────
 let myRole = 'viewer';
+// Capability flags derived from the role (backend is the real gate; these just
+// avoid showing dead buttons). Edit: everyone except viewer (engineer is
+// own-only, enforced server-side). Delete: admin/coordinator only. Config
+// (Управление / Data Fields / staff sync): admin/coordinator only.
+let canEditRole = false, canDeleteRole = false, canConfigRole = false;
+function applyRoleCaps() {
+  canEditRole   = ['admin','manager','logist','coordinator','engineer'].includes(myRole);
+  canDeleteRole = ['admin','coordinator'].includes(myRole);
+  canConfigRole = ['admin','coordinator'].includes(myRole);
+  const hide = (sel) => { const el = document.querySelector(sel); if (el) el.style.display = 'none'; };
+  if (!canEditRole)   hide('button[onclick="openNew()"]');       // + Событие
+  if (!canConfigRole) hide('button[onclick="openAdmin()"]');     // Управление
+  if (!canConfigRole) hide('button[onclick="openDF()"]');        // Data Fields
+}
 async function initAuth() {
   try {
     const r = await fetch('/auth/me');
     if (!r.ok) { window.location.href='/login.html'; return; }
     const d = await r.json();
     myRole = d.user.role;
+    applyRoleCaps();
     document.getElementById('uName').textContent = d.user.displayName + (myRole==='admin' ? ' · админ' : '');
   } catch(e) { window.location.href='/login.html'; }
 }
@@ -1120,6 +1135,7 @@ function gridClientToLocal(e) {
 }
 
 function onGridMD(e) {
+  if (!canEditRole) return; // viewer: no drag-to-create
   if (e.button !== 0) return;
   const {x, y} = gridClientToLocal(e);
   if (x < 0) return; // clicked on sticky sidebar area
@@ -1241,6 +1257,7 @@ function renderEvents() {
     block.addEventListener('mousemove', e2=>moveTip(e2));
     block.addEventListener('click', e2=>{e2.stopPropagation();hideTip();openEdit(ev.id);});
     block.addEventListener('mousedown', e2=>{
+      if(!canEditRole) return; // viewer: no move/resize (click still opens read-only detail)
       if(e2.target.classList.contains('ev-rsz')){e2.stopPropagation();startResize(e2,ev.id);}
       else{e2.stopPropagation();startDrag(e2,ev.id);}
     });
@@ -1449,6 +1466,7 @@ function filterRes(q){
 
 // ── Panel ──────────────────────────────────────────────────────
 function openNew(pre={}){
+  if(!canEditRole) return; // viewer: cannot create
   editId=null; curType=pre.type||'trip';
   // Default start=09:00, end=18:00 on same day
   if (!pre.start) {
@@ -1473,8 +1491,13 @@ function openNew(pre={}){
 function openEdit(id){
   editId=id; const ev=events.find(e=>e.id===id); if(!ev) return;
   curType=ev.type||'trip';
-  document.getElementById('pTitle').textContent='Редактировать событие';
-  document.getElementById('pActs').innerHTML=`<button class="pb pb-del" onclick="deleteEv()">Удалить</button><button class="pb pb-save" onclick="saveEv()">Сохранить</button>`;
+  document.getElementById('pTitle').textContent = canEditRole ? 'Редактировать событие' : 'Событие';
+  // Delete only for admin/coordinator; Save only for roles that may edit
+  // (backend still enforces engineer own-only). Viewer sees neither — read only.
+  let acts='';
+  if (canDeleteRole) acts += `<button class="pb pb-del" onclick="deleteEv()">Удалить</button>`;
+  if (canEditRole)   acts += `<button class="pb pb-save" onclick="saveEv()">Сохранить</button>`;
+  document.getElementById('pActs').innerHTML=acts;
   renderForm(ev);
   document.getElementById('overlay').style.display='flex';
 }
@@ -1693,6 +1716,7 @@ async function saveEv(){
   closePanel(); buildStickyRows(); renderEvents();
 }
 async function deleteEv(){
+  if(!canDeleteRole) return; // only admin/coordinator; backend also enforces
   if(!editId) return;
   const ev = events.find(e=>e.id===editId);
   if (ev?.bitrixItemId) {
