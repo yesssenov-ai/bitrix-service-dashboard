@@ -637,12 +637,86 @@ function requirePageAuth(roles = []) {
   };
 }
 
+// ── Роли и доступы ────────────────────────────────────────────────────────────
+// Может ли пользователь РЕДАКТИРОВАТЬ заявку/сделку.
+//  admin/manager/coordinator — любые; engineer — только «свои» (совпадает
+//  инженер по имени ИЛИ он ответственный в Bitrix — assignedById); viewer — нет.
 function canEdit(user, ticket) {
-  if (['admin', 'coordinator'].includes(user.role)) return true;
-  if (user.role === 'engineer' && user.engineer_name) {
-    return ticket?.engineer === user.engineer_name;
+  if (!user) return false;
+  // Полное право правки — у всех «управляющих» ролей.
+  if (['admin', 'manager', 'logist', 'coordinator'].includes(user.role)) return true;
+  if (user.role === 'engineer') {
+    if (user.engineer_name && ticket && ticket.engineer === user.engineer_name) return true;
+    const uid = user.bitrix_user_id;
+    if (uid && ticket && String(ticket.assignedById || ticket.responsibleId || ticket.assigned_by_id || '') === String(uid)) return true;
+    return false;
   }
-  return false;
+  return false; // viewer и прочее
+}
+
+// Разрешённые для удаления модули (коды портала) по ролям. admin — все.
+const DELETE_MODULES_BY_ROLE = {
+  coordinator: new Set(['PLN', 'SVC']),  // Планировщик, Сервисные заявки
+  manager: new Set(['OPS']),             // Реализация
+  logist: new Set(['LOG']),              // Логистика
+};
+
+// Может ли пользователь УДАЛЯТЬ в модуле moduleCode (удаление всегда логируется).
+function canDelete(user, moduleCode) {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  const set = DELETE_MODULES_BY_ROLE[user.role];
+  return !!(set && set.has(String(moduleCode || '')));
+}
+
+// Коды выданных пользователю модулей (admin → все). Возвращает Set строк.
+async function userModuleCodes(user) {
+  if (!user) return new Set();
+  if (user.role === 'admin') return null; // null = все модули
+  let bid = user.bitrix_user_id || null;
+  if (!bid && user.engineer_name) {
+    const { USERS } = require('./constants');
+    const found = Object.entries(USERS).find(([, n]) => n === user.engineer_name);
+    if (found) bid = parseInt(found[0], 10);
+  }
+  if (!bid) return new Set();
+  try {
+    const { rows } = await pool.query('SELECT modules FROM ticketsmodule_module_access WHERE bitrix_user_id=$1', [bid]);
+    return new Set(rows.length ? (rows[0].modules || []) : []);
+  } catch (e) { return new Set(); }
+}
+
+// Middleware страницы: пускаем, если модуль ВЫДАН (или admin). Иначе — на портал.
+// Так viewer/engineer/manager, которым выдан модуль, могут его ОТКРЫТЬ (просмотр),
+// а роль дальше решает, что можно править/удалять.
+function requireModule(moduleCode) {
+  return async (req, res, next) => {
+    try {
+      const token = req.cookies?.token;
+      if (!token) return res.redirect('/login.html');
+      if (tokenBlacklist.has(token)) return res.redirect('/login.html');
+      const payload = jwt.verify(token, JWT_SECRET);
+      if (payload.step) return res.redirect('/login.html');
+      const result = await pool.query('SELECT * FROM ticketsmodule_users WHERE id=$1 AND active=true', [payload.userId]);
+      if (!result.rows.length) return res.redirect('/login.html');
+      const user = result.rows[0];
+      req.user = user; req.token = token;
+      const codes = await userModuleCodes(user);
+      if (codes === null || codes.has(moduleCode)) return next();
+      return res.redirect('/'); // нет доступа к модулю — на портал
+    } catch (e) {
+      return res.redirect('/login.html');
+    }
+  };
+}
+
+// Middleware API: 403, если модуль не выдан (для эндпоинтов данных модуля).
+function requireModuleApi(moduleCode) {
+  return [requireAuth(), async (req, res, next) => {
+    const codes = await userModuleCodes(req.user);
+    if (codes === null || codes.has(moduleCode)) return next();
+    return res.status(403).json({ ok: false, error: 'Нет доступа к модулю' });
+  }];
 }
 
 // ── Equipment map DB init (kept in same initDB now) ───────────────────────────
@@ -650,6 +724,7 @@ async function initEquipmentMapDB() {} // no-op, table created in initDB above
 
 module.exports = {
   pool, initDB, initEquipmentMapDB, auditLog, requireAuth, requirePageAuth, canEdit,
+  canDelete, userModuleCodes, requireModule, requireModuleApi,
   checkLoginRateLimit, recordLoginAttempt, clearLoginAttempts, tokenBlacklist,
   bcrypt, jwt, speakeasy, JWT_SECRET, SESSION_HOURS, VALID_ROLES,
 };

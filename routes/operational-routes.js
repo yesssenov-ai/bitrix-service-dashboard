@@ -33,6 +33,8 @@ function invalidatePerms() { _permCache = null; }
 async function userCan(user, cap) {
   if (!user) return false;
   if (user.role === 'admin') return true;
+  // Просмотр — всем, кому выдан модуль (страница гейтится грантом requireModule('OPS')).
+  if (cap === 'view') return true;
   const map = await getPermsMap();
   return !!(map[user.role] && map[user.role][cap]);
 }

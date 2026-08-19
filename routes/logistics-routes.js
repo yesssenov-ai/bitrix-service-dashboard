@@ -4,7 +4,9 @@ const http = require('http');
 const router = express.Router();
 const { requireAuth } = require('../auth');
 
-const VIEW_ROLES = ['admin', 'coordinator'];
+// Просмотр — любому авторизованному, кому выдан модуль (страница гейтится грантом
+// requireModule('LOG')). Логистика — дашборд только для чтения.
+const VIEW_ROLES = [];
 
 // Скачиваем содержимое по URL, проходя редиректы (Bitrix отдаёт 302 на файл).
 function pipeDownload(url, res, depth = 0) {

@@ -240,13 +240,19 @@ router.put('/:id', requireAuth(ROLES), express.json(), async (req, res) => {
   }
 });
 
-// DELETE /api/procurement/:id — удалить заявку и элемент 1066
+// DELETE /api/procurement/:id — удалить заявку и элемент 1066.
+// Удаление в «Закупках» разрешено ТОЛЬКО роли admin (PROC не входит в модули
+// удаления менеджера/логиста/координатора). Всегда пишем в аудит.
 router.delete('/:id', requireAuth(ROLES), async (req, res) => {
   try {
+    const { canDelete, auditLog } = require('../auth');
+    if (!canDelete(req.user, 'PROC')) return res.status(403).json({ error: 'Удаление закупок доступно только администратору.' });
     const { deleteRequest } = require('../procurement-calc');
     const reason = String((req.body && req.body.reason) || '').trim();
     if (!reason) return res.status(400).json({ error: 'Укажите причину удаления.' });
-    res.json(await deleteRequest(parseInt(req.params.id, 10), req.user.bitrix_user_id || null, reason));
+    const out = await deleteRequest(parseInt(req.params.id, 10), req.user.bitrix_user_id || null, reason);
+    auditLog(req.user.id, req.user.username, 'PROCUREMENT_DELETED', String(req.params.id), { reason }, req.ip, req.headers['user-agent']).catch(() => {});
+    return res.json(out);
   } catch (e) {
     console.error('DELETE /api/procurement/:id error:', e.message);
     res.status(500).json({ error: 'Не удалось удалить: ' + e.message });

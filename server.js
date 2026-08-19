@@ -10,7 +10,7 @@ for (const key of REQUIRED) {
   if (!process.env[key]) { console.error(`❌ Missing env: ${key}`); process.exit(1); }
 }
 const { b24, flattenInto } = require('./bitrix');
-const { initDB, requireAuth, requirePageAuth, auditLog, canEdit, pool } = require('./auth');
+const { initDB, requireAuth, requirePageAuth, requireModule, auditLog, canEdit, canDelete, pool } = require('./auth');
 const { tgMgt, tgOps, tgBoth, notifyNewTicket, notifyOverdueNew } = require('./notifications');
 const telegramLinkBot = require('./telegram-link-bot');
 const equipmentRoutes = require('./routes/equipment-routes');
@@ -110,20 +110,23 @@ app.get('/login', (_, res) => res.sendFile(path.join(__dirname, 'public', 'login
 app.get('/login.html', (_, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 app.get('/', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'portal.html')));
 app.get('/portal.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'portal.html')));
-app.get('/index.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-app.get('/planner.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'planner.html')));
-app.get('/equipment-map.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'equipment-map.html')));
-app.get('/licenses-map.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'licenses-map.html')));
-app.get('/relations.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'relations.html')));
+// Доступ к модулям — ПО ВЫДАННЫМ ГРАНТАМ (requireModule), а не по роли: кому
+// выдан модуль, тот может его открыть (в т.ч. viewer — в режиме просмотра).
+// admin видит всё. Роль дальше определяет право правки/удаления внутри модуля.
+app.get('/index.html', requireModule('SVC'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/planner.html', requireModule('PLN'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'planner.html')));
+app.get('/equipment-map.html', requireModule('EQP'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'equipment-map.html')));
+app.get('/licenses-map.html', requireModule('LIC'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'licenses-map.html')));
+app.get('/relations.html', requireModule('REL'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'relations.html')));
 app.get('/admin.html', requirePageAuth(['admin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
-app.get('/mail.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'mail.html')));
-app.get('/kp.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'kp.html')));
-app.get('/bonus.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'bonus.html')));
-app.get('/stats.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'stats.html')));
-app.get('/contracts.html', requirePageAuth(['admin','coordinator']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'contracts.html')));
-app.get('/logistics.html', requirePageAuth(['admin','coordinator']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'logistics.html')));
-app.get('/operational.html', requirePageAuth(['admin','coordinator']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'operational.html')));
-app.get('/procurement.html', requirePageAuth(['admin','coordinator']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'procurement.html')));
+app.get('/mail.html', requireModule('MAIL'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'mail.html')));
+app.get('/kp.html', requireModule('KP'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'kp.html')));
+app.get('/bonus.html', requireModule('BONUS'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'bonus.html')));
+app.get('/stats.html', requireModule('STATS'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'stats.html')));
+app.get('/contracts.html', requireModule('CONTR'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'contracts.html')));
+app.get('/logistics.html', requireModule('LOG'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'logistics.html')));
+app.get('/operational.html', requireModule('OPS'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'operational.html')));
+app.get('/procurement.html', requireModule('PROC'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'procurement.html')));
 app.get('/cup-admin.html', requirePageAuth(['admin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'cup-admin.html')));
 app.get('/account.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'account.html')));
 // `index:false` — without this, static would auto-serve public/index.html

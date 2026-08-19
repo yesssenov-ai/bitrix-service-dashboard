@@ -2,7 +2,9 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../auth');
 
-const VIEW_ROLES = ['admin', 'coordinator'];
+// Просмотр — любому авторизованному, кому выдан модуль (страница гейтится грантом
+// requireModule('CONTR')). Запись плана (/plan) остаётся только у admin.
+const VIEW_ROLES = [];
 
 // GET /api/contracts/summary?year=2026 — плоский список сделок + план + мета.
 router.get('/summary', requireAuth(VIEW_ROLES), async (req, res) => {

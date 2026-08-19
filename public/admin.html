@@ -71,6 +71,8 @@ th:last-child,td:last-child{text-align:right;}
 .role-badge{display:inline-flex;align-items:center;border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
 .role-admin{background:rgba(220,38,38,.1);color:#dc2626;}
 .role-coordinator{background:rgba(37,99,235,.1);color:#2563eb;}
+.role-manager{background:rgba(217,119,6,.12);color:#d97706;}
+.role-logist{background:rgba(124,58,237,.12);color:#7c3aed;}
 .role-engineer{background:rgba(5,150,105,.1);color:#059669;}
 .role-viewer{background:rgba(107,114,128,.1);color:#6b7280;}
 
@@ -280,10 +282,12 @@ th:last-child,td:last-child{text-align:right;}
       <div class="form-group">
         <label class="form-label">Роль</label>
         <select class="form-select" id="fRole" onchange="toggleEngineerField()">
-          <option value="viewer">viewer - только просмотр</option>
-          <option value="engineer">engineer - просмотр + редактирование своих</option>
-          <option value="coordinator">coordinator - полное управление</option>
-          <option value="admin">admin - администратор</option>
+          <option value="viewer">viewer — только просмотр выданных модулей</option>
+          <option value="engineer">engineer / sales — правит только свои заявки/сделки, без удаления</option>
+          <option value="manager">manager — правит любые; удаляет в «Реализации»</option>
+          <option value="logist">logist — правит любые; удаляет в «Логистике»</option>
+          <option value="coordinator">coordinator — правит любые; удаляет в «Планировщике»/«Сервисных заявках»</option>
+          <option value="admin">admin — полный доступ, удаление везде</option>
         </select>
       </div>
       <div class="form-group" id="engineerField">
