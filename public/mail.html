@@ -9,6 +9,34 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
+  --bg:#14171d;
+  --bg2:#1b1f27;
+  --bg3:#20242e;
+  --surface:#1b1f27;
+  --surface2:#20242e;
+  --border:#2a2f3a;
+  --border2:#363c49;
+  --text:#eef0f3;
+  --text2:#c3c9d3;
+  --text3:#8b93a3;
+  --terra:#C53B2F;
+  --terra2:#A32920;
+  --terra-light:rgba(197,59,47,.16);
+  --terra-border:rgba(197,59,47,.35);
+  --green:#3ddc84;
+  --green-bg:rgba(61,220,132,.14);
+  --red:#ef5a6a;
+  --red-bg:rgba(239,90,106,.14);
+  --yellow:#e0a940;
+  --yellow-bg:rgba(224,169,64,.14);
+  --purple:#a78bfa;
+  --purple-bg:rgba(167,139,250,.18);
+  --cyan:#35d0c0;
+  --cyan-bg:rgba(53,208,192,.14);
+  --shadow:0 1px 3px rgba(0,0,0,.4);
+  --shadow-md:0 4px 16px rgba(0,0,0,.5);
+}
+html[data-theme="light"]{
   --bg:#F5F6FA;
   --bg2:#FFFFFF;
   --bg3:#F0F1F6;
@@ -40,7 +68,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 
 /* Header */
 .header{
-  background:#fff;border-bottom:1px solid var(--border);
+  background:var(--surface);border-bottom:1px solid var(--border);
   padding:0 28px;height:58px;
   display:flex;align-items:center;gap:8px;
   position:sticky;top:0;z-index:100;
@@ -59,7 +87,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .live-pill{
   display:flex;align-items:center;gap:5px;
   padding:4px 10px;background:var(--green-bg);
-  border-radius:20px;border:1px solid #A7F3D0;
+  border-radius:20px;border:1px solid rgba(61,220,132,.3);
 }
 .live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
@@ -70,7 +98,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
   border:1px solid var(--border);border-radius:20px;
 }
 .btn-report{
-  background:#fff;color:var(--terra);
+  background:var(--surface);color:var(--terra);
   border:1px solid var(--terra);padding:8px 14px;
   border-radius:8px;font-size:13px;font-weight:600;
   cursor:pointer;font-family:'Inter',sans-serif;transition:all 0.2s;
@@ -84,7 +112,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .btn-refresh:hover{background:var(--terra2)}
 .btn-refresh:disabled{opacity:0.5;cursor:not-allowed}
 .btn-logout{
-  background:#fff;color:var(--text3);
+  background:var(--surface);color:var(--text3);
   border:1px solid var(--border);padding:8px 14px;
   border-radius:8px;font-size:13px;cursor:pointer;
   font-family:'Inter',sans-serif;transition:all 0.2s;
@@ -98,7 +126,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
   background:var(--bg);border-bottom:1px solid var(--border);
 }
 .stat-card{
-  background:#fff;border:1px solid var(--border);
+  background:var(--surface);border:1px solid var(--border);
   border-radius:12px;padding:14px 16px;
   cursor:pointer;transition:all 0.2s;
   position:relative;overflow:hidden;
@@ -124,7 +152,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 /* Sidebar */
 .sidebar{
   width:200px;min-width:200px;
-  background:#fff;border-right:1px solid var(--border);
+  background:var(--surface);border-right:1px solid var(--border);
   padding:12px 0;overflow-y:auto;
 }
 .nav-label{
@@ -151,7 +179,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .content{flex:1;overflow-y:auto;display:flex;flex-direction:column;background:var(--bg)}
 .content-header{
   padding:12px 20px;display:flex;align-items:center;gap:10px;
-  background:#fff;border-bottom:1px solid var(--border);
+  background:var(--surface);border-bottom:1px solid var(--border);
   position:sticky;top:0;z-index:50;
 }
 .search-wrap{flex:1;position:relative}
@@ -161,12 +189,12 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
   color:var(--text);padding:8px 12px 8px 34px;border-radius:8px;
   font-size:13px;font-family:'Inter',sans-serif;outline:none;transition:all 0.2s;
 }
-.search-input:focus{border-color:var(--terra);background:#fff;box-shadow:0 0 0 3px var(--terra-light)}
+.search-input:focus{border-color:var(--terra);background:var(--surface);box-shadow:0 0 0 3px var(--terra-light)}
 .search-input::placeholder{color:var(--text3)}
 .last-update{font-size:11px;color:var(--text3);white-space:nowrap}
 
 /* Table */
-.table-wrap{background:#fff;margin:0}
+.table-wrap{background:var(--surface);margin:0}
 table{width:100%;border-collapse:collapse;font-size:13px}
 thead{background:var(--bg3)}
 th{
@@ -191,11 +219,11 @@ tr{cursor:pointer;transition:background 0.1s}
   cursor:pointer;transition:opacity 0.15s;white-space:nowrap;border:1px solid transparent;
 }
 .cat-badge:hover{opacity:0.75}
-.cat-client{background:var(--cyan-bg);color:var(--cyan);border-color:#A5F3FC}
+.cat-client{background:var(--cyan-bg);color:var(--cyan);border-color:rgba(53,208,192,.3)}
 .cat-spam{background:var(--bg3);color:var(--text3);border-color:var(--border)}
-.cat-adv{background:var(--yellow-bg);color:var(--yellow);border-color:#FDE68A}
-.cat-tender{background:var(--purple-bg);color:var(--purple);border-color:#DDD6FE}
-.cat-internal{background:#F0FDF4;color:#15803D;border-color:#BBF7D0}
+.cat-adv{background:var(--yellow-bg);color:var(--yellow);border-color:rgba(224,169,64,.3)}
+.cat-tender{background:var(--purple-bg);color:var(--purple);border-color:rgba(167,139,250,.3)}
+.cat-internal{background:var(--green-bg);color:var(--green);border-color:rgba(61,220,132,.3)}
 .cat-uncategorized{background:var(--bg3);color:var(--text3);border-color:var(--border)}
 
 .ans-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap}
@@ -210,7 +238,7 @@ tr{cursor:pointer;transition:background 0.1s}
 
 /* Cat picker */
 .cat-picker{
-  position:fixed;background:#fff;
+  position:fixed;background:var(--surface);
   border:1px solid var(--border);border-radius:10px;padding:6px;
   z-index:500;min-width:150px;box-shadow:var(--shadow-md);
 }
@@ -222,7 +250,7 @@ tr{cursor:pointer;transition:background 0.1s}
 .detail-overlay.open{display:block}
 .detail-panel{
   position:absolute;right:0;top:0;bottom:0;width:520px;
-  background:#fff;border-left:1px solid var(--border);
+  background:var(--surface);border-left:1px solid var(--border);
   overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:14px;
   box-shadow:-4px 0 24px rgba(0,0,0,0.08);
 }
@@ -246,7 +274,7 @@ tr{cursor:pointer;transition:background 0.1s}
   cursor:pointer;text-align:center;color:var(--text3);
   transition:all 0.15s;border:none;background:transparent;font-family:'Inter',sans-serif;
 }
-.detail-tab.active{background:#fff;color:var(--text);box-shadow:var(--shadow)}
+.detail-tab.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
 .detail-body{
   background:var(--bg3);border:1px solid var(--border);
   border-radius:10px;padding:16px;font-size:13px;
@@ -261,7 +289,7 @@ tr{cursor:pointer;transition:background 0.1s}
 .rule-form{display:grid;grid-template-columns:120px 1fr 140px 100px;gap:10px;margin-bottom:20px;align-items:end}
 .form-group label{display:block;font-size:11px;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600}
 .form-input{
-  background:#fff;border:1px solid var(--border);color:var(--text);
+  background:var(--surface);border:1px solid var(--border);color:var(--text);
   padding:9px 12px;border-radius:8px;font-size:13px;width:100%;
   outline:none;font-family:'Inter',sans-serif;transition:all 0.2s;
 }
@@ -275,7 +303,7 @@ tr{cursor:pointer;transition:background 0.1s}
 .rules-list{display:flex;flex-direction:column;gap:8px}
 .rule-row{
   display:flex;align-items:center;gap:12px;
-  background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;
 }
 .rule-field{font-size:10px;color:var(--text3);width:55px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600}
 .rule-pattern{flex:1;font-weight:500;font-size:13px}
@@ -285,7 +313,7 @@ tr{cursor:pointer;transition:background 0.1s}
   padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;
   font-family:'Inter',sans-serif;transition:background 0.2s;
 }
-.btn-del:hover{background:#FEE2E2}
+.btn-del:hover{background:rgba(239,90,106,.2)}
 
 /* Mobile */
 @media(max-width:768px){
@@ -297,7 +325,7 @@ tr{cursor:pointer;transition:background 0.1s}
   .stat-lbl{font-size:9px}
   .layout{flex-direction:column;height:auto}
   .sidebar{display:none}
-  .sidebar.open{display:flex;position:fixed;inset:0;z-index:200;width:240px;background:#fff;border-right:1px solid var(--border);padding-top:52px}
+  .sidebar.open{display:flex;position:fixed;inset:0;z-index:200;width:240px;background:var(--surface);border-right:1px solid var(--border);padding-top:52px}
   .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:199}
   .sidebar-overlay.open{display:block}
   .mobile-menu-btn{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);cursor:pointer;font-size:15px;margin-right:6px}
@@ -305,7 +333,7 @@ tr{cursor:pointer;transition:background 0.1s}
   .content-header{padding:10px 12px}
   table{display:none}
   .mobile-cards{display:flex;flex-direction:column;gap:1px;background:var(--border)}
-  .email-card{background:#fff;padding:14px 14px;cursor:pointer;transition:background 0.1s;display:flex;flex-direction:column;gap:7px}
+  .email-card{background:var(--surface);padding:14px 14px;cursor:pointer;transition:background 0.1s;display:flex;flex-direction:column;gap:7px}
   .email-card:hover{background:var(--bg3)}
   .email-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
   .email-card-from{font-weight:600;font-size:13px;color:var(--text);flex:1}
@@ -333,11 +361,8 @@ tr{cursor:pointer;transition:background 0.1s}
     <div class="logo-icon">PLS</div>
     <div class="logo-text"><b>ProLab</b>Support <span class="logo-sub">Mail Tracker</span></div>
   </a>
-  <a href="/" style="display:flex;align-items:center;gap:5px;font-size:12.5px;color:#9ca3af;text-decoration:none;border:1px solid #e5e7eb;padding:6px 12px;border-radius:7px;margin-left:10px;white-space:nowrap">← Все модули</a>
+  <a href="/" style="display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--text3);text-decoration:none;border:1px solid var(--border);padding:6px 12px;border-radius:7px;margin-left:10px;white-space:nowrap">← Все модули</a>
   <div class="header-right">
-    <div class="live-pill"><div class="live-dot"></div><span class="live-text">Live</span></div>
-    <span class="user-pill" id="userInfo"></span>
-    <button class="btn-report" onclick="showReportDialog()" title="Отправить отчёт на email">📊 Отчёт</button>
     <button class="btn-refresh" id="btnPoll" onclick="triggerPoll()">↻ Обновить</button>
     <button class="btn-logout" onclick="logout()">Выйти</button>
   </div>
@@ -426,27 +451,6 @@ tr{cursor:pointer;transition:background 0.1s}
     </div>
     <div class="detail-body" id="detailBody">Загрузка...</div>
     <div class="detail-body" id="detailAnswerBody" style="display:none"></div>
-  </div>
-</div>
-
-<!-- Report dialog -->
-<div id="reportOverlay" style="display:none;position:fixed;inset:0;background:rgba(17,24,39,0.4);z-index:400;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px)">
-  <div style="background:#fff;border-radius:14px;padding:28px;width:420px;box-shadow:0 20px 60px rgba(0,0,0,0.15)">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <div style="font-size:16px;font-weight:600;color:var(--text)">📊 Отправить отчёт</div>
-      <button onclick="closeReportDialog()" style="background:var(--bg3);border:1px solid var(--border);color:var(--text3);width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:15px">✕</button>
-    </div>
-    <p style="font-size:13px;color:var(--text3);margin-bottom:16px">Отчёт по неотвеченным письмам будет отправлен на указанный адрес</p>
-    <div style="margin-bottom:16px">
-      <label style="display:block;font-size:11px;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Email получателя</label>
-      <input id="reportEmail" type="email" class="form-input" placeholder="email@company.kz" style="width:100%">
-    </div>
-    <div id="reportMsg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
-    <div style="display:flex;gap:10px">
-      <button onclick="closeReportDialog()" style="flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:10px;border-radius:8px;font-size:13px;cursor:pointer;font-family:'Inter',sans-serif">Отмена</button>
-      <button onclick="sendReport()" id="btnSendReport" style="flex:2;background:var(--terra);color:#fff;border:none;padding:10px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">Отправить отчёт →</button>
-    </div>
-    <p style="font-size:11px;color:var(--text3);margin-top:12px;text-align:center">Автоотчёт также отправляется ежедневно в 18:00</p>
   </div>
 </div>
 
@@ -722,79 +726,14 @@ async function loadUserInfo(){
     if(!r.ok){window.location.href='/login.html';return;}
     const d=await r.json();
     const u=d.user;
-    document.getElementById('userInfo').textContent=u.displayName+' · '+u.role;
+    const ui=document.getElementById('userInfo');
+    if(ui) ui.textContent=u.displayName+' · '+u.role;
     // Показываем раздел ящиков только для админа
     if(u.role==='admin'){
       document.getElementById('mailboxSection').style.display='block';
     }
   }catch(e){}
 }
-
-function showReportDialog() {
-  const overlay = document.getElementById('reportOverlay');
-  overlay.style.display = 'flex';
-  document.getElementById('reportEmail').value = '';
-  document.getElementById('reportMsg').style.display = 'none';
-  setTimeout(() => document.getElementById('reportEmail').focus(), 100);
-}
-
-function closeReportDialog() {
-  document.getElementById('reportOverlay').style.display = 'none';
-}
-
-async function sendReport() {
-  const email = document.getElementById('reportEmail').value.trim();
-  const btn = document.getElementById('btnSendReport');
-  const msg = document.getElementById('reportMsg');
-
-  if (!email || !email.includes('@')) {
-    msg.style.display = 'block';
-    msg.style.background = 'var(--red-bg)';
-    msg.style.color = 'var(--red)';
-    msg.textContent = 'Введите корректный email адрес';
-    return;
-  }
-
-  btn.disabled = true;
-  btn.textContent = '⏳ Отправляем...';
-
-  try {
-    const r = await fetch('/api/mail/report', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({email})
-    });
-    const data = await r.json();
-
-    if (r.ok) {
-      msg.style.display = 'block';
-      msg.style.background = 'var(--green-bg)';
-      msg.style.color = 'var(--green)';
-      msg.textContent = '✓ Отчёт отправлен на ' + email;
-      btn.textContent = '✓ Отправлено';
-      setTimeout(() => closeReportDialog(), 2000);
-    } else {
-      msg.style.display = 'block';
-      msg.style.background = 'var(--red-bg)';
-      msg.style.color = 'var(--red)';
-      msg.textContent = data.error || 'Ошибка отправки';
-      btn.disabled = false;
-      btn.textContent = 'Отправить отчёт →';
-    }
-  } catch(e) {
-    msg.style.display = 'block';
-    msg.style.background = 'var(--red-bg)';
-    msg.style.color = 'var(--red)';
-    msg.textContent = 'Ошибка сети';
-    btn.disabled = false;
-    btn.textContent = 'Отправить отчёт →';
-  }
-}
-
-// Close on overlay click
-document.getElementById('reportOverlay').addEventListener('click', function(e) {
-  if (e.target === this) closeReportDialog();
-});
 
 async function triggerPoll(){
   const btn=document.getElementById('btnPoll');

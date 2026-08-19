@@ -13,6 +13,38 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
+  --surface:#14171d;
+  --canvas:#20242e;
+  --card:#1b1f27;
+  --stroke:#2a2f3a;
+  --stroke-strong:#363c49;
+  --text:#eef0f3;
+  --text-2:#c3c9d3;
+  --text-3:#8b93a3;
+  --brand:#4098e6;
+  --brand-2:#5aa8ec;
+  --brand-tint:rgba(64,152,230,.15);
+  --brand-tint-strong:rgba(64,152,230,.25);
+  --accent:#e5544a;
+  --accent-tint:rgba(197,59,47,.16);
+  --success:#3ddc84;
+  --success-tint:rgba(61,220,132,.14);
+  --warn:#e0a940;
+  --warn-tint:rgba(224,169,64,.14);
+  --danger:#ef5a6a;
+  --danger-tint:rgba(239,90,106,.14);
+  --radius-sm:6px;
+  --radius:10px;
+  --radius-lg:14px;
+  --shadow-1:0 1px 3px rgba(0,0,0,.4);
+  --shadow-2:0 4px 16px rgba(0,0,0,.5);
+  --shadow-3:0 20px 60px rgba(0,0,0,.6);
+  --font:'Inter',-apple-system,'Segoe UI',system-ui,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+
+html[data-theme="light"]{
   --surface:#faf9f8;
   --canvas:#f3f2f1;
   --card:#ffffff;
@@ -33,15 +65,9 @@
   --warn-tint:#fed9cc;
   --danger:#c4314b;
   --danger-tint:#fde7eb;
-  --radius-sm:6px;
-  --radius:10px;
-  --radius-lg:14px;
   --shadow-1:0 1px 2px rgba(0,0,0,.07),0 1px 1px rgba(0,0,0,.04);
   --shadow-2:0 4px 8px rgba(0,0,0,.07),0 2px 4px rgba(0,0,0,.05);
   --shadow-3:0 16px 36px rgba(0,0,0,.10),0 4px 12px rgba(0,0,0,.06);
-  --font:'Inter',-apple-system,'Segoe UI',system-ui,sans-serif;
-  --mono:'JetBrains Mono',ui-monospace,monospace;
-  --ease:cubic-bezier(.16,1,.3,1);
 }
 
 html{scroll-behavior:smooth;}
@@ -61,7 +87,7 @@ body{
 
 /* ───────────────────────── HEADER ───────────────────────── */
 .header{
-  background:rgba(255,255,255,.82);
+  background:var(--card);
   backdrop-filter:blur(20px) saturate(1.4);
   -webkit-backdrop-filter:blur(20px) saturate(1.4);
   border-bottom:1px solid var(--stroke);
@@ -119,8 +145,8 @@ body{
   font-family:var(--font);outline:none;cursor:pointer;transition:all .15s var(--ease);
   font-weight:500;
 }
-.fsel:hover{border-color:var(--stroke-strong);background:#fff;}
-.fsel:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px var(--brand-tint);}
+.fsel:hover{border-color:var(--stroke-strong);background:var(--card);}
+.fsel:focus{border-color:var(--brand);background:var(--card);box-shadow:0 0 0 3px var(--brand-tint);}
 .select-wrap::after{
   content:'';position:absolute;right:13px;top:50%;transform:translateY(-50%);
   width:8px;height:8px;border-right:2px solid var(--text-3);border-bottom:2px solid var(--text-3);
@@ -134,8 +160,8 @@ body{
   padding:10px 14px 10px 38px;font-size:13.5px;color:var(--text);font-family:var(--font);
   outline:none;transition:all .15s var(--ease);
 }
-.search-input:hover{border-color:var(--stroke-strong);background:#fff;}
-.search-input:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px var(--brand-tint);}
+.search-input:hover{border-color:var(--stroke-strong);background:var(--card);}
+.search-input:focus{border-color:var(--brand);background:var(--card);box-shadow:0 0 0 3px var(--brand-tint);}
 .search-input::placeholder{color:var(--text-3);}
 
 .search-results{
@@ -200,7 +226,7 @@ body{
   width:100%;background:var(--canvas);border:1px solid var(--stroke);border-radius:7px;
   padding:7px 11px 7px 30px;font-size:12.5px;color:var(--text);font-family:var(--font);outline:none;
 }
-.deals-mini-search input:focus{border-color:var(--brand);background:#fff;}
+.deals-mini-search input:focus{border-color:var(--brand);background:var(--card);}
 .deals-mini-search svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text-3);}
 
 .view-toggle{display:flex;gap:2px;background:var(--canvas);border:1px solid var(--stroke);border-radius:7px;padding:2px;margin-left:auto;}
@@ -208,7 +234,7 @@ body{
   border:none;background:transparent;padding:5px 9px;border-radius:5px;cursor:pointer;
   color:var(--text-3);display:flex;align-items:center;transition:all .15s;
 }
-.view-toggle button.active{background:#fff;color:var(--brand);box-shadow:var(--shadow-1);}
+.view-toggle button.active{background:var(--card);color:var(--brand);box-shadow:var(--shadow-1);}
 
 .sort-select{
   background:var(--canvas);border:1px solid var(--stroke);border-radius:7px;
@@ -282,12 +308,12 @@ body{
 .node-card:hover{box-shadow:var(--shadow-2);border-color:var(--brand);transform:translateY(-1px);}
 .node-card.is-deal{
   border-color:var(--accent);
-  background:linear-gradient(160deg,var(--accent-tint) 0%,#fff 60%);
+  background:linear-gradient(160deg,var(--accent-tint) 0%,var(--card) 60%);
 }
 .node-card.is-focus{box-shadow:0 0 0 3px rgba(15,108,189,.25),var(--shadow-2);border-color:var(--brand);}
 
 .node-badge-id{
-  position:absolute;top:-9px;right:11px;background:var(--text);color:#fff;
+  position:absolute;top:-9px;right:11px;background:var(--text);color:var(--card);
   border-radius:5px;padding:1px 7px;font-size:10px;font-weight:700;font-family:var(--mono);
   box-shadow:var(--shadow-1);
 }
@@ -327,17 +353,6 @@ body{
     ProLabSupport
   </a>
   <a href="/" style="display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--text-3,#8b93a3);text-decoration:none;border:1px solid var(--line,#e3e6ef);padding:6px 12px;border-radius:7px;margin-left:10px;white-space:nowrap" onmouseover="this.style.borderColor='#C53B2F';this.style.color='#C53B2F'" onmouseout="this.style.borderColor='var(--line,#e3e6ef)';this.style.color='var(--text-3,#8b93a3)'">← Все модули</a>
-  <div class="hdiv"></div>
-  <nav class="h-nav">
-    <a href="/">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-      Дашборд
-    </a>
-    <a href="/relations.html" class="active">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M12 8.5v3M9.8 14l-1.6 1.5M14.2 14l1.6 1.5"/></svg>
-      Связи сделок
-    </a>
-  </nav>
   <div class="h-right">
     <span class="user-chip"><span class="user-dot"></span><span id="currentUser">—</span></span>
   </div>
