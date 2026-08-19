@@ -217,11 +217,15 @@ function buildResponse(query) {
   const companyMap = {}; all.forEach(it => { if (it.companyId && it.companyName) companyMap[it.companyId] = it.companyName; });
   const companies = Object.entries(companyMap).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
 
-  // Слой сервисных заявок: только позиционированные (есть координаты).
+  // На карту идут только позиционированные (есть координаты).
   const placedTickets = (ticketsCache || []).filter(t => t.lat && t.lng);
+  // А СЧЁТЧИКИ типов/видов считаем по ВСЕМ активным заявкам (как в модуле
+  // «Сервисные заявки»), а не только по размещённым на карте — иначе числа
+  // расходились (напр. «Заявка клиента» 7 на карте против 10 в модуле:
+  // не размещённые/без координат в счёт не попадали).
   const kindCounts = { urgent: 0, install: 0, service: 0 };
   const typeCounts = {};
-  placedTickets.forEach(t => {
+  (ticketsCache || []).forEach(t => {
     if (kindCounts[t.kind] != null) kindCounts[t.kind]++;
     (t.serviceTypeIds && t.serviceTypeIds.length ? t.serviceTypeIds : ['0']).forEach(id => { typeCounts[id] = (typeCounts[id] || 0) + 1; });
   });

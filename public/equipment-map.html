@@ -191,6 +191,35 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
 .dp-ticket-t{font-size:12px;font-weight:600;margin-bottom:2px;}
 .dp-ticket-s{font-size:11px;color:var(--text-3);}
 .dp-btn{display:inline-flex;align-items:center;gap:5px;background:var(--brand);color:#fff;padding:8px 14px;border-radius:7px;font-size:12.5px;font-weight:600;text-decoration:none;margin-top:12px;}
+.dp-ticket-open{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--brand);font-weight:600;text-decoration:none;cursor:pointer;}
+.dp-b24{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border:1px solid var(--stroke-2);border-radius:5px;color:var(--text-3);text-decoration:none;font-size:10px;line-height:1;flex-shrink:0;transition:all .12s;}
+.dp-b24:hover{border-color:var(--brand);color:var(--brand);}
+
+/* Компактная шапка сайдбара + иконка сброса */
+.sb-title-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.sb-title-row .sb-title{margin:0;flex:1;}
+.icon-btn{width:28px;height:28px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border:1px solid var(--stroke-2);border-radius:7px;background:var(--surface);color:var(--text-3);cursor:pointer;font-size:13px;line-height:1;transition:all .12s;}
+.icon-btn:hover{border-color:var(--brand);color:var(--brand);}
+.icon-btn.active{border-color:var(--brand);color:var(--brand);}
+
+/* Мультиселект (чекбоксы в выпадашке) */
+.fp.compact{padding:10px 16px;}
+.ms{position:relative;}
+.ms-btn{width:100%;display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--stroke);border-radius:8px;padding:8px 12px;font-size:12.5px;color:var(--text);font-family:var(--font);cursor:pointer;text-align:left;transition:border-color .12s;}
+.ms-btn:hover{border-color:var(--stroke-2);}
+.ms-btn.has{border-color:var(--brand);}
+.ms-btn .ms-lbl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ms-btn .ms-lbl.dim{color:var(--text-3);}
+.ms-btn .ms-cnt{font-size:10.5px;font-weight:700;color:#fff;background:var(--brand);border-radius:10px;padding:1px 7px;}
+.ms-btn .ms-car{color:var(--text-4);font-size:10px;flex-shrink:0;}
+.ms-panel{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--card);border:1px solid var(--stroke);border-radius:8px;box-shadow:var(--shadow-3);z-index:300;max-height:280px;overflow-y:auto;display:none;padding:4px;}
+.ms-panel.show{display:block;}
+.ms-opt{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:6px;cursor:pointer;font-size:12.5px;color:var(--text-2);}
+.ms-opt:hover{background:var(--surface);}
+.ms-opt input{width:15px;height:15px;flex-shrink:0;accent-color:var(--brand);cursor:pointer;}
+.ms-opt .o-lbl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ms-opt .o-cnt{font-size:10.5px;color:var(--text-4);}
+.ms-empty{padding:10px;font-size:12px;color:var(--text-3);text-align:center;}
 </style>
 </head>
 <body>
@@ -225,36 +254,30 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
 
     <!-- EQUIPMENT MODE -->
     <div id="modeEquipment">
-      <!-- Manufacturer filter -->
-      <div class="fp">
+      <div class="fp compact" style="display:flex;align-items:center;justify-content:space-between;padding-bottom:4px;">
+        <div class="fp-label" style="margin:0">Фильтры</div>
+        <button class="icon-btn" id="resetBtn" title="Сбросить все фильтры" onclick="resetFilters()" style="display:none">↺</button>
+      </div>
+      <div class="fp compact">
         <div class="fp-label">Производитель</div>
-        <select class="fsel" id="mfrSel" onchange="setMfrFromSel()">
-          <option value="">Все производители</option>
-        </select>
+        <div class="ms" id="msMfr">
+          <button type="button" class="ms-btn" onclick="toggleMs('Mfr')"><span class="ms-lbl dim" id="lblMfr">Все производители</span><span class="ms-cnt" id="cntMfr" style="display:none">0</span><span class="ms-car">▾</span></button>
+          <div class="ms-panel" id="panelMfr"></div>
+        </div>
       </div>
-      <!-- Device model -->
-      <div class="fp">
+      <div class="fp compact">
         <div class="fp-label">Модель прибора</div>
-        <select class="fsel" id="modelSel" onchange="applyFilters()">
-          <option value="">Все модели</option>
-        </select>
+        <div class="ms" id="msModel">
+          <button type="button" class="ms-btn" onclick="toggleMs('Model')"><span class="ms-lbl dim" id="lblModel">Все модели</span><span class="ms-cnt" id="cntModel" style="display:none">0</span><span class="ms-car">▾</span></button>
+          <div class="ms-panel" id="panelModel"></div>
+        </div>
       </div>
-      <!-- Status -->
-      <div class="fp">
+      <div class="fp compact">
         <div class="fp-label">Статус</div>
-        <select class="fsel" id="statusSel" onchange="setStatFromSel()">
-          <option value="">Все</option>
-          <option value="prolab">🔵 ProLabSupport</option>
-          <option value="third">⚪ Сторонние продавцы</option>
-          <option value="warranty">✅ На гарантии</option>
-          <option value="problems">⚠ Есть проблемы</option>
-        </select>
-      </div>
-      <!-- Reset -->
-      <div class="fp">
-        <button onclick="resetFilters()" style="width:100%;background:var(--surface);border:1.5px solid var(--stroke-2);border-radius:8px;padding:9px;font-size:12.5px;font-weight:600;color:var(--text-2);cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--stroke-2)';this.style.color='var(--text-2)'">
-          ↺ Сбросить все фильтры
-        </button>
+        <div class="ms" id="msStatus">
+          <button type="button" class="ms-btn" onclick="toggleMs('Status')"><span class="ms-lbl dim" id="lblStatus">Все</span><span class="ms-cnt" id="cntStatus" style="display:none">0</span><span class="ms-car">▾</span></button>
+          <div class="ms-panel" id="panelStatus"></div>
+        </div>
       </div>
     </div>
 
@@ -323,7 +346,15 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
 let allItems = [], filteredItems = [];
 let manufacturers = [], deviceNames = [], cities = [], companies = [];
 let mode = 'equipment';
-let curMfr = '', curModel = '', curStatus = '', curCity = '', curCompany = '';
+// Мультивыбор фильтров — множества выбранных значений.
+let mfrSet = new Set(), modelSet = new Set(), statusSet = new Set();
+let curCity = '', curCompany = '';
+const STATUS_OPTS = [
+  { id: 'prolab',   label: '🔵 ProLabSupport' },
+  { id: 'third',    label: '⚪ Сторонние продавцы' },
+  { id: 'warranty', label: '✅ На гарантии' },
+  { id: 'problems', label: '⚠ Есть проблемы' },
+];
 let showTickets = false;
 let selectedId = null;
 let allTickets = [], ticketTypes = [], ticketKinds = {};
@@ -467,6 +498,7 @@ function applyData(d) {
   updateStats(d.stats);
   buildMfrChips();
   buildModelSelect();
+  buildStatusMs();
   applyFilters();
   // Когда обновлялись данные по приборам (последняя полная сборка).
   const upd = d.lastFullSync || d.cachedAt;
@@ -507,60 +539,85 @@ function updateStatsDynamic() {
   document.getElementById('sProb').textContent = prob;
 }
 
-// ── Filter builders ───────────────────────────────────────────────────────────
+// ── Мультиселект: построение опций и сводки ────────────────────────────────────
+function msOptRow(kind, id, label, count) {
+  const set = kind === 'Mfr' ? mfrSet : kind === 'Model' ? modelSet : statusSet;
+  const on = set.has(String(id));
+  return `<label class="ms-opt"><input type="checkbox" ${on?'checked':''} onchange="onMsToggle('${kind}','${esc(String(id))}',this.checked)"><span class="o-lbl">${label}</span>${count!=null?`<span class="o-cnt">${count}</span>`:''}</label>`;
+}
 function buildMfrChips() {
-  const sel = document.getElementById('mfrSel');
-  if (!sel) return;
-  sel.innerHTML = '<option value="">Все производители</option>';
-  for (const m of manufacturers) {
-    sel.innerHTML += `<option value="${m.id}" ${curMfr===m.id?'selected':''}>${esc(m.name)} (${m.count})</option>`;
-  }
+  const p = document.getElementById('panelMfr'); if (!p) return;
+  p.innerHTML = manufacturers.length ? manufacturers.map(m => msOptRow('Mfr', m.id, esc(m.name), m.count)).join('') : '<div class="ms-empty">Нет данных</div>';
+  renderMsSummary('Mfr');
 }
-
 function buildModelSelect() {
-  const sel = document.getElementById('modelSel');
-  // Filter to current manufacturer
-  const filtered = curMfr
-    ? deviceNames.filter(d => {
-        const items = allItems.filter(i => i.manufacturerIds.includes(curMfr));
-        return items.some(i => i.deviceNameIds.includes(d.id));
-      })
-    : deviceNames;
-  sel.innerHTML = '<option value="">Все модели</option>';
-  for (const d of filtered) {
-    sel.innerHTML += `<option value="${d.id}" ${curModel===d.id?'selected':''}>${esc(d.name)} (${d.count})</option>`;
+  const p = document.getElementById('panelModel'); if (!p) return;
+  // Модели ограничиваем выбранными производителями (объединение).
+  let list = deviceNames;
+  if (mfrSet.size) {
+    const items = allItems.filter(i => i.manufacturerIds.some(x => mfrSet.has(String(x))));
+    list = deviceNames.filter(d => items.some(i => i.deviceNameIds.includes(d.id)));
   }
+  // Уберём из выбора модели, которых больше нет в списке.
+  [...modelSet].forEach(id => { if (!list.some(d => String(d.id) === id)) modelSet.delete(id); });
+  p.innerHTML = list.length ? list.map(d => msOptRow('Model', d.id, esc(d.name), d.count)).join('') : '<div class="ms-empty">Нет моделей</div>';
+  renderMsSummary('Model');
 }
-
-// ── Filter state setters ──────────────────────────────────────────────────────
-function setMfr(id) {
-  curMfr = id; curModel = '';
-  document.getElementById('modelSel').value = '';
-  buildModelSelect();
+function buildStatusMs() {
+  const p = document.getElementById('panelStatus'); if (!p) return;
+  p.innerHTML = STATUS_OPTS.map(o => msOptRow('Status', o.id, o.label, null)).join('');
+  renderMsSummary('Status');
+}
+function renderMsSummary(kind) {
+  const set = kind === 'Mfr' ? mfrSet : kind === 'Model' ? modelSet : statusSet;
+  const lbl = document.getElementById('lbl' + kind);
+  const cnt = document.getElementById('cnt' + kind);
+  const btn = cnt ? cnt.closest('.ms-btn') : null;
+  const allText = kind === 'Mfr' ? 'Все производители' : kind === 'Model' ? 'Все модели' : 'Все';
+  if (!set.size) {
+    lbl.textContent = allText; lbl.classList.add('dim');
+    cnt.style.display = 'none'; if (btn) btn.classList.remove('has');
+  } else {
+    // Название, если выбран один; иначе «N выбрано».
+    let single = '';
+    if (set.size === 1) {
+      const id = [...set][0];
+      if (kind === 'Status') single = (STATUS_OPTS.find(o => o.id === id) || {}).label || id;
+      else if (kind === 'Mfr') single = (manufacturers.find(m => String(m.id) === id) || {}).name || id;
+      else single = (deviceNames.find(d => String(d.id) === id) || {}).name || id;
+    }
+    lbl.textContent = single || (set.size + ' выбрано'); lbl.classList.remove('dim');
+    cnt.textContent = set.size; cnt.style.display = set.size > 1 ? '' : 'none';
+    if (btn) btn.classList.add('has');
+  }
+  updateResetBtn();
+}
+function updateResetBtn() {
+  const active = mfrSet.size || modelSet.size || statusSet.size || curCity || curCompany;
+  const b = document.getElementById('resetBtn'); if (b) b.style.display = active ? 'flex' : 'none';
+}
+function toggleMs(kind) {
+  const panel = document.getElementById('panel' + kind);
+  const open = panel.classList.contains('show');
+  document.querySelectorAll('.ms-panel').forEach(p => p.classList.remove('show'));
+  if (!open) panel.classList.add('show');
+}
+function onMsToggle(kind, id, on) {
+  const set = kind === 'Mfr' ? mfrSet : kind === 'Model' ? modelSet : statusSet;
+  id = String(id);
+  if (on) set.add(id); else set.delete(id);
+  if (kind === 'Mfr') buildModelSelect(); // список моделей зависит от производителей
+  renderMsSummary(kind);
   applyFilters();
 }
-
-function setMfrFromSel() {
-  setMfr(document.getElementById('mfrSel').value);
-}
-
-function setStat(v) {
-  curStatus = v;
-  applyFilters();
-}
-
-function setStatFromSel() {
-  setStat(document.getElementById('statusSel').value);
-}
+// Клик вне выпадашки — закрыть.
+document.addEventListener('click', e => { if (!e.target.closest('.ms')) document.querySelectorAll('.ms-panel').forEach(p => p.classList.remove('show')); });
 
 function resetFilters() {
-  curMfr = ''; curModel = ''; curStatus = ''; curCity = ''; curCompany = '';
-  document.getElementById('mfrSel').value = '';
-  document.getElementById('modelSel').value = '';
-  document.getElementById('statusSel').value = '';
-  document.getElementById('cityInput').value = '';
-  document.getElementById('companyInput').value = '';
-  buildModelSelect();
+  mfrSet.clear(); modelSet.clear(); statusSet.clear(); curCity = ''; curCompany = '';
+  const ci = document.getElementById('cityInput'); if (ci) ci.value = '';
+  const co = document.getElementById('companyInput'); if (co) co.value = '';
+  buildMfrChips(); buildModelSelect(); buildStatusMs();
   applyFilters();
 }
 
@@ -622,29 +679,30 @@ function selectCompany(id, name) {
 }
 
 // ── Main filter ───────────────────────────────────────────────────────────────
+function statusMatch(item, st) {
+  if (st === 'prolab') return item.seller === 'ProLabSupport';
+  if (st === 'third') return item.seller === 'Сторонний продавец';
+  if (st === 'warranty') return item.hasWarranty === 'Есть' && item.warrantyEnd && new Date(item.warrantyEnd) >= new Date();
+  if (st === 'problems') return item.hasProblems;
+  return true;
+}
 function applyFilters() {
-  // Read current model from select
-  curModel = document.getElementById('modelSel')?.value || '';
-
   filteredItems = allItems.filter(item => {
-    if (curMfr && !item.manufacturerIds.includes(curMfr)) return false;
-    if (curModel && !item.deviceNameIds.includes(curModel)) return false;
-    if (curStatus === 'prolab' && item.seller !== 'ProLabSupport') return false;
-    if (curStatus === 'third' && item.seller !== 'Сторонний продавец') return false;
-    if (curStatus === 'warranty') {
-      if (item.hasWarranty !== 'Есть') return false;
-      if (!item.warrantyEnd || new Date(item.warrantyEnd) < new Date()) return false;
-    }
-    if (curStatus === 'problems' && !item.hasProblems) return false;
+    // Производитель: любой из выбранных.
+    if (mfrSet.size && !item.manufacturerIds.some(x => mfrSet.has(String(x)))) return false;
+    // Модель: любая из выбранных.
+    if (modelSet.size && !item.deviceNameIds.some(x => modelSet.has(String(x)))) return false;
+    // Статус: удовлетворяет хотя бы одному выбранному.
+    if (statusSet.size && ![...statusSet].some(st => statusMatch(item, st))) return false;
     if (curCity && item.city?.toLowerCase() !== curCity.toLowerCase()) return false;
     if (curCompany && String(item.companyId) !== curCompany) return false;
     return true;
   });
 
   updateStatsDynamic();
+  updateResetBtn();
 
   if (mode === 'equipment' || mode === 'city' || mode === 'company') {
-    document.getElementById('modelSel').value = curModel;
     renderList();
     renderMarkers();
   }
@@ -794,8 +852,11 @@ function renderTicketsLayer() {
     // список заявок (до 14) — приоритет: срочные и Tickets выше
     const rank = t => (t.kind === 'urgent' ? 0 : t.isTicket ? 1 : 2);
     const sorted = loc.tickets.slice().sort((a, b) => rank(a) - rank(b));
-    const list = sorted.slice(0, 14).map(t => `<div style="padding:4px 0;border-top:1px solid #f0f0f0;font-size:11px">
-        <a href="${t.url}" target="_blank" style="color:${KIND[t.kind].color};font-weight:700;text-decoration:none">${KIND[t.kind].emoji} ${t.isTicket ? '⭐ ' : ''}${esc(t.title || ('Заявка #'+t.id))}</a>
+    const list = sorted.slice(0, 14).map(t => `<div style="padding:5px 0;border-top:1px solid #eee;font-size:11px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <a href="/index.html?focus=${t.id}" style="color:${KIND[t.kind].color};font-weight:700;text-decoration:none;flex:1;min-width:0">${KIND[t.kind].emoji} ${t.isTicket ? '⭐ ' : ''}${esc(t.title || ('Заявка #'+t.id))}</a>
+          <a href="${t.url}" target="_blank" title="Открыть в Битрикс24" style="flex-shrink:0;border:1px solid #d2d0ce;border-radius:5px;padding:1px 5px;font-size:9px;color:#666;text-decoration:none;font-weight:700">Б24 ↗</a>
+        </div>
         <div style="color:#8a8886">${esc(t.serviceTypeLabel || '—')} · ${esc(STAGE_NAMES[t.stageId] || t.stageId)}${t.eqTitle ? ' · 🔬 ' + esc(t.eqTitle) : ''}</div>
       </div>`).join('');
     const more = sorted.length > 14 ? `<div style="font-size:11px;color:#8a8886;padding-top:4px">…и ещё ${sorted.length - 14}</div>` : '';
@@ -842,7 +903,10 @@ function showDetail(item) {
       tickets += `<div class="dp-ticket ${t.isOverdue?'ov':''}">
         <div class="dp-ticket-t">#${t.id} ${esc((t.title||'').replace(/^[-\s–—]+/,'').slice(0,55))}</div>
         <div class="dp-ticket-s">${esc(STAGE_NAMES[t.stageId]||t.stageId)}${t.isOverdue?' ⚠ Просрочена':''}</div>
-        <a href="${t.url}" target="_blank" style="font-size:11px;color:var(--brand)">Открыть →</a>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:5px">
+          <a class="dp-ticket-open" href="/index.html?focus=${t.id}">Открыть в Сервисных заявках →</a>
+          <a class="dp-b24" href="${t.url}" target="_blank" title="Открыть в Битрикс24">Б24</a>
+        </div>
       </div>`;
     }
   }

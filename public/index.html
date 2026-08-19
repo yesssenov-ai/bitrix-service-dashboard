@@ -117,6 +117,8 @@ th { padding:10px 14px; text-align:left; font-size:11px; font-weight:600; color:
 td { padding:11px 14px; border-bottom:1px solid var(--border); vertical-align:middle; font-size:13px; color:var(--text-2); }
 tr:last-child td { border-bottom:none; }
 tr.tr:hover td { background:var(--bg2); }
+tr.row-flash td { animation:rowFlash 1.05s ease 3; }
+@keyframes rowFlash { 0%,100%{ background:transparent } 50%{ background:var(--accent-light) } }
 /* Cells */
 .idbadge { font-size:11.5px; font-weight:600; color:var(--text-4); font-variant-numeric:tabular-nums; background:var(--bg); border-radius:5px; padding:2px 6px; border:1px solid var(--border); }
 .tname { font-weight:500; color:var(--text); line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; margin-bottom:2px; }
@@ -576,7 +578,7 @@ function renderTable(items){
     const ei=t.engineer?t.engineer.trim().split(' ').map(w=>w[0]||'').join('').slice(0,2):'';
     const engHtml=t.engineer?`<div class="person-row"><div class="eng-av">${esc(ei)}</div><span class="person-name">${esc(t.engineer)}</span></div>`:`<span style="color:var(--text-4);font-size:12px">—</span>`;
     const title=(t.title||'').replace(/^[-\s–—]+/,'').replace(/[-\s–—]+$/,'').trim()||'(без названия)';
-    return `<tr class="tr">
+    return `<tr class="tr" id="row-${t.id}">
       <td><span class="idbadge">${t.id}</span></td>
       <td><div class="tname" title="${esc(title)}">${esc(title)}</div>${t.description?`<div class="tdesc" data-full="${esc(t.description)}">${esc(t.description)}</div>`:''}</td>
       <td>${svcHtml}</td>
@@ -611,6 +613,24 @@ function renderTable(items){
     <thead><tr><th>ID</th><th>Заявка</th><th>Тип услуги</th><th>Стадия</th><th title="Дней на стадии">Дней</th><th>Координатор</th><th>Инженер</th><th>Срочность</th><th>Создана</th><th>Просрочена</th><th>Действия</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
+  focusFromUrl();
+}
+// Переход из Карты оборудования: ?focus=<id> — подсветить и прокрутить к заявке.
+let _focusDone = false;
+function focusFromUrl(){
+  if(_focusDone) return;
+  const id = new URLSearchParams(location.search).get('focus');
+  if(!id) return;
+  const row = document.getElementById('row-'+id);
+  if(!row){
+    // Заявка не в текущем списке — подсказываем снять фильтры.
+    if(typeof toast==='function') toast('Заявка #'+id+' не в текущем списке. Нажмите «Сбросить» фильтры.');
+    return;
+  }
+  _focusDone = true;
+  row.scrollIntoView({behavior:'smooth',block:'center'});
+  row.classList.add('row-flash');
+  setTimeout(()=>row.classList.remove('row-flash'), 3200);
 }
 // ── Modals ────────────────────────────────────────────────────────────────────
 function openEditBtn(btn){openEdit(Number(btn.dataset.id),btn.dataset.title);}

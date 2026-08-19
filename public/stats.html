@@ -159,6 +159,38 @@ let CO_YEAR=null, CO_DEPT='', CO_MGR='';
 let YEARS=null, SPH_SCOPE='sold', _yearsAtOpen='';
 const MONTHS_RU=['','января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 const MONTHS_NOM=['','Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+// Группы «направлений» (отдел/сфера). Значение-группа в фильтре означает союз
+// нескольких отделов. «Инструменты» = приборные направления. Совпадение по dept
+// делаем без учёта регистра/пробелов и по префиксу (чтобы «Элементный анализ»
+// матчился на «Элементный», а «Хроматография и клеточный анализ» — на «Хроматография»).
+const DEPT_GROUPS={
+  'Инструменты':['Элементный','Хроматография','Электрохимия','Материаловедение','General Lab','Дженерал Лаб']
+};
+const _norm=v=>String(v==null?'':v).trim().toLowerCase();
+function deptGroupMembers(sel){
+  if(DEPT_GROUPS[sel])return DEPT_GROUPS[sel];
+  const key=Object.keys(DEPT_GROUPS).find(k=>_norm(k)===_norm(sel));
+  return key?DEPT_GROUPS[key]:null;
+}
+// true, если dept-значение записи подходит под выбранный фильтр sel.
+// Для обычных отделов — точное совпадение (как раньше); для группы — союз.
+function deptMatches(val,sel){
+  if(!sel)return true;
+  const v=_norm(val), s=_norm(sel);
+  const grp=deptGroupMembers(sel);
+  if(grp){
+    if(v===s)return true; // записи, буквально помеченные именем группы (fallback воронки)
+    return grp.some(m=>{const mm=_norm(m);return v===mm||v.startsWith(mm);});
+  }
+  return v===s;
+}
+// Добавляет имена групп в список опций отдела (без дублей), чтобы группу всегда
+// можно было выбрать, даже если ни одна запись не помечена именем группы буквально.
+function withDeptGroups(list){
+  const out=list.slice();
+  Object.keys(DEPT_GROUPS).forEach(g=>{ if(!out.some(d=>_norm(d)===_norm(g)))out.push(g); });
+  return out.sort((a,b)=>String(a).localeCompare(String(b),'ru'));
+}
 
 async function load(force){
   const years=(YEARS&&YEARS.length)?YEARS.join(','):String(new Date().getFullYear());
@@ -210,7 +242,7 @@ const FLABELS={P10:'P10 · Новый лид',P30:'P30 · Задача прин�
 const FSTEPS=['P10','P30','P60','P80','CONTRACT','EXEC','WON'];
 function funnelFiltered(){
   let d=BOARD.funnelDeals||[];
-  if(FDEPT)d=d.filter(x=>x.dept===FDEPT);
+  if(FDEPT)d=d.filter(x=>deptMatches(x.dept,FDEPT));
   if(FMGR)d=d.filter(x=>String(x.managerId)===FMGR);
   if(FMONTH)d=d.filter(x=>String(x.month)===FMONTH);
   if(FMANUF)d=d.filter(x=>x.manufacturer===FMANUF);
@@ -221,7 +253,7 @@ function uniqSorted(arr){return [...new Set(arr)].filter(v=>v!=null&&v!=='').sor
 function renderFunnel(){
   const wrap=document.getElementById('funnelWrap');if(!wrap)return;
   const all=BOARD.funnelDeals||[];
-  const depts=uniqSorted(all.map(d=>d.dept));
+  const depts=withDeptGroups(uniqSorted(all.map(d=>d.dept)));
   const mgrMap={};all.forEach(d=>{if(d.managerId!=null)mgrMap[d.managerId]=d.manager;});
   const mgrs=Object.entries(mgrMap).sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'ru'));
   const months=[...new Set(all.map(d=>d.month).filter(Boolean))].sort((a,b)=>a-b);
@@ -285,13 +317,13 @@ function renderProducers(){
 function toggleM(k){EXPANDM[k]=!EXPANDM[k];renderTab();}
 
 function renderManagers(){
-  const depts=BOARD.departments||[];
+  const depts=withDeptGroups(BOARD.departments||[]);
   const chips=`<div class="chips"><span class="chip ${DEPT===''?'on':''}" onclick="setDept('')">Все отделы</span>${
     depts.map(d=>`<span class="chip ${DEPT===d?'on':''}" onclick="setDept('${esc(d).replace(/'/g,"\\'")}')">${esc(d)}</span>`).join('')}</div>`;
   let list=BOARD.managers;
-  if(DEPT)list=list.filter(m=>m.depts.includes(DEPT));
+  if(DEPT)list=list.filter(m=>m.depts.some(dd=>deptMatches(dd,DEPT)));
   const rows=list.map((m,i)=>{
-    const dealsF=DEPT?m.deals.filter(d=>d.dept===DEPT):m.deals;
+    const dealsF=DEPT?m.deals.filter(d=>deptMatches(d.dept,DEPT)):m.deals;
     return `<div class="row" id="mg${i}">
       <div class="rhead" onclick="document.getElementById('mg${i}').classList.toggle('open')">
         <div><div class="rname">${esc(m.name)}</div><div class="rmeta">${m.count} сделок · средний чек ${M(m.avg)} ₸</div></div>
@@ -358,7 +390,7 @@ function aggCompanies(deals){
 function renderCompanies(){
   if(CO_YEAR===null)CO_YEAR=String(BOARD.year);
   const src=BOARD.companyDeals||[];
-  const cdepts=[...new Set(src.map(d=>d.dept))].filter(Boolean).sort((a,b)=>String(a).localeCompare(String(b),'ru'));
+  const cdepts=withDeptGroups([...new Set(src.map(d=>d.dept))].filter(Boolean));
   const cmgrMap={};src.forEach(d=>{if(d.mId!=null)cmgrMap[d.mId]=d.mgr;});
   const cmgrs=Object.entries(cmgrMap).sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'ru'));
   const years=(BOARD.years&&BOARD.years.length)?BOARD.years:[BOARD.year];
@@ -371,7 +403,7 @@ function renderCompanies(){
   </div>`;
   let deals=src;
   if(CO_YEAR)deals=deals.filter(d=>String(d.y)===CO_YEAR);
-  if(CO_DEPT)deals=deals.filter(d=>d.dept===CO_DEPT);
+  if(CO_DEPT)deals=deals.filter(d=>deptMatches(d.dept,CO_DEPT));
   if(CO_MGR)deals=deals.filter(d=>String(d.mId)===CO_MGR);
   const base=aggCompanies(deals);
   const q=CSEARCH.toLowerCase();
