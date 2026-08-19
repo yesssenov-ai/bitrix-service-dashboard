@@ -203,4 +203,107 @@ router.post('/confirm-totp', requireAuth(), async (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Вход по Face ID / Touch ID / Windows Hello (WebAuthn passkeys) ───────────
+// Челлендж между «options» и «verify» храним в коротком подписанном cookie (5 мин).
+const WA_CHAL_COOKIE = 'wa_chal';
+const waChalOpts = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 5 * 60 * 1000 };
+function setChallenge(res, data) {
+  const t = jwt.sign(data, JWT_SECRET, { expiresIn: '5m' });
+  res.cookie(WA_CHAL_COOKIE, t, waChalOpts);
+}
+function readChallenge(req) {
+  try { return jwt.verify(req.cookies?.[WA_CHAL_COOKIE] || '', JWT_SECRET); } catch (e) { return null; }
+}
+
+// Включение Face ID — только для вошедшего пользователя.
+router.post('/webauthn/register/options', requireAuth(), async (req, res) => {
+  try {
+    const wa = require('../webauthn');
+    const options = await wa.registrationOptions(req, req.user);
+    setChallenge(res, { c: options.challenge, uid: req.user.id, t: 'reg' });
+    res.json(options);
+  } catch (e) {
+    console.error('webauthn register/options:', e.message);
+    res.status(500).json({ ok: false, error: 'Не удалось начать регистрацию Face ID' });
+  }
+});
+
+router.post('/webauthn/register/verify', requireAuth(), async (req, res) => {
+  try {
+    const wa = require('../webauthn');
+    const ch = readChallenge(req);
+    if (!ch || ch.t !== 'reg' || String(ch.uid) !== String(req.user.id)) {
+      return res.status(400).json({ ok: false, error: 'Сессия регистрации истекла, попробуйте снова' });
+    }
+    const { response, label } = req.body || {};
+    const r = await wa.verifyRegistration(req, req.user, response, ch.c, label);
+    res.clearCookie(WA_CHAL_COOKIE);
+    if (!r.verified) return res.status(400).json({ ok: false, error: 'Не удалось подтвердить Face ID' });
+    await auditLog(req.user.id, req.user.username, 'WEBAUTHN_REGISTERED', null, {}, req.ip, req.headers['user-agent']);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('webauthn register/verify:', e.message);
+    res.status(500).json({ ok: false, error: 'Ошибка регистрации Face ID' });
+  }
+});
+
+// Вход по Face ID — публично (пользователь ещё не авторизован).
+router.post('/webauthn/login/options', async (req, res) => {
+  try {
+    const wa = require('../webauthn');
+    const options = await wa.authenticationOptions(req);
+    setChallenge(res, { c: options.challenge, t: 'login' });
+    res.json(options);
+  } catch (e) {
+    console.error('webauthn login/options:', e.message);
+    res.status(500).json({ ok: false, error: 'Не удалось начать вход по Face ID' });
+  }
+});
+
+router.post('/webauthn/login/verify', async (req, res) => {
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+  const ua = req.headers['user-agent'];
+  try {
+    const blocked = await checkLoginRateLimit(ip + ':wa');
+    if (blocked) return res.status(429).json({ ok: false, error: 'Слишком много попыток' });
+    const wa = require('../webauthn');
+    const ch = readChallenge(req);
+    if (!ch || ch.t !== 'login') return res.status(400).json({ ok: false, error: 'Сессия входа истекла, попробуйте снова' });
+    const { response } = req.body || {};
+    const r = await wa.verifyAuthentication(req, response, ch.c);
+    res.clearCookie(WA_CHAL_COOKIE);
+    if (!r.verified) {
+      await recordLoginAttempt(ip + ':wa');
+      return res.status(401).json({ ok: false, error: 'Face ID не распознан' });
+    }
+    const ur = await pool.query('SELECT * FROM ticketsmodule_users WHERE id=$1 AND active=true', [r.userId]);
+    if (!ur.rows.length) return res.status(401).json({ ok: false, error: 'Пользователь не найден или отключён' });
+    const user = ur.rows[0];
+    await clearLoginAttempts(ip + ':wa');
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: `${SESSION_HOURS}h` });
+    res.cookie('token', token, COOKIE_OPTS(SESSION_HOURS * 3600000));
+    await auditLog(user.id, user.username, 'LOGIN_FACEID_SUCCESS', null, {}, ip, ua);
+    res.json({ ok: true, user: { id: user.id, username: user.username, displayName: user.display_name, role: user.role, engineerName: user.engineer_name } });
+  } catch (e) {
+    console.error('webauthn login/verify:', e.message);
+    res.status(401).json({ ok: false, error: 'Ошибка входа по Face ID' });
+  }
+});
+
+// Статус (сколько устройств привязано) и отключение.
+router.get('/webauthn/status', requireAuth(), async (req, res) => {
+  try {
+    const n = await require('../webauthn').countForUser(req.user.id);
+    res.json({ ok: true, enabled: n > 0, count: n });
+  } catch (e) { res.json({ ok: true, enabled: false, count: 0 }); }
+});
+
+router.post('/webauthn/disable', requireAuth(), async (req, res) => {
+  try {
+    await require('../webauthn').disableForUser(req.user.id);
+    await auditLog(req.user.id, req.user.username, 'WEBAUTHN_DISABLED', null, {}, req.ip, req.headers['user-agent']);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 module.exports = router;

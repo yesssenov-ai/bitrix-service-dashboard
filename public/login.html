@@ -150,6 +150,7 @@ input:focus{border-color:var(--signal);box-shadow:0 0 0 3px rgba(53,208,192,.12)
         <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
       </div>
       <button class="btn" id="btnLogin" onclick="doLogin()">Войти</button>
+      <button class="btn" id="btnFaceId" onclick="loginFaceId()" style="display:none;margin-top:10px;background:transparent;border:1px solid var(--brand);color:var(--brand)">🔓 Войти по Face ID</button>
     </div>
 
     <div class="step" id="step2">
@@ -217,7 +218,7 @@ async function doLogin() {
       showStep('step3');
       setTimeout(() => document.getElementById('setupCode').focus(), 100);
     } else {
-      window.location.href = '/';
+      await afterLogin();
     }
   } catch(e) { showErr('Ошибка сети'); }
   finally { setLoading('btnLogin', false, 'Войти'); }
@@ -276,7 +277,101 @@ document.addEventListener('DOMContentLoaded', () => {
       this.value = v.length > 3 ? v.slice(0,3) + ' ' + v.slice(3) : v;
     });
   });
+  initFaceId();
 });
+
+// ── Face ID / Touch ID / Windows Hello (WebAuthn) ───────────────────────────
+function b64urlToBuf(s){ s=String(s).replace(/-/g,'+').replace(/_/g,'/'); const pad='='.repeat((4-s.length%4)%4); const raw=atob(s+pad); const a=new Uint8Array(raw.length); for(let i=0;i<raw.length;i++)a[i]=raw.charCodeAt(i); return a.buffer; }
+function bufToB64url(buf){ const b=new Uint8Array(buf); let s=''; for(let i=0;i<b.length;i++)s+=String.fromCharCode(b[i]); return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+
+// Кнопку «Войти по Face ID» показываем, если устройство поддерживает платформенный
+// аутентификатор (Face ID/Touch ID/Windows Hello).
+async function initFaceId(){
+  try{
+    if(!window.PublicKeyCredential) return;
+    const ok = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    if(ok){ const b=document.getElementById('btnFaceId'); if(b) b.style.display='block'; }
+  }catch(e){}
+}
+
+async function loginFaceId(){
+  clearErr();
+  if(!window.PublicKeyCredential){ showErr('Устройство не поддерживает Face ID'); return; }
+  setLoading('btnFaceId', true, 'Проверяю…');
+  try{
+    const or = await fetch('/auth/webauthn/login/options', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+    const opts = await or.json();
+    if(!or.ok){ showErr(opts.error||'Не удалось начать вход'); return; }
+    const pub = Object.assign({}, opts, { challenge: b64urlToBuf(opts.challenge) });
+    if(Array.isArray(opts.allowCredentials)) pub.allowCredentials = opts.allowCredentials.map(c=>Object.assign({},c,{id:b64urlToBuf(c.id)}));
+    const cred = await navigator.credentials.get({ publicKey: pub });
+    const response = {
+      id: cred.id, rawId: bufToB64url(cred.rawId), type: cred.type,
+      response: {
+        authenticatorData: bufToB64url(cred.response.authenticatorData),
+        clientDataJSON: bufToB64url(cred.response.clientDataJSON),
+        signature: bufToB64url(cred.response.signature),
+        userHandle: cred.response.userHandle ? bufToB64url(cred.response.userHandle) : undefined,
+      },
+      clientExtensionResults: cred.getClientExtensionResults ? cred.getClientExtensionResults() : {},
+    };
+    const vr = await fetch('/auth/webauthn/login/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ response }) });
+    const d = await vr.json();
+    if(!vr.ok || !d.ok){ showErr(d.error||'Не удалось войти по Face ID. Войдите по паролю и включите Face ID заново.'); return; }
+    window.location.href = '/';
+  }catch(e){
+    if(e && (e.name==='NotAllowedError'||e.name==='AbortError')) showErr('Вход по Face ID отменён');
+    else showErr('Face ID недоступен. Войдите по паролю.');
+  }finally{ setLoading('btnFaceId', false, '🔓 Войти по Face ID'); }
+}
+
+// После успешного входа по паролю — предлагаем включить Face ID на этом устройстве.
+async function afterLogin(){
+  try{
+    if(window.PublicKeyCredential && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+       && localStorage.getItem('pls-faceid-set') !== '1'
+       && localStorage.getItem('pls-faceid-skip') !== '1'){
+      if(confirm('Включить вход по Face ID на этом устройстве? В следующий раз входить можно будет по лицу.')){
+        const done = await enrollFaceId();
+        if(done){ localStorage.setItem('pls-faceid-set','1'); alert('Готово! Теперь можно входить по Face ID.'); }
+      } else {
+        localStorage.setItem('pls-faceid-skip','1');
+      }
+    }
+  }catch(e){}
+  window.location.href = '/';
+}
+
+async function enrollFaceId(){
+  try{
+    const or = await fetch('/auth/webauthn/register/options', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+    const opts = await or.json();
+    if(!or.ok){ alert(opts.error||'Не удалось начать настройку Face ID'); return false; }
+    const pub = Object.assign({}, opts, {
+      challenge: b64urlToBuf(opts.challenge),
+      user: Object.assign({}, opts.user, { id: b64urlToBuf(opts.user.id) }),
+    });
+    if(Array.isArray(opts.excludeCredentials)) pub.excludeCredentials = opts.excludeCredentials.map(c=>Object.assign({},c,{id:b64urlToBuf(c.id)}));
+    const cred = await navigator.credentials.create({ publicKey: pub });
+    const response = {
+      id: cred.id, rawId: bufToB64url(cred.rawId), type: cred.type,
+      response: {
+        attestationObject: bufToB64url(cred.response.attestationObject),
+        clientDataJSON: bufToB64url(cred.response.clientDataJSON),
+        transports: cred.response.getTransports ? cred.response.getTransports() : [],
+      },
+      clientExtensionResults: cred.getClientExtensionResults ? cred.getClientExtensionResults() : {},
+    };
+    const label = (navigator.userAgent.match(/iPhone|iPad|Android|Macintosh|Windows/) || ['Устройство'])[0];
+    const vr = await fetch('/auth/webauthn/register/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ response, label }) });
+    const d = await vr.json();
+    if(!vr.ok || !d.ok){ alert(d.error||'Не удалось включить Face ID'); return false; }
+    return true;
+  }catch(e){
+    if(!(e && (e.name==='NotAllowedError'||e.name==='AbortError'))) alert('Не удалось включить Face ID на этом устройстве.');
+    return false;
+  }
+}
 </script>
 </body>
 </html>
