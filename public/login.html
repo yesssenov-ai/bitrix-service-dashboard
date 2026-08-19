@@ -310,6 +310,11 @@ function bufToB64url(buf){ const b=new Uint8Array(buf); let s=''; for(let i=0;i<
 async function initFaceId(){
   try{
     if(!window.PublicKeyCredential) return;
+    // Показываем кнопку ТОЛЬКО если на этом устройстве Face ID уже включён
+    // (иначе Windows/браузер показал бы окно «возьмите ключ с телефона»).
+    let enrolledHere=false;
+    try{ enrolledHere = localStorage.getItem('pls-faceid-set')==='1'; }catch(e){}
+    if(!enrolledHere) return;
     const ok = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
     if(ok){
       const b=document.getElementById('btnFaceId'); if(b) b.style.display='flex';
@@ -346,7 +351,14 @@ async function loginFaceId(){
     };
     const vr = await fetch('/auth/webauthn/login/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ response }) });
     const d = await vr.json();
-    if(!vr.ok || !d.ok){ showErr(d.error||'Не удалось войти по Face ID. Войдите по паролю и включите Face ID заново.'); return; }
+    if(!vr.ok || !d.ok){
+      // Ключ на этом устройстве не признан сервером — снимаем метку и прячем кнопку.
+      try{ localStorage.removeItem('pls-faceid-set'); }catch(e){}
+      const b=document.getElementById('btnFaceId'); if(b) b.style.display='none';
+      const s=document.getElementById('faceSep'); if(s) s.style.display='none';
+      showErr(d.error||'На этом устройстве вход по Face ID не настроен. Войдите по паролю и включите его в Профиле.');
+      return;
+    }
     window.location.href = '/';
   }catch(e){
     if(e && (e.name==='NotAllowedError'||e.name==='AbortError')) showErr('Вход по Face ID отменён');
