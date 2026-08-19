@@ -244,7 +244,9 @@ router.put('/:id', requireAuth(ROLES), express.json(), async (req, res) => {
 router.delete('/:id', requireAuth(ROLES), async (req, res) => {
   try {
     const { deleteRequest } = require('../procurement-calc');
-    res.json(await deleteRequest(parseInt(req.params.id, 10), req.user.bitrix_user_id || null));
+    const reason = String((req.body && req.body.reason) || '').trim();
+    if (!reason) return res.status(400).json({ error: 'Укажите причину удаления.' });
+    res.json(await deleteRequest(parseInt(req.params.id, 10), req.user.bitrix_user_id || null, reason));
   } catch (e) {
     console.error('DELETE /api/procurement/:id error:', e.message);
     res.status(500).json({ error: 'Не удалось удалить: ' + e.message });
@@ -279,7 +281,9 @@ router.post('/:id/upload', requireAuth(ROLES), express.json({ limit: '25mb' }), 
 router.post('/:id/request-approval', requireAuth(ROLES), express.json(), async (req, res) => {
   try {
     const { requestApproval } = require('../procurement-calc');
-    res.json(await requestApproval(parseInt(req.params.id, 10), (req.body || {}).approverId));
+    const b = req.body || {};
+    const approvers = b.approverIds != null ? b.approverIds : b.approverId;
+    res.json(await requestApproval(parseInt(req.params.id, 10), approvers));
   } catch (e) {
     console.error('POST /api/procurement/:id/request-approval error:', e.message);
     res.status(500).json({ error: 'Не удалось отправить на согласование: ' + e.message });
@@ -306,6 +310,21 @@ router.post('/:id/accountant', requireAuth(ROLES), express.json(), async (req, r
   } catch (e) {
     console.error('POST /api/procurement/:id/accountant error:', e.message);
     res.status(500).json({ error: 'Не удалось сменить бухгалтера: ' + e.message });
+  }
+});
+
+// GET /api/procurement/pending-count — число действий, за которые отвечает
+// текущий пользователь (для бейджа на иконке установленного приложения).
+router.get('/pending-count', requireAuth(ROLES), async (req, res) => {
+  try {
+    const { pendingActionsFor } = require('../procurement-calc');
+    const bid = req.user && req.user.bitrix_user_id;
+    if (!bid) return res.json({ count: 0, items: [] });
+    res.set('Cache-Control', 'no-store');
+    res.json(await pendingActionsFor(bid));
+  } catch (e) {
+    console.error('GET /api/procurement/pending-count error:', e.message);
+    res.status(500).json({ count: 0, items: [], error: e.message });
   }
 });
 

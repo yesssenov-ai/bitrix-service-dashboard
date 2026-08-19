@@ -79,6 +79,14 @@ async function notifyPerson(uid, { reason, tgText, subject, html, itemId, attach
   const tg = await sendTg(uid, tgText); await logN(itemId, reason, 'telegram', uid, tg);
   const em = await sendEmail(uid, subject, html, attachments); await logN(itemId, reason, 'email', uid, em);
   const im = await imNotify(uid, String(tgText || '').replace(/<[^>]+>/g, '')); await logN(itemId, reason, 'bitrix', uid, im);
+  // Web Push — уведомление на иконку приложения (работает и когда оно закрыто).
+  try {
+    const push = require('./push');
+    if (push.enabled()) {
+      const body = String(tgText || subject || '').replace(/<[^>]+>/g, '').replace(/\n+/g, ' ').trim().slice(0, 140);
+      await push.sendToUser(uid, { type: 'alert', notify: { title: subject || 'ProLabSupport ЦУП', body }, url: '/procurement.html' });
+    }
+  } catch (e) { /* push best-effort */ }
 }
 
 module.exports = { notifyPerson, emailHtml, esc };

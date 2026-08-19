@@ -269,12 +269,13 @@ async function loadDeletions(){
     const items=d.items||[];
     if(!items.length){ box.innerHTML='<div class="empty">Удалённых закупок пока нет.</div>'; return; }
     box.innerHTML=`<div class="hint" style="margin-bottom:10px">Журнал удалённых закупок · ${items.length}</div>`
-      +`<div class="tbl-wrap"><table><thead><tr><th>Заявка</th><th>Сделка</th><th>Стадия</th><th>Файлы</th><th>Кто удалил</th><th>Когда</th></tr></thead><tbody>`
+      +`<div class="tbl-wrap"><table><thead><tr><th>Заявка</th><th>Сделка</th><th>Стадия</th><th>Файлы</th><th>Причина</th><th>Кто удалил</th><th>Когда</th></tr></thead><tbody>`
       +items.map(r=>`<tr>
         <td><b>${esc(r.title||('#'+(r.bitrixItemId||r.requestId||'')))}</b><div class="hint">${r.bitrixItemId?('Б24 #'+r.bitrixItemId):''}${(r.opportunity!=null)?(' · '+F(r.opportunity)+' '+esc(r.currency||'')):''}</div></td>
         <td>${r.dealId?`<a class="lnk" href="${esc(r.dealUrl||'#')}" target="_blank">#${r.dealId}</a>`:'—'}</td>
         <td>${esc(r.stageName||'—')}</td>
         <td>${r.filesCount||0}${r.filesCount?` <span class="hint" title="${esc((r.files||[]).map(f=>f.name).join(', '))}">📎</span>`:''}</td>
+        <td>${r.reason?esc(r.reason):'<span class="hint">—</span>'}</td>
         <td>${esc(r.actorName||'—')}</td>
         <td class="hint">${r.at?fmtDateTime(r.at):'—'}</td>
       </tr>`).join('')+`</tbody></table></div>`;
@@ -306,8 +307,8 @@ function createCardHtml(){
       <label class="fl">БИН</label>
       <input id="bin" inputmode="numeric" maxlength="12" placeholder="12 цифр — найдём компанию в ГБД ЮЛ" oninput="onBinInput(this.value)">
       <div id="binStatus" class="hint"></div>
-      <label class="fl">Название заявки</label>
-      <input id="title" placeholder="Напр.: Доп оборудование — …">
+      <label class="fl">Название заявки (Поставщик)</label>
+      <input id="title" placeholder="Напр.: Доп оборудование — … (поставщик)">
       <div class="row2">
         <div><label class="fl">Источник</label><select id="source">${srcOpts}</select></div>
         <div><label class="fl">Ответственный</label><select id="assigned">${empOpts}</select></div>
@@ -425,13 +426,18 @@ function renderByDeal(data){
   if(resh.length){ out+=`<div class="reshsep">доотправка · ${resh.length}</div>`+resh.map(it=>dvItemCard(it,data)).join(''); }
   box.innerHTML=out;
 }
-const DV_PILL={ok:'pill-ok',fail:'pill-no',work:'pill-work'};
+// Незавершённые закупки (не на успешной стадии) — красным. Завершённые — зелёным.
+const DV_PILL={ok:'pill-ok',fail:'pill-no',work:'pill-no'};
 function dvItemCard(it,data){
   const did=data.dealId;
+  const unfinished = it.sem!=='ok'; // всё, что не «Товар принят/Успех» — незавершено
+  const cardStyle = unfinished
+    ? 'flex-wrap:wrap;border-color:rgba(255,90,90,.55);background:rgba(255,90,90,.07)'
+    : 'flex-wrap:wrap';
   const ttnLinks=(it.ttn||[]).map(f=>`<a class="lnk" href="${esc(f.url)}" target="_blank">${esc(f.name||'ТТН')}</a> <span class="fx" title="Удалить" onclick="delShipFile(${did},${f.id})">✕</span>`).join(' · ');
   const ttnRow=it.isReship?`<div style="flex-basis:100%"><div class="ttnrow">🚚 ТТН доотправки: ${ttnLinks||'<span class="hint">не приложена</span>'} <label class="addf" style="padding:4px 9px;margin:0">＋ ТТН<input type="file" style="display:none" onchange="addShipTtn(${did},${it.id},this)"></label></div></div>`:'';
-  return `<div class="pcard" style="flex-wrap:wrap">
-    <div style="flex:1;min-width:0"><div class="pcard-t">${esc(it.title)}</div><div class="hint">#${it.id} · ${it.isOurs?'<span style="color:var(--signal)">доп (дашборд)</span>':'импорт'}${it.assignedName?` · 👤 ${esc(it.assignedName)}`:''}</div></div>
+  return `<div class="pcard" style="${cardStyle}">
+    <div style="flex:1;min-width:0"><div class="pcard-t">${esc(it.title)}${unfinished?' <span class="pill pill-no" style="font-size:10px;padding:1px 6px;vertical-align:middle">не завершена</span>':''}</div><div class="hint">#${it.id} · ${it.isOurs?'<span style="color:var(--signal)">доп (дашборд)</span>':'импорт'}${it.assignedName?` · 👤 ${esc(it.assignedName)}`:''}</div></div>
     <div style="text-align:right;white-space:nowrap"><span class="pill ${DV_PILL[it.sem]||''}">${esc(it.stageName)}</span><div class="hint" style="margin-top:5px">${F(it.sum)} ${esc(it.currency)}</div></div>
     <div style="display:flex;flex-direction:column;gap:5px;margin-left:6px;white-space:nowrap">
       ${it.url?`<a class="lnk" href="${esc(it.url)}" target="_blank">Б24 ↗</a>`:''}
@@ -614,45 +620,55 @@ function goodsBlockHtml(id,d){
 function approvalHtml(id,d){
   const ap=d.approval||{};
   const YES=String(META.approve.yes), NO=String(META.approve.no||'1828');
-  const curAppr=ap.approver||META.defaultApprover||'';
-  const nm=empName(curAppr)||'Не выбран';
+  const apprs=ap.approvers||[];
   const myBid=(META.me&&META.me.bitrixUserId)||null;
-  const amApprover = myBid && curAppr && String(myBid)===String(curAppr);
+  const mine = myBid ? apprs.find(a=>String(a.bid)===String(myBid)) : null;
+  const amApprover = !!(mine && !mine.decided) && ap.requested && !ap.approved;
   const rejected = ap.status && String(ap.status)===NO && ap.decided;
   const approved = !!ap.approved;
-  const decided = approved || rejected;
+  const pendingN = apprs.filter(a=>!a.decided).length;
   // Статус согласования
   let pill;
   if(approved) pill='<span class="pill pill-ok">✓ Согласовано</span>';
   else if(rejected) pill='<span class="pill pill-no">✕ Отклонено</span>';
-  else if(ap.requested) pill='<span class="pill pill-work">На согласовании</span>';
+  else if(ap.requested) pill=`<span class="pill pill-work">На согласовании${apprs.length>1?` · ${apprs.length-pendingN}/${apprs.length}`:''}</span>`;
   else pill='<span class="pill">Черновик</span>';
 
-  const apprSel=(META.employees||[]).map(e=>`<option value="${e.id}" ${String(e.id)===String(curAppr)?'selected':''}>${esc(e.name)}</option>`).join('');
-  // Блок инициатора: выбрать согласующего и отправить
+  // Список согласующих с их решениями (после отправки)
+  const statusRow=a=>{
+    const s=a.decided?(a.approved?'<span style="color:var(--good)">✓ согласовал</span>':'<span style="color:var(--bad)">✕ отклонил</span>'):'<span class="hint">ожидает</span>';
+    return `<div class="pc-row" style="gap:8px;padding:5px 0"><div class="avatar av-brand" style="width:26px;height:26px;font-size:11px">${initials(a.name)}</div><div style="flex:1;min-width:0"><div class="pc-name" style="font-size:13px">${esc(a.name)}</div>${a.comment?`<div class="hint">💬 ${esc(a.comment)}</div>`:''}</div><div style="white-space:nowrap;font-size:12px;text-align:right">${s}${a.at?`<br><span class="hint">${fmtDateTime(a.at)}</span>`:''}</div></div>`;
+  };
+  const apprList = (ap.requested||approved||rejected)&&apprs.length ? `<div style="margin:4px 0 10px;border-top:1px solid var(--border2)">${apprs.map(statusRow).join('')}</div>` : '';
+
+  // Блок инициатора: один или несколько согласующих (можно добавить ещё строки)
+  const firstSel = (apprs[0]&&apprs[0].bid) || ap.approver || META.defaultApprover || '';
   const initiatorBlock=`
-    <label class="fl">Согласующий</label><select id="apby-${id}">${apprSel}</select>
-    <button class="btn" style="margin-top:8px;width:100%;justify-content:center" onclick="sendApproval(${id})">📨 ${ap.requested?'Отправить повторно':'Отправить на согласование'}</button>`;
+    <label class="fl">Согласующий(ие)</label>
+    <div id="apprRows-${id}">${approverRowHtml(firstSel)}</div>
+    <button class="btn" style="width:100%;justify-content:center;margin-bottom:6px" onclick="addApprover(${id})">＋ Ещё согласующий</button>
+    <div class="hint" style="margin-bottom:8px">Можно указать нескольких — достаточно, чтобы согласовал любой из них.</div>
+    <button class="btn btn-p" style="width:100%;justify-content:center" onclick="sendApproval(${id})">📨 ${ap.requested?'Отправить повторно':'Отправить на согласование'}</button>`;
   // Блок согласующего: решение + комментарий (кнопки согласовать/отклонить)
   const approverBlock=`
-    <div class="hint" style="margin-bottom:8px">Требуется ваше решение по этой закупке.</div>
-    <label class="fl">Комментарий</label><textarea id="apcm-${id}" placeholder="необязательно">${esc(ap.comment||'')}</textarea>
+    <div class="hint" style="margin-bottom:8px">Требуется ваше решение по этой закупке.${apprs.length>1?` Согласующих: ${apprs.length} — достаточно согласования любого.`:''}</div>
+    <label class="fl">Комментарий</label><textarea id="apcm-${id}" placeholder="необязательно">${esc(mine&&mine.comment||'')}</textarea>
     <div style="display:flex;gap:8px;margin-top:10px">
       <button class="btn" style="flex:1;justify-content:center;border-color:var(--good);color:var(--good)" onclick="decide(${id},'${YES}')">✓ Согласовать</button>
       <button class="btn" style="flex:1;justify-content:center;border-color:var(--bad);color:var(--bad)" onclick="decide(${id},'${NO}')">✕ Отклонить</button>
     </div>`;
-  const waitingNote=`<div class="hint" style="margin-top:8px">Отправлено согласующему — ждём решение от <b style="color:var(--text)">${esc(nm)}</b>.</div>`;
-  const decidedNote=`<div class="hint" style="margin-top:8px">${approved?'✅ Согласовал':'⛔ Отклонил'}: <b style="color:var(--text)">${esc(nm)}</b>${ap.decidedAt?` · ${fmtDateTime(ap.decidedAt)}`:''}${ap.comment?`<br>💬 ${esc(ap.comment)}`:''}</div>`;
+  const waitingNote=`<div class="hint" style="margin-top:8px">Отправлено — ждём решения${pendingN>1?` (${pendingN})`:''}.</div>`;
 
-  let body;
-  if(approved) body=decidedNote;
-  else if(rejected) body=decidedNote+initiatorBlock;       // отклонено — можно переотправить
-  else if(ap.requested && amApprover) body=approverBlock;  // я согласующий — решаю
-  else if(ap.requested) body=initiatorBlock+waitingNote;   // отправлено — ждём
-  else body=initiatorBlock;                                // ещё не отправлено
+  let body=apprList;
+  if(approved) body+='';                                     // список уже показывает кто/когда
+  else if(rejected) body+=initiatorBlock;                    // отклонено — можно переотправить
+  else if(ap.requested && amApprover) body+=approverBlock;   // я согласующий и ещё не решил
+  else if(ap.requested) body+=waitingNote;                   // отправлено — ждём (или я уже решил)
+  else body=initiatorBlock;                                  // ещё не отправлено
 
+  const hdrName = apprs.length ? (apprs.length===1 ? apprs[0].name : `${apprs.length} согласующих`) : 'Согласование';
   return `<div class="proccard">
-    <div class="pc-row"><div class="avatar av-brand">${initials(nm)}</div><div style="flex:1;min-width:0"><div class="pc-name">${esc(nm)}</div><div class="hint">Согласующий</div></div>${pill}</div>
+    <div class="pc-row"><div class="avatar av-brand">${initials(apprs.length===1?apprs[0].name:'✓')}</div><div style="flex:1;min-width:0"><div class="pc-name">${esc(hdrName)}</div><div class="hint">Согласование закупки</div></div>${pill}</div>
     ${body}
   </div>`;
 }
@@ -788,11 +804,27 @@ async function toggleFully(id,checked){
     await reloadList(); // обновит цвет змейки; затем detail подтянется
   }catch(e){alert('Ошибка: '+e.message);}
 }
+// Одна строка выбора согласующего (для формы «отправить на согласование»).
+function approverRowHtml(sel){
+  const opts=(META.employees||[]).map(e=>`<option value="${e.id}" ${String(e.id)===String(sel||'')?'selected':''}>${esc(e.name)}</option>`).join('');
+  return `<div class="apprRow" style="display:flex;gap:6px;margin-bottom:6px"><select class="apprSel" style="flex:1">${opts}</select><button class="btn" title="Убрать" onclick="rmApprover(this)" style="padding:6px 11px">×</button></div>`;
+}
+function addApprover(id){
+  const box=document.getElementById('apprRows-'+id); if(!box)return;
+  box.insertAdjacentHTML('beforeend',approverRowHtml(''));
+}
+function rmApprover(btn){
+  const row=btn.closest('.apprRow'); const box=row&&row.parentNode;
+  if(box&&box.querySelectorAll('.apprRow').length>1) row.remove();
+}
 async function sendApproval(id){
-  const el=document.getElementById('apby-'+id); const approverId=el?el.value:'';
-  if(!approverId){alert('Выберите согласующего');return;}
+  const box=document.getElementById('apprRows-'+id);
+  const sels=box?[...box.querySelectorAll('.apprSel')]:[];
+  const ids=[...new Set(sels.map(s=>s.value).filter(Boolean))];
+  if(!ids.length){alert('Выберите хотя бы одного согласующего');return;}
+  if(ids.length>1 && !confirm('Отправить на согласование '+ids.length+' согласующим?\nДостаточно, чтобы согласовал любой из них.'))return;
   try{
-    const r=await fetch('/api/procurement/'+id+'/request-approval',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({approverId})});
+    const r=await fetch('/api/procurement/'+id+'/request-approval',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({approverIds:ids})});
     const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка');return;}
     await reloadList(); // покажет статус «На согласовании»
   }catch(e){alert('Ошибка: '+e.message);}
@@ -804,7 +836,10 @@ async function decide(id,status){
   try{
     const r=await fetch('/api/procurement/'+id+'/approval',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,approverId:(META.me&&META.me.bitrixUserId)||null,comment})});
     const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка');return;}
-    if(String(status)===String(META.approve.yes)){ await moveStep(id,'payment'); } else { await reloadList(); }
+    // На «Оплату» переходим только когда согласовали ВСЕ (d.approved). Иначе —
+    // частичное согласование: просто обновляем список (ждём остальных).
+    if(d.approved){ await moveStep(id,'payment'); }
+    else { if(d.pending) alert('Ваше решение учтено. Ждём остальных согласующих ('+(d.remaining||0)+').'); await reloadList(); }
   }catch(e){alert('Ошибка: '+e.message);}
 }
 async function saveAccountant(id){
@@ -817,9 +852,11 @@ async function saveAccountant(id){
   }catch(e){alert('Ошибка: '+e.message);}
 }
 async function deleteReq(id){
-  if(!confirm('Удалить заявку и связанный элемент в «Закупках» Битрикса? Это необратимо.'))return;
+  const reason=prompt('Удаление закупки необратимо (удалит и элемент в «Закупках» Битрикса).\n\nУкажите причину удаления:');
+  if(reason===null)return;                       // отмена
+  if(!String(reason).trim()){ alert('Нужно указать причину удаления.'); return; }
   try{
-    const r=await fetch('/api/procurement/'+id,{method:'DELETE'});
+    const r=await fetch('/api/procurement/'+id,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:String(reason).trim()})});
     const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка удаления');return;}
     backToCreate(); await reloadList();
   }catch(e){alert('Ошибка: '+e.message);}

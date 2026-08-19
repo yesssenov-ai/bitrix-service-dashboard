@@ -10,6 +10,8 @@ const { USERS } = require('./constants');
 const APP_BASE = process.env.APP_BASE_URL || 'https://bitrix-service-dashboard-production.up.railway.app';
 const dashUrl = () => `${APP_BASE}/procurement.html`;
 const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// Человекочитаемая дата-время (Астана) для писем/уведомлений.
+const fmtWhen = iso => { try { return new Date(iso).toLocaleString('ru-RU', { timeZone: 'Asia/Almaty', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return String(iso || ''); } };
 const findUserId = re => { const e = Object.entries(USERS || {}).find(([, name]) => re.test(name)); return e ? Number(e[0]) : null; };
 // ВРЕМЕННО (на время настройки модуля): по умолчанию бухгалтер — Куаныш Есенов
 // вместо Натальи Зенченко. Чтобы вернуть Зенченко — замени регэксп на /зенченко/i.
@@ -93,7 +95,9 @@ function ensureSchema() {
         snapshot JSONB,
         actor_bid INTEGER,
         actor_name VARCHAR(200),
+        comment TEXT,
         at TIMESTAMPTZ DEFAULT NOW());
+      ALTER TABLE ticketsmodule_procurement_audit ADD COLUMN IF NOT EXISTS comment TEXT;
       CREATE INDEX IF NOT EXISTS idx_proc_audit_at ON ticketsmodule_procurement_audit(at DESC);
     `);
   })().catch(e => { _schemaReady = null; throw e; });
@@ -496,26 +500,38 @@ async function setAccountant(localId, accountantBid) {
   return { ok: true };
 }
 
-// Отправить закупку на согласование выбранному руководителю (+ уведомить его).
-async function requestApproval(localId, approverId) {
-  if (!approverId) throw new Error('Не выбран согласующий');
+// Отправить закупку на согласование одному ИЛИ нескольким руководителям (+ уведомить их).
+// approvers — массив Bitrix-id (или один id). Согласование считается полученным,
+// когда КАЖДЫЙ из выбранных согласовал; отклонение хотя бы одним — отклоняет всю закупку.
+async function requestApproval(localId, approvers) {
+  let ids = Array.isArray(approvers) ? approvers : [approvers];
+  ids = [...new Set(ids.filter(Boolean).map(String))];
+  if (!ids.length) throw new Error('Не выбран согласующий');
   const ctx = await getRequestContext(localId);
-  await b24('crm.item.update', { entityTypeId: ENTITY, id: ctx.itemId, fields: { [F.preApprover]: approverId } });
-  // Локальный статус «На согласовании» (в 1066 нет отдельной стадии под это) —
-  // сбрасываем прошлое решение, чтобы pill снова показал ожидание.
+  // В Bitrix-поле «Утверждающий» пишем первого (поле одиночное) — для совместимости.
+  await b24('crm.item.update', { entityTypeId: ENTITY, id: ctx.itemId, fields: { [F.preApprover]: ids[0] } });
+  // Локальный статус «На согласовании» — сбрасываем прошлые решения.
   try {
     const { rows } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
     const pl = (rows[0] && rows[0].payload) || {};
-    pl.apRequested = true; pl.apApprover = String(approverId); pl.apDecided = false;
+    pl.apRequested = true; pl.apDecided = false;
+    pl.apApprovers = ids;             // список согласующих
+    pl.apApprover = ids[0];           // совместимость со старым кодом/полем
+    pl.apDecisions = {};              // решения: bid -> {status, comment, at, name}
+    pl.apRequestedAt = new Date().toISOString();
+    delete pl.apDecidedAt;
     await pool.query('UPDATE ticketsmodule_procurement SET payload=$1, updated_at=NOW() WHERE id=$2', [pl, localId]);
   } catch (e) { /* флаг не критичен */ }
   const { notifyPerson, emailHtml } = require('./procurement-notify');
   const t = ctx.title || ('#' + ctx.itemId);
-  const tg = `🟠 <b>Закупка на согласование</b>\n📋 ${esc(t)}${ctx.dealId ? `\n🔗 Сделка #${ctx.dealId}` : ''}\n\nТребуется ваше согласование (счёт на оплату во вложении).\n<a href="${dashUrl()}">Открыть в дашборде</a>${ctx.itemUrl ? ` · <a href="${ctx.itemUrl}">в Битриксе</a>` : ''}`;
-  const html = emailHtml({ title: 'Закупка на согласование', color: '#d97706', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ...(ctx.dealId ? [['Сделка', '#' + ctx.dealId]] : [])], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
   const attachments = await slotAttachments(localId, 'invoice');
-  await notifyPerson(approverId, { reason: 'Запрос согласования', tgText: tg, subject: 'Закупка на согласование #' + ctx.itemId, html, itemId: ctx.itemId, attachments });
-  return { ok: true };
+  const others = ids.length > 1 ? ids.map(id => USERS[id] || ('#' + id)).join(', ') : null;
+  for (const approverId of ids) {
+    const tg = `🟠 <b>Закупка на согласование</b>\n📋 ${esc(t)}${ctx.dealId ? `\n🔗 Сделка #${ctx.dealId}` : ''}\n\nТребуется ваше согласование (счёт на оплату во вложении).${others ? `\n👥 Согласующие: ${esc(others)}` : ''}\n<a href="${dashUrl()}">Открыть в дашборде</a>${ctx.itemUrl ? ` · <a href="${ctx.itemUrl}">в Битриксе</a>` : ''}`;
+    const html = emailHtml({ title: 'Закупка на согласование', color: '#d97706', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ...(ctx.dealId ? [['Сделка', '#' + ctx.dealId]] : []), ...(others ? [['Согласующие', others]] : []), ['Кому', USERS[approverId] || ('#' + approverId)]], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
+    await notifyPerson(approverId, { reason: 'Запрос согласования', tgText: tg, subject: 'Закупка на согласование #' + ctx.itemId, html, itemId: ctx.itemId, attachments });
+  }
+  return { ok: true, approvers: ids };
 }
 
 // Редактирование заявки: базовые поля (название, источник, ответственный, вид закупки).
@@ -537,7 +553,7 @@ async function updateRequest(localId, payload) {
 }
 
 // Удаление заявки: элемент 1066 + локальная строка.
-async function deleteRequest(localId, byBid) {
+async function deleteRequest(localId, byBid, reason) {
   await ensureSchema();
   const { rows } = await pool.query('SELECT * FROM ticketsmodule_procurement WHERE id=$1', [localId]);
   const r = rows[0];
@@ -552,12 +568,13 @@ async function deleteRequest(localId, byBid) {
   try {
     const pl = (r && r.payload) || {};
     await pool.query(
-      `INSERT INTO ticketsmodule_procurement_audit (action, request_id, bitrix_item_id, deal_id, title, stage_id, opportunity, currency, files, snapshot, actor_bid, actor_name)
-       VALUES ('delete',$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      `INSERT INTO ticketsmodule_procurement_audit (action, request_id, bitrix_item_id, deal_id, title, stage_id, opportunity, currency, files, snapshot, actor_bid, actor_name, comment)
+       VALUES ('delete',$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [localId, itemId || null, (r && r.deal_id) || null, (r && r.title) || null, (r && r.stage_id) || null,
        pl.opportunity != null ? Number(pl.opportunity) : null, pl.currency || null,
        JSON.stringify(filesSnap), JSON.stringify(pl),
-       byBid || null, byBid ? (USERS[byBid] || ('#' + byBid)) : null]);
+       byBid || null, byBid ? (USERS[byBid] || ('#' + byBid)) : null,
+       String(reason || '').trim() || null]);
   } catch (e) { console.error('procurement audit write:', e.message); }
   if (itemId) { try { await b24('crm.item.delete', { entityTypeId: ENTITY, id: itemId }); } catch (e) { console.error('procurement delete item:', e.message); } }
   await pool.query('DELETE FROM ticketsmodule_procurement_files WHERE request_id=$1', [localId]).catch(() => {});
@@ -569,7 +586,7 @@ async function deleteRequest(localId, byBid) {
 async function listDeletions(limit) {
   await ensureSchema();
   const { rows } = await pool.query(
-    `SELECT request_id, bitrix_item_id, deal_id, title, stage_id, opportunity, currency, files, actor_name, at
+    `SELECT request_id, bitrix_item_id, deal_id, title, stage_id, opportunity, currency, files, actor_name, comment, at
        FROM ticketsmodule_procurement_audit WHERE action='delete' ORDER BY at DESC LIMIT $1`, [Math.min(Number(limit) || 200, 1000)]);
   const sName = {}; try { (await getStages()).forEach(s => { sName[s.id] = s.name; }); } catch (e) {}
   return rows.map(r => ({
@@ -577,7 +594,7 @@ async function listDeletions(limit) {
     title: r.title, stageId: r.stage_id, stageName: sName[r.stage_id] || r.stage_id,
     opportunity: r.opportunity, currency: r.currency,
     files: r.files || [], filesCount: Array.isArray(r.files) ? r.files.length : 0,
-    actorName: r.actor_name, at: r.at,
+    actorName: r.actor_name, reason: r.comment || '', at: r.at,
     dealUrl: dealUrl(r.deal_id),
   }));
 }
@@ -711,7 +728,7 @@ async function moveStage(localId, stageKey, opts = {}) {
 
   // Переход на «Ожидание товара» = оплата завершена → письмо с платёжкой и
   // доверенностью в одном сообщении.
-  if (stageKey === 'waiting' && !isBackward) { notifyPaymentDone(localId).catch(() => {}); }
+  if (stageKey === 'waiting' && !isBackward) { notifyPaymentDone(localId, opts.byBid).catch(() => {}); }
   // Уведомление «Товар принят» шлём НЕ при входе на стадию (может быть частичная
   // приёмка), а при отметке «Полностью принят» — см. setFullyReceived.
   return { stageId: step.bitrix, stepKey: step.key };
@@ -786,15 +803,33 @@ async function getItemDetail(localId) {
     rollbacks: Array.isArray(pl.rollbacks) ? pl.rollbacks : [],
     docs: { invoice: fileInfo(docFields.invoice, 'invoice'), pay: fileInfo(docFields.pay, 'pay'), contract: fileInfo(docFields.contract, 'contract'), warranty: fileInfo(docFields.warranty, 'warranty') },
     dopy,
-    approval: {
-      status: item[F.preApprove] != null ? String(item[F.preApprove]) : null,
-      approver: item[F.preApprover] || pl.apApprover || null,
-      comment: item[F.preApproveComment] || '',
-      approved: String(item[F.preApprove]) === APPROVE_YES,
-      requested: !!pl.apRequested,
-      decided: !!pl.apDecided,
-      decidedAt: pl.apDecidedAt || null,
-    },
+    approval: (() => {
+      const apprIds = Array.isArray(pl.apApprovers) && pl.apApprovers.length
+        ? pl.apApprovers.map(String)
+        : ((item[F.preApprover] || pl.apApprover) ? [String(item[F.preApprover] || pl.apApprover)] : []);
+      const dec = pl.apDecisions || {};
+      const approvers = apprIds.map(bid => {
+        const d = dec[bid] || null;
+        return {
+          bid, name: USERS[bid] || ('#' + bid),
+          status: d ? String(d.status) : null,
+          approved: d ? String(d.status) === APPROVE_YES : false,
+          decided: !!d,
+          comment: d ? (d.comment || '') : '',
+          at: d ? (d.at || null) : null,
+        };
+      });
+      return {
+        status: item[F.preApprove] != null ? String(item[F.preApprove]) : null,
+        approver: item[F.preApprover] || pl.apApprover || null,
+        approvers,                       // список согласующих + их решения
+        comment: item[F.preApproveComment] || '',
+        approved: String(item[F.preApprove]) === APPROVE_YES,
+        requested: !!pl.apRequested,
+        decided: !!pl.apDecided,
+        decidedAt: pl.apDecidedAt || null,
+      };
+    })(),
   };
 }
 
@@ -839,31 +874,79 @@ async function uploadDoc(localId, fieldCode, filename, base64) {
 // о решении, а при «Согласовано» — главбуха о необходимости приложить оплату.
 async function setApproval(localId, status, approverId, comment) {
   const ctx = await getRequestContext(localId);
+  const now = new Date().toISOString();
+  const myYes = String(status) === APPROVE_YES;
+  // Считываем список согласующих и уже накопленные решения.
+  const { rows } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
+  const pl = (rows[0] && rows[0].payload) || {};
+  let approvers = Array.isArray(pl.apApprovers) && pl.apApprovers.length
+    ? pl.apApprovers.map(String)
+    : (pl.apApprover ? [String(pl.apApprover)] : []);
+  const decider = approverId ? String(approverId) : (approvers[0] || null);
+  // Если решающий не в списке (напр. руководитель зашёл сам) — добавляем его.
+  if (decider && !approvers.includes(decider)) approvers = approvers.concat(decider);
+  const decisions = Object.assign({}, pl.apDecisions);
+  if (decider) decisions[decider] = { status: String(status), comment: comment || '', at: now, name: USERS[decider] || ('#' + decider) };
+
+  // Итог: достаточно согласования ЛЮБОГО из указанных — тогда закупка согласована.
+  // Отклонена — только если ВСЕ указанные отклонили. Пока никто не согласовал и
+  // кто-то ещё не решил — ждём.
+  const list = approvers.length ? approvers : (decider ? [decider] : []);
+  const anyYes = list.some(id => decisions[id] && String(decisions[id].status) === APPROVE_YES);
+  const allDecided = list.length > 0 && list.every(id => decisions[id]);
+  const overallApproved = anyYes;
+  const overallRejected = !anyYes && allDecided;
+  const finalDecided = overallApproved || overallRejected;
+  const pendingIds = list.filter(id => !decisions[id]);
+
+  // Bitrix: пишем утверждающего/комментарий; статус «да» — когда согласовал любой,
+  // «нет» — когда все отклонили; иначе поле статуса не трогаем (шлюз оплаты закрыт).
   const fields = {};
-  if (status) fields[F.preApprove] = status;
-  if (approverId) fields[F.preApprover] = approverId;
+  if (decider) fields[F.preApprover] = decider;
   if (comment != null) fields[F.preApproveComment] = comment;
+  if (overallApproved) fields[F.preApprove] = APPROVE_YES;
+  else if (overallRejected) fields[F.preApprove] = String(status);
   await b24('crm.item.update', { entityTypeId: ENTITY, id: ctx.itemId, fields });
-  // Отметить, что решение принято (снимает статус «На согласовании»).
+
+  // Локальное состояние.
   try {
-    const { rows } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
-    const pl = (rows[0] && rows[0].payload) || {};
-    pl.apDecided = true; pl.apRequested = false; pl.apDecidedAt = new Date().toISOString();
-    if (approverId) pl.apApprover = String(approverId);
+    pl.apApprovers = list;
+    pl.apDecisions = decisions;
+    if (decider) pl.apApprover = decider;
+    pl.apDecided = finalDecided;
+    pl.apRequested = !finalDecided;
+    if (finalDecided) pl.apDecidedAt = now; else delete pl.apDecidedAt;
     await pool.query('UPDATE ticketsmodule_procurement SET payload=$1, updated_at=NOW() WHERE id=$2', [pl, localId]);
   } catch (e) { /* флаг не критичен */ }
 
   const { notifyPerson, emailHtml } = require('./procurement-notify');
-  const approved = String(status) === APPROVE_YES;
+  const approved = overallApproved;
   const t = ctx.title || ('#' + ctx.itemId);
-  // 1) уведомить создателя о решении
+  const myName = decider ? (USERS[decider] || ('#' + decider)) : '—';
+  // Строка «кто как решил» для писем.
+  const decisionLines = list.map(id => {
+    const dd = decisions[id];
+    const nm = USERS[id] || ('#' + id);
+    if (!dd) return `${nm}: ожидает`;
+    return `${nm}: ${String(dd.status) === APPROVE_YES ? 'согласовал' : 'отклонил'}${dd.at ? ' (' + fmtWhen(dd.at) + ')' : ''}${dd.comment ? ' — ' + dd.comment : ''}`;
+  }).join('; ');
+
+  // 1) уведомить создателя.
   if (ctx.creatorBid) {
-    const verdict = approved ? 'согласована' : 'отклонена';
-    const tg = `${approved ? '✅' : '⛔'} <b>Закупка ${verdict}</b>\n📋 ${esc(t)}${comment ? `\n💬 ${esc(comment)}` : ''}\n<a href="${dashUrl()}">Открыть</a>`;
-    const html = emailHtml({ title: `Закупка ${verdict}`, color: approved ? '#0e7c3f' : '#b91c1c', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ...(comment ? [['Комментарий', comment]] : [])], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
-    await notifyPerson(ctx.creatorBid, { reason: 'Решение по согласованию', tgText: tg, subject: `Закупка ${verdict} #${ctx.itemId}`, html, itemId: ctx.itemId });
+    if (finalDecided) {
+      const verdict = approved ? 'согласована' : 'отклонена';
+      const tg = `${approved ? '✅' : '⛔'} <b>Закупка ${verdict}</b>\n📋 ${esc(t)}\n👥 ${esc(decisionLines)}\n<a href="${dashUrl()}">Открыть</a>`;
+      const html = emailHtml({ title: `Закупка ${verdict}`, color: approved ? '#0e7c3f' : '#b91c1c', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ['Решения согласующих', decisionLines], ...(comment ? [['Последний комментарий', comment]] : [])], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
+      await notifyPerson(ctx.creatorBid, { reason: 'Решение по согласованию', tgText: tg, subject: `Закупка ${verdict} #${ctx.itemId}`, html, itemId: ctx.itemId });
+    } else {
+      // частичное согласование — сообщаем прогресс.
+      const remain = pendingIds.map(id => USERS[id] || ('#' + id)).join(', ');
+      const tg = `📝 <b>Промежуточное согласование</b>\n📋 ${esc(t)}\n👤 ${esc(myName)} — ${myYes ? 'согласовал' : 'решил'}${comment ? `: ${esc(comment)}` : ''}\n⏳ Ждём: ${esc(remain || '—')}\n<a href="${dashUrl()}">Открыть</a>`;
+      const html = emailHtml({ title: 'Промежуточное согласование', color: '#d97706', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ['Решения', decisionLines], ['Ещё не решили', remain || '—']], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
+      await notifyPerson(ctx.creatorBid, { reason: 'Промежуточное согласование', tgText: tg, subject: `Согласование закупки #${ctx.itemId}: ${myName} — ${myYes ? 'да' : 'решение'}`, html, itemId: ctx.itemId });
+    }
   }
-  // 2) если согласовано — передать бухгалтеру на оплату (назначенному или главбуху)
+  // 2) если согласовано ВСЕМИ — передать бухгалтеру на оплату (назначенному или главбуху)
   if (approved) {
     const chief = ctx.accountantBid || chiefAccountantId();
     if (chief) {
@@ -873,7 +956,7 @@ async function setApproval(localId, status, approverId, comment) {
       await notifyPerson(chief, { reason: 'Запрос оплаты', tgText: tg, subject: 'Требуется оплата закупки #' + ctx.itemId, html, itemId: ctx.itemId, attachments });
     }
   }
-  return { ok: true, approved };
+  return { ok: true, approved, rejected: overallRejected, pending: !finalDecided, remaining: pendingIds.length };
 }
 
 // ── Создание заявки: локальная строка + элемент 1066 ────────────────────────
@@ -1122,7 +1205,7 @@ async function addFile(localId, slot, { filename, mime, base64, warehouse, accep
   // (см. moveStage → stageKey==='waiting').
   // Добавили/изменили документ (не первый файл слота) → досылаем его повторно
   // с уведомлением. Первый файл покрывают уведомления смены стадии.
-  if (!first) notifyFileChanged(localId, slot, filename || 'file', base64).catch(() => {});
+  if (!first) notifyFileChanged(localId, slot, filename || 'file', base64, uploadedBy).catch(() => {});
   return { id: ins.rows[0].id, first };
 }
 
@@ -1146,14 +1229,14 @@ async function addFilesBatch(localId, slot, files, uploadedBy) {
   // Досылаем уведомление, если добавили сверх первого файла слота.
   if (before > 0 || files.length > 1) {
     const atts = files.slice(before > 0 ? 0 : 1).map(f => ({ filename: f.filename || 'file', content: f.base64 }));
-    if (atts.length) notifyFilesChanged(localId, slot, atts).catch(() => {});
+    if (atts.length) notifyFilesChanged(localId, slot, atts, { byBid: uploadedBy }).catch(() => {});
   }
   return { count: files.length, first: before === 0 };
 }
 
 // Уведомление «документ(ы) добавлен(ы)/изменён(ы)» — с вложением самих файлов.
 // attachments: [{ filename, content(base64) }]. Получатели зависят от типа документа.
-async function notifyFilesChanged(localId, slot, attachments) {
+async function notifyFilesChanged(localId, slot, attachments, opts = {}) {
   try {
     if (!attachments || !attachments.length) return;
     const ctx = await getRequestContext(localId);
@@ -1171,16 +1254,20 @@ async function notifyFilesChanged(localId, slot, attachments) {
     const recip = recipMap[slot] || [ctx.creatorBid, ctx.approverBid];
     const names = attachments.map(a => a.filename).filter(Boolean).join(', ');
     const targets = [...new Set(recip.filter(Boolean).map(String))];
+    // Кто приложил + когда — для подробного уведомления (#4).
+    const byName = opts.byBid ? (USERS[opts.byBid] || ('#' + opts.byBid)) : null;
+    const whenStr = fmtWhen(new Date().toISOString());
+    const byLine = byName ? `\n👤 Приложил: ${esc(byName)} · ${esc(whenStr)}` : `\n🕒 ${esc(whenStr)}`;
     for (const uid of targets) {
-      const tg = `📎 <b>Документ обновлён: «${esc(label)}»</b>\n📋 ${esc(t)}\nДобавлено файлов: ${attachments.length} (во вложении):\n${esc(names)}\n<a href="${dashUrl()}">Открыть</a>`;
-      const html = emailHtml({ title: `Документ обновлён: «${label}»`, color: '#7c3aed', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ['Документ', label], ['Файлы', names]], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
+      const tg = `📎 <b>Документ обновлён: «${esc(label)}»</b>\n📋 ${esc(t)}\nДобавлено файлов: ${attachments.length} (во вложении):\n${esc(names)}${byLine}\n<a href="${dashUrl()}">Открыть</a>`;
+      const html = emailHtml({ title: `Документ обновлён: «${label}»`, color: '#7c3aed', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ['Документ', label], ['Файлы', names], ['Количество', String(attachments.length)], ...(byName ? [['Приложил', byName]] : []), ['Когда', whenStr]], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
       await notifyPerson(uid, { reason: 'Документ обновлён', tgText: tg, subject: `Документ обновлён: ${label} · закупка #${ctx.itemId}`, html, itemId: ctx.itemId, attachments });
     }
   } catch (e) { /* best-effort */ }
 }
 // Совместимость: одиночный файл.
-function notifyFileChanged(localId, slot, filename, base64) {
-  return notifyFilesChanged(localId, slot, base64 ? [{ filename: filename || 'file', content: base64 }] : []);
+function notifyFileChanged(localId, slot, filename, base64, byBid) {
+  return notifyFilesChanged(localId, slot, base64 ? [{ filename: filename || 'file', content: base64 }] : [], { byBid });
 }
 
 // Уведомление об откате стадии назад (с причиной) — инициатору, согласующему, бухгалтеру.
@@ -1200,16 +1287,19 @@ async function notifyRollback(localId, fromLabel, toLabel, reason, byName) {
 
 // Уведомление «Оплата проведена» (инициатору и согласующему) с вложением
 // платёжки и доверенности. Вызывается при переходе на «Ожидание товара».
-async function notifyPaymentDone(localId) {
+async function notifyPaymentDone(localId, byBid) {
   try {
     const ctx = await getRequestContext(localId);
     const { notifyPerson, emailHtml } = require('./procurement-notify');
     const t = ctx.title || ('#' + ctx.itemId);
     const attachments = await slotAttachments(localId, ['pay', 'poa']);
     const targets = [...new Set([ctx.creatorBid, ctx.approverBid].filter(Boolean).map(String))];
+    const byName = byBid ? (USERS[byBid] || ('#' + byBid)) : null;
+    const whenStr = fmtWhen(new Date().toISOString());
+    const hasPoa = attachments.length > 1;
     for (const uid of targets) {
-      const tg = `💳 <b>Оплата закупки проведена</b>\n📋 ${esc(t)}\nПриложено подтверждение оплаты${attachments.length > 1 ? ' и доверенность' : ''} (во вложении).\n<a href="${dashUrl()}">Открыть</a>`;
-      const html = emailHtml({ title: 'Оплата закупки проведена', color: '#0e7c3f', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')]], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
+      const tg = `💳 <b>Оплата закупки проведена</b>\n📋 ${esc(t)}\nПриложено подтверждение оплаты${hasPoa ? ' и доверенность' : ''} (во вложении).${byName ? `\n👤 Провёл: ${esc(byName)} · ${esc(whenStr)}` : `\n🕒 ${esc(whenStr)}`}\n<a href="${dashUrl()}">Открыть</a>`;
+      const html = emailHtml({ title: 'Оплата закупки проведена', color: '#0e7c3f', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ['Вложения', hasPoa ? 'подтверждение оплаты + доверенность' : 'подтверждение оплаты'], ...(byName ? [['Провёл оплату', byName]] : []), ['Когда', whenStr]], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
       await notifyPerson(uid, { reason: 'Оплата приложена', tgText: tg, subject: 'Оплата закупки проведена #' + ctx.itemId, html, itemId: ctx.itemId, attachments });
     }
   } catch (e) { /* best-effort */ }
@@ -1414,4 +1504,44 @@ async function removeShipFile(dealId, fileId) {
   return { ok: true };
 }
 
-module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, listDeletions, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, autoCreateFromService, itemUrl, dealUrl };
+// ── Действия, за которые отвечает пользователь (для бейджа на иконке PWA) ─────
+// Считаем только по локальной таблице (быстро, без обращений к Битриксу):
+//  • согласование ждёт меня (я в списке согласующих и ещё не решил);
+//  • оплата ждёт меня (я назначенный бухгалтер / главбух, стадия «Оплата»);
+//  • приёмка ждёт меня (я ответственный, стадия «Ожидание товара»).
+async function pendingActionsFor(bid) {
+  await ensureSchema();
+  bid = String(bid || '');
+  if (!bid) return { count: 0, items: [] };
+  const paymentStage = (FLOW.find(s => s.key === 'payment') || {}).bitrix;
+  const waitingStage = (FLOW.find(s => s.key === 'waiting') || {}).bitrix;
+  const chief = String(chiefAccountantId() || '');
+  let rows = [];
+  try {
+    ({ rows } = await pool.query('SELECT id, bitrix_item_id, title, stage_id, accountant_bid, payload FROM ticketsmodule_procurement'));
+  } catch (e) { return { count: 0, items: [] }; }
+  const items = [];
+  for (const r of rows) {
+    const pl = r.payload || {};
+    // 1) согласование ждёт меня
+    const apprs = Array.isArray(pl.apApprovers) ? pl.apApprovers.map(String) : (pl.apApprover ? [String(pl.apApprover)] : []);
+    const decided = pl.apDecisions || {};
+    if (pl.apRequested && !pl.apDecided && apprs.includes(bid) && !decided[bid]) {
+      items.push({ localId: r.id, title: r.title, kind: 'approve', label: 'Требуется согласование' });
+      continue;
+    }
+    // 2) оплата ждёт меня
+    if (paymentStage && r.stage_id === paymentStage) {
+      const acc = r.accountant_bid ? String(r.accountant_bid) : chief;
+      if (acc && acc === bid) { items.push({ localId: r.id, title: r.title, kind: 'pay', label: 'Требуется оплата' }); continue; }
+    }
+    // 3) приёмка ждёт меня (ответственный склад)
+    if (waitingStage && r.stage_id === waitingStage) {
+      const assignee = String(pl.assigned || pl.initiatorBid || '');
+      if (assignee && assignee === bid) { items.push({ localId: r.id, title: r.title, kind: 'receive', label: 'Ожидает приёмки' }); }
+    }
+  }
+  return { count: items.length, items };
+}
+
+module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, listDeletions, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, autoCreateFromService, pendingActionsFor, itemUrl, dealUrl };

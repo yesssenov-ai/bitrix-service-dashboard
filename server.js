@@ -69,6 +69,8 @@ const PWA_HEAD = [
   "<script>(function(){try{if(localStorage.getItem('pls-theme')==='light')document.documentElement.setAttribute('data-theme','light')}catch(e){}})();</script>",
   '<link rel="stylesheet" href="/assets/theme.css">',
   '<script src="/assets/theme.js" defer></script>',
+  // Бейдж на иконке приложения (число действий пользователя) — см. assets/badge.js.
+  '<script src="/assets/badge.js" defer></script>',
 ].join('\n') + '\n';
 app.use((req, res, next) => {
   const orig = res.sendFile.bind(res);
@@ -143,6 +145,7 @@ app.use('/api/contracts', require('./routes/contracts-routes').router);
 app.use('/api/logistics', require('./routes/logistics-routes').router);
 app.use('/api/operational', require('./routes/operational-routes').router);
 app.use('/api/procurement', require('./routes/procurement-routes').router);
+app.use('/api/notify', require('./routes/notify-routes').router);
 const { router: relationsRouter, handleBitrixWebhook } = require('./routes/relations-routes');
 app.use('/relations', relationsRouter);
 app.post('/webhook/bitrix-update', express.urlencoded({ extended: true }), handleBitrixWebhook);
@@ -632,6 +635,16 @@ initDB().then(() => {
     const { reconcileAllPlannerEvents } = require('./routes/relations-routes');
     setTimeout(() => reconcileAllPlannerEvents().catch(e => console.error('reconcileAllPlannerEvents error:', e.message)), 10000);
     setInterval(() => reconcileAllPlannerEvents().catch(e => console.error('reconcileAllPlannerEvents error:', e.message)), 10 * 60 * 1000);
+    // Пуши/бейджи: пересчёт числа действий у подписанных пользователей и тихое
+    // обновление бейджа на иконке приложения (работает даже когда оно закрыто).
+    try {
+      const push = require('./push');
+      if (push.enabled()) {
+        setTimeout(() => push.broadcastBadges().catch(e => console.error('push broadcastBadges boot error:', e.message)), 20000);
+        setInterval(() => push.broadcastBadges().catch(e => console.error('push broadcastBadges error:', e.message)), 3 * 60 * 1000);
+        console.log('✅ Web Push (бейджи на иконке) активны');
+      }
+    } catch (e) { console.error('push init error:', e.message); }
     // Telegram linking bot
     telegramLinkBot.setPool(pool);
     telegramLinkBot.startPolling(15000);
