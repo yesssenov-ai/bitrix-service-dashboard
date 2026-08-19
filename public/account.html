@@ -197,7 +197,7 @@ async function loadFaceId(){
   }
   box.innerHTML=`<div class="ro"><span>Статус</span><span>${st.count?`<span class="badge on">включён</span> · устройств: <b>${st.count}</b>`:'<span class="badge off">не настроен</span>'}</span></div>
     <div class="row" style="margin-top:12px">
-      <button class="btn btn-primary" id="faceEnroll" onclick="enrollFaceIdAcc()">${st.count?'Добавить это устройство':'Включить на этом устройстве'}</button>
+      <button class="btn btn-primary" id="faceEnroll" onclick="enrollFaceIdAcc()" style="display:inline-flex;align-items:center;gap:8px"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M9.5 10v1.5M14.5 10v1.5M12 9.5v3l-1 .8"/><path d="M9.3 15c.8.7 1.8 1 2.7 1s1.9-.3 2.7-1"/></svg>${st.count?'Добавить это устройство':'Включить на этом устройстве'}</button>
       ${st.count?'<button class="btn btn-danger" id="faceDisable" onclick="disableFaceIdAcc()">Отключить на всех устройствах</button>':''}
       <span class="msg" id="faceMsg"></span>
     </div>`;

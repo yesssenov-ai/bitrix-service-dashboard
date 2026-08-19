@@ -94,6 +94,23 @@ input:focus{border-color:var(--signal);box-shadow:0 0 0 3px rgba(53,208,192,.12)
 .btn:disabled{opacity:.55;cursor:not-allowed;}
 .btn:focus-visible{outline:2px solid var(--signal);outline-offset:2px;}
 
+/* Вход по Face ID — вторичная, «обведённая» кнопка в стиле ЦУП: чёткая линия,
+   акцент — фирменный teal, аккуратный ховер. */
+.btn-face{
+  width:100%;display:flex;align-items:center;justify-content:center;gap:9px;
+  background:transparent;color:var(--text);border:1px solid var(--line-2);border-radius:9px;
+  padding:12px;font-size:14px;font-weight:600;font-family:var(--font-body);cursor:pointer;
+  transition:border-color .15s ease,color .15s ease,background .15s ease;
+}
+.btn-face:hover{border-color:var(--signal);background:rgba(53,208,192,.06);}
+.btn-face:disabled{opacity:.6;cursor:not-allowed;}
+.btn-face:focus-visible{outline:2px solid var(--signal);outline-offset:2px;}
+.btn-face svg{color:var(--signal);flex:none;}
+/* Разделитель «или» — тонкие линии по бокам, моно-подпись */
+.or-sep{display:flex;align-items:center;gap:12px;margin:18px 0 4px;color:var(--text-faint);
+  font-family:var(--font-mono);font-size:10.5px;letter-spacing:1.5px;text-transform:uppercase;}
+.or-sep::before,.or-sep::after{content:'';flex:1;height:1px;background:var(--line);}
+
 .err{
   background:rgba(240,85,74,.1);border:1px solid rgba(240,85,74,.35);border-radius:8px;
   padding:10px 14px;font-size:13px;color:var(--err);margin-bottom:16px;display:none;
@@ -150,7 +167,11 @@ input:focus{border-color:var(--signal);box-shadow:0 0 0 3px rgba(53,208,192,.12)
         <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
       </div>
       <button class="btn" id="btnLogin" onclick="doLogin()">Войти</button>
-      <button class="btn" id="btnFaceId" onclick="loginFaceId()" style="display:none;margin-top:10px;background:transparent;border:1px solid var(--brand);color:var(--brand)">🔓 Войти по Face ID</button>
+      <div class="or-sep" id="faceSep" style="display:none"><span>или</span></div>
+      <button class="btn-face" id="btnFaceId" onclick="loginFaceId()" style="display:none">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M9.5 10v1.5M14.5 10v1.5M12 9.5v3l-1 .8"/><path d="M9.3 15c.8.7 1.8 1 2.7 1s1.9-.3 2.7-1"/></svg>
+        <span id="faceLbl">Войти по Face ID</span>
+      </button>
     </div>
 
     <div class="step" id="step2">
@@ -290,14 +311,22 @@ async function initFaceId(){
   try{
     if(!window.PublicKeyCredential) return;
     const ok = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-    if(ok){ const b=document.getElementById('btnFaceId'); if(b) b.style.display='block'; }
+    if(ok){
+      const b=document.getElementById('btnFaceId'); if(b) b.style.display='flex';
+      const s=document.getElementById('faceSep'); if(s) s.style.display='flex';
+    }
   }catch(e){}
+}
+// Загрузка для Face ID-кнопки без стирания иконки (меняем только текст в span).
+function setFaceLoading(on,label){
+  const b=document.getElementById('btnFaceId'); const l=document.getElementById('faceLbl');
+  if(b) b.disabled=on; if(l) l.textContent=label;
 }
 
 async function loginFaceId(){
   clearErr();
   if(!window.PublicKeyCredential){ showErr('Устройство не поддерживает Face ID'); return; }
-  setLoading('btnFaceId', true, 'Проверяю…');
+  setFaceLoading(true, 'Проверяю…');
   try{
     const or = await fetch('/auth/webauthn/login/options', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
     const opts = await or.json();
@@ -322,7 +351,7 @@ async function loginFaceId(){
   }catch(e){
     if(e && (e.name==='NotAllowedError'||e.name==='AbortError')) showErr('Вход по Face ID отменён');
     else showErr('Face ID недоступен. Войдите по паролю.');
-  }finally{ setLoading('btnFaceId', false, '🔓 Войти по Face ID'); }
+  }finally{ setFaceLoading(false, 'Войти по Face ID'); }
 }
 
 // После успешного входа по паролю — предлагаем включить Face ID на этом устройстве.

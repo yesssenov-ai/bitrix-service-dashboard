@@ -66,25 +66,47 @@
     }).catch(function () { return false; });
   }
 
+  // Стиль кнопки в дизайн-системе ЦУП (чёткая линия, teal-акцент, аккуратный ховер).
+  // Внедряем один раз — так доступны :hover и media-запросы.
+  function injectFabStyle() {
+    if (document.getElementById('pls-fab-style')) return;
+    var css = ''
+      + '.pls-fab{position:fixed;right:18px;bottom:70px;z-index:99998;display:inline-flex;align-items:center;gap:9px;'
+      + 'background:var(--panel,#1b1f27);color:var(--text,#eef0f3);border:1px solid var(--line-2,#363c49);'
+      + 'border-radius:12px;padding:10px 13px;font:600 13px "Inter",system-ui,-apple-system,sans-serif;letter-spacing:.2px;'
+      + 'box-shadow:0 8px 24px rgba(0,0,0,.30);cursor:pointer;'
+      + 'transition:border-color .15s ease,transform .15s ease,background .2s ease;animation:plsFabIn .25s ease both;}'
+      + '.pls-fab:hover{border-color:var(--signal,#35d0c0);transform:translateY(-1px);}'
+      + '.pls-fab:focus-visible{outline:2px solid var(--signal,#35d0c0);outline-offset:2px;}'
+      + '.pls-fab .ic{color:var(--signal,#35d0c0);display:flex;flex:none;}'
+      + '.pls-fab .x{margin-left:3px;color:var(--text-faint,#565d6b);font-weight:400;font-size:15px;line-height:1;padding:1px 3px;border-radius:6px;}'
+      + '.pls-fab .x:hover{color:var(--text,#eef0f3);background:rgba(255,255,255,.06);}'
+      + '@keyframes plsFabIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}'
+      + '@media(max-width:520px){.pls-fab{right:12px;bottom:64px;}}';
+    var st = document.createElement('style');
+    st.id = 'pls-fab-style';
+    st.textContent = css;
+    (document.head || document.documentElement).appendChild(st);
+  }
+
   // Плавающая кнопка «Включить уведомления» — показываем, если пуши поддерживаются,
   // ключ есть, а разрешение ещё не выдано. Запрос — строго по нажатию (нужно для iOS).
   function showEnableButton() {
     if (document.getElementById('pls-notify-btn')) return;
     if (Notification.permission === 'granted') return;
     try { if (sessionStorage.getItem('pls-notify-dismissed') === '1') return; } catch (e) {}
+    injectFabStyle();
     var b = document.createElement('button');
     b.id = 'pls-notify-btn';
     b.type = 'button';
-    b.innerHTML = '🔔 Включить уведомления';
-    b.setAttribute('style', [
-      'position:fixed', 'right:16px', 'bottom:16px', 'z-index:99999',
-      'background:#0f6cbd', 'color:#fff', 'border:none', 'border-radius:24px',
-      'padding:11px 16px', 'font:600 14px Inter,Arial,sans-serif',
-      'box-shadow:0 6px 20px rgba(0,0,0,.28)', 'cursor:pointer', 'max-width:calc(100vw - 32px)'
-    ].join(';'));
+    b.className = 'pls-fab';
+    b.setAttribute('aria-label', 'Включить уведомления');
+    var bell = '<span class="ic"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 1 1 12 0c0 4.5 1.8 5.7 2.4 6.2a.5.5 0 0 1-.3.8H3.9a.5.5 0 0 1-.3-.8C4.2 14.7 6 13.5 6 9Z"/><path d="M10.3 20a1.9 1.9 0 0 0 3.4 0"/></svg></span>';
+    b.innerHTML = bell + '<span>Включить уведомления</span>';
     var close = document.createElement('span');
-    close.innerHTML = ' ✕';
-    close.setAttribute('style', 'margin-left:8px;opacity:.7');
+    close.className = 'x';
+    close.innerHTML = '✕';
+    close.setAttribute('aria-label', 'Скрыть');
     close.addEventListener('click', function (ev) {
       ev.stopPropagation();
       try { sessionStorage.setItem('pls-notify-dismissed', '1'); } catch (e) {}
