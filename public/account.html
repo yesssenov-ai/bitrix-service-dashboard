@@ -184,6 +184,7 @@ function render(){
 // ── Face ID / Touch ID / Windows Hello (WebAuthn) ──
 function _b64urlToBuf(s){s=String(s).replace(/-/g,'+').replace(/_/g,'/');const pad='='.repeat((4-s.length%4)%4);const raw=atob(s+pad);const a=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)a[i]=raw.charCodeAt(i);return a.buffer;}
 function _bufToB64url(buf){const b=new Uint8Array(buf);let s='';for(let i=0;i<b.length;i++)s+=String.fromCharCode(b[i]);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
+function _strToBuf(s){return new TextEncoder().encode(String(s)).buffer;}
 async function loadFaceId(){
   const box=document.getElementById('faceBox'); if(!box)return;
   let supported=false;
@@ -208,7 +209,7 @@ async function enrollFaceIdAcc(){
     const or=await fetch('/auth/webauthn/register/options',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
     const opts=await or.json();
     if(!or.ok){ if(msg){msg.className='msg err';msg.textContent=opts.error||'Ошибка';} return; }
-    const pub=Object.assign({},opts,{challenge:_b64urlToBuf(opts.challenge),user:Object.assign({},opts.user,{id:_b64urlToBuf(opts.user.id)})});
+    const pub=Object.assign({},opts,{challenge:_b64urlToBuf(opts.challenge),user:Object.assign({},opts.user,{id:_strToBuf(opts.user.id)})});
     if(Array.isArray(opts.excludeCredentials)) pub.excludeCredentials=opts.excludeCredentials.map(c=>Object.assign({},c,{id:_b64urlToBuf(c.id)}));
     const cred=await navigator.credentials.create({publicKey:pub});
     const response={id:cred.id,rawId:_bufToB64url(cred.rawId),type:cred.type,

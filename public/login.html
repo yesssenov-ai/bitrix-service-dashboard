@@ -304,6 +304,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // ── Face ID / Touch ID / Windows Hello (WebAuthn) ───────────────────────────
 function b64urlToBuf(s){ s=String(s).replace(/-/g,'+').replace(/_/g,'/'); const pad='='.repeat((4-s.length%4)%4); const raw=atob(s+pad); const a=new Uint8Array(raw.length); for(let i=0;i<raw.length;i++)a[i]=raw.charCodeAt(i); return a.buffer; }
 function bufToB64url(buf){ const b=new Uint8Array(buf); let s=''; for(let i=0;i<b.length;i++)s+=String.fromCharCode(b[i]); return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+// user.id приходит от сервера как обычная строка (напр. "4") — кодируем в байты UTF-8.
+function strToBuf(s){ return new TextEncoder().encode(String(s)).buffer; }
 
 // Кнопку «Войти по Face ID» показываем, если устройство поддерживает платформенный
 // аутентификатор (Face ID/Touch ID/Windows Hello).
@@ -390,7 +392,7 @@ async function enrollFaceId(){
     if(!or.ok){ alert(opts.error||'Не удалось начать настройку Face ID'); return false; }
     const pub = Object.assign({}, opts, {
       challenge: b64urlToBuf(opts.challenge),
-      user: Object.assign({}, opts.user, { id: b64urlToBuf(opts.user.id) }),
+      user: Object.assign({}, opts.user, { id: strToBuf(opts.user.id) }),
     });
     if(Array.isArray(opts.excludeCredentials)) pub.excludeCredentials = opts.excludeCredentials.map(c=>Object.assign({},c,{id:b64urlToBuf(c.id)}));
     const cred = await navigator.credentials.create({ publicKey: pub });
