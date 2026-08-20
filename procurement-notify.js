@@ -27,10 +27,16 @@ async function sendTg(uid, text) {
     return !!(res.ok && d && d.ok);
   } catch (e) { return false; }
 }
-async function sendEmail(uid, subject, html, attachments) {
+async function sendEmail(uid, subject, html, attachments, threadKey) {
   const email = USER_EMAILS[uid]; if (!email || !RESEND_KEY) return false;
   try {
     const body = { from: `ProLabSupport <${FROM_EMAIL}>`, to: [email], subject, html };
+    // Единая ветка в Outlook/почте: одинаковые References/In-Reply-To на все
+    // письма по одной закупке → клиент группирует их в одну переписку.
+    if (threadKey) {
+      const ref = `<proc-${threadKey}@prolabsupport.kz>`;
+      body.headers = { 'References': ref, 'In-Reply-To': ref };
+    }
     // Вложения Resend: { filename, content } где content — base64-строка.
     if (Array.isArray(attachments) && attachments.length) {
       body.attachments = attachments
@@ -77,7 +83,7 @@ function emailHtml({ title, color, lines, itemUrl, dashUrl }) {
 async function notifyPerson(uid, { reason, tgText, subject, html, itemId, attachments }) {
   if (!uid) return;
   const tg = await sendTg(uid, tgText); await logN(itemId, reason, 'telegram', uid, tg);
-  const em = await sendEmail(uid, subject, html, attachments); await logN(itemId, reason, 'email', uid, em);
+  const em = await sendEmail(uid, subject, html, attachments, itemId); await logN(itemId, reason, 'email', uid, em);
   const im = await imNotify(uid, String(tgText || '').replace(/<[^>]+>/g, '')); await logN(itemId, reason, 'bitrix', uid, im);
   // Web Push — уведомление на иконку приложения (работает и когда оно закрыто).
   try {

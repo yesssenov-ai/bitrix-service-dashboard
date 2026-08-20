@@ -2,7 +2,10 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../auth');
 
-const ROLES = ['admin', 'coordinator'];
+// Доступ к модулю «Закупки»: admin, coordinator и store правят закупки.
+const ROLES = ['admin', 'coordinator', 'store'];
+// Удаление закупок — БЕЗ store (store может всё, кроме удаления).
+const DEL_ROLES = ['admin', 'coordinator'];
 
 // GET /api/procurement/meta — стадии + справочники для формы (кэш 30 мин, ?force=1)
 router.get('/meta', requireAuth(ROLES), async (req, res) => {
@@ -243,7 +246,7 @@ router.put('/:id', requireAuth(ROLES), express.json(), async (req, res) => {
 // DELETE /api/procurement/:id — удалить заявку и элемент 1066.
 // Удаление в «Закупках» разрешено ТОЛЬКО роли admin (PROC не входит в модули
 // удаления менеджера/логиста/координатора). Всегда пишем в аудит.
-router.delete('/:id', requireAuth(ROLES), async (req, res) => {
+router.delete('/:id', requireAuth(DEL_ROLES), async (req, res) => {
   try {
     const { canDelete, auditLog } = require('../auth');
     if (!canDelete(req.user, 'PROC')) return res.status(403).json({ error: 'Удаление закупок доступно только администратору.' });
@@ -283,13 +286,26 @@ router.post('/:id/upload', requireAuth(ROLES), express.json({ limit: '25mb' }), 
   }
 });
 
+// POST /api/procurement/:id/amount { opportunity, currency } — сумма закупки (2 этап)
+router.post('/:id/amount', requireAuth(ROLES), express.json(), async (req, res) => {
+  try {
+    const { setAmount } = require('../procurement-calc');
+    const { opportunity, currency } = req.body || {};
+    if (!(Number(opportunity) > 0)) return res.status(400).json({ error: 'Укажите сумму закупки больше 0' });
+    res.json(await setAmount(parseInt(req.params.id, 10), opportunity, currency));
+  } catch (e) {
+    console.error('POST /api/procurement/:id/amount error:', e.message);
+    res.status(500).json({ error: 'Не удалось сохранить сумму: ' + e.message });
+  }
+});
+
 // POST /api/procurement/:id/request-approval { approverId } — отправить на согласование
 router.post('/:id/request-approval', requireAuth(ROLES), express.json(), async (req, res) => {
   try {
     const { requestApproval } = require('../procurement-calc');
     const b = req.body || {};
     const approvers = b.approverIds != null ? b.approverIds : b.approverId;
-    res.json(await requestApproval(parseInt(req.params.id, 10), approvers));
+    res.json(await requestApproval(parseInt(req.params.id, 10), approvers, b.note));
   } catch (e) {
     console.error('POST /api/procurement/:id/request-approval error:', e.message);
     res.status(500).json({ error: 'Не удалось отправить на согласование: ' + e.message });

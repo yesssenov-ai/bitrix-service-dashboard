@@ -638,6 +638,13 @@ initDB().then(() => {
     const { reconcileAllPlannerEvents } = require('./routes/relations-routes');
     setTimeout(() => reconcileAllPlannerEvents().catch(e => console.error('reconcileAllPlannerEvents error:', e.message)), 10000);
     setInterval(() => reconcileAllPlannerEvents().catch(e => console.error('reconcileAllPlannerEvents error:', e.message)), 10 * 60 * 1000);
+    // Fallback авто-создания закупок из завершённых подборов (если вебхук из Bitrix
+    // не доходит). Дедуп по source_item_id — повторных закупок не будет.
+    try {
+      const { scanServiceForAutoCreate } = require('./procurement-calc');
+      setTimeout(() => scanServiceForAutoCreate().catch(e => console.error('procurement scan boot error:', e.message)), 45000);
+      setInterval(() => scanServiceForAutoCreate().catch(e => console.error('procurement scan error:', e.message)), 15 * 60 * 1000);
+    } catch (e) { console.error('procurement scan init error:', e.message); }
     // Пуши/бейджи: пересчёт числа действий у подписанных пользователей и тихое
     // обновление бейджа на иконке приложения (работает даже когда оно закрыто).
     try {

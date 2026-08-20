@@ -13,6 +13,17 @@ const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g,
 // Человекочитаемая дата-время (Астана) для писем/уведомлений.
 const fmtWhen = iso => { try { return new Date(iso).toLocaleString('ru-RU', { timeZone: 'Asia/Almaty', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return String(iso || ''); } };
 const findUserId = re => { const e = Object.entries(USERS || {}).find(([, name]) => re.test(name)); return e ? Number(e[0]) : null; };
+// ЕДИНАЯ тема письма на всю закупку — чтобы Outlook собирал все уведомления по
+// одной закупке в ОДНУ ветку. Тема НЕ меняется от события к событию; конкретика
+// (что именно произошло) — всегда в теле письма. Формат: «Закупка #123 · <PO/название>».
+function mailSubject(ctx) {
+  const parts = ['Закупка #' + ctx.itemId];
+  const tail = (ctx.po ? ('PO ' + ctx.po) : '') || (ctx.title ? String(ctx.title).replace(/\s+/g, ' ').trim().slice(0, 60) : '');
+  if (tail) parts.push(tail);
+  return parts.join(' · ');
+}
+// Ключ ветки для заголовков References/In-Reply-To (стабилен на всю закупку).
+const mailThreadId = itemId => `<proc-${itemId}@prolabsupport.kz>`;
 // ВРЕМЕННО (на время настройки модуля): по умолчанию бухгалтер — Куаныш Есенов
 // вместо Натальи Зенченко. Чтобы вернуть Зенченко — замени регэксп на /зенченко/i.
 const chiefAccountantId = () => findUserId(/есенов|yessenov/i) || findUserId(/зенченко/i);
@@ -23,7 +34,13 @@ const defaultApproverId = () => findUserId(/казиев|исабек/i);
 // Авто-создание из завершённого «подбора допов» (смарт «Заявки на сервис» 1058)
 const SERVICE_ENTITY = 1058;
 const SERVICE_FINAL_STAGE = 'DT1058_11:SUCCESS';          // «Заявка закрыта»
-const SERVICE_DOPY_FIELD = 'ufCrm8_1732856507642';        // «Подбор дополнительного оборудования» (file[])
+// Стадии-триггеры авто-создания закупки: «Заявка закрыта» (SUCCESS) И «Заявка
+// исполнена» (DT1058_11:3) — раньше срабатывала ТОЛЬКО SUCCESS, поэтому подборы,
+// которые инженеры считают завершёнными на «исполнена», не создавали закупок.
+// Можно переопределить через env PROC_TRIGGER_STAGES="DT1058_11:SUCCESS,DT1058_11:3".
+const SERVICE_TRIGGER_STAGES = (process.env.PROC_TRIGGER_STAGES || 'DT1058_11:SUCCESS,DT1058_11:3')
+  .split(',').map(s => s.trim()).filter(Boolean);
+const SERVICE_DOPY_FIELD = process.env.PROC_DOPY_FIELD || 'ufCrm8_1732856507642'; // «Подбор доп. оборудования» (file[])
 const SERVICE_ZAKUPKI_FIELD = 'ufCrmZakupki';             // обратная связь 1058 → Закупки
 const SERVICE_PARENT_DEAL_FIELD = 'ufCrm8_1732856267';    // «Родительский процесс (01 Продажа инструментов)» — сейловая сделка
 const VID_POSTAVKA_KLIENTU = '127';                       // «Вид закупки» = Для поставки клиенту
@@ -495,7 +512,7 @@ async function setAccountant(localId, accountantBid) {
     const tg = `👤 <b>Вы назначены на оплату закупки</b>\n📋 ${esc(t)}\nСчёт на оплату во вложении (если приложен).\n<a href="${dashUrl()}">Открыть в дашборде</a>${ctx.itemUrl ? ` · <a href="${ctx.itemUrl}">в Битриксе</a>` : ''}`;
     const html = emailHtml({ title: 'Вы назначены на оплату закупки', color: '#0f766e', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')]], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
     const attachments = await slotAttachments(localId, 'invoice');
-    await notifyPerson(accountantBid, { reason: 'Назначен бухгалтер', tgText: tg, subject: 'Вы назначены на оплату закупки #' + ctx.itemId, html, itemId: ctx.itemId, attachments });
+    await notifyPerson(accountantBid, { reason: 'Назначен бухгалтер', tgText: tg, subject: mailSubject(ctx), html, itemId: ctx.itemId, attachments });
   } catch (e) { /* уведомление best-effort */ }
   return { ok: true };
 }
@@ -503,10 +520,11 @@ async function setAccountant(localId, accountantBid) {
 // Отправить закупку на согласование одному ИЛИ нескольким руководителям (+ уведомить их).
 // approvers — массив Bitrix-id (или один id). Согласование считается полученным,
 // когда КАЖДЫЙ из выбранных согласовал; отклонение хотя бы одним — отклоняет всю закупку.
-async function requestApproval(localId, approvers) {
+async function requestApproval(localId, approvers, note) {
   let ids = Array.isArray(approvers) ? approvers : [approvers];
   ids = [...new Set(ids.filter(Boolean).map(String))];
   if (!ids.length) throw new Error('Не выбран согласующий');
+  note = String(note || '').trim();
   const ctx = await getRequestContext(localId);
   // В Bitrix-поле «Утверждающий» пишем первого (поле одиночное) — для совместимости.
   await b24('crm.item.update', { entityTypeId: ENTITY, id: ctx.itemId, fields: { [F.preApprover]: ids[0] } });
@@ -518,6 +536,7 @@ async function requestApproval(localId, approvers) {
     pl.apApprovers = ids;             // список согласующих
     pl.apApprover = ids[0];           // совместимость со старым кодом/полем
     pl.apDecisions = {};              // решения: bid -> {status, comment, at, name}
+    pl.apRequestNote = note || '';    // комментарий инициатора согласующим
     pl.apRequestedAt = new Date().toISOString();
     delete pl.apDecidedAt;
     await pool.query('UPDATE ticketsmodule_procurement SET payload=$1, updated_at=NOW() WHERE id=$2', [pl, localId]);
@@ -527,11 +546,28 @@ async function requestApproval(localId, approvers) {
   const attachments = await slotAttachments(localId, 'invoice');
   const others = ids.length > 1 ? ids.map(id => USERS[id] || ('#' + id)).join(', ') : null;
   for (const approverId of ids) {
-    const tg = `🟠 <b>Закупка на согласование</b>\n📋 ${esc(t)}${ctx.dealId ? `\n🔗 Сделка #${ctx.dealId}` : ''}\n\nТребуется ваше согласование (счёт на оплату во вложении).${others ? `\n👥 Согласующие: ${esc(others)}` : ''}\n<a href="${dashUrl()}">Открыть в дашборде</a>${ctx.itemUrl ? ` · <a href="${ctx.itemUrl}">в Битриксе</a>` : ''}`;
-    const html = emailHtml({ title: 'Закупка на согласование', color: '#d97706', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ...(ctx.dealId ? [['Сделка', '#' + ctx.dealId]] : []), ...(others ? [['Согласующие', others]] : []), ['Кому', USERS[approverId] || ('#' + approverId)]], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
-    await notifyPerson(approverId, { reason: 'Запрос согласования', tgText: tg, subject: 'Закупка на согласование #' + ctx.itemId, html, itemId: ctx.itemId, attachments });
+    const tg = `🟠 <b>Закупка на согласование</b>\n📋 ${esc(t)}${ctx.dealId ? `\n🔗 Сделка #${ctx.dealId}` : ''}\n\nТребуется согласование ВСЕХ указанных (счёт на оплату во вложении).${others ? `\n👥 Согласующие: ${esc(others)}` : ''}${note ? `\n💬 Комментарий: ${esc(note)}` : ''}\n<a href="${dashUrl()}">Открыть в дашборде</a>${ctx.itemUrl ? ` · <a href="${ctx.itemUrl}">в Битриксе</a>` : ''}`;
+    const html = emailHtml({ title: 'Закупка на согласование', color: '#d97706', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ...(ctx.dealId ? [['Сделка', '#' + ctx.dealId]] : []), ...(others ? [['Согласующие (нужны все)', others]] : []), ...(note ? [['Комментарий', note]] : []), ['Кому', USERS[approverId] || ('#' + approverId)]], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
+    await notifyPerson(approverId, { reason: 'Запрос согласования', tgText: tg, subject: mailSubject(ctx), html, itemId: ctx.itemId, attachments });
   }
   return { ok: true, approvers: ids };
+}
+
+// Сумма закупки (запрашивается на 2 этапе — «Запрос счёта на оплату»).
+async function setAmount(localId, opportunity, currency) {
+  const itemId = await itemIdOf(localId);
+  const fields = {};
+  if (opportunity !== undefined && opportunity !== null && opportunity !== '') fields[F.opportunity] = Number(opportunity) || 0;
+  if (currency) fields[F.currency] = currency;
+  if (Object.keys(fields).length) await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields });
+  try {
+    const { rows } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
+    const pl = (rows[0] && rows[0].payload) || {};
+    if (fields[F.opportunity] !== undefined) pl.opportunity = fields[F.opportunity];
+    if (currency) pl.currency = currency;
+    await pool.query('UPDATE ticketsmodule_procurement SET payload=$1, updated_at=NOW() WHERE id=$2', [pl, localId]);
+  } catch (e) { /* снимок необязателен */ }
+  return { ok: true };
 }
 
 // Редактирование заявки: базовые поля (название, источник, ответственный, вид закупки).
@@ -824,6 +860,7 @@ async function getItemDetail(localId) {
         approver: item[F.preApprover] || pl.apApprover || null,
         approvers,                       // список согласующих + их решения
         comment: item[F.preApproveComment] || '',
+        requestNote: pl.apRequestNote || '',
         approved: String(item[F.preApprove]) === APPROVE_YES,
         requested: !!pl.apRequested,
         decided: !!pl.apDecided,
@@ -863,7 +900,7 @@ async function uploadDoc(localId, fieldCode, filename, base64) {
       for (const uid of targets) {
         const tg = `💳 <b>Оплата закупки проведена</b>\n📋 ${esc(t)}\nПриложено подтверждение оплаты.\n<a href="${dashUrl()}">Открыть</a>`;
         const html = emailHtml({ title: 'Оплата закупки проведена', color: '#0e7c3f', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')]], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
-        await notifyPerson(uid, { reason: 'Оплата приложена', tgText: tg, subject: 'Оплата закупки проведена #' + ctx.itemId, html, itemId: ctx.itemId });
+        await notifyPerson(uid, { reason: 'Оплата приложена', tgText: tg, subject: mailSubject(ctx), html, itemId: ctx.itemId });
       }
     } catch (e) { /* уведомление best-effort */ }
   }
@@ -888,14 +925,13 @@ async function setApproval(localId, status, approverId, comment) {
   const decisions = Object.assign({}, pl.apDecisions);
   if (decider) decisions[decider] = { status: String(status), comment: comment || '', at: now, name: USERS[decider] || ('#' + decider) };
 
-  // Итог: достаточно согласования ЛЮБОГО из указанных — тогда закупка согласована.
-  // Отклонена — только если ВСЕ указанные отклонили. Пока никто не согласовал и
-  // кто-то ещё не решил — ждём.
+  // Итог: закупка согласована ТОЛЬКО когда согласовали ВСЕ указанные согласующие.
+  // Достаточно одного отказа — закупка отклонена. Пока не решили все — ждём.
   const list = approvers.length ? approvers : (decider ? [decider] : []);
-  const anyYes = list.some(id => decisions[id] && String(decisions[id].status) === APPROVE_YES);
-  const allDecided = list.length > 0 && list.every(id => decisions[id]);
-  const overallApproved = anyYes;
-  const overallRejected = !anyYes && allDecided;
+  const anyNo = list.some(id => decisions[id] && String(decisions[id].status) !== APPROVE_YES);
+  const allYes = list.length > 0 && list.every(id => decisions[id] && String(decisions[id].status) === APPROVE_YES);
+  const overallApproved = allYes && !anyNo;
+  const overallRejected = anyNo;
   const finalDecided = overallApproved || overallRejected;
   const pendingIds = list.filter(id => !decisions[id]);
 
@@ -937,13 +973,13 @@ async function setApproval(localId, status, approverId, comment) {
       const verdict = approved ? 'согласована' : 'отклонена';
       const tg = `${approved ? '✅' : '⛔'} <b>Закупка ${verdict}</b>\n📋 ${esc(t)}\n👥 ${esc(decisionLines)}\n<a href="${dashUrl()}">Открыть</a>`;
       const html = emailHtml({ title: `Закупка ${verdict}`, color: approved ? '#0e7c3f' : '#b91c1c', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ['Решения согласующих', decisionLines], ...(comment ? [['Последний комментарий', comment]] : [])], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
-      await notifyPerson(ctx.creatorBid, { reason: 'Решение по согласованию', tgText: tg, subject: `Закупка ${verdict} #${ctx.itemId}`, html, itemId: ctx.itemId });
+      await notifyPerson(ctx.creatorBid, { reason: 'Решение по согласованию', tgText: tg, subject: mailSubject(ctx), html, itemId: ctx.itemId });
     } else {
       // частичное согласование — сообщаем прогресс.
       const remain = pendingIds.map(id => USERS[id] || ('#' + id)).join(', ');
       const tg = `📝 <b>Промежуточное согласование</b>\n📋 ${esc(t)}\n👤 ${esc(myName)} — ${myYes ? 'согласовал' : 'решил'}${comment ? `: ${esc(comment)}` : ''}\n⏳ Ждём: ${esc(remain || '—')}\n<a href="${dashUrl()}">Открыть</a>`;
       const html = emailHtml({ title: 'Промежуточное согласование', color: '#d97706', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ['Решения', decisionLines], ['Ещё не решили', remain || '—']], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
-      await notifyPerson(ctx.creatorBid, { reason: 'Промежуточное согласование', tgText: tg, subject: `Согласование закупки #${ctx.itemId}: ${myName} — ${myYes ? 'да' : 'решение'}`, html, itemId: ctx.itemId });
+      await notifyPerson(ctx.creatorBid, { reason: 'Промежуточное согласование', tgText: tg, subject: mailSubject(ctx), html, itemId: ctx.itemId });
     }
   }
   // 2) если согласовано ВСЕМИ — передать бухгалтеру на оплату (назначенному или главбуху)
@@ -953,7 +989,7 @@ async function setApproval(localId, status, approverId, comment) {
       const tg = `💰 <b>Требуется оплата закупки</b>\n📋 ${esc(t)}\nЗакупка согласована. Счёт на оплату во вложении. Приложите «Подтверждение оплаты».\n<a href="${dashUrl()}">Открыть в дашборде</a>${ctx.itemUrl ? ` · <a href="${ctx.itemUrl}">в Битриксе</a>` : ''}`;
       const html = emailHtml({ title: 'Требуется оплата закупки', color: '#0f766e', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ...(ctx.dealId ? [['Сделка', '#' + ctx.dealId]] : [])], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
       const attachments = await slotAttachments(localId, 'invoice');
-      await notifyPerson(chief, { reason: 'Запрос оплаты', tgText: tg, subject: 'Требуется оплата закупки #' + ctx.itemId, html, itemId: ctx.itemId, attachments });
+      await notifyPerson(chief, { reason: 'Запрос оплаты', tgText: tg, subject: mailSubject(ctx), html, itemId: ctx.itemId, attachments });
     }
   }
   return { ok: true, approved, rejected: overallRejected, pending: !finalDecided, remaining: pendingIds.length };
@@ -972,8 +1008,10 @@ async function createRequest(payload, bitrixUserId) {
   payload.initiatorBid = bitrixUserId || payload.assigned || null;
 
   const fields = { categoryId: CATEGORY, opened: 'Y', title };
-  // Ответственный: выбранный в форме, иначе — текущий пользователь (менеджер склада).
-  const assigned = payload.assigned || bitrixUserId;
+  // Ответственный = ТОТ, КТО СОЗДАЛ заявку в ЦУП (его Bitrix-id). Раньше по
+  // умолчанию проставлялся менеджер склада (Нурмаганбетов) — это неверно.
+  // Если аккаунт дашборда не привязан к Bitrix — берём выбранного в форме.
+  const assigned = bitrixUserId || payload.assigned;
   if (assigned) fields[F.assigned] = assigned;
   // Источник: выбранный в форме, иначе — «Внутренний запрос».
   const source = payload.source || meta.internalSourceId;
@@ -1049,7 +1087,7 @@ async function autoCreateFromService(serviceItemId) {
   await ensureSchema();
   const { result } = await b24('crm.item.get', { entityTypeId: SERVICE_ENTITY, id: serviceItemId });
   const item = (result && result.item) || {};
-  if (item.stageId !== SERVICE_FINAL_STAGE) return { skipped: 'stage', stage: item.stageId };
+  if (!SERVICE_TRIGGER_STAGES.includes(item.stageId)) return { skipped: 'stage', stage: item.stageId };
   if (!fileNonEmpty(item[SERVICE_DOPY_FIELD])) return { skipped: 'no-dopy' };
   // дедуп
   const { rows: ex } = await pool.query('SELECT id FROM ticketsmodule_procurement WHERE source_item_id=$1', [serviceItemId]);
@@ -1083,12 +1121,46 @@ async function autoCreateFromService(serviceItemId) {
       const { notifyPerson, emailHtml } = require('./procurement-notify');
       const tg = `🆕 <b>Авто-заявка на закуп допов</b>\n📋 ${esc(payload.title)}${dealId ? `\n🔗 Сделка #${dealId}` : ''}\nСоздана из завершённого подбора. Файлы допов внутри.\n<a href="${dashUrl()}">Открыть в дашборде</a>`;
       const html = emailHtml({ title: 'Авто-заявка на закуп допов', color: '#7c3aed', lines: [['Заявка', '#' + out.bitrixItemId + ' — ' + payload.title], ...(dealId ? [['Сделка', '#' + dealId]] : [])], itemUrl: out.itemUrl, dashUrl: dashUrl() });
-      await notifyPerson(wm, { reason: 'Авто-заявка из подбора', tgText: tg, subject: 'Авто-заявка на закуп допов #' + out.bitrixItemId, html, itemId: out.bitrixItemId });
+      await notifyPerson(wm, { reason: 'Авто-заявка из подбора', tgText: tg, subject: mailSubject({ itemId: out.bitrixItemId, title: out.title }), html, itemId: out.bitrixItemId });
     }
   } catch (e) { /* best-effort */ }
 
   console.log(`🆕 procurement: авто-заявка #${out.bitrixItemId} из подбора 1058 #${serviceItemId}`);
   return { created: true, ...out };
+}
+
+// ── Fallback-поллинг: если вебхук из Bitrix не доходит (напр. привязан к старому
+// домену), периодически сами сканируем 1058 на триггер-стадиях с файлом подбора и
+// до-создаём недостающие закупки. Дедуп по source_item_id делает это безопасным.
+async function scanServiceForAutoCreate() {
+  await ensureSchema();
+  let created = 0, checked = 0;
+  try {
+    for (const stage of SERVICE_TRIGGER_STAGES) {
+      let start = 0, guard = 0;
+      while (guard++ < 40) {
+        const { result } = await b24('crm.item.list', {
+          entityTypeId: SERVICE_ENTITY,
+          filter: { stageId: stage },
+          select: ['id', 'stageId', SERVICE_DOPY_FIELD], start,
+        });
+        const items = (result && result.items) || [];
+        for (const it of items) {
+          if (!fileNonEmpty(it[SERVICE_DOPY_FIELD])) continue;
+          checked++;
+          const { rows } = await pool.query('SELECT id FROM ticketsmodule_procurement WHERE source_item_id=$1', [it.id]);
+          if (rows.length) continue; // уже создана
+          try { const r = await autoCreateFromService(it.id); if (r && r.created) created++; }
+          catch (e) { console.error('scanServiceForAutoCreate item', it.id, e.message); }
+        }
+        const total = result && result.total; start += items.length;
+        if (!items.length || (total != null && start >= total) || items.length < 50) break;
+        if (start > 3000) break;
+      }
+    }
+    if (created) console.log(`procurement scan: авто-создано закупок — ${created}`);
+  } catch (e) { console.error('scanServiceForAutoCreate error:', e.message); }
+  return { created, checked };
 }
 
 // ── Файлы документов (множественные, локальный источник правды) ──────────────
@@ -1261,7 +1333,7 @@ async function notifyFilesChanged(localId, slot, attachments, opts = {}) {
     for (const uid of targets) {
       const tg = `📎 <b>Документ обновлён: «${esc(label)}»</b>\n📋 ${esc(t)}\nДобавлено файлов: ${attachments.length} (во вложении):\n${esc(names)}${byLine}\n<a href="${dashUrl()}">Открыть</a>`;
       const html = emailHtml({ title: `Документ обновлён: «${label}»`, color: '#7c3aed', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ['Документ', label], ['Файлы', names], ['Количество', String(attachments.length)], ...(byName ? [['Приложил', byName]] : []), ['Когда', whenStr]], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
-      await notifyPerson(uid, { reason: 'Документ обновлён', tgText: tg, subject: `Документ обновлён: ${label} · закупка #${ctx.itemId}`, html, itemId: ctx.itemId, attachments });
+      await notifyPerson(uid, { reason: 'Документ обновлён', tgText: tg, subject: mailSubject(ctx), html, itemId: ctx.itemId, attachments });
     }
   } catch (e) { /* best-effort */ }
 }
@@ -1280,7 +1352,7 @@ async function notifyRollback(localId, fromLabel, toLabel, reason, byName) {
     for (const uid of targets) {
       const tg = `↩ <b>Откат стадии закупки</b>\n📋 ${esc(t)}\n${esc(fromLabel)} → ${esc(toLabel)}${byName ? ` · ${esc(byName)}` : ''}\n💬 Причина: ${esc(reason || '—')}\n<a href="${dashUrl()}">Открыть</a>`;
       const html = emailHtml({ title: 'Откат стадии закупки', color: '#d97706', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ['Откат', fromLabel + ' → ' + toLabel], ...(byName ? [['Кто', byName]] : []), ['Причина', reason || '—']], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
-      await notifyPerson(uid, { reason: 'Откат стадии', tgText: tg, subject: `Откат стадии закупки #${ctx.itemId}`, html, itemId: ctx.itemId });
+      await notifyPerson(uid, { reason: 'Откат стадии', tgText: tg, subject: mailSubject(ctx), html, itemId: ctx.itemId });
     }
   } catch (e) { /* best-effort */ }
 }
@@ -1300,7 +1372,7 @@ async function notifyPaymentDone(localId, byBid) {
     for (const uid of targets) {
       const tg = `💳 <b>Оплата закупки проведена</b>\n📋 ${esc(t)}\nПриложено подтверждение оплаты${hasPoa ? ' и доверенность' : ''} (во вложении).${byName ? `\n👤 Провёл: ${esc(byName)} · ${esc(whenStr)}` : `\n🕒 ${esc(whenStr)}`}\n<a href="${dashUrl()}">Открыть</a>`;
       const html = emailHtml({ title: 'Оплата закупки проведена', color: '#0e7c3f', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ['Вложения', hasPoa ? 'подтверждение оплаты + доверенность' : 'подтверждение оплаты'], ...(byName ? [['Провёл оплату', byName]] : []), ['Когда', whenStr]], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
-      await notifyPerson(uid, { reason: 'Оплата приложена', tgText: tg, subject: 'Оплата закупки проведена #' + ctx.itemId, html, itemId: ctx.itemId, attachments });
+      await notifyPerson(uid, { reason: 'Оплата приложена', tgText: tg, subject: mailSubject(ctx), html, itemId: ctx.itemId, attachments });
     }
   } catch (e) { /* best-effort */ }
 }
@@ -1406,7 +1478,7 @@ async function setFullyReceived(localId, value, byBid) {
       for (const uid of targets) {
         const tg = `📦 <b>Товар принят полностью</b>\n📋 ${esc(t)}\nЗакупка завершена — товар получен (накладная и гарантийный сертификат во вложении).\n<a href="${dashUrl()}">Открыть</a>`;
         const html = emailHtml({ title: 'Товар принят полностью', color: '#0e7c3f', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ...(ctx.dealId ? [['Сделка', '#' + ctx.dealId]] : [])], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
-        await notifyPerson(uid, { reason: 'Товар принят', tgText: tg, subject: 'Товар принят #' + ctx.itemId, html, itemId: ctx.itemId, attachments });
+        await notifyPerson(uid, { reason: 'Товар принят', tgText: tg, subject: mailSubject(ctx), html, itemId: ctx.itemId, attachments });
       }
     } catch (e) { /* уведомление best-effort */ }
   }
@@ -1544,4 +1616,4 @@ async function pendingActionsFor(bid) {
   return { count: items.length, items };
 }
 
-module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, listDeletions, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, autoCreateFromService, pendingActionsFor, itemUrl, dealUrl };
+module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, listDeletions, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, setAmount, autoCreateFromService, scanServiceForAutoCreate, pendingActionsFor, itemUrl, dealUrl };

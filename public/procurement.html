@@ -316,10 +316,7 @@ function createCardHtml(){
       <label class="fl">Вид закупки <span class="req">*</span></label>
       <select id="vidZakupki">${opt(META.options.vidZakupki,'— выберите —')}</select>
       ${vidWarn}
-      <div class="row2">
-        <div><label class="fl">Сумма закупки <span class="req">*</span></label><input id="opportunity" type="number" min="0" step="any" inputmode="decimal" placeholder="0"></div>
-        <div><label class="fl">Валюта</label><select id="currency">${curOpts}</select></div>
-      </div>
+      <div class="hint" style="margin-top:4px">Сумму закупки укажешь на этапе «Запрос счёта на оплату» — когда приложишь счёт.</div>
       <div class="msg" id="msg"></div>
       <button class="btn btn-p" id="createBtn" style="margin-top:14px;width:100%;justify-content:center" onclick="submitReq()">Создать заявку</button>
     </div>`;
@@ -523,7 +520,25 @@ function rowHtml(r){
     <td>${r.itemUrl?`<a class="lnk" href="${esc(r.itemUrl)}" target="_blank" onclick="event.stopPropagation()">↗</a>`:''}</td>
   </tr>`;
 }
-async function reloadList(){ const l=await fetch('/api/procurement/list'); LIST=(await l.json()).items||[]; render(); }
+async function reloadList(){ const l=await fetch('/api/procurement/list'); LIST=(await l.json()).items||[]; _pollSig=listSig(LIST); render(); }
+// ── Автообновление статусов ────────────────────────────────────────────────
+// Пока пользователь смотрит заявку/сделку, кто-то другой мог сменить стадию.
+// Тихо опрашиваем список раз в 20с и, если что-то изменилось, перерисовываем
+// (в режиме просмотра заявки заодно перезагрузится её детальная карточка).
+// В режиме заполнения новой заявки НЕ трогаем — чтобы не стереть форму.
+let _pollSig='';
+function listSig(items){ return (items||[]).map(r=>r.id+':'+(r.stageId||'')+':'+(r.stepIndex!=null?r.stepIndex:'')+':'+(r.updatedAt||'')).join('|'); }
+async function pollRefresh(){
+  if(document.visibilityState!=='visible') return;
+  if(MODE==='create') return;
+  try{
+    const j=await (await fetch('/api/procurement/list')).json();
+    const items=j.items||[]; const sig=listSig(items);
+    if(sig!==_pollSig){ _pollSig=sig; LIST=items; render(); }
+  }catch(e){/* тихо */}
+}
+setInterval(pollRefresh, 20000);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') pollRefresh(); });
 async function moveStep(id,stageKey,reason){
   const r0=LIST.find(x=>x.id===id)||{}; const flow=META.flow||[];
   const curIdx=(r0.stepIndex!=null)?r0.stepIndex:-1;
@@ -647,11 +662,13 @@ function approvalHtml(id,d){
     <label class="fl">Согласующий(ие)</label>
     <div id="apprRows-${id}">${approverRowHtml(firstSel)}</div>
     <button class="btn" style="width:100%;justify-content:center;margin-bottom:6px" onclick="addApprover(${id})">＋ Ещё согласующий</button>
-    <div class="hint" style="margin-bottom:8px">Можно указать нескольких — достаточно, чтобы согласовал любой из них.</div>
+    <label class="fl">Комментарий согласующим</label>
+    <textarea id="apnote-${id}" placeholder="необязательно — например, обоснование закупки" style="margin-bottom:8px">${esc(d.approval&&d.approval.requestNote||'')}</textarea>
+    <div class="hint" style="margin-bottom:8px">Можно указать нескольких — закупка перейдёт к оплате только когда согласуют <b>все</b> указанные.</div>
     <button class="btn btn-p" style="width:100%;justify-content:center" onclick="sendApproval(${id})">📨 ${ap.requested?'Отправить повторно':'Отправить на согласование'}</button>`;
   // Блок согласующего: решение + комментарий (кнопки согласовать/отклонить)
   const approverBlock=`
-    <div class="hint" style="margin-bottom:8px">Требуется ваше решение по этой закупке.${apprs.length>1?` Согласующих: ${apprs.length} — достаточно согласования любого.`:''}</div>
+    <div class="hint" style="margin-bottom:8px">Требуется ваше решение по этой закупке.${apprs.length>1?` Согласующих: ${apprs.length} — нужно решение <b>всех</b>.`:''}${d.approval&&d.approval.requestNote?`<br>💬 Инициатор: ${esc(d.approval.requestNote)}`:''}</div>
     <label class="fl">Комментарий</label><textarea id="apcm-${id}" placeholder="необязательно">${esc(mine&&mine.comment||'')}</textarea>
     <div style="display:flex;gap:8px;margin-top:10px">
       <button class="btn" style="flex:1;justify-content:center;border-color:var(--good);color:var(--good)" onclick="decide(${id},'${YES}')">✓ Согласовать</button>
@@ -719,7 +736,24 @@ function renderDetail(id,d){
   const curKey=(ci>=0&&ci<flow.length)?flow[ci].key:null;
   let hdr='Дальнейшее действие', html='';
   if(curKey==='new'){ hdr='Заявка создана'; html='<div class="hint">Запроси счёт и двигай на «Запрос счёта на оплату».</div>'; }
-  else if(curKey==='invoice'){ hdr='Запрос счёта на оплату'; html=filesSlotHtml(id,d,'invoice')+`<div class="hint" style="margin-top:6px">Приложи счёт (Invoice) — заявка сама уйдёт на «Договор». Можно несколько файлов.</div>`; }
+  else if(curKey==='invoice'){
+    hdr='Запрос счёта на оплату';
+    const rr=LIST.find(x=>x.id===id)||{};
+    const curSum=(rr.opportunity!=null?rr.opportunity:'');
+    const curCur=(rr.currency||'KZT');
+    const curOptsInv=(META.currencies||[{id:'KZT'}]).map(c=>`<option value="${esc(c.id)}" ${String(c.id)===String(curCur)?'selected':''}>${esc(c.id)}</option>`).join('');
+    const amountBlock=`<div style="margin-bottom:12px;padding:12px;border:1px solid var(--border2);border-radius:12px;background:var(--bg)">
+      <label class="fl">Сумма закупки <span class="req">*</span></label>
+      <div class="row2">
+        <input id="inv-amt-${id}" type="number" min="0" step="any" inputmode="decimal" placeholder="0" value="${esc(curSum)}">
+        <select id="inv-cur-${id}">${curOptsInv}</select>
+      </div>
+      <button class="btn" style="margin-top:8px;width:100%;justify-content:center" onclick="saveAmount(${id})">💾 Сохранить сумму</button>
+      <span class="msg" id="inv-amt-msg-${id}"></span>
+      <div class="hint" style="margin-top:6px">Укажи сумму по счёту и сохрани — затем приложи счёт (Invoice), и заявка уйдёт на «Договор».</div>
+    </div>`;
+    html=amountBlock+filesSlotHtml(id,d,'invoice');
+  }
   else if(curKey==='contract'){ hdr='Договор'; html='<div class="hint">Договор — по необходимости. Двигай на «Согласование закупки».</div>'; }
   else if(curKey==='approve'){ hdr='Согласование закупки'; html=approvalHtml(id,d); }
   else if(curKey==='payment'){
@@ -755,7 +789,18 @@ async function postFile(id,slot,file,meta){
 // Простые слоты (счёт/оплата/доверенность/гарантийный). Авто-переход: первый счёт
 // → «Договор», первое подтверждение оплаты → «Ожидание товара». Остальное — без перехода.
 async function addSimpleFile(id,slot,input){
-  const files=input.files?Array.from(input.files):[]; if(!files.length)return; input.disabled=true;
+  const files=input.files?Array.from(input.files):[]; if(!files.length)return;
+  // Счёт нельзя приложить без суммы закупки — просим указать её на этом шаге.
+  if(slot==='invoice'){
+    const rr=LIST.find(x=>x.id===id)||{};
+    const amtEl=document.getElementById('inv-amt-'+id);
+    const typed=amtEl?Number(amtEl.value):NaN;
+    if(!(rr.opportunity>0)){
+      if(typed>0){ if(!(await saveAmount(id,true))){ input.value=''; return; } }
+      else { alert('Сначала укажите и сохраните сумму закупки.'); if(amtEl) amtEl.focus(); input.value=''; return; }
+    }
+  }
+  input.disabled=true;
   try{
     const payload=[];
     for(const f of files){ if(f.size>25*1024*1024){alert('Файл «'+f.name+'» больше 25 МБ — пропущен.');continue;} payload.push({filename:f.name,mime:f.type||'',base64:await fileToB64(f)}); }
@@ -822,9 +867,10 @@ async function sendApproval(id){
   const sels=box?[...box.querySelectorAll('.apprSel')]:[];
   const ids=[...new Set(sels.map(s=>s.value).filter(Boolean))];
   if(!ids.length){alert('Выберите хотя бы одного согласующего');return;}
-  if(ids.length>1 && !confirm('Отправить на согласование '+ids.length+' согласующим?\nДостаточно, чтобы согласовал любой из них.'))return;
+  if(ids.length>1 && !confirm('Отправить на согласование '+ids.length+' согласующим?\nЗакупка перейдёт к оплате только когда согласуют ВСЕ указанные.'))return;
+  const noteEl=document.getElementById('apnote-'+id); const note=noteEl?noteEl.value.trim():'';
   try{
-    const r=await fetch('/api/procurement/'+id+'/request-approval',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({approverIds:ids})});
+    const r=await fetch('/api/procurement/'+id+'/request-approval',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({approverIds:ids,note})});
     const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка');return;}
     await reloadList(); // покажет статус «На согласовании»
   }catch(e){alert('Ошибка: '+e.message);}
@@ -841,6 +887,20 @@ async function decide(id,status){
     if(d.approved){ await moveStep(id,'payment'); }
     else { if(d.pending) alert('Ваше решение учтено. Ждём остальных согласующих ('+(d.remaining||0)+').'); await reloadList(); }
   }catch(e){alert('Ошибка: '+e.message);}
+}
+// Сохранить сумму закупки (2 этап). silent=true — без alert (вызов из addSimpleFile).
+async function saveAmount(id, silent){
+  const amtEl=document.getElementById('inv-amt-'+id), curEl=document.getElementById('inv-cur-'+id);
+  const msg=document.getElementById('inv-amt-msg-'+id);
+  const opp=amtEl?Number(amtEl.value):NaN;
+  if(!(opp>0)){ if(msg){msg.className='msg err';msg.textContent='Укажите сумму > 0';} if(!silent)alert('Укажите сумму закупки больше 0.'); return false; }
+  try{
+    const r=await fetch('/api/procurement/'+id+'/amount',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({opportunity:opp,currency:(curEl&&curEl.value)||'KZT'})});
+    const d=await r.json(); if(!r.ok){ if(msg){msg.className='msg err';msg.textContent=d.error||'Ошибка';} if(!silent)alert(d.error||'Ошибка'); return false; }
+    const rr=LIST.find(x=>x.id===id); if(rr){ rr.opportunity=opp; rr.currency=(curEl&&curEl.value)||'KZT'; }
+    if(msg){msg.className='msg ok';msg.textContent='Сумма сохранена';}
+    return true;
+  }catch(e){ if(!silent)alert('Ошибка: '+e.message); return false; }
 }
 async function saveAccountant(id){
   const bid=document.getElementById('acctSel').value;
@@ -942,13 +1002,12 @@ async function submitReq(){
   const vid=document.getElementById('vidZakupki').value;
   if(META.required.vidZakupki && !vid){ msg.className='msg err'; msg.textContent='Заполните обязательное поле «Вид закупки».'; return; }
   const val=id=>{const el=document.getElementById(id);return el?el.value.trim():'';};
-  const opp=val('opportunity');
-  if(opp===''||!(Number(opp)>0)){ msg.className='msg err'; msg.textContent='Заполните обязательное поле «Сумма закупки».'; return; }
+  // Сумма закупки больше не спрашивается на 1 этапе — её укажут при запросе счёта.
   const payload={
     dealId:DEAL?DEAL.id:null,
     companyId:(COMPANY&&COMPANY.id)||null, companyName:(COMPANY&&COMPANY.title)||'', bin:(val('bin').replace(/\D/g,''))||'',
     title:val('title'), source:val('source'), assigned:val('assigned'),
-    vidZakupki:vid, opportunity:Number(opp), currency:val('currency')||'KZT',
+    vidZakupki:vid,
   };
   const btn=document.getElementById('createBtn'); btn.disabled=true; btn.textContent='Создаю…';
   try{
