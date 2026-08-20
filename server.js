@@ -127,6 +127,7 @@ app.get('/contracts.html', requireModule('CONTR'), (_, res) => res.sendFile(path
 app.get('/logistics.html', requireModule('LOG'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'logistics.html')));
 app.get('/operational.html', requireModule('OPS'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'operational.html')));
 app.get('/procurement.html', requireModule('PROC'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'procurement.html')));
+app.get('/campaigns.html', requireModule('CAM'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'campaigns.html')));
 app.get('/cup-admin.html', requirePageAuth(['admin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'cup-admin.html')));
 app.get('/account.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'account.html')));
 // `index:false` — without this, static would auto-serve public/index.html
@@ -148,6 +149,7 @@ app.use('/api/contracts', require('./routes/contracts-routes').router);
 app.use('/api/logistics', require('./routes/logistics-routes').router);
 app.use('/api/operational', require('./routes/operational-routes').router);
 app.use('/api/procurement', require('./routes/procurement-routes').router);
+app.use('/api/campaigns', require('./routes/campaigns-routes').router);
 app.use('/api/notify', require('./routes/notify-routes').router);
 const { router: relationsRouter, handleBitrixWebhook } = require('./routes/relations-routes');
 app.use('/relations', relationsRouter);

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProLabSupport - Рассылки</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#14171d;--bg2:#20242e;--card:#1b1f27;--border:#2a2f3a;--border2:#363c49;
+  --text:#eef0f3;--text-2:#c3c9d3;--text-3:#8b93a3;--text-4:#616a78;
+  --accent:#e5544a;--accent-h:#d94737;--brand:#4098e6;--brand-l:rgba(64,152,230,.15);
+  --good:#3ddc84;--good-l:rgba(61,220,132,.14);--warn:#e0a940;--bad:#ef5a6a;--bad-l:rgba(239,90,106,.14);
+  --signal:#35d0c0;--radius:12px;--font:'Inter',system-ui,sans-serif;
+  --shadow:0 4px 16px rgba(0,0,0,.5);
+}
+html[data-theme="light"]{
+  --bg:#f5f6fa;--bg2:#eef0f7;--card:#fff;--border:#e3e6ef;--border2:#d0d4e4;
+  --text:#111827;--text-2:#374151;--text-3:#6b7280;--text-4:#9ca3af;
+  --accent:#C53B2F;--accent-h:#a83226;--brand:#2563eb;--brand-l:rgba(37,99,235,.08);
+  --good:#059669;--good-l:rgba(5,150,105,.08);--warn:#d97706;--bad:#dc2626;--bad-l:rgba(220,38,38,.08);
+  --signal:#0f766e;--shadow:0 4px 16px rgba(0,0,0,.08);
+}
+body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased}
+.header{background:var(--card);border-bottom:1px solid var(--border);height:56px;display:flex;align-items:center;padding:0 20px;position:sticky;top:0;z-index:100;gap:12px}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14px}
+.logo img{height:24px}
+.hbtn{font-size:12.5px;color:var(--text-3);text-decoration:none;border:1px solid var(--border2);padding:6px 12px;border-radius:8px;background:transparent;cursor:pointer;font-family:var(--font)}
+.hbtn:hover{border-color:var(--accent);color:var(--accent)}
+.hsub{font-size:13.5px;color:var(--text-3);font-weight:500}
+.hr{margin-left:auto;display:flex;gap:8px;align-items:center}
+.wrap{display:grid;grid-template-columns:260px 1fr 420px;gap:16px;padding:16px;height:calc(100vh - 56px)}
+@media(max-width:1100px){.wrap{grid-template-columns:1fr;height:auto}}
+.col{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.col-h{padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.col-b{overflow:auto;flex:1;min-height:0}
+.ind{padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.ind:hover{background:var(--bg2)}
+.ind.on{background:var(--brand-l);color:var(--brand)}
+.ind .n{font-weight:600;font-size:13px}
+.ind .c{font-size:11px;color:var(--text-3);white-space:nowrap}
+.comp{border-bottom:1px solid var(--border)}
+.comp-h{padding:9px 14px;display:flex;align-items:center;gap:8px;cursor:pointer}
+.comp-h:hover{background:var(--bg2)}
+.comp-t{font-weight:600;font-size:13px;flex:1}
+.comp-cnt{font-size:11px;color:var(--text-3)}
+.emails{padding:2px 14px 8px 34px;display:none}
+.emails.open{display:block}
+.em{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px}
+.em label{cursor:pointer;color:var(--text-2);word-break:break-all}
+.em .src{font-size:10px;color:var(--text-4);border:1px solid var(--border2);border-radius:4px;padding:0 5px}
+input[type=checkbox]{width:15px;height:15px;accent-color:var(--brand);cursor:pointer}
+.fl{display:block;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 5px}
+input[type=text],textarea,select{width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:var(--font);outline:none}
+textarea{min-height:180px;resize:vertical;line-height:1.5}
+input:focus,textarea:focus,select:focus{border-color:var(--brand)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--text-2);font-family:var(--font)}
+.btn:hover{background:var(--bg2)}
+.btn-p{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-p:hover{background:var(--accent-h)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.pad{padding:14px}
+.msg{font-size:12.5px;margin-top:8px}
+.msg.ok{color:var(--good)}.msg.err{color:var(--bad)}
+.hint{font-size:12px;color:var(--text-3);line-height:1.5}
+.selbar{padding:8px 14px;border-top:1px solid var(--border);font-size:12.5px;color:var(--text-2);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.pill{font-size:11px;font-weight:700;border-radius:6px;padding:2px 8px}
+.pill.draft{background:var(--bg2);color:var(--text-3)}
+.pill.sending{background:var(--brand-l);color:var(--brand)}
+.pill.sent{background:var(--good-l);color:var(--good)}
+.pill.failed{background:var(--bad-l);color:var(--bad)}
+.camp{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;align-items:center;cursor:pointer}
+.camp:hover{background:var(--bg2)}
+.tabbar{display:flex;gap:4px;padding:8px 14px;border-bottom:1px solid var(--border)}
+.tab{padding:6px 12px;border-radius:7px;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--text-3);border:none;background:transparent;font-family:var(--font)}
+.tab.on{background:var(--brand-l);color:var(--brand)}
+.searchbox{padding:8px 14px;border-bottom:1px solid var(--border)}
+.warnbar{margin:0 14px 12px;padding:9px 12px;border:1px solid var(--warn);background:rgba(224,169,64,.12);border-radius:8px;font-size:12px;color:var(--warn)}
+</style>
+</head>
+<body>
+<header class="header">
+  <a href="/" class="logo" style="text-decoration:none;color:inherit"><img src="/assets/logo-icon.png" alt="">ProLabSupport</a>
+  <a href="/" class="hbtn">← Все модули</a>
+  <span class="hsub">Рассылки</span>
+  <div class="hr">
+    <button class="hbtn" onclick="syncAudience()" id="syncBtn">⟳ Синхронизировать базу</button>
+    <button class="hbtn" onclick="logout()">Выйти</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- Industries -->
+  <div class="col">
+    <div class="col-h">Сферы <span id="lastSync" class="hint"></span></div>
+    <div class="col-b" id="indList"><div class="pad hint">Загрузка…</div></div>
+  </div>
+
+  <!-- Companies + emails -->
+  <div class="col">
+    <div class="col-h"><span id="compTitle">Компании</span>
+      <span><button class="btn" style="padding:5px 9px" onclick="selectAllVisible(true)">Выбрать все</button>
+      <button class="btn" style="padding:5px 9px" onclick="selectAllVisible(false)">Снять</button></span></div>
+    <div class="searchbox"><input type="text" id="compSearch" placeholder="Поиск компании…" oninput="renderCompanies()"></div>
+    <div class="col-b" id="compList"><div class="pad hint">Выбери сферу слева.</div></div>
+    <div class="selbar"><span>Выбрано адресов: <b id="selCount">0</b></span></div>
+  </div>
+
+  <!-- Editor + history -->
+  <div class="col">
+    <div class="tabbar"><button class="tab on" id="tabEdit" onclick="showTab('edit')">✍ Письмо</button><button class="tab" id="tabHist" onclick="showTab('hist')">📜 История</button></div>
+    <div class="col-b">
+      <div id="paneEdit" class="pad">
+        <div class="warnbar" id="domWarn" style="display:none"></div>
+        <label class="fl">Название кампании (для себя)</label>
+        <input type="text" id="cName" placeholder="Напр.: Выставка LABTEST 2026">
+        <label class="fl">Тема письма</label>
+        <input type="text" id="cSubject" placeholder="Напр.: Приглашаем на стенд ProLabSupport">
+        <label class="fl">От кого (имя отправителя)</label>
+        <input type="text" id="cFrom" placeholder="ProLabSupport">
+        <label class="fl">Текст письма (HTML, можно подстановку {{Компания}})</label>
+        <textarea id="cBody" placeholder="Здравствуйте, {{Компания}}!&#10;&#10;Рады сообщить…"></textarea>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <button class="btn" onclick="preview()">👁 Предпросмотр</button>
+          <button class="btn" onclick="loadTemplate()">Шаблон</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button class="btn" onclick="saveDraft()">💾 Сохранить черновик</button>
+          <button class="btn btn-p" onclick="sendNow()">📨 Отправить выбранным (<span id="sendN">0</span>)</button>
+        </div>
+        <div class="msg" id="editMsg"></div>
+        <div id="previewBox" style="margin-top:14px"></div>
+      </div>
+      <div id="paneHist" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let ME=null, INDUSTRIES=[], CUR_IND=null, COMPANIES=[], SELECTED=new Set(), CUR_CAMP=null;
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+async function api(u,o){const r=await fetch(u,o);let d={};try{d=await r.json()}catch(e){}return{ok:r.ok,d}}
+
+async function boot(){
+  const r=await fetch('/auth/me'); if(!r.ok){location.href='/login.html';return;}
+  ME=(await r.json()).user;
+  await loadIndustries(); loadHistory();
+  document.getElementById('domWarn').style.display='block';
+  document.getElementById('domWarn').textContent='⚠ Перед реальной отправкой заведи отдельный поддомен для рассылок и подтверди его в Resend (SPF/DKIM/DMARC), затем пропиши CAMPAIGN_FROM в окружении. Иначе письма уйдут в спам или не отправятся.';
+}
+async function loadIndustries(){
+  const {ok,d}=await api('/api/campaigns/industries');
+  const box=document.getElementById('indList');
+  if(!ok){box.innerHTML='<div class="pad hint">Ошибка загрузки</div>';return;}
+  INDUSTRIES=d.industries||[];
+  document.getElementById('lastSync').textContent=d.lastSync?('обновлено '+new Date(d.lastSync).toLocaleDateString('ru')):(d.syncing?'синхронизация…':'не синхронизировано');
+  if(!INDUSTRIES.length){ box.innerHTML='<div class="pad hint">База пуста. Нажми «Синхронизировать базу» вверху — подтянем компании и e-mail из Битрикса.</div>'; return; }
+  box.innerHTML=INDUSTRIES.map(i=>`<div class="ind ${CUR_IND===i.id?'on':''}" onclick="pickIndustry('${esc(i.id)}')"><div><div class="n">${esc(i.name)}</div><div class="c">${i.companies} компаний</div></div><div class="c">${i.emails} e-mail</div></div>`).join('');
+}
+async function pickIndustry(id){
+  CUR_IND=id; loadIndustries();
+  const {ok,d}=await api('/api/campaigns/companies?industry='+encodeURIComponent(id));
+  COMPANIES=(ok&&d.companies)||[];
+  document.getElementById('compTitle').textContent=(INDUSTRIES.find(x=>x.id===id)||{}).name||'Компании';
+  renderCompanies();
+}
+function renderCompanies(){
+  const q=(document.getElementById('compSearch').value||'').toLowerCase();
+  const box=document.getElementById('compList');
+  const list=COMPANIES.filter(c=>!q||c.name.toLowerCase().includes(q));
+  if(!list.length){box.innerHTML='<div class="pad hint">Нет компаний.</div>';return;}
+  box.innerHTML=list.map((c,idx)=>{
+    const emails=(c.emails||[]);
+    const rows=emails.map(e=>`<div class="em"><input type="checkbox" ${SELECTED.has(e.email)?'checked':''} onchange="toggleEmail('${esc(e.email)}',this.checked)"><label>${esc(e.email)}${e.name?` <span class="src">${esc(e.name)}</span>`:''} <span class="src">${e.source==='contact'?'контакт':'компания'}</span></label></div>`).join('');
+    return `<div class="comp"><div class="comp-h" onclick="toggleComp(${idx})"><input type="checkbox" onclick="event.stopPropagation()" ${emails.every(e=>SELECTED.has(e.email))&&emails.length?'checked':''} onchange="toggleCompany(${idx},this.checked)"><div class="comp-t">${esc(c.name)}</div><span class="comp-cnt">${emails.length} e-mail</span></div><div class="emails" id="em-${idx}">${rows||'<div class="hint">нет адресов</div>'}</div></div>`;
+  }).join('');
+  updateSel();
+}
+function toggleComp(idx){const el=document.getElementById('em-'+idx);if(el)el.classList.toggle('open');}
+function toggleEmail(email,on){if(on)SELECTED.add(email);else SELECTED.delete(email);updateSel();}
+function toggleCompany(idx,on){const c=COMPANIES.filter(cc=>{const q=(document.getElementById('compSearch').value||'').toLowerCase();return !q||cc.name.toLowerCase().includes(q)})[idx];if(!c)return;(c.emails||[]).forEach(e=>{if(on)SELECTED.add(e.email);else SELECTED.delete(e.email)});renderCompanies();}
+function selectAllVisible(on){const q=(document.getElementById('compSearch').value||'').toLowerCase();COMPANIES.filter(c=>!q||c.name.toLowerCase().includes(q)).forEach(c=>(c.emails||[]).forEach(e=>{if(on)SELECTED.add(e.email);else SELECTED.delete(e.email)}));renderCompanies();}
+function updateSel(){document.getElementById('selCount').textContent=SELECTED.size;document.getElementById('sendN').textContent=SELECTED.size;}
+
+async function syncAudience(){
+  const b=document.getElementById('syncBtn'); b.disabled=true; b.textContent='Синхронизирую…';
+  await api('/api/campaigns/sync',{method:'POST'});
+  setTimeout(async()=>{ await loadIndustries(); b.disabled=false; b.textContent='⟳ Синхронизировать базу'; alert('Синхронизация запущена. Это может занять минуту-две — обнови сферы позже кнопкой ещё раз.'); },1500);
+}
+
+function loadTemplate(){
+  document.getElementById('cBody').value=
+`<p>Здравствуйте, {{Компания}}!</p>
+<p>Приглашаем вас ознакомиться с новинками ProLabSupport…</p>
+<p>С уважением,<br>Команда ProLabSupport</p>`;
+}
+function preview(){
+  const html=(document.getElementById('cBody').value||'').replace(/\{\{\s*Компания\s*\}\}/gi,'<b>Название компании</b>');
+  document.getElementById('previewBox').innerHTML=`<div class="fl">Предпросмотр</div><div style="border:1px solid var(--border2);border-radius:10px;padding:14px;background:var(--bg)">${html}<hr style="border:none;border-top:1px solid var(--border);margin:16px 0"><div class="hint">ProLabSupport · <a href="#" onclick="return false">Отписаться</a></div></div>`;
+}
+async function saveDraft(){
+  const payload={name:val('cName'),subject:val('cSubject'),fromName:val('cFrom'),bodyHtml:document.getElementById('cBody').value};
+  if(!payload.subject||!payload.bodyHtml){msg('Заполни тему и текст письма','err');return null;}
+  let id=CUR_CAMP;
+  if(id){ await api('/api/campaigns/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); }
+  else { const {ok,d}=await api('/api/campaigns',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); if(!ok){msg(d.error||'Ошибка','err');return null;} id=d.id; CUR_CAMP=id; }
+  msg('Черновик сохранён','ok'); loadHistory(); return id;
+}
+async function sendNow(){
+  if(!SELECTED.size){msg('Не выбраны получатели','err');return;}
+  if(!confirm('Отправить рассылку на '+SELECTED.size+' адресов?\nПеред массовой отправкой убедись, что поддомен для рассылок настроен (SPF/DKIM/DMARC).'))return;
+  const id=await saveDraft(); if(!id)return;
+  const r1=await api('/api/campaigns/'+id+'/recipients',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({emails:[...SELECTED]})});
+  if(!r1.ok){msg(r1.d.error||'Ошибка получателей','err');return;}
+  const r2=await api('/api/campaigns/'+id+'/send',{method:'POST'});
+  if(!r2.ok){msg(r2.d.error||'Ошибка отправки','err');return;}
+  msg('Рассылка запущена — статус в «Истории».','ok'); showTab('hist'); loadHistory();
+}
+
+async function loadHistory(){
+  const {ok,d}=await api('/api/campaigns');
+  const box=document.getElementById('paneHist');
+  if(!ok){box.innerHTML='<div class="pad hint">Ошибка</div>';return;}
+  const cs=d.campaigns||[];
+  box.innerHTML=cs.length?cs.map(c=>`<div class="camp" onclick="openCamp(${c.id})"><div><div style="font-weight:600;font-size:13px">${esc(c.name||('#'+c.id))}</div><div class="hint">${esc(c.subject||'')}</div><div class="hint">${c.sent||0}/${c.total||0} отправлено${c.failed?(' · ошибок '+c.failed):''}</div></div><span class="pill ${c.status}">${c.status}</span></div>`).join(''):'<div class="pad hint">Кампаний пока нет.</div>';
+}
+async function openCamp(id){
+  const {ok,d}=await api('/api/campaigns/'+id); if(!ok)return;
+  CUR_CAMP=id; showTab('edit');
+  document.getElementById('cName').value=d.name||''; document.getElementById('cSubject').value=d.subject||'';
+  document.getElementById('cFrom').value=d.from_name||''; document.getElementById('cBody').value=d.body_html||'';
+  msg('Загружена кампания #'+id+' ('+d.status+'). Отправлено '+(d.sent||0)+'/'+(d.total||0),'ok');
+}
+function showTab(t){document.getElementById('tabEdit').classList.toggle('on',t==='edit');document.getElementById('tabHist').classList.toggle('on',t==='hist');document.getElementById('paneEdit').style.display=t==='edit'?'block':'none';document.getElementById('paneHist').style.display=t==='hist'?'block':'none';if(t==='hist')loadHistory();}
+function val(id){const e=document.getElementById(id);return e?e.value.trim():'';}
+function msg(t,c){const e=document.getElementById('editMsg');e.className='msg '+(c||'');e.textContent=t;}
+async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
+boot();
+</script>
+</body>
+</html>
