@@ -5,7 +5,7 @@
 // сделок для привязки, и (в следующей фазе) create/update/move.
 const { b24 } = require('./bitrix');
 const { pool } = require('./auth');
-const { USERS } = require('./constants');
+const { USERS, USER_EMAILS } = require('./constants');
 
 const APP_BASE = process.env.APP_BASE_URL || 'https://bitrix-service-dashboard-production.up.railway.app';
 const dashUrl = () => `${APP_BASE}/procurement.html`;
@@ -28,6 +28,20 @@ const mailThreadId = itemId => `<proc-${itemId}@prolabsupport.kz>`;
 // вместо Натальи Зенченко. Чтобы вернуть Зенченко — замени регэксп на /зенченко/i.
 const chiefAccountantId = () => findUserId(/есенов|yessenov/i) || findUserId(/зенченко/i);
 const warehouseManagerId = () => findUserId(/нурмаганбетов/i);
+const findBidByEmail = re => { const e = Object.entries(USER_EMAILS || {}).find(([, em]) => re.test(String(em || ''))); return e ? Number(e[0]) : null; };
+// Два бухгалтера для доверенности: Бактыгул Акмурзина и Елнура Капар. Резолвим по
+// ФИО (из Bitrix), иначе по почте (3-accountant@ и 2-accountant@). Переопределяется
+// env PROC_POA_ACCOUNTANTS="<bid1>,<bid2>".
+function poaAccountants() {
+  const env = (process.env.PROC_POA_ACCOUNTANTS || '').split(',').map(s => s.trim()).filter(Boolean);
+  let ids;
+  if (env.length) ids = env.map(Number);
+  else ids = [
+    findUserId(/акмурзина/i) || findBidByEmail(/^3-accountant@/i),
+    findUserId(/капар/i) || findBidByEmail(/^2-accountant@/i),
+  ];
+  return [...new Set(ids.filter(Boolean).map(Number))].map(bid => ({ bid, name: USERS[bid] || ('#' + bid) }));
+}
 // Согласующий по умолчанию — Казиев Исабек (подтягивается из Bitrix при hydrateUsers).
 const defaultApproverId = () => findUserId(/казиев|исабек/i);
 
@@ -97,6 +111,16 @@ function ensureSchema() {
         uploaded_by INTEGER,
         uploaded_at TIMESTAMPTZ DEFAULT NOW());
       CREATE INDEX IF NOT EXISTS idx_proc_ship_files_deal ON ticketsmodule_procurement_ship_files(deal_id);
+      -- Трек-номер и перевозчик для отгрузок (когда шлём службой доставки, а не транспортом).
+      ALTER TABLE ticketsmodule_procurement_ship_files ADD COLUMN IF NOT EXISTS track_number VARCHAR(120);
+      ALTER TABLE ticketsmodule_procurement_ship_files ADD COLUMN IF NOT EXISTS carrier VARCHAR(60);
+      -- Отсечка авто-создания закупок из подборов: на ПЕРВОМ запуске сюда попадают
+      -- все УЖЕ завершённые подборы (как «предсуществующие») — по ним закупки НЕ
+      -- создаются задним числом. Создаются только те, что завершатся ПОСЛЕ деплоя.
+      -- Спец-строка source_item_id=-1 — маркер, что базовая отсечка уже сделана.
+      CREATE TABLE IF NOT EXISTS ticketsmodule_procurement_autoseen (
+        source_item_id BIGINT PRIMARY KEY,
+        at TIMESTAMPTZ DEFAULT NOW());
       -- Аудит удалённых закупок: кто, когда, что удалил (снимок на момент удаления).
       CREATE TABLE IF NOT EXISTS ticketsmodule_procurement_audit (
         id SERIAL PRIMARY KEY,
@@ -317,6 +341,7 @@ async function getMeta(force) {
     defaultAssignee,
     approve: { yes: APPROVE_YES, no: '1828', options: [{ id: '1827', label: 'Согласовано' }, { id: '1828', label: 'Не согласовано' }] },
     chiefAccountant: chiefAccountantId(),
+    poaAccountants: poaAccountants(),
     defaultApprover: defaultApproverId(),
     uploadSlots,
     currencies,
@@ -570,6 +595,25 @@ async function setAmount(localId, opportunity, currency) {
   return { ok: true };
 }
 
+// Настройка доверенности (на 2 этапе): нужна ли доверенность и какой бухгалтер
+// её ведёт (один из двух). Если нужна — на этапе оплаты закупка падает и главбуху,
+// и выбранному бухгалтеру, и двигается дальше только после ОБОИХ документов.
+async function setPoaSetup(localId, required, accountantBid) {
+  const allowed = new Set(poaAccountants().map(a => String(a.bid)));
+  const { rows } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
+  const pl = (rows[0] && rows[0].payload) || {};
+  pl.poaRequired = !!required;
+  if (required) {
+    const bid = String(accountantBid || '');
+    if (!allowed.has(bid)) throw userFacing('Выберите бухгалтера для доверенности из списка.');
+    pl.poaAccountantBid = bid;
+  } else {
+    delete pl.poaAccountantBid;
+  }
+  await pool.query('UPDATE ticketsmodule_procurement SET payload=$1, updated_at=NOW() WHERE id=$2', [pl, localId]);
+  return { ok: true, poaRequired: pl.poaRequired, poaAccountantBid: pl.poaAccountantBid || null };
+}
+
 // Редактирование заявки: базовые поля (название, источник, ответственный, вид закупки).
 async function updateRequest(localId, payload) {
   const itemId = await itemIdOf(localId);
@@ -722,8 +766,18 @@ async function moveStage(localId, stageKey, opts = {}) {
     if (!reason) { const e = userFacing('Для отката назад укажите причину.'); e.needReason = true; throw e; }
   }
 
-  // Проверка условий — только при движении ВПЕРЁД (откат назад не блокируем).
-  const reqmt = isBackward ? null : REQUIREMENTS[stageKey];
+  // «Ожидание товара»: динамический шлюз. Всегда нужна платёжка; если на 2 этапе
+  // отметили «Доверенность» — дополнительно нужна доверенность (оба документа).
+  if (!isBackward && stageKey === 'waiting') {
+    const files = await filesFor(localId);
+    const has = sl => (files[sl] || []).length > 0;
+    const { rows: pr } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
+    const poaRequired = !!(((pr[0] && pr[0].payload) || {}).poaRequired);
+    if (!has('pay')) throw userFacing(`Нельзя перейти на «${step.label}»: не приложено подтверждение оплаты.`);
+    if (poaRequired && !has('poa')) throw userFacing(`Нельзя перейти на «${step.label}»: нужна доверенность (была отмечена на этапе счёта).`);
+  }
+  // Проверка прочих условий — только при движении ВПЕРЁД (откат назад не блокируем).
+  const reqmt = (isBackward || stageKey === 'waiting') ? null : REQUIREMENTS[stageKey];
   if (reqmt) {
     if (reqmt.kind === 'file' || reqmt.kind === 'files') {
       const files = await filesFor(localId);
@@ -836,6 +890,9 @@ async function getItemDetail(localId) {
     fullyReceived: !!pl.fullyReceived,
     fullyReceivedAt: pl.fullyReceivedAt || null,
     fullyReceivedBy: pl.fullyReceivedBy || null,
+    poaRequired: !!pl.poaRequired,
+    poaAccountantBid: pl.poaAccountantBid || null,
+    poaAccountantName: pl.poaAccountantBid ? (USERS[pl.poaAccountantBid] || ('#' + pl.poaAccountantBid)) : null,
     rollbacks: Array.isArray(pl.rollbacks) ? pl.rollbacks : [],
     docs: { invoice: fileInfo(docFields.invoice, 'invoice'), pay: fileInfo(docFields.pay, 'pay'), contract: fileInfo(docFields.contract, 'contract'), warranty: fileInfo(docFields.warranty, 'warranty') },
     dopy,
@@ -982,14 +1039,25 @@ async function setApproval(localId, status, approverId, comment) {
       await notifyPerson(ctx.creatorBid, { reason: 'Промежуточное согласование', tgText: tg, subject: mailSubject(ctx), html, itemId: ctx.itemId });
     }
   }
-  // 2) если согласовано ВСЕМИ — передать бухгалтеру на оплату (назначенному или главбуху)
+  // 2) если согласовано ВСЕМИ — передать на оплату. Всегда главбуху; а если на 2
+  // этапе отмечена «Доверенность» — ПАРАЛЛЕЛЬНО и выбранному бухгалтеру (он готовит
+  // доверенность). Дальше процесс двигается только после обоих документов (шлюз в moveStage).
   if (approved) {
     const chief = ctx.accountantBid || chiefAccountantId();
-    if (chief) {
-      const tg = `💰 <b>Требуется оплата закупки</b>\n📋 ${esc(t)}\nЗакупка согласована. Счёт на оплату во вложении. Приложите «Подтверждение оплаты».\n<a href="${dashUrl()}">Открыть в дашборде</a>${ctx.itemUrl ? ` · <a href="${ctx.itemUrl}">в Битриксе</a>` : ''}`;
-      const html = emailHtml({ title: 'Требуется оплата закупки', color: '#0f766e', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ...(ctx.dealId ? [['Сделка', '#' + ctx.dealId]] : [])], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
-      const attachments = await slotAttachments(localId, 'invoice');
-      await notifyPerson(chief, { reason: 'Запрос оплаты', tgText: tg, subject: mailSubject(ctx), html, itemId: ctx.itemId, attachments });
+    const poaReq = !!pl.poaRequired;
+    const poaBid = poaReq && pl.poaAccountantBid ? String(pl.poaAccountantBid) : null;
+    const targets = [...new Set([chief, poaBid].filter(Boolean).map(String))];
+    const attachments = await slotAttachments(localId, 'invoice');
+    for (const uid of targets) {
+      const isPoaMan = poaBid && String(uid) === String(poaBid);
+      const extra = poaReq
+        ? (isPoaMan
+            ? '\nТребуется ДОВЕРЕННОСТЬ по этой закупке — приложите её.'
+            : '\nПриложите «Подтверждение оплаты». По закупке также нужна доверенность (готовит бухгалтер).')
+        : '\nПриложите «Подтверждение оплаты».';
+      const tg = `💰 <b>Требуется ${isPoaMan ? 'доверенность' : 'оплата'} закупки</b>\n📋 ${esc(t)}\nЗакупка согласована. Счёт во вложении.${extra}\n<a href="${dashUrl()}">Открыть в дашборде</a>${ctx.itemUrl ? ` · <a href="${ctx.itemUrl}">в Битриксе</a>` : ''}`;
+      const html = emailHtml({ title: isPoaMan ? 'Требуется доверенность' : 'Требуется оплата закупки', color: '#0f766e', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ...(ctx.dealId ? [['Сделка', '#' + ctx.dealId]] : []), ...(poaReq ? [['Доверенность', 'требуется' + (pl.poaAccountantBid ? ' · ' + (USERS[pl.poaAccountantBid] || ('#' + pl.poaAccountantBid)) : '')]] : [])], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
+      await notifyPerson(uid, { reason: isPoaMan ? 'Запрос доверенности' : 'Запрос оплаты', tgText: tg, subject: mailSubject(ctx), html, itemId: ctx.itemId, attachments });
     }
   }
   return { ok: true, approved, rejected: overallRejected, pending: !finalDecided, remaining: pendingIds.length };
@@ -1134,8 +1202,13 @@ async function autoCreateFromService(serviceItemId) {
 // до-создаём недостающие закупки. Дедуп по source_item_id делает это безопасным.
 async function scanServiceForAutoCreate() {
   await ensureSchema();
-  let created = 0, checked = 0;
+  let created = 0, checked = 0, baseline = 0;
   try {
+    // Первый запуск после деплоя = базовая отсечка: все уже завершённые подборы
+    // помечаем «предсуществующими» и НЕ создаём по ним закупки. Дальше создаём
+    // только новые завершения.
+    const { rows: bl } = await pool.query('SELECT 1 FROM ticketsmodule_procurement_autoseen WHERE source_item_id=-1');
+    const baselined = bl.length > 0;
     for (const stage of SERVICE_TRIGGER_STAGES) {
       let start = 0, guard = 0;
       while (guard++ < 40) {
@@ -1148,19 +1221,36 @@ async function scanServiceForAutoCreate() {
         for (const it of items) {
           if (!fileNonEmpty(it[SERVICE_DOPY_FIELD])) continue;
           checked++;
-          const { rows } = await pool.query('SELECT id FROM ticketsmodule_procurement WHERE source_item_id=$1', [it.id]);
-          if (rows.length) continue; // уже создана
-          try { const r = await autoCreateFromService(it.id); if (r && r.created) created++; }
-          catch (e) { console.error('scanServiceForAutoCreate item', it.id, e.message); }
+          if (!baselined) {
+            // помечаем как предсуществующий — без создания
+            await pool.query('INSERT INTO ticketsmodule_procurement_autoseen (source_item_id) VALUES ($1) ON CONFLICT DO NOTHING', [it.id]);
+            baseline++;
+            continue;
+          }
+          // уже помечен как предсуществующий или уже есть закупка → пропускаем
+          const seen = await pool.query('SELECT 1 FROM ticketsmodule_procurement_autoseen WHERE source_item_id=$1', [it.id]);
+          if (seen.rows.length) continue;
+          const dup = await pool.query('SELECT id FROM ticketsmodule_procurement WHERE source_item_id=$1', [it.id]);
+          if (dup.rows.length) { await pool.query('INSERT INTO ticketsmodule_procurement_autoseen (source_item_id) VALUES ($1) ON CONFLICT DO NOTHING', [it.id]); continue; }
+          try {
+            const r = await autoCreateFromService(it.id);
+            if (r && r.created) created++;
+            await pool.query('INSERT INTO ticketsmodule_procurement_autoseen (source_item_id) VALUES ($1) ON CONFLICT DO NOTHING', [it.id]);
+          } catch (e) { console.error('scanServiceForAutoCreate item', it.id, e.message); }
         }
         const total = result && result.total; start += items.length;
         if (!items.length || (total != null && start >= total) || items.length < 50) break;
         if (start > 3000) break;
       }
     }
-    if (created) console.log(`procurement scan: авто-создано закупок — ${created}`);
+    if (!baselined) {
+      await pool.query('INSERT INTO ticketsmodule_procurement_autoseen (source_item_id) VALUES (-1) ON CONFLICT DO NOTHING', []);
+      console.log(`procurement scan: базовая отсечка — отмечено предсуществующих подборов: ${baseline} (по ним закупки НЕ создаются)`);
+    } else if (created) {
+      console.log(`procurement scan: авто-создано закупок — ${created}`);
+    }
   } catch (e) { console.error('scanServiceForAutoCreate error:', e.message); }
-  return { created, checked };
+  return { created, checked, baseline };
 }
 
 // ── Файлы документов (множественные, локальный источник правды) ──────────────
@@ -1616,4 +1706,4 @@ async function pendingActionsFor(bid) {
   return { count: items.length, items };
 }
 
-module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, listDeletions, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, setAmount, autoCreateFromService, scanServiceForAutoCreate, pendingActionsFor, itemUrl, dealUrl };
+module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, listDeletions, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, setAmount, setPoaSetup, autoCreateFromService, scanServiceForAutoCreate, pendingActionsFor, itemUrl, dealUrl };

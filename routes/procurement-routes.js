@@ -299,6 +299,18 @@ router.post('/:id/amount', requireAuth(ROLES), express.json(), async (req, res) 
   }
 });
 
+// POST /api/procurement/:id/poa-setup { required, accountantBid } — доверенность (2 этап)
+router.post('/:id/poa-setup', requireAuth(ROLES), express.json(), async (req, res) => {
+  try {
+    const { setPoaSetup } = require('../procurement-calc');
+    const { required, accountantBid } = req.body || {};
+    res.json(await setPoaSetup(parseInt(req.params.id, 10), !!required, accountantBid));
+  } catch (e) {
+    console.error('POST /api/procurement/:id/poa-setup error:', e.message);
+    res.status(e.userFacing ? 400 : 500).json({ error: e.message });
+  }
+});
+
 // POST /api/procurement/:id/request-approval { approverId } — отправить на согласование
 router.post('/:id/request-approval', requireAuth(ROLES), express.json(), async (req, res) => {
   try {

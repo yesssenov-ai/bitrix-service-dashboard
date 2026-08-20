@@ -752,21 +752,34 @@ function renderDetail(id,d){
       <span class="msg" id="inv-amt-msg-${id}"></span>
       <div class="hint" style="margin-top:6px">Укажи сумму по счёту и сохрани — затем приложи счёт (Invoice), и заявка уйдёт на «Договор».</div>
     </div>`;
-    html=amountBlock+filesSlotHtml(id,d,'invoice');
+    const poaAccs=META.poaAccountants||[];
+    const poaBlock=`<div style="margin-bottom:12px;padding:12px;border:1px solid var(--border2);border-radius:12px;background:var(--bg)">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600">
+        <input type="checkbox" id="poa-chk-${id}" ${d.poaRequired?'checked':''} onchange="onPoaToggle(${id})"> Требуется доверенность
+      </label>
+      <div id="poa-acc-${id}" style="margin-top:8px;${d.poaRequired?'':'display:none'}">
+        <label class="fl">Бухгалтер (готовит доверенность)</label>
+        <select id="poa-acc-sel-${id}">${poaAccs.map(a=>`<option value="${a.bid}" ${String(a.bid)===String(d.poaAccountantBid||'')?'selected':''}>${esc(a.name)}</option>`).join('')||'<option value="">— не найдены —</option>'}</select>
+      </div>
+      <button class="btn" style="margin-top:8px;width:100%;justify-content:center" onclick="savePoa(${id})">💾 Сохранить</button>
+      <span class="msg" id="poa-msg-${id}"></span>
+      <div class="hint" style="margin-top:6px">Если доверенность нужна — отметь и выбери бухгалтера. На этапе оплаты закупка уйдёт и главбуху, и выбранному бухгалтеру; дальше — только после обоих документов (платёжка + доверенность).</div>
+    </div>`;
+    html=amountBlock+poaBlock+filesSlotHtml(id,d,'invoice');
   }
   else if(curKey==='contract'){ hdr='Договор'; html='<div class="hint">Договор — по необходимости. Двигай на «Согласование закупки».</div>'; }
   else if(curKey==='approve'){ hdr='Согласование закупки'; html=approvalHtml(id,d); }
   else if(curKey==='payment'){
     hdr='Оплата закупки';
     const hasPay=((d.files&&d.files.pay)||[]).length>0;
+    const hasPoa=((d.files&&d.files.poa)||[]).length>0;
     let body=approvedBanner(d)+accountantHtml(id)+`<div style="margin-top:12px"></div>`+filesSlotHtml(id,d,'pay');
-    if(!hasPay){
-      body+=`<div class="hint" style="margin-top:6px">Приложи подтверждение оплаты (можно несколько). После этого спросим про доверенность.</div>`;
+    if(d.poaRequired){
+      body+=`<div class="fullybar" style="margin-top:14px;border-color:var(--signal)"><div><div class="ft">Требуется доверенность${d.poaAccountantName?(' · '+esc(d.poaAccountantName)):''}</div><div class="fs">Заявка уйдёт на «Ожидание товара», когда приложены и подтверждение оплаты, и доверенность.</div></div></div>`
+        +filesSlotHtml(id,d,'poa',true);
+      if(hasPay&&hasPoa) body+=`<button class="btn btn-p" style="margin-top:8px;width:100%;justify-content:center" onclick="moveStep(${id},'waiting')">Далее → Ожидание товара</button>`;
     } else {
-      // Шаг 2: доверенность. Загрузка ИЛИ «Не требуется» → авто-переход дальше.
-      body+=`<div class="fullybar" style="margin-top:14px;border-color:var(--signal)"><div><div class="ft">Нужна доверенность?</div><div class="fs">Приложи доверенность — заявка уйдёт на «Ожидание товара». Если не нужна — нажми «Не требуется».</div></div></div>`
-        +filesSlotHtml(id,d,'poa',true)
-        +`<button class="btn" style="margin-top:8px;width:100%;justify-content:center" onclick="skipPoa(${id})">Доверенность не требуется — далее →</button>`;
+      body+=`<div class="hint" style="margin-top:6px">Доверенность не требуется. Приложи подтверждение оплаты — заявка автоматически уйдёт на «Ожидание товара».</div>`;
     }
     html=body;
   }
@@ -809,10 +822,16 @@ async function addSimpleFile(id,slot,input){
     const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка загрузки'); loadDetail(id); return;}
     const r0=LIST.find(x=>x.id===id)||{}; const flow=META.flow||[]; const ci=(r0.stepIndex!=null)?r0.stepIndex:-1;
     const curKey=(ci>=0&&ci<flow.length)?flow[ci].key:null;
-    // Автопереходы: первый счёт → «Договор». На оплате доверенность (загрузка ИЛИ
-    // «Не требуется») → «Ожидание товара».
+    // Автопереходы: первый счёт → «Договор». На оплате: если доверенность НЕ нужна —
+    // после платёжки уходим на «Ожидание товара»; если нужна — только когда есть и
+    // платёжка, и доверенность.
     if(d.first&&curKey==='invoice'&&slot==='invoice'){ await moveStep(id,'contract'); }
-    else if(curKey==='payment'&&slot==='poa'){ await moveStep(id,'waiting'); }
+    else if(curKey==='payment'&&(slot==='pay'||slot==='poa')){
+      const det=await (await fetch('/api/procurement/'+id+'/detail')).json();
+      const f=det.files||{}; const hasPay=(f.pay||[]).length>0, hasPoa=(f.poa||[]).length>0;
+      if(det.poaRequired){ if(hasPay&&hasPoa) await moveStep(id,'waiting'); else loadDetail(id); }
+      else { if(hasPay) await moveStep(id,'waiting'); else loadDetail(id); }
+    }
     else { loadDetail(id); }
   }catch(e){alert('Ошибка: '+e.message); loadDetail(id);}
   finally{input.disabled=false;}
@@ -887,6 +906,23 @@ async function decide(id,status){
     if(d.approved){ await moveStep(id,'payment'); }
     else { if(d.pending) alert('Ваше решение учтено. Ждём остальных согласующих ('+(d.remaining||0)+').'); await reloadList(); }
   }catch(e){alert('Ошибка: '+e.message);}
+}
+// Доверенность (2 этап): показать/скрыть выбор бухгалтера + сохранить настройку.
+function onPoaToggle(id){
+  const chk=document.getElementById('poa-chk-'+id), box=document.getElementById('poa-acc-'+id);
+  if(box) box.style.display=(chk&&chk.checked)?'block':'none';
+}
+async function savePoa(id){
+  const chk=document.getElementById('poa-chk-'+id), sel=document.getElementById('poa-acc-sel-'+id);
+  const msg=document.getElementById('poa-msg-'+id);
+  const required=!!(chk&&chk.checked);
+  const accountantBid=(required&&sel)?sel.value:null;
+  if(required&&!accountantBid){ if(msg){msg.className='msg err';msg.textContent='Выберите бухгалтера';} return; }
+  try{
+    const r=await fetch('/api/procurement/'+id+'/poa-setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({required,accountantBid})});
+    const d=await r.json(); if(!r.ok){ if(msg){msg.className='msg err';msg.textContent=d.error||'Ошибка';} return; }
+    if(msg){msg.className='msg ok';msg.textContent=required?'Доверенность включена':'Доверенность не требуется';}
+  }catch(e){ if(msg){msg.className='msg err';msg.textContent='Ошибка сети';} }
 }
 // Сохранить сумму закупки (2 этап). silent=true — без alert (вызов из addSimpleFile).
 async function saveAmount(id, silent){
