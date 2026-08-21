@@ -122,7 +122,7 @@ router.post('/:id/stage', requireAuth(ROLES), express.json(), async (req, res) =
 });
 
 // POST /api/procurement/:id/files — добавить файл в слот (множественно) + метаданные накладной
-router.post('/:id/files', requireAuth(ROLES), express.json({ limit: '45mb' }), async (req, res) => {
+router.post('/:id/files', requireAuth(VIEW_ROLES), express.json({ limit: '45mb' }), async (req, res) => {
   try {
     const { addFile } = require('../procurement-calc');
     const id = parseInt(req.params.id, 10);
@@ -137,7 +137,7 @@ router.post('/:id/files', requireAuth(ROLES), express.json({ limit: '45mb' }), a
 });
 
 // POST /api/procurement/:id/files-batch — загрузить несколько файлов в слот за раз
-router.post('/:id/files-batch', requireAuth(ROLES), express.json({ limit: '90mb' }), async (req, res) => {
+router.post('/:id/files-batch', requireAuth(VIEW_ROLES), express.json({ limit: '90mb' }), async (req, res) => {
   try {
     const { addFilesBatch } = require('../procurement-calc');
     const id = parseInt(req.params.id, 10);
@@ -152,7 +152,7 @@ router.post('/:id/files-batch', requireAuth(ROLES), express.json({ limit: '90mb'
 });
 
 // GET /api/procurement/:id/files/:fileId/download — скачать файл
-router.get('/:id/files/:fileId/download', requireAuth(ROLES), async (req, res) => {
+router.get('/:id/files/:fileId/download', requireAuth(VIEW_ROLES), async (req, res) => {
   try {
     const { getFileBytes } = require('../procurement-calc');
     const f = await getFileBytes(parseInt(req.params.id, 10), parseInt(req.params.fileId, 10));

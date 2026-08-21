@@ -583,7 +583,7 @@ function fileRow(id,slot,f){
   return `<div class="fitem">
     <a class="lnk fn" href="${esc(f.url||'#')}" target="_blank" title="${esc(f.name||'')}">${esc(f.name||'файл')}</a>
     ${meta?`<span class="fmeta">${meta}</span>`:''}
-    <span class="fx" title="Удалить" onclick="delFile(${id},${f.id})">✕</span>
+    ${canEditProc()?`<span class="fx" title="Удалить" onclick="delFile(${id},${f.id})">✕</span>`:''}
   </div>`;
 }
 // Простой множественный слот (счёт / оплата / доверенность / гарантийный).
@@ -791,8 +791,16 @@ function renderDetail(id,d){
   else if(curKey==='waiting'){ hdr='Ожидание / приёмка товара'; html=goodsBlockHtml(id,d); }
   else if(curKey==='received'){ hdr='Товар принят'; html=goodsBlockHtml(id,d); }
   else { hdr='Готово'; html='<div class="hint" style="color:var(--good)">Процесс завершён.</div>'; }
-  // engineer/sales: только просмотр; действие доступно лишь на «Согласовании».
-  if(!canEditProc() && curKey!=='approve'){ html='<div class="hint">Только просмотр. Согласование появится, когда закупка будет на этапе «Согласование закупки» и назначена на тебя.</div>'; }
+  // engineer/sales: согласование (если на «Согласовании») + документы (просмотр,
+  // скачивание и загрузка файлов). Стадии он не двигает, но файлы фиксируются.
+  if(!canEditProc()){
+    let body='';
+    if(curKey==='approve'){ body+=approvalHtml(id,d)+'<div style="margin-top:16px"></div>'; hdr='Согласование закупки'; }
+    else hdr='Документы закупки';
+    body+='<div class="deth">Документы (просмотр и загрузка)</div>';
+    ['invoice','pay','poa','contract','warranty'].forEach(sl=>{ body+=`<div class="fl" style="margin-top:10px">${DOC_LABELS[sl]}</div>`+filesSlotHtml(id,d,sl); });
+    html=body;
+  }
   const hEl=document.getElementById('actionHdr'); if(hEl)hEl.textContent=hdr;
   const aEl=document.getElementById('stepAction'); if(aEl)aEl.innerHTML=html;
 }
@@ -810,8 +818,9 @@ async function postFile(id,slot,file,meta){
 // → «Договор», первое подтверждение оплаты → «Ожидание товара». Остальное — без перехода.
 async function addSimpleFile(id,slot,input){
   const files=input.files?Array.from(input.files):[]; if(!files.length)return;
-  // Счёт нельзя приложить без суммы закупки — просим указать её на этом шаге.
-  if(slot==='invoice'){
+  // Счёт нельзя приложить без суммы закупки — просим указать её (только у тех, кто
+  // ведёт процесс; engineer/sales просто прикладывает файл без смены стадии).
+  if(slot==='invoice' && canEditProc()){
     const rr=LIST.find(x=>x.id===id)||{};
     const amtEl=document.getElementById('inv-amt-'+id);
     const typed=amtEl?Number(amtEl.value):NaN;
@@ -828,10 +837,10 @@ async function addSimpleFile(id,slot,input){
     const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка загрузки'); loadDetail(id); return;}
     const r0=LIST.find(x=>x.id===id)||{}; const flow=META.flow||[]; const ci=(r0.stepIndex!=null)?r0.stepIndex:-1;
     const curKey=(ci>=0&&ci<flow.length)?flow[ci].key:null;
-    // Автопереходы: первый счёт → «Договор». На оплате: если доверенность НЕ нужна —
-    // после платёжки уходим на «Ожидание товара»; если нужна — только когда есть и
-    // платёжка, и доверенность.
-    if(d.first&&curKey==='invoice'&&slot==='invoice'){ await moveStep(id,'contract'); }
+    // Автопереходы стадий — только у тех, кто ведёт процесс. engineer/sales просто
+    // прикладывает файл (он фиксируется), стадию не двигает.
+    if(!canEditProc()){ loadDetail(id); }
+    else if(d.first&&curKey==='invoice'&&slot==='invoice'){ await moveStep(id,'contract'); }
     else if(curKey==='payment'&&(slot==='pay'||slot==='poa')){
       const det=await (await fetch('/api/procurement/'+id+'/detail')).json();
       const f=det.files||{}; const hasPay=(f.pay||[]).length>0, hasPoa=(f.poa||[]).length>0;
