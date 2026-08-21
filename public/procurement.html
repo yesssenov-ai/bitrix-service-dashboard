@@ -243,8 +243,14 @@ const empName=id=>{const e=(META.employees||[]).find(x=>String(x.id)===String(id
 const isDone=r=>{ if(!r)return false; const onRecv=(r.stepKey==='received'||/:SUCCESS$/i.test(String(r.stageId||''))); return onRecv && !!(r.payload&&r.payload.fullyReceived); };
 const activeList=()=>LIST.filter(r=>!isDone(r));
 const doneList=()=>LIST.filter(isDone);
+function canEditProc(){ return ME && ['admin','coordinator','store'].includes(ME.role); }
+function readOnlyCreateCard(){
+  return `<div class="card"><h3>Мои закупки</h3>
+    <div class="hint" style="line-height:1.6">Режим просмотра. Здесь ты видишь только свои закупки (где ты согласующий, ответственный или инициатор).<br><br>Выбери закупку в списке справа — если она на этапе «Согласование закупки» и назначена на тебя, ты сможешь её согласовать или отклонить.</div></div>`;
+}
 function render(){
-  const left=(MODE==='edit'&&EDIT!=null)?editCardHtml():createCardHtml();
+  const canEdit=canEditProc();
+  const left=(MODE==='edit'&&EDIT!=null)?editCardHtml():(canEdit?createCardHtml():readOnlyCreateCard());
   const nA=activeList().length, nD=doneList().length;
   const isAdmin = ME && ME.role==='admin';
   const body = RVIEW==='deal' ? dealViewHtml()
@@ -344,8 +350,8 @@ function editCardHtml(){
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
         <button class="btn" onclick="backToCreate()">← Новая заявка</button>
         <span style="margin-left:auto"></span>
-        <button class="btn" onclick="toggleEditFields(${r.id})">✎ Изменить</button>
-        <button class="btn btn-del" onclick="deleteReq(${r.id})">🗑 Удалить</button>
+        ${canEditProc()?`<button class="btn" onclick="toggleEditFields(${r.id})">✎ Изменить</button>`:''}
+        ${(ME&&(ME.role==='admin'||ME.role==='coordinator'))?`<button class="btn btn-del" onclick="deleteReq(${r.id})">🗑 Удалить</button>`:''}
       </div>
       <div class="rtitle">${esc(r.title||('Заявка #'+r.bitrixItemId))}</div>
       <div class="hint">#${r.bitrixItemId||'—'}${r.dealId?` · сделка <a class="lnk" href="${esc(r.dealUrl)}" target="_blank">#${r.dealId}</a>`:''}${r.itemUrl?` · <a class="lnk" href="${esc(r.itemUrl)}" target="_blank">в Битриксе ↗</a>`:''}</div>
@@ -748,9 +754,8 @@ function renderDetail(id,d){
         <input id="inv-amt-${id}" type="number" min="0" step="any" inputmode="decimal" placeholder="0" value="${esc(curSum)}">
         <select id="inv-cur-${id}">${curOptsInv}</select>
       </div>
-      <button class="btn" style="margin-top:8px;width:100%;justify-content:center" onclick="saveAmount(${id})">💾 Сохранить сумму</button>
       <span class="msg" id="inv-amt-msg-${id}"></span>
-      <div class="hint" style="margin-top:6px">Укажи сумму по счёту и сохрани — затем приложи счёт (Invoice), и заявка уйдёт на «Договор».</div>
+      <div class="hint" style="margin-top:6px">Впиши сумму по счёту — она сохранится сама, когда приложишь счёт (Invoice), и заявка уйдёт на «Договор».</div>
     </div>`;
     const poaAccs=META.poaAccountants||[];
     const poaBlock=`<div style="margin-bottom:12px;padding:12px;border:1px solid var(--border2);border-radius:12px;background:var(--bg)">
@@ -786,6 +791,8 @@ function renderDetail(id,d){
   else if(curKey==='waiting'){ hdr='Ожидание / приёмка товара'; html=goodsBlockHtml(id,d); }
   else if(curKey==='received'){ hdr='Товар принят'; html=goodsBlockHtml(id,d); }
   else { hdr='Готово'; html='<div class="hint" style="color:var(--good)">Процесс завершён.</div>'; }
+  // engineer/sales: только просмотр; действие доступно лишь на «Согласовании».
+  if(!canEditProc() && curKey!=='approve'){ html='<div class="hint">Только просмотр. Согласование появится, когда закупка будет на этапе «Согласование закупки» и назначена на тебя.</div>'; }
   const hEl=document.getElementById('actionHdr'); if(hEl)hEl.textContent=hdr;
   const aEl=document.getElementById('stepAction'); if(aEl)aEl.innerHTML=html;
 }
@@ -808,10 +815,9 @@ async function addSimpleFile(id,slot,input){
     const rr=LIST.find(x=>x.id===id)||{};
     const amtEl=document.getElementById('inv-amt-'+id);
     const typed=amtEl?Number(amtEl.value):NaN;
-    if(!(rr.opportunity>0)){
-      if(typed>0){ if(!(await saveAmount(id,true))){ input.value=''; return; } }
-      else { alert('Сначала укажите и сохраните сумму закупки.'); if(amtEl) amtEl.focus(); input.value=''; return; }
-    }
+    // Сумму сохраняем автоматически при приложении счёта (переход на след. этап).
+    if(typed>0){ if(!(await saveAmount(id,true))){ input.value=''; return; } }
+    else if(!(rr.opportunity>0)){ alert('Сначала укажите сумму закупки.'); if(amtEl) amtEl.focus(); input.value=''; return; }
   }
   input.disabled=true;
   try{
@@ -901,10 +907,10 @@ async function decide(id,status){
   try{
     const r=await fetch('/api/procurement/'+id+'/approval',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,approverId:(META.me&&META.me.bitrixUserId)||null,comment})});
     const d=await r.json(); if(!r.ok){alert(d.error||'Ошибка');return;}
-    // На «Оплату» переходим только когда согласовали ВСЕ (d.approved). Иначе —
-    // частичное согласование: просто обновляем список (ждём остальных).
-    if(d.approved){ await moveStep(id,'payment'); }
-    else { if(d.pending) alert('Ваше решение учтено. Ждём остальных согласующих ('+(d.remaining||0)+').'); await reloadList(); }
+    // На «Оплату» закупку двигает СЕРВЕР сам, когда согласовали все — здесь просто
+    // обновляем список/карточку (работает и для engineer/sales без прав на стадии).
+    if(d.pending) alert('Ваше решение учтено. Ждём остальных согласующих ('+(d.remaining||0)+').');
+    await reloadList();
   }catch(e){alert('Ошибка: '+e.message);}
 }
 // Доверенность (2 этап): показать/скрыть выбор бухгалтера + сохранить настройку.

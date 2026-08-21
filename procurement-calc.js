@@ -482,10 +482,20 @@ function bitrixOrigin() { try { return new URL(process.env.BITRIX_WEBHOOK).origi
 function itemUrl(itemId) { const o = bitrixOrigin(); return o && itemId ? `${o}/crm/type/${ENTITY}/details/${itemId}/` : null; }
 function dealUrl(dealId) { const o = bitrixOrigin(); return o && dealId ? `${o}/crm/deal/details/${dealId}/` : null; }
 
-async function listRequests() {
+// ownerBid — если задан (для роли engineer/sales), возвращаем только «свои»
+// закупки: где пользователь согласующий, ответственный или инициатор.
+async function listRequests(ownerBid) {
   await ensureSchema();
   pruneOldFileBytes(); // фоновая чистка временных байтов (throttled)
-  const { rows } = await pool.query('SELECT * FROM ticketsmodule_procurement ORDER BY created_at DESC');
+  let { rows } = await pool.query('SELECT * FROM ticketsmodule_procurement ORDER BY created_at DESC');
+  if (ownerBid) {
+    const b = String(ownerBid);
+    rows = rows.filter(r => {
+      const pl = r.payload || {};
+      const apprs = Array.isArray(pl.apApprovers) ? pl.apApprovers.map(String) : (pl.apApprover ? [String(pl.apApprover)] : []);
+      return apprs.includes(b) || String(pl.initiatorBid || '') === b || String(pl.assigned || '') === b;
+    });
+  }
   return rows.map(r => {
     const stepIndex = stepIndexForStage(r.stage_id);
     return {
@@ -1060,6 +1070,9 @@ async function setApproval(localId, status, approverId, comment) {
       await notifyPerson(uid, { reason: isPoaMan ? 'Запрос доверенности' : 'Запрос оплаты', tgText: tg, subject: mailSubject(ctx), html, itemId: ctx.itemId, attachments });
     }
   }
+  // Когда согласовали ВСЕ — сервер сам двигает закупку на «Оплату» (чтобы это
+  // работало и для engineer/sales, у которого нет прав дёргать смену стадии).
+  if (approved) { try { await moveStage(localId, 'payment', { byBid: decider }); } catch (e) { console.error('auto-advance to payment:', e.message); } }
   return { ok: true, approved, rejected: overallRejected, pending: !finalDecided, remaining: pendingIds.length };
 }
 

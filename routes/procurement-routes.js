@@ -4,15 +4,19 @@ const { requireAuth } = require('../auth');
 
 // Доступ к модулю «Закупки»: admin, coordinator и store правят закупки.
 const ROLES = ['admin', 'coordinator', 'store'];
+// Просмотр + согласование: те же + engineer/sales (видит ТОЛЬКО свои закупки —
+// где он согласующий/ответственный/инициатор; правами на правку не наделяется,
+// но может согласовывать назначенные на него закупки).
+const VIEW_ROLES = ['admin', 'coordinator', 'store', 'engineer'];
 // Удаление закупок — БЕЗ store (store может всё, кроме удаления).
 const DEL_ROLES = ['admin', 'coordinator'];
 
 // GET /api/procurement/meta — стадии + справочники для формы (кэш 30 мин, ?force=1)
-router.get('/meta', requireAuth(ROLES), async (req, res) => {
+router.get('/meta', requireAuth(VIEW_ROLES), async (req, res) => {
   try {
     const { getMeta } = require('../procurement-calc');
     const meta = await getMeta(req.query.force === '1');
-    res.json({ ...meta, me: { bitrixUserId: req.user.bitrix_user_id || null, name: req.user.display_name } });
+    res.json({ ...meta, me: { bitrixUserId: req.user.bitrix_user_id || null, name: req.user.display_name, role: req.user.role } });
   } catch (e) {
     console.error('GET /api/procurement/meta error:', e.message);
     res.status(500).json({ error: 'Не удалось загрузить справочники: ' + e.message });
@@ -64,10 +68,12 @@ router.get('/bin', requireAuth(ROLES), async (req, res) => {
 });
 
 // GET /api/procurement/list — наши заявки (из локальной таблицы)
-router.get('/list', requireAuth(ROLES), async (req, res) => {
+router.get('/list', requireAuth(VIEW_ROLES), async (req, res) => {
   try {
     const { listRequests } = require('../procurement-calc');
-    res.json({ items: await listRequests() });
+    // engineer/sales видит только свои закупки; остальные роли — все.
+    const ownerBid = req.user.role === 'engineer' ? (req.user.bitrix_user_id || -1) : null;
+    res.json({ items: await listRequests(ownerBid) });
   } catch (e) {
     console.error('GET /api/procurement/list error:', e.message);
     res.status(500).json({ error: e.message, items: [] });
@@ -263,7 +269,7 @@ router.delete('/:id', requireAuth(DEL_ROLES), async (req, res) => {
 });
 
 // GET /api/procurement/:id/detail — документы + согласование (из 1066)
-router.get('/:id/detail', requireAuth(ROLES), async (req, res) => {
+router.get('/:id/detail', requireAuth(VIEW_ROLES), async (req, res) => {
   try {
     const { getItemDetail } = require('../procurement-calc');
     res.json(await getItemDetail(parseInt(req.params.id, 10)));
@@ -325,11 +331,21 @@ router.post('/:id/request-approval', requireAuth(ROLES), express.json(), async (
 });
 
 // POST /api/procurement/:id/approval { status, approverId, comment } — решение по согласованию
-router.post('/:id/approval', requireAuth(ROLES), express.json(), async (req, res) => {
+router.post('/:id/approval', requireAuth(VIEW_ROLES), express.json(), async (req, res) => {
   try {
-    const { setApproval } = require('../procurement-calc');
-    const { status, approverId, comment } = req.body || {};
-    res.json(await setApproval(parseInt(req.params.id, 10), status, approverId, comment));
+    const { setApproval, getItemDetail } = require('../procurement-calc');
+    const localId = parseInt(req.params.id, 10);
+    let { status, approverId, comment } = req.body || {};
+    // engineer/sales решает ТОЛЬКО от своего имени и только если он в списке
+    // согласующих этой закупки.
+    if (req.user.role === 'engineer') {
+      const bid = String(req.user.bitrix_user_id || '');
+      approverId = bid;
+      const det = await getItemDetail(localId).catch(() => null);
+      const list = (det && det.approval && det.approval.approvers || []).map(a => String(a.bid));
+      if (!bid || !list.includes(bid)) return res.status(403).json({ error: 'Вы не назначены согласующим по этой закупке' });
+    }
+    res.json(await setApproval(localId, status, approverId, comment));
   } catch (e) {
     console.error('POST /api/procurement/:id/approval error:', e.message);
     res.status(500).json({ error: 'Не удалось сохранить согласование: ' + e.message });
