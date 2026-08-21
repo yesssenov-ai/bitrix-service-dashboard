@@ -699,12 +699,17 @@ function approvalHtml(id,d){
 // чтобы он видел, что закупка согласована, когда и кем.
 function approvedBanner(d){
   const ap=(d&&d.approval)||{}; if(!ap.approved)return '';
-  const nm=empName(ap.approver)||'—';
+  const apprs=ap.approvers||[];
+  // Показываем ВСЕХ согласующих (кто, когда, с комментарием) — чтобы бухгалтер
+  // видел всех, а не только последнего.
+  const rows=(apprs.length?apprs:[{name:empName(ap.approver)||'—',decided:true,approved:true,at:ap.decidedAt,comment:ap.comment}])
+    .map(a=>`<div class="pc-row" style="gap:8px;padding:4px 0"><div class="avatar av-teal" style="width:24px;height:24px;font-size:11px">${a.approved?'✓':(a.decided?'✕':'…')}</div><div style="flex:1;min-width:0"><div class="pc-name" style="font-size:13px">${esc(a.name)}</div>${a.comment?`<div class="hint">💬 ${esc(a.comment)}</div>`:''}</div><div class="hint" style="white-space:nowrap">${a.at?fmtDateTime(a.at):''}</div></div>`).join('');
   return `<div class="proccard" style="border-color:rgba(61,220,132,.45);background:rgba(61,220,132,.08)">
     <div class="pc-row"><div class="avatar av-teal">✓</div><div style="flex:1;min-width:0">
-      <div class="pc-name" style="color:var(--good)">Закупка согласована</div>
-      <div class="hint">Согласовал: <b style="color:var(--text)">${esc(nm)}</b>${ap.decidedAt?` · ${fmtDateTime(ap.decidedAt)}`:''}${ap.comment?`<br>💬 ${esc(ap.comment)}`:''}</div>
+      <div class="pc-name" style="color:var(--good)">Закупка согласована${apprs.length>1?` (${apprs.length} согласующих)`:''}</div>
+      <div class="hint">Согласующие:</div>
     </div></div>
+    <div style="margin-top:6px;border-top:1px solid var(--border2)">${rows}</div>
   </div>`;
 }
 function accountantHtml(id){

@@ -1066,7 +1066,7 @@ async function setApproval(localId, status, approverId, comment) {
             : '\nПриложите «Подтверждение оплаты». По закупке также нужна доверенность (готовит бухгалтер).')
         : '\nПриложите «Подтверждение оплаты».';
       const tg = `💰 <b>Требуется ${isPoaMan ? 'доверенность' : 'оплата'} закупки</b>\n📋 ${esc(t)}\nЗакупка согласована. Счёт во вложении.${extra}\n<a href="${dashUrl()}">Открыть в дашборде</a>${ctx.itemUrl ? ` · <a href="${ctx.itemUrl}">в Битриксе</a>` : ''}`;
-      const html = emailHtml({ title: isPoaMan ? 'Требуется доверенность' : 'Требуется оплата закупки', color: '#0f766e', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ...(ctx.dealId ? [['Сделка', '#' + ctx.dealId]] : []), ...(poaReq ? [['Доверенность', 'требуется' + (pl.poaAccountantBid ? ' · ' + (USERS[pl.poaAccountantBid] || ('#' + pl.poaAccountantBid)) : '')]] : [])], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
+      const html = emailHtml({ title: isPoaMan ? 'Требуется доверенность' : 'Требуется оплата закупки', color: '#0f766e', lines: [['Заявка', '#' + ctx.itemId + ' — ' + (ctx.title || '')], ...(ctx.dealId ? [['Сделка', '#' + ctx.dealId]] : []), ['Согласовали', decisionLines], ...(poaReq ? [['Доверенность', 'требуется' + (pl.poaAccountantBid ? ' · ' + (USERS[pl.poaAccountantBid] || ('#' + pl.poaAccountantBid)) : '')]] : [])], itemUrl: ctx.itemUrl, dashUrl: dashUrl() });
       await notifyPerson(uid, { reason: isPoaMan ? 'Запрос доверенности' : 'Запрос оплаты', tgText: tg, subject: mailSubject(ctx), html, itemId: ctx.itemId, attachments });
     }
   }
