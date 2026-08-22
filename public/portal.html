@@ -76,8 +76,9 @@ h1{font-family:var(--font-display);font-size:30px;font-weight:600;letter-spacing
 .h1-sub{color:var(--text-dim);font-size:14.5px;margin-bottom:34px;max-width:560px;}
 
 .user-chip{
-  display:flex;align-items:center;gap:10px;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
 }
+.user-chip a,.user-chip button{white-space:nowrap;}
 .user-chip .name{font-size:13px;color:var(--text-dim);}
 .user-chip .name b{color:var(--text);font-weight:600;}
 .logout-btn{
@@ -174,7 +175,7 @@ footer{text-align:center;color:var(--text-faint);font-size:11.5px;padding:20px;f
     </div>
     <div class="user-chip">
       <span class="name" id="userName"></span>
-      <a href="/cup-admin.html" id="cupAdminLink" style="display:none;font-size:12.5px;color:var(--text-dim);text-decoration:none;border:1px solid var(--line-2);padding:7px 14px;border-radius:8px;transition:border-color .15s,color .15s" onmouseover="this.style.borderColor='var(--signal)';this.style.color='var(--text)'" onmouseout="this.style.borderColor='var(--line-2)';this.style.color='var(--text-dim)'">⚙ Доступ к модулям</a>
+      <a href="/cup-admin.html" id="cupAdminLink" style="display:none;align-items:center;gap:6px;font-size:12.5px;color:var(--text-dim);text-decoration:none;border:1px solid var(--line-2);padding:7px 14px;border-radius:8px;transition:border-color .15s,color .15s" onmouseover="this.style.borderColor='var(--signal)';this.style.color='var(--text)'" onmouseout="this.style.borderColor='var(--line-2)';this.style.color='var(--text-dim)'">⚙ Доступ к модулям</a>
       <button id="installBtn" onclick="onInstallClick()" style="display:none;font-size:12.5px;font-weight:600;color:#fff;background:linear-gradient(135deg,var(--brand),var(--brand-h));border:0;padding:8px 15px;border-radius:8px;cursor:pointer;align-items:center;gap:7px">⬇ Установить приложение</button>
       <button class="logout-btn" onclick="logout()">Выйти</button>
     </div>
@@ -298,7 +299,7 @@ async function init(){
     const hour = new Date().getHours();
     const greeting = hour<6?'Доброй ночи':hour<12?'Доброе утро':hour<18?'Добрый день':'Добрый вечер';
     document.getElementById('helloLine').textContent = `${greeting} · роль: ${user.role}`;
-    if (user.role === 'admin') document.getElementById('cupAdminLink').style.display = '';
+    if (user.role === 'admin') document.getElementById('cupAdminLink').style.display = 'inline-flex';
 
     // Строго по доступам: показываем только выданные админом модули (роль не даёт
     // модули сама по себе). Админ — все. Не смогли узнать — только личный кабинет.

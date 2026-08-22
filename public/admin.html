@@ -27,7 +27,7 @@ html[data-theme="light"]{
   --shadow-sm:0 1px 3px rgba(0,0,0,.06);--shadow:0 4px 16px rgba(0,0,0,.07);
   --shadow-lg:0 20px 60px rgba(0,0,0,.15);
 }
-body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased;}
+body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased;overflow-x:hidden;}
 .header{background:var(--white);border-bottom:1px solid var(--border);height:60px;display:flex;align-items:center;padding:0 28px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.04);}
 .logo{display:flex;align-items:center;gap:11px;font-weight:700;font-size:15px;flex-shrink:0;}
 .logo-mark{width:32px;height:32px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;}
@@ -126,6 +126,20 @@ th:last-child,td:last-child{text-align:right;}
 .toast.show{transform:translateY(0);}
 .toast.success{background:#059669;}
 .toast.error{background:var(--red);}
+
+/* ── Мобильная адаптация ──────────────────────────────────────────────────
+   Шапка и вкладки не влезают в узкий экран — даём им горизонтальную прокрутку
+   внутри своей области (а не всей странице), уменьшаем отступы, прячем e-mail. */
+@media(max-width:760px){
+  .header{padding:0 12px;height:auto;min-height:54px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;}
+  .header > *{flex:0 0 auto;}
+  .hdiv{margin:0 8px;}
+  .h-nav a{padding:6px 8px;}
+  .user-badge{display:none;}
+  .page{padding:18px 12px 60px;}
+  .tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;}
+  .tab{flex:0 0 auto;white-space:nowrap;}
+}
 </style>
 </head>
 <body>
