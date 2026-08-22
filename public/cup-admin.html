@@ -207,21 +207,11 @@ function syncSelectAll(){
 
 // ── Панель массовых действий ──
 function buildActionBar(){
-  const chips = MODULE_CODES.map(c => `
-    <span class="chip">
-      <span class="chip-lbl">${esc(MODULE_LABELS[c]||c)}</span>
-      <button class="chip-btn plus"  title="Выдать всем выбранным"  onclick="bulkSet('${c}',true)">+</button>
-      <button class="chip-btn minus" title="Убрать у всех выбранных" onclick="bulkSet('${c}',false)">−</button>
-    </span>`).join('');
   const opts = EMPLOYEES.map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('');
   document.getElementById('actionBar').innerHTML = `
     <div class="ab-head">
       <span class="ab-count">Выбрано: <b id="selCount">0</b></span>
       <button class="ab-clear" onclick="clearSelection()">Снять выделение</button>
-    </div>
-    <div class="ab-section">
-      <span class="ab-label">Модули — выдать (+) / убрать (−) всем выбранным</span>
-      <div class="chips">${chips}</div>
     </div>
     <div class="ab-section ab-copy">
       <span class="ab-label">Скопировать доступ у сотрудника и применить ко всем выбранным</span>
