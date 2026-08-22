@@ -146,7 +146,10 @@
   .deal .dv{color:var(--dim);font-weight:600;flex-shrink:0}
   .deal a.dl{color:var(--dim2);flex-shrink:0;display:grid;place-items:center}.deal a.dl:hover{color:var(--brand2)}
 
-  .bars{display:flex;align-items:flex-end;gap:7px;height:200px;padding-top:22px}
+  .bars{display:flex;align-items:flex-end;gap:7px;height:200px;padding-top:22px;position:relative}
+  /* Линия месячного плана (план отдела ÷ 12) поверх столбцов */
+  .planline{position:absolute;left:0;right:0;height:0;border-top:2px dashed #ffb020;pointer-events:none;z-index:4;opacity:0;transition:opacity .5s,top .6s cubic-bezier(.2,.8,.2,1)}
+  .planline-lbl{position:absolute;right:0;top:-14px;font-size:9.5px;font-weight:700;color:#ffb020;background:rgba(20,23,29,.72);padding:0 5px;border-radius:5px;white-space:nowrap}
   .bcol{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end;cursor:default;position:relative}
   .bcol .bval{font-size:10.5px;font-weight:700;color:var(--dim);opacity:1;transition:.2s}
   .bcol:hover .bval{color:var(--text)}
@@ -455,6 +458,21 @@ function orderDepts(names){const seen=new Set(names);return [...DEPT_ORDER.filte
 function toggleFilter(dep){const a=FILT.dept;const i=a.indexOf(dep);if(i>=0)a.splice(i,1);else a.push(dep);renderMS('dept');renderAll();}
 
 let LAST_CONS=[];
+let PLANLINE={planMonthMln:0,maxM:1};
+// Ставим горизонтальную линию плана на ту же шкалу, что и столбцы: измеряем
+// реальную базовую линию столбца и высоту 100% по DOM (устойчиво к вёрстке).
+function positionPlanLine(){
+  const bars=document.getElementById('bars'); const line=document.getElementById('planLine'); if(!bars||!line)return;
+  const wrap=bars.querySelector('.bwrap'), col=bars.querySelector('.bcol'); if(!wrap||!col)return;
+  const {planMonthMln,maxM}=PLANLINE; if(!(planMonthMln>0)||!(maxM>0)){line.style.opacity='0';return;}
+  const barsTop=bars.getBoundingClientRect().top;
+  const baseY=wrap.getBoundingClientRect().bottom-barsTop;   // низ столбцов (базовая линия)
+  const H=col.clientHeight;                                   // высота, соответствующая 100%
+  const planPx=(planMonthMln/maxM)*H;
+  line.style.top=Math.max(0,baseY-planPx)+'px';
+  line.style.opacity='1';
+}
+window.addEventListener('resize',()=>{ if(!CMP) positionPlanLine(); });
 function renderAll(){
   const cons=getFiltered();
   LAST_CONS=cons;
@@ -649,16 +667,27 @@ function renderBars(deals){
   const byMonth=Array.from({length:12},()=>({}));
   deals.forEach(d=>{if(d.month!=null){const o=byMonth[d.month];o[d.saleType]=(o[d.saleType]||0)+d.sumKzt/1e6;}});
   const totals=byMonth.map(o=>Object.values(o).reduce((a,v)=>a+v,0));
-  const maxM=Math.max(1,...totals);
+  // Месячный план (в млн ₸) = годовой план выбранного отдела(ов) ÷ 12.
+  // Ничего не выбрано → суммарный план всех отделов ÷ 12 (общая линия).
+  const planYear=(FILT.dept.length?FILT.dept.reduce((a,dp)=>a+(PLAN[dp]||0),0):Object.values(PLAN).reduce((a,v)=>a+v,0));
+  const planMonthMln=planYear/12/1e6;
+  // Масштаб включает линию плана, чтобы она всегда была видна над столбцами.
+  const maxM=Math.max(1,...totals,planMonthMln);
+  PLANLINE={planMonthMln,maxM};
   const depts=orderDepts([...new Set(deals.map(d=>d.saleType))]);
+  const planLineHtml=planMonthMln>0?`<div class="planline" id="planLine"><span class="planline-lbl">план ${fmt(planMonthMln)} млн/мес${FILT.dept.length?'':' · всего'}</span></div>`:'';
   document.getElementById('bars').innerHTML=MONTHS.map((m,i)=>{
     const o=byMonth[i],tot=totals[i],h=tot/maxM*100;
     const segs=tot?depts.filter(dp=>o[dp]).map(dp=>`<div class="bseg" style="background:${stColor(dp,DEPT_ORDER.indexOf(dp))};height:${o[dp]/tot*100}%"></div>`).join(''):'';
     return `<div class="bcol" data-i="${i}"><span class="bval">${tot?fmt(tot):''}</span><div class="bwrap" data-h="${h}" style="height:0">${segs}</div><span class="bm">${m}</span></div>`;
-  }).join('');
+  }).join('')+planLineHtml;
   setTimeout(()=>document.querySelectorAll('#bars .bwrap').forEach((b,i)=>setTimeout(()=>b.style.height=b.dataset.h+'%',i*20)),200);
+  requestAnimationFrame(()=>requestAnimationFrame(positionPlanLine));
   document.querySelectorAll('#bars .bcol').forEach(c=>{const i=+c.dataset.i,o=byMonth[i];
-    c.addEventListener('mousemove',e=>{const rows=Object.keys(o).sort((a,b)=>o[b]-o[a]).map(dp=>`<span style="color:${stColor(dp,DEPT_ORDER.indexOf(dp))}">■</span> ${esc(dp)}: ${fmt(o[dp])} млн`).join('<br>');showTip(`<b>${MONTHS[i]} ${YEAR} · ${fmt(totals[i])} млн ₸</b>${rows?'<br>'+rows:''}`,e.clientX,e.clientY);});
+    c.addEventListener('mousemove',e=>{const rows=Object.keys(o).sort((a,b)=>o[b]-o[a]).map(dp=>`<span style="color:${stColor(dp,DEPT_ORDER.indexOf(dp))}">■</span> ${esc(dp)}: ${fmt(o[dp])} млн`).join('<br>');
+      let planRow='';
+      if(planMonthMln>0){const diff=totals[i]-planMonthMln;const dpct=planMonthMln?Math.round(totals[i]/planMonthMln*100):0;const col=diff>=0?'#3ddc84':'#ff5b6e';planRow=`<br><span style="color:#ffb020">▬</span> план/мес: ${fmt(planMonthMln)} млн<br><span style="color:${col}">${diff>=0?'▲ +':'▼ '}${fmt(diff)} млн (${dpct}% плана)</span>`;}
+      showTip(`<b>${MONTHS[i]} ${YEAR} · ${fmt(totals[i])} млн ₸</b>${rows?'<br>'+rows:''}${planRow}`,e.clientX,e.clientY);});
     c.addEventListener('mouseleave',hideTip);});
 }
 
