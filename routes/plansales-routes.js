@@ -18,6 +18,68 @@ router.get('/', requireAuth(VIEW_ROLES), async (req, res) => {
   }
 });
 
+// POST /api/plansales/refresh — быстрая инкрементальная синхронизация (как в
+// Контрактах): тянет из Bitrix только сделки, изменённые с последней синхронизации.
+let _refreshing = false;
+router.post('/refresh', requireAuth(VIEW_ROLES), express.json(), async (req, res) => {
+  if (_refreshing) return res.json({ ok: true, running: true, note: 'Обновление уже идёт' });
+  _refreshing = true;
+  try {
+    const { pool } = require('../auth');
+    const { rows } = await pool.query('SELECT MAX(synced_at) AS t FROM ticketsmodule_stat_deals');
+    const last = rows[0] && rows[0].t ? new Date(rows[0].t).getTime() : null;
+    const sinceMs = (last || (Date.now() - 7 * 86400 * 1000)) - 15 * 60 * 1000; // буфер 15 мин
+    const { incrementalSync } = require('../stats-sync');
+    const r = await incrementalSync(sinceMs);
+    const { rows: r2 } = await pool.query('SELECT MAX(synced_at) AS t FROM ticketsmodule_stat_deals');
+    res.json({ ok: true, updated: r.updated || 0, updatedAt: r2[0] && r2[0].t ? new Date(r2[0].t).toISOString() : null });
+  } catch (e) {
+    console.error('POST /api/plansales/refresh error:', e.message);
+    res.status(500).json({ error: 'Не удалось обновить: ' + e.message });
+  } finally { _refreshing = false; }
+});
+
+// GET /api/plansales/:id/comments — лента комментариев сделки из Bitrix (таймлайн).
+router.get('/:id/comments', requireAuth(VIEW_ROLES), async (req, res) => {
+  try {
+    const { b24 } = require('../bitrix');
+    const { USERS } = require('../constants');
+    const id = parseInt(req.params.id, 10);
+    const { result } = await b24('crm.timeline.comment.list', {
+      filter: { ENTITY_ID: id, ENTITY_TYPE: 'deal' }, order: { CREATED: 'DESC' },
+    });
+    const items = (result || []).map(c => ({
+      id: c.ID,
+      text: c.COMMENT || '',
+      authorId: c.AUTHOR_ID || null,
+      author: c.AUTHOR_ID ? (USERS[c.AUTHOR_ID] || ('#' + c.AUTHOR_ID)) : '—',
+      created: c.CREATED || null,
+    }));
+    res.set('Cache-Control', 'no-store');
+    res.json({ ok: true, items });
+  } catch (e) {
+    console.error('GET /api/plansales/:id/comments error:', e.message);
+    res.status(500).json({ error: e.message, items: [] });
+  }
+});
+
+// POST /api/plansales/:id/comments { text } — добавить комментарий в сделку (в Bitrix).
+router.post('/:id/comments', requireAuth(VIEW_ROLES), express.json(), async (req, res) => {
+  try {
+    const { b24 } = require('../bitrix');
+    const id = parseInt(req.params.id, 10);
+    const text = String((req.body || {}).text || '').trim();
+    if (!text) return res.status(400).json({ error: 'Пустой комментарий' });
+    const fields = { ENTITY_ID: id, ENTITY_TYPE: 'deal', COMMENT: text };
+    if (req.user && req.user.bitrix_user_id) fields.AUTHOR_ID = req.user.bitrix_user_id; // автор = текущий пользователь
+    const { result } = await b24('crm.timeline.comment.add', { fields });
+    res.json({ ok: true, id: result });
+  } catch (e) {
+    console.error('POST /api/plansales/:id/comments error:', e.message);
+    res.status(500).json({ error: 'Не удалось сохранить комментарий: ' + e.message });
+  }
+});
+
 // POST /api/plansales/resync — полная пересинхронизация зеркала сделок (админ).
 // Нужна разово после релиза, чтобы у существующих сделок заполнились новые поля
 // (планируемый срок покупки, «наиболее вероятная»). Запускается в фоне.

@@ -12,6 +12,30 @@
     --text:#e8edf7;--dim:#8592ad;--dim2:#5c6884;--brand:#ff2d55;--brand2:#ff6b81;--accent:#5b8cff;
     --good:#22c9a3;--warn:#ffb020;--bad:#ff5b6e;--p60:#5b8cff;--p80:#ffb020;--p10:#8592ad;--p30:#a56bff;
   }
+  /* Светлая тема (глобальный тумблер ставит html[data-theme="light"]) */
+  html[data-theme="light"]{
+    --bg:#f5f6fa;--panel:#ffffff;--panel2:#eef1f7;--border:#e4e7ef;--border2:#d3d8e6;
+    --text:#111827;--dim:#5b6472;--dim2:#8b93a3;--brand:#dc2626;--brand2:#e04759;--accent:#2563eb;
+    --good:#059669;--warn:#c77700;--bad:#dc2626;--p60:#2563eb;--p80:#c77700;--p10:#6b7280;--p30:#7c3aed;
+  }
+  html[data-theme="light"] body{background:radial-gradient(1200px 600px at 15% -5%,rgba(220,38,38,.05),transparent 60%),radial-gradient(1000px 700px at 100% 0%,rgba(37,99,235,.05),transparent 55%),var(--bg)}
+  html[data-theme="light"] .card{backdrop-filter:none;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  html[data-theme="light"] .chip{color:#5b6472}
+  html[data-theme="light"] .chip[data-s="P10"].on{color:#374151}
+  html[data-theme="light"] .chip[data-s="P30"].on{color:#6d28d9}
+  html[data-theme="light"] .chip[data-s="P60"].on{color:#1d4ed8}
+  html[data-theme="light"] .chip[data-s="P80"].on{color:#b45309}
+  html[data-theme="light"] .chip.act{color:#b91c1c}
+  html[data-theme="light"] .chip.act.on{color:#fff}
+  html[data-theme="light"] .row:hover,html[data-theme="light"] .deal:hover{background:rgba(0,0,0,.03)}
+  html[data-theme="light"] .lvl-month{background:rgba(0,0,0,.02)}
+  html[data-theme="light"] .deal.likely{background:rgba(220,38,38,.06)}
+  html[data-theme="light"] .row .cnt{background:#eef1f7;color:#6b7280}
+  html[data-theme="light"] .ctl select option{background:#fff;color:#111827}
+  html[data-theme="light"] .stg.P10{background:rgba(107,114,128,.14);color:#374151}
+  html[data-theme="light"] .stg.P30{background:rgba(124,58,237,.14);color:#6d28d9}
+  html[data-theme="light"] .stg.P60{background:rgba(37,99,235,.14);color:#1d4ed8}
+  html[data-theme="light"] .stg.P80{background:rgba(217,119,6,.16);color:#b45309}
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{background:var(--bg);color:var(--text);font-family:"SF Pro Display","Segoe UI",Inter,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
   body{min-height:100vh;overflow-x:hidden;background:radial-gradient(1200px 600px at 15% -5%,rgba(255,45,85,.10),transparent 60%),radial-gradient(1000px 700px at 100% 0%,rgba(91,140,255,.10),transparent 55%),radial-gradient(900px 800px at 50% 120%,rgba(34,201,163,.07),transparent 60%),var(--bg)}
@@ -100,6 +124,28 @@
   .spin{width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite;margin:40px auto}
   @keyframes sp{to{transform:rotate(360deg)}}
   .togglehint{font-size:11px;color:var(--dim2)}
+  .deal .cm{background:var(--panel2);border:1px solid var(--border);border-radius:7px;color:var(--dim);font-size:11px;font-weight:700;padding:3px 8px;cursor:pointer;flex-shrink:0}
+  .deal .cm:hover{color:#fff;border-color:var(--border2)}
+  html[data-theme="light"] .deal .cm:hover{color:#111827}
+  .deal .cm .b{color:var(--brand2);margin-left:3px}
+  /* Модалка комментариев */
+  .ov{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
+  .ov.show{display:flex}
+  .modal{background:#0d1524;border:1px solid var(--border2);border-radius:16px;width:100%;max-width:560px;max-height:86vh;display:flex;flex-direction:column;overflow:hidden}
+  html[data-theme="light"] .modal{background:#fff}
+  .modal .mh{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:1px solid var(--border)}
+  .modal .mh .mt{font-weight:800;font-size:15px}.modal .mh .ms{font-size:11.5px;color:var(--dim);margin-top:3px}
+  .modal .mx{background:none;border:0;color:var(--dim);font-size:22px;cursor:pointer;line-height:1}
+  .modal .mb{padding:14px 18px;overflow-y:auto;flex:1}
+  .cmt{padding:10px 0;border-bottom:1px solid var(--border)}
+  .cmt:last-child{border-bottom:0}
+  .cmt .ch{font-size:12px;color:var(--dim);margin-bottom:3px}.cmt .ch b{color:var(--text)}
+  .cmt .ct{font-size:13.5px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+  .modal .mf{padding:12px 18px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+  .modal textarea{width:100%;min-height:64px;resize:vertical;background:var(--panel2);border:1px solid var(--border);border-radius:10px;color:var(--text);font:inherit;font-size:13.5px;padding:10px 12px;outline:none}
+  .modal textarea:focus{border-color:var(--accent)}
+  .modal .send{align-self:flex-end;background:var(--accent);color:#fff;border:0;border-radius:10px;padding:9px 18px;font:inherit;font-weight:700;font-size:13px;cursor:pointer}
+  .modal .send:disabled{opacity:.6;cursor:default}
 </style>
 </head>
 <body>
@@ -109,9 +155,10 @@
       <a href="/" class="back" title="В ЦУП">←</a>
       <div class="logo"><div class="lg1">ЦУП · <span>План продаж</span></div><div class="lg2">Незаконтрактованный pipeline по планируемому сроку покупки</div></div>
     </div>
-    <div style="display:flex;align-items:center;gap:12px">
-      <button class="minibtn" id="resyncBtn" title="Полная пересинхронизация сделок из Bitrix (для админа). Нужна разово после обновления, чтобы заполнились новые поля." style="padding:8px 12px">↻ Пересинхронизировать</button>
-      <div class="clock"><div class="c1">Данные из зеркала Bitrix</div><div class="c2" id="updated">…</div></div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <button class="minibtn" id="refreshBtn" title="Подтянуть из Bitrix сделки, изменённые с последней синхронизации" style="padding:8px 12px">↻ Обновить</button>
+      <button class="minibtn" id="resyncBtn" title="Полная пересинхронизация всех сделок из Bitrix (для админа). Нужна разово после обновления, чтобы заполнились новые поля." style="padding:8px 12px">⟲ Полная</button>
+      <div class="clock"><div class="c1"><span id="liveDot" style="display:none">🟢 онлайн · </span>обновлено</div><div class="c2" id="updated">…</div></div>
     </div>
   </header>
 
@@ -152,6 +199,20 @@
   </div>
 </div>
 
+<div class="ov" id="cmOv">
+  <div class="modal">
+    <div class="mh">
+      <div><div class="mt" id="cmTitle">Комментарии</div><div class="ms" id="cmSub"></div></div>
+      <button class="mx" id="cmClose">×</button>
+    </div>
+    <div class="mb" id="cmList"><div class="spin"></div></div>
+    <div class="mf">
+      <textarea id="cmInput" placeholder="Новый комментарий к сделке… (сохранится в Bitrix)"></textarea>
+      <button class="send" id="cmSend">Отправить</button>
+    </div>
+  </div>
+</div>
+
 <script>
 let DATA={deals:[],meta:{}};
 let YEAR=null;
@@ -166,12 +227,21 @@ function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'
 function fmt(n){return Math.round(n||0).toLocaleString('ru-RU').replace(/ /g,' ');}
 function fmtMln(v){const m=v/1e6; if(Math.abs(m)>=100)return fmt(m)+' млн'; return (Math.round(m*10)/10).toLocaleString('ru-RU')+' млн';}
 
+function fmtUpd(v){const u=v?new Date(v):null;return u?u.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';}
+async function fetchData(){
+  const r=await fetch('/api/plansales'); const d=await r.json();
+  if(!r.ok) throw new Error(d.error||'Ошибка');
+  DATA=d;
+}
+// Тихая перезагрузка зеркала (вебхук держит его онлайн) — фильтры и раскрытие сохраняются.
+async function reloadData(){
+  try{ await fetchData(); renderAll(); document.getElementById('updated').textContent=fmtUpd(DATA.meta.updatedAt); }
+  catch(e){ /* тихо */ }
+}
 async function load(){
   try{
-    const r=await fetch('/api/plansales'); const d=await r.json();
-    if(!r.ok) throw new Error(d.error||'Ошибка');
-    DATA=d;
-    const yrs=(d.meta.years||[]);
+    await fetchData();
+    const yrs=(DATA.meta.years||[]);
     YEAR=yrs.includes(now.getFullYear())?now.getFullYear():(yrs[yrs.length-1]||now.getFullYear());
     if(YEAR===now.getFullYear()) OPEN.add('m'+now.getMonth());  // текущий месяц раскрыт сразу
     buildControls();
@@ -179,8 +249,11 @@ async function load(){
     document.getElementById('controls').style.display='';
     document.getElementById('kpis').style.display='';
     document.getElementById('pipeBlock').style.display='';
-    const u=d.meta.updatedAt?new Date(d.meta.updatedAt):null;
-    document.getElementById('updated').textContent=u?u.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
+    document.getElementById('updated').textContent=fmtUpd(DATA.meta.updatedAt);
+    document.getElementById('liveDot').style.display='';
+    // Онлайн: периодически подтягиваем свежие данные из зеркала (его обновляет вебхук Bitrix).
+    setInterval(()=>{ if(document.visibilityState==='visible') reloadData(); }, 60000);
+    document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') reloadData(); });
   }catch(e){
     document.getElementById('tree').innerHTML='<div class="empty">Не удалось загрузить: '+esc(e.message)+'</div>';
   }
@@ -272,6 +345,7 @@ function dealHtml(d){
     ${d.likely?'<span class="lk">⚡</span>':''}
     <span class="stg ${d.step}">${d.step}</span>
     <span class="dsum tabular">${fmt(d.sum)} ₸</span>
+    <button class="cm" data-cid="${d.id}" data-ctitle="${esc(d.title)}" title="Комментарии сделки">💬</button>
     ${d.url?`<a class="ext" href="${esc(d.url)}" target="_blank" title="Открыть в Bitrix">↗</a>`:''}
   </div>`;
 }
@@ -313,7 +387,55 @@ function renderTree(){
   box.querySelectorAll('.row').forEach(r=>{
     r.onclick=()=>{const k=r.dataset.key; if(OPEN.has(k))OPEN.delete(k); else OPEN.add(k); renderTree();};
   });
+  box.querySelectorAll('.deal .cm').forEach(b=>{
+    b.onclick=(e)=>{ e.stopPropagation(); openComments(b.dataset.cid, b.dataset.ctitle); };
+  });
 }
+
+// ── Комментарии сделки (таймлайн Bitrix) ──────────────────────────────────────
+let CM_ID=null;
+function stripBB(t){return String(t||'').replace(/\[\/?[^\]]+\]/g,'');}
+function openComments(id,title){
+  CM_ID=id;
+  document.getElementById('cmSub').textContent=(title||'')+' · сделка #'+id;
+  document.getElementById('cmInput').value='';
+  document.getElementById('cmOv').classList.add('show');
+  loadComments(id);
+}
+async function loadComments(id){
+  const box=document.getElementById('cmList'); box.innerHTML='<div class="spin"></div>';
+  try{
+    const r=await fetch('/api/plansales/'+id+'/comments'); const d=await r.json();
+    if(!r.ok) throw new Error(d.error||'Ошибка');
+    if(!d.items||!d.items.length){ box.innerHTML='<div class="empty" style="padding:24px">Пока нет комментариев. Будь первым.</div>'; return; }
+    box.innerHTML=d.items.map(c=>`<div class="cmt"><div class="ch"><b>${esc(c.author)}</b>${c.created?' · '+new Date(c.created).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):''}</div><div class="ct">${esc(stripBB(c.text))}</div></div>`).join('');
+  }catch(e){ box.innerHTML='<div class="empty" style="padding:24px">Ошибка: '+esc(e.message)+'</div>'; }
+}
+async function sendComment(){
+  const t=document.getElementById('cmInput').value.trim(); if(!t||CM_ID==null)return;
+  const btn=document.getElementById('cmSend'); btn.disabled=true; const o=btn.textContent; btn.textContent='Отправка…';
+  try{
+    const r=await fetch('/api/plansales/'+CM_ID+'/comments',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.error||'Ошибка');
+    document.getElementById('cmInput').value=''; await loadComments(CM_ID);
+  }catch(e){ alert('Не удалось сохранить: '+e.message); }
+  finally{ btn.disabled=false; btn.textContent=o; }
+}
+document.getElementById('cmClose').onclick=()=>document.getElementById('cmOv').classList.remove('show');
+document.getElementById('cmOv').onclick=(e)=>{ if(e.target.id==='cmOv') document.getElementById('cmOv').classList.remove('show'); };
+document.getElementById('cmSend').onclick=sendComment;
+
+// ↻ Обновить — инкрементальная синхронизация (как в Контрактах)
+document.getElementById('refreshBtn').onclick=async(e)=>{
+  const b=e.currentTarget; b.disabled=true; const o=b.textContent; b.textContent='⏳ Обновляю…';
+  try{
+    const r=await fetch('/api/plansales/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    const d=await r.json(); if(!r.ok) throw new Error(d.error||'Ошибка');
+    await reloadData();
+    b.textContent='✓ +'+(d.updated||0); setTimeout(()=>{b.textContent=o;},2200);
+  }catch(err){ alert('Ошибка обновления: '+err.message); b.textContent=o; }
+  finally{ b.disabled=false; }
+};
 
 document.getElementById('resyncBtn').onclick=async(e)=>{
   const b=e.currentTarget;
