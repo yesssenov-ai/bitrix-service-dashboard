@@ -257,7 +257,7 @@ function render(){
   const right=`<div class="card" style="padding:0;overflow:hidden">
     <div style="display:flex;flex-direction:column;gap:10px;padding:16px 20px 0">
       <div class="seg2"><button class="${RVIEW==='mine'?'on':''}" onclick="setRView('mine')">Мои заявки${nA?' · '+nA:''}</button><button class="${RVIEW==='done'?'on':''}" onclick="setRView('done')">Завершённые${nD?' · '+nD:''}</button><button class="${RVIEW==='deal'?'on':''}" onclick="setRView('deal')">По сделке</button>${isAdmin?`<button class="${RVIEW==='deleted'?'on':''}" onclick="setRView('deleted')">Удалённые</button>`:''}</div>
-      <input id="rsearch" placeholder="Поиск закупки по названию…" value="${esc(RSEARCH)}" oninput="onRSearch(this.value)" autocomplete="off" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font:inherit;font-size:13px;outline:none">
+      ${RVIEW==='deal'?'':`<input id="rsearch" placeholder="Поиск закупки по названию…" value="${esc(RSEARCH)}" oninput="onRSearch(this.value)" autocomplete="off" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font:inherit;font-size:13px;outline:none">`}
     </div>
     <div style="overflow:auto;max-height:78vh;padding:14px 20px 20px" id="rightBody">${body}</div>
   </div>`;
