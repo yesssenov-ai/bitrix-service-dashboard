@@ -117,6 +117,19 @@ h1{font-family:var(--font-display);font-size:30px;font-weight:600;letter-spacing
 .card-enter svg{width:12px;height:12px;transition:transform .15s;}
 .card:hover:not(.locked) .card-enter svg{transform:translateX(3px);}
 
+/* ── Бейдж уведомлений на карточке (правый верхний угол) ─────── */
+/* Карточка уже position:relative — позиционируем абсолютно поверх неё.
+   Красный бренд-цвет + белый текст читается и в тёмной, и в светлой теме. */
+.modbadge{
+  position:absolute;top:-8px;right:-8px;z-index:2;
+  min-width:20px;height:20px;padding:0 6px;
+  display:inline-flex;align-items:center;justify-content:center;
+  background:var(--brand);color:#fff;
+  font-family:var(--font-mono);font-size:11px;font-weight:600;line-height:1;
+  border-radius:999px;border:2px solid var(--bg);
+  box-shadow:0 2px 8px rgba(197,59,47,.45);
+  pointer-events:none;
+}
 .card.locked{cursor:default;}
 .card.locked .card-name,.card.locked .card-desc{color:var(--text-faint);}
 .card.locked::after{
@@ -210,7 +223,8 @@ function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
 const ACCOUNT_CARD = { code:'КАБ', name:'Мой кабинет', desc:'Профиль, пароль, 2ФА, Telegram-уведомления, мой журнал действий и лог уведомлений.', href:'/account.html' };
 
 function moduleCard(m){
-  return `<a class="card" href="${m.href}">
+  return `<a class="card" href="${m.href}" data-mod="${m.code}">
+      <span class="modbadge" data-badge="${m.code}" style="display:none"></span>
       <div class="card-top">
         <span class="card-code">${m.code}</span>
         <span class="status online"><span class="dot"></span>доступен</span>
@@ -230,6 +244,33 @@ function renderGrid(allowedCodes){
   grid.innerHTML = cards;
   const note = document.getElementById('emptyNote');
   if (note) note.style.display = visible.length ? 'none' : '';
+  // Карточки только что перерисованы: мгновенно ставим уже известные счётчики
+  // (без мигания), затем освежаем с сервера.
+  applyModuleBadges(lastModuleCounts);
+  refreshModuleBadges();
+}
+
+// ── Бейджи уведомлений на карточках модулей ─────────────────────────────────
+// Тянем /api/notify/module-counts → { counts:{ CODE:n } } и раскрашиваем бейджи.
+// Модули без счётчика/с 0 — бейдж прячем. Показ капаем на 99+.
+let lastModuleCounts = {};
+function applyModuleBadges(counts){
+  counts = counts || {};
+  lastModuleCounts = counts;
+  document.querySelectorAll('.modbadge[data-badge]').forEach(el => {
+    const code = el.getAttribute('data-badge');
+    const n = Number(counts[code]) || 0;
+    if (n > 0) { el.textContent = n > 99 ? '99+' : String(n); el.style.display = ''; }
+    else { el.textContent = ''; el.style.display = 'none'; }
+  });
+}
+async function refreshModuleBadges(){
+  try{
+    const r = await fetch('/api/notify/module-counts', { credentials:'same-origin', headers:{ 'Accept':'application/json' } });
+    if (!r.ok) return;                       // не залогинен / ошибка — молчим
+    const d = await r.json();
+    applyModuleBadges((d && d.counts) || {});
+  }catch(e){ /* офлайн / сбой — бейджи не трогаем */ }
 }
 
 function tickClock(){
@@ -318,6 +359,11 @@ tickClock();
 setInterval(tickClock, 1000);
 init();
 initInstall();
+
+// Освежаем бейджи модулей раз в ~30с и при возврате фокуса/видимости.
+setInterval(function(){ if (document.visibilityState !== 'hidden') refreshModuleBadges(); }, 30000);
+window.addEventListener('focus', refreshModuleBadges);
+document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') refreshModuleBadges(); });
 </script>
 </body>
 </html>

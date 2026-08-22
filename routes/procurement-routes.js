@@ -7,7 +7,9 @@ const ROLES = ['admin', 'coordinator', 'store'];
 // Просмотр + согласование: те же + engineer/sales (видит ТОЛЬКО свои закупки —
 // где он согласующий/ответственный/инициатор; правами на правку не наделяется,
 // но может согласовывать назначенные на него закупки).
-const VIEW_ROLES = ['admin', 'coordinator', 'store', 'engineer'];
+const VIEW_ROLES = ['admin', 'coordinator', 'store', 'engineer', 'accountant'];
+// Роли, которые видят/согласовывают ТОЛЬКО свои закупки (без прав на правку).
+const OWN_ONLY = ['engineer', 'accountant'];
 // Удаление закупок — БЕЗ store (store может всё, кроме удаления).
 const DEL_ROLES = ['admin', 'coordinator'];
 
@@ -71,8 +73,8 @@ router.get('/bin', requireAuth(ROLES), async (req, res) => {
 router.get('/list', requireAuth(VIEW_ROLES), async (req, res) => {
   try {
     const { listRequests } = require('../procurement-calc');
-    // engineer/sales видит только свои закупки; остальные роли — все.
-    const ownerBid = req.user.role === 'engineer' ? (req.user.bitrix_user_id || -1) : null;
+    // engineer/sales и бухгалтер видят только свои закупки; остальные роли — все.
+    const ownerBid = OWN_ONLY.includes(req.user.role) ? (req.user.bitrix_user_id || -1) : null;
     res.json({ items: await listRequests(ownerBid) });
   } catch (e) {
     console.error('GET /api/procurement/list error:', e.message);
@@ -111,7 +113,8 @@ router.post('/:id/stage', requireAuth(ROLES), express.json(), async (req, res) =
     const { moveStage } = require('../procurement-calc');
     const id = parseInt(req.params.id, 10);
     const body = req.body || {};
-    const out = await moveStage(id, body.stageKey, { reason: body.reason, byBid: req.user.bitrix_user_id || null });
+    // Админ может пропускать стадии (force) — шлюзы требований не проверяются.
+    const out = await moveStage(id, body.stageKey, { reason: body.reason, byBid: req.user.bitrix_user_id || null, force: req.user.role === 'admin' });
     res.json({ ok: true, ...out });
   } catch (e) {
     // needReason → фронт покажет запрос причины отката (не как обычную ошибку).
@@ -336,9 +339,9 @@ router.post('/:id/approval', requireAuth(VIEW_ROLES), express.json(), async (req
     const { setApproval, getItemDetail } = require('../procurement-calc');
     const localId = parseInt(req.params.id, 10);
     let { status, approverId, comment } = req.body || {};
-    // engineer/sales решает ТОЛЬКО от своего имени и только если он в списке
-    // согласующих этой закупки.
-    if (req.user.role === 'engineer') {
+    // engineer/sales и бухгалтер решают ТОЛЬКО от своего имени и только если он
+    // в списке согласующих этой закупки.
+    if (OWN_ONLY.includes(req.user.role)) {
       const bid = String(req.user.bitrix_user_id || '');
       approverId = bid;
       const det = await getItemDetail(localId).catch(() => null);
@@ -365,7 +368,7 @@ router.post('/:id/accountant', requireAuth(ROLES), express.json(), async (req, r
 
 // GET /api/procurement/pending-count — число действий, за которые отвечает
 // текущий пользователь (для бейджа на иконке установленного приложения).
-router.get('/pending-count', requireAuth(ROLES), async (req, res) => {
+router.get('/pending-count', requireAuth(VIEW_ROLES), async (req, res) => {
   try {
     const { pendingActionsFor } = require('../procurement-calc');
     const bid = req.user && req.user.bitrix_user_id;

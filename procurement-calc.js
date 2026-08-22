@@ -493,7 +493,8 @@ async function listRequests(ownerBid) {
     rows = rows.filter(r => {
       const pl = r.payload || {};
       const apprs = Array.isArray(pl.apApprovers) ? pl.apApprovers.map(String) : (pl.apApprover ? [String(pl.apApprover)] : []);
-      return apprs.includes(b) || String(pl.initiatorBid || '') === b || String(pl.assigned || '') === b;
+      return apprs.includes(b) || String(pl.initiatorBid || '') === b || String(pl.assigned || '') === b
+        || String(r.accountant_bid || '') === b || String(pl.poaAccountantBid || '') === b;
     });
   }
   return rows.map(r => {
@@ -776,9 +777,11 @@ async function moveStage(localId, stageKey, opts = {}) {
     if (!reason) { const e = userFacing('Для отката назад укажите причину.'); e.needReason = true; throw e; }
   }
 
+  // Админ может пропускать стадии (opts.force) — шлюзы условий не проверяем.
+  const force = !!opts.force;
   // «Ожидание товара»: динамический шлюз. Всегда нужна платёжка; если на 2 этапе
   // отметили «Доверенность» — дополнительно нужна доверенность (оба документа).
-  if (!isBackward && stageKey === 'waiting') {
+  if (!isBackward && !force && stageKey === 'waiting') {
     const files = await filesFor(localId);
     const has = sl => (files[sl] || []).length > 0;
     const { rows: pr } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
@@ -786,8 +789,8 @@ async function moveStage(localId, stageKey, opts = {}) {
     if (!has('pay')) throw userFacing(`Нельзя перейти на «${step.label}»: не приложено подтверждение оплаты.`);
     if (poaRequired && !has('poa')) throw userFacing(`Нельзя перейти на «${step.label}»: нужна доверенность (была отмечена на этапе счёта).`);
   }
-  // Проверка прочих условий — только при движении ВПЕРЁД (откат назад не блокируем).
-  const reqmt = (isBackward || stageKey === 'waiting') ? null : REQUIREMENTS[stageKey];
+  // Проверка прочих условий — только при движении ВПЕРЁД и без force (админ).
+  const reqmt = (isBackward || force || stageKey === 'waiting') ? null : REQUIREMENTS[stageKey];
   if (reqmt) {
     if (reqmt.kind === 'file' || reqmt.kind === 'files') {
       const files = await filesFor(localId);
@@ -819,6 +822,15 @@ async function moveStage(localId, stageKey, opts = {}) {
     });
     // Откат с «Товар принят» назад — снимаем отметку «полностью принят».
     if (curIdx === FLOW.length - 1) { pl.fullyReceived = false; pl.fullyReceivedAt = null; pl.fullyReceivedBy = null; }
+    // #3: откат на этап «Согласование» (или раньше) — сбрасываем согласование,
+    // чтобы отправитель мог заново выбрать согласующих и отправить повторно.
+    const approveIdx = FLOW.findIndex(s => s.key === 'approve');
+    if (approveIdx >= 0 && targetIdx <= approveIdx && (pl.apRequested || pl.apDecided || pl.apApprover || (Array.isArray(pl.apApprovers) && pl.apApprovers.length))) {
+      pl.apRequested = false; pl.apDecided = false;
+      delete pl.apDecidedAt; delete pl.apRequestedAt; delete pl.apDecisions;
+      delete pl.apApprovers; delete pl.apApprover; delete pl.apRequestNote;
+      try { await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields: { [F.preApprove]: '', [F.preApprover]: '' } }); } catch (e) { /* best-effort */ }
+    }
     await pool.query('UPDATE ticketsmodule_procurement SET stage_id=$1, payload=$2, updated_at=NOW() WHERE id=$3', [step.bitrix, pl, localId]);
     // Уведомляем об откате (с причиной) инициатора, согласующего, бухгалтера.
     notifyRollback(localId, (curIdx >= 0 ? FLOW[curIdx].label : (curStageId || '—')), step.label, String(opts.reason || '').trim(), opts.byBid ? (USERS[opts.byBid] || ('#' + opts.byBid)) : null).catch(() => {});

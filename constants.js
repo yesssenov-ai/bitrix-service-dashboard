@@ -57,7 +57,7 @@ const COORDINATORS = new Set([26, 79]);
 //  store      — правит любые закупки в модуле «Закупки» (кроме удаления);
 //               остальные выданные модули — только просмотр.
 //  viewer     — только просмотр выданных модулей.
-const VALID_ROLES = new Set(['admin', 'manager', 'logist', 'coordinator', 'engineer', 'store', 'viewer']);
+const VALID_ROLES = new Set(['admin', 'manager', 'logist', 'coordinator', 'engineer', 'store', 'accountant', 'viewer']);
 
 // ── Гидратация справочника сотрудников из Bitrix (глобально для ВСЕХ модулей) ──
 // Статический USERS выше — курируемый минимум; сотрудники с новыми ID (49, 66, 92…)

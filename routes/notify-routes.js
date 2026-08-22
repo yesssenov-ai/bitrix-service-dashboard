@@ -17,6 +17,27 @@ router.get('/pending-count', requireAuth(), async (req, res) => {
   }
 });
 
+// Счётчики уведомлений/действий ПО МОДУЛЯМ для бейджей на карточках портала.
+// Возвращает карту { CODE: n } — код кладём ТОЛЬКО когда n>0 (карта легко
+// расширяется новыми источниками). Каждый модуль считаем в своём try/catch —
+// падение одного источника даёт 0, а не рушит весь ответ.
+router.get('/module-counts', requireAuth(), async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const counts = {};
+  const bid = req.user && req.user.bitrix_user_id;
+  // PROC — «Закупки»: число действий, за которые отвечает пользователь.
+  try {
+    if (bid) {
+      const { pendingActionsFor } = require('../procurement-calc');
+      const proc = await pendingActionsFor(bid);
+      const n = (proc && proc.count) || 0;
+      if (n > 0) counts.PROC = n;
+    }
+  } catch (e) { /* best-effort: модуль без источника → 0 */ }
+  // Новые источники по другим модулям добавляй здесь по тому же шаблону.
+  res.json({ ok: true, counts });
+});
+
 // Публичный VAPID-ключ для оформления подписки на пуши.
 router.get('/push-key', requireAuth(), (req, res) => {
   const push = require('../push');

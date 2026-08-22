@@ -235,7 +235,7 @@ async function boot(){
 const opt=(arr,ph)=>`<option value="">${ph||'—'}</option>`+(arr||[]).map(o=>`<option value="${esc(o.id)}">${esc(o.label)}</option>`).join('');
 const stageName=id=>{const f=(META.flow||[]).find(x=>x.bitrix===id);if(f)return f.label;const s=(META.stages||[]).find(s=>s.id===id);return s?s.name:(id||'—');};
 
-let MODE='create', EDIT=null, RVIEW='mine', DEALVIEW=null, dvTimer=null;
+let MODE='create', EDIT=null, RVIEW='mine', DEALVIEW=null, dvTimer=null, RSEARCH='';
 const initials=name=>{const p=String(name||'').trim().split(/\s+/).filter(Boolean);return((p[0]||'?')[0]+(p[1]?p[1][0]:'')).toUpperCase();};
 const empName=id=>{const e=(META.employees||[]).find(x=>String(x.id)===String(id));return e?e.name:'';};
 // Завершённая заявка = дошла до «Товар принят» И отмечена «Полностью принят».
@@ -253,20 +253,20 @@ function render(){
   const left=(MODE==='edit'&&EDIT!=null)?editCardHtml():(canEdit?createCardHtml():readOnlyCreateCard());
   const nA=activeList().length, nD=doneList().length;
   const isAdmin = ME && ME.role==='admin';
-  const body = RVIEW==='deal' ? dealViewHtml()
-    : RVIEW==='deleted' ? '<div class="spin" style="margin:24px auto"></div>'
-    : (RVIEW==='done' ? listInner(doneList(),'Завершённых заявок пока нет.')
-                      : listInner(activeList(),'Активных заявок нет. Создай первую слева.'));
+  const body = rightBodyHtml();
   const right=`<div class="card" style="padding:0;overflow:hidden">
-    <div style="display:flex;align-items:center;gap:10px;padding:16px 20px 0;flex-wrap:wrap">
+    <div style="display:flex;flex-direction:column;gap:10px;padding:16px 20px 0">
       <div class="seg2"><button class="${RVIEW==='mine'?'on':''}" onclick="setRView('mine')">Мои заявки${nA?' · '+nA:''}</button><button class="${RVIEW==='done'?'on':''}" onclick="setRView('done')">Завершённые${nD?' · '+nD:''}</button><button class="${RVIEW==='deal'?'on':''}" onclick="setRView('deal')">По сделке</button>${isAdmin?`<button class="${RVIEW==='deleted'?'on':''}" onclick="setRView('deleted')">Удалённые</button>`:''}</div>
+      <input id="rsearch" placeholder="Поиск закупки по названию…" value="${esc(RSEARCH)}" oninput="onRSearch(this.value)" autocomplete="off" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font:inherit;font-size:13px;outline:none">
     </div>
     <div style="overflow:auto;max-height:78vh;padding:14px 20px 20px" id="rightBody">${body}</div>
   </div>`;
   document.getElementById('root').innerHTML=`<div class="grid">${left}${right}</div>`;
   if(MODE==='edit'&&EDIT!=null) loadDetail(EDIT);
-  if(RVIEW==='deal'&&DEALVIEW) loadByDeal(DEALVIEW.id);
-  if(RVIEW==='deleted') loadDeletions();
+  if(!(RSEARCH||'').trim()){
+    if(RVIEW==='deal'&&DEALVIEW) loadByDeal(DEALVIEW.id);
+    if(RVIEW==='deleted') loadDeletions();
+  }
 }
 async function loadDeletions(){
   const box=document.getElementById('rightBody'); if(!box)return;
@@ -287,7 +287,25 @@ async function loadDeletions(){
       </tr>`).join('')+`</tbody></table></div>`;
   }catch(e){ box.innerHTML='<div class="empty">Не удалось загрузить журнал: '+esc(e.message)+'</div>'; }
 }
-function setRView(v){ RVIEW=v; render(); }
+// Тело правой панели: при непустом поиске — фильтр по названию ПО ВСЕМ закупкам
+// (и активным, и завершённым), иначе — обычные вкладки.
+function rightBodyHtml(){
+  const q=(RSEARCH||'').trim().toLowerCase();
+  if(q){
+    const hits=LIST.filter(r=>String(r.title||'').toLowerCase().includes(q));
+    return listInner(hits,'Ничего не найдено по запросу «'+esc(RSEARCH.trim())+'».');
+  }
+  return RVIEW==='deal' ? dealViewHtml()
+    : RVIEW==='deleted' ? '<div class="spin" style="margin:24px auto"></div>'
+    : (RVIEW==='done' ? listInner(doneList(),'Завершённых заявок пока нет.')
+                      : listInner(activeList(),'Активных заявок нет. Создай первую слева.'));
+}
+function onRSearch(v){
+  RSEARCH=v;
+  if(!String(v||'').trim()){ render(); return; }   // очистили — вернуть обычный вид
+  const b=document.getElementById('rightBody'); if(b) b.innerHTML=rightBodyHtml();
+}
+function setRView(v){ RVIEW=v; RSEARCH=''; render(); }
 function createCardHtml(){
   const srcOpts=(META.sources||[]).map(s=>`<option value="${esc(s.id)}" ${s.id===META.internalSourceId?'selected':''}>${esc(s.name)}</option>`).join('');
   const defBid=META.defaultAssignee||((META.me&&META.me.bitrixUserId)||'');
@@ -556,6 +574,10 @@ async function moveStep(id,stageKey,reason){
     if(!String(why).trim()){ alert('Причина отката обязательна — откат не выполнен.'); return; }
     reason=String(why).trim();
   }
+  // Админ может ПРОПУСКАТЬ этапы (перескок вперёд минуя проверки) — подтверждаем.
+  if(ME&&ME.role==='admin' && curIdx>=0 && targetIdx>curIdx+1){
+    if(!confirm('Пропустить промежуточные этапы и перейти сразу на «'+((flow[targetIdx]||{}).label||stageKey)+'»?\nПроверки документов будут пропущены (режим администратора).')) return;
+  }
   try{
     const body={stageKey}; if(reason)body.reason=reason;
     const r=await fetch('/api/procurement/'+id+'/stage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -633,8 +655,9 @@ function goodsBlockHtml(id,d){
       <div class="fs">${fully?('Отмечено'+(d.fullyReceivedBy?(' · '+esc(d.fullyReceivedBy)):'')+(d.fullyReceivedAt?(' · '+fmtDateTime(d.fullyReceivedAt)):'')):'Пока не отмечено — «Товар принят» остаётся красным (частичная приёмка)'}</div>
     </div>
   </div>`;
-  // Доверенность — сквозной документ: показываем и здесь, если не приложили на оплате.
-  const poaBlock=filesSlotHtml(id,d,'poa',true);
+  // Доверенность — сквозной документ: показываем ТОЛЬКО если на этапе счёта была
+  // отмечена галочка «Требуется доверенность». Без неё слот не выводим.
+  const poaBlock=d.poaRequired?filesSlotHtml(id,d,'poa',true):'';
   return waybillsHtml(id,d)+filesSlotHtml(id,d,'warranty')+poaBlock+chk
     +`<div class="hint" style="margin-top:8px">Товар может приходить частями с разными накладными. Отметь «Полностью принят», когда получено всё — тогда шаг «Товар принят» станет зелёным.${(!nakl||!warr)?' Для перехода на «Товар принят» нужны хотя бы одна накладная и гарантийный сертификат.':''}</div>`;
 }

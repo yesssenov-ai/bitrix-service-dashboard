@@ -15,6 +15,7 @@
   --bg:#14171d; --panel:#1b1f27; --panel-h:#20242e; --line:#2a2f3a; --line-2:#363c49;
   --text:#eef0f3; --text-dim:#8b93a3; --text-faint:#565d6b;
   --brand:#C53B2F; --brand-h:#d94737; --signal:#35d0c0; --signal-dim:rgba(53,208,192,.35);
+  --sel:#17272b; --sel-h:#1b2e33;
   --font-display:'Space Grotesk',sans-serif; --font-body:'Inter',system-ui,sans-serif; --font-mono:'IBM Plex Mono',monospace;
 }
 body{font-family:var(--font-body);background:var(--bg);color:var(--text);min-height:100vh;}
@@ -44,17 +45,48 @@ thead th{
   text-align:center;padding:12px 8px;border-bottom:1px solid var(--line-2);
   position:sticky;top:0;z-index:5;background:var(--panel-h);
 }
-thead th.name-col{text-align:left;padding-left:18px;position:sticky;left:0;z-index:6;background:var(--panel-h);}
-tbody td.name-col{position:sticky;left:0;z-index:1;background:var(--panel);}
+thead th.sel-col{width:40px;padding:12px 0;position:sticky;left:0;z-index:7;background:var(--panel-h);}
+tbody td.sel-col{width:40px;padding:11px 0;position:sticky;left:0;z-index:2;background:var(--panel);}
+tbody tr:hover td.sel-col{background:var(--panel-h);}
+thead th.name-col{text-align:left;padding-left:18px;position:sticky;left:40px;z-index:6;background:var(--panel-h);}
+tbody td.name-col{position:sticky;left:40px;z-index:1;background:var(--panel);}
 tbody tr:hover td.name-col{background:var(--panel-h);}
 tbody td{padding:11px 8px;border-bottom:1px solid var(--line);text-align:center;}
 tbody td.name-col{text-align:left;padding-left:18px;font-size:13.5px;font-weight:500;}
 tbody tr:last-child td{border-bottom:none;}
 tbody tr:hover{background:var(--panel-h);}
+/* Выделенные (отмеченные для массовых операций) строки — мягкая бирюзовая подсветка. */
+tbody tr.selected td{background:var(--sel);}
+tbody tr.selected:hover td{background:var(--sel-h);}
 .chk{width:17px;height:17px;accent-color:var(--signal);cursor:pointer;}
 .row-status{font-family:var(--font-mono);font-size:10px;color:var(--text-faint);margin-left:8px;}
 .save-note{font-size:11px;color:var(--signal);opacity:0;transition:opacity .3s;}
 .save-note.show{opacity:1;}
+
+/* Панель массовых действий — появляется, когда выбран хотя бы один сотрудник. */
+.action-bar{background:var(--panel);border:1px solid var(--line-2);border-radius:12px;padding:14px 16px;margin-bottom:16px;display:flex;flex-direction:column;gap:12px;}
+.action-bar[hidden]{display:none;}
+.ab-head{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.ab-count{font-family:var(--font-mono);font-size:13px;color:var(--text);}
+.ab-count b{color:var(--signal);}
+.ab-clear{background:none;border:1px solid var(--line-2);color:var(--text-dim);border-radius:7px;padding:5px 12px;font-family:var(--font-body);font-size:12px;cursor:pointer;}
+.ab-clear:hover{color:var(--text);border-color:var(--text-dim);}
+.ab-section{display:flex;flex-wrap:wrap;align-items:center;gap:8px;}
+.ab-label{font-family:var(--font-mono);font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.6px;width:100%;}
+.chips{display:flex;flex-wrap:wrap;gap:6px;}
+.chip{display:inline-flex;align-items:center;gap:4px;background:var(--panel-h);border:1px solid var(--line-2);border-radius:8px;padding:3px 4px 3px 9px;}
+.chip-lbl{font-size:12px;color:var(--text);}
+.chip-btn{width:20px;height:20px;line-height:1;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:700;font-family:var(--font-mono);display:inline-flex;align-items:center;justify-content:center;}
+.chip-btn.plus{background:var(--signal-dim);color:var(--signal);}
+.chip-btn.plus:hover{background:var(--signal);color:var(--bg);}
+.chip-btn.minus{background:rgba(197,59,47,.28);color:var(--brand-h);}
+.chip-btn.minus:hover{background:var(--brand);color:#fff;}
+.ab-copy{gap:8px;}
+.ab-select{background:var(--panel-h);border:1px solid var(--line-2);border-radius:8px;padding:7px 10px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;min-width:220px;}
+.ab-select:focus{border-color:var(--signal);}
+.ab-apply{background:var(--signal);border:none;color:var(--bg);border-radius:8px;padding:8px 16px;font-family:var(--font-body);font-size:13px;font-weight:600;cursor:pointer;}
+.ab-apply:hover{background:#4be0d0;}
+.ab-apply:disabled{opacity:.5;cursor:not-allowed;}
 
 footer{text-align:center;color:var(--text-faint);font-size:11.5px;padding:24px;font-family:var(--font-mono);}
 .loading{padding:60px;text-align:center;color:var(--text-dim);font-family:var(--font-mono);font-size:13px;}
@@ -76,6 +108,8 @@ footer{text-align:center;color:var(--text-faint);font-size:11.5px;padding:24px;f
     <span class="count" id="count">—</span>
   </div>
 
+  <div id="actionBar" class="action-bar" hidden></div>
+
   <div id="tableWrap"><div class="loading">Загрузка сотрудников из Bitrix24…</div></div>
 </main>
 
@@ -84,6 +118,7 @@ footer{text-align:center;color:var(--text-faint);font-size:11.5px;padding:24px;f
 <script>
 let EMPLOYEES = [];
 let MODULE_CODES = [];
+const SELECTED = new Set();          // id сотрудников, отмеченных для массовых операций
 const MODULE_LABELS = { PLN:'Планировщик', SVC:'Заявки', EQP:'Оборуд.', LIC:'Лицензии', REL:'Связи', MAIL:'Почта', KP:'КП', BONUS:'Бонусы', STATS:'Статистика', CONTR:'Контракты', LOG:'Логистика', OPS:'Реализация', PROC:'Закупки', CAM:'Рассылки', ADM:'Управл.' };
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -95,26 +130,40 @@ async function load(){
     const d = await r.json();
     EMPLOYEES = d.employees;
     MODULE_CODES = d.moduleCodes;
+    buildActionBar();
     renderTable();
   }catch(e){
     document.getElementById('tableWrap').innerHTML = '<div class="loading">Ошибка загрузки.</div>';
   }
 }
 
-function renderTable(){
+// Отфильтрованный список по строке поиска (единый источник для таблицы и «выбрать все»).
+function visibleList(){
   const q = document.getElementById('search').value.trim().toLowerCase();
-  const list = q ? EMPLOYEES.filter(e => e.name.toLowerCase().includes(q)) : EMPLOYEES;
+  return q ? EMPLOYEES.filter(e => e.name.toLowerCase().includes(q)) : EMPLOYEES;
+}
+
+function renderTable(){
+  const list = visibleList();
   document.getElementById('count').textContent = `${list.length} из ${EMPLOYEES.length}`;
 
-  const head = `<thead><tr><th class="name-col">Сотрудник</th>${MODULE_CODES.map(c=>`<th>${MODULE_LABELS[c]||c}</th>`).join('')}</tr></thead>`;
+  const head = `<thead><tr>
+      <th class="sel-col"><input type="checkbox" class="chk" id="selectAll" onchange="toggleSelectAll(this.checked)"></th>
+      <th class="name-col">Сотрудник</th>
+      ${MODULE_CODES.map(c=>`<th>${MODULE_LABELS[c]||c}</th>`).join('')}
+    </tr></thead>`;
   const body = list.map(emp => `
-    <tr>
+    <tr id="row-${emp.id}" class="${SELECTED.has(emp.id)?'selected':''}">
+      <td class="sel-col"><input type="checkbox" class="chk" ${SELECTED.has(emp.id)?'checked':''} onchange="toggleSelect(${emp.id},this.checked)"></td>
       <td class="name-col">${esc(emp.name)}<span class="save-note" id="note-${emp.id}">✓ сохранено</span></td>
       ${MODULE_CODES.map(c => `<td><input type="checkbox" class="chk" ${emp.modules.includes(c)?'checked':''} onchange="toggleModule(${emp.id},'${c}',this.checked)"></td>`).join('')}
     </tr>`).join('');
   document.getElementById('tableWrap').innerHTML = `<table>${head}<tbody>${body}</tbody></table>`;
+  syncSelectAll();
+  updateActionBar();
 }
 
+// ── Единичное сохранение (мгновенно по клику) — поведение не изменилось ──
 async function toggleModule(empId, code, checked){
   const emp = EMPLOYEES.find(e => e.id === empId);
   if (!emp) return;
@@ -126,9 +175,127 @@ async function toggleModule(empId, code, checked){
       method:'PUT', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ modules: emp.modules })
     });
-    const note = document.getElementById('note-'+empId);
-    if (note) { note.classList.add('show'); setTimeout(()=>note.classList.remove('show'), 1200); }
+    showNote(empId);
   }catch(e){ alert('Не удалось сохранить изменение.'); }
+}
+
+// ── Выделение сотрудников ──
+function toggleSelect(empId, checked){
+  if (checked) SELECTED.add(empId); else SELECTED.delete(empId);
+  document.getElementById('row-'+empId)?.classList.toggle('selected', checked);
+  syncSelectAll();
+  updateActionBar();
+}
+
+function toggleSelectAll(checked){
+  visibleList().forEach(e => { if (checked) SELECTED.add(e.id); else SELECTED.delete(e.id); });
+  renderTable();
+}
+
+function clearSelection(){ SELECTED.clear(); renderTable(); }
+
+// Состояние мастер-чекбокса в шапке: отмечен, если выбраны все видимые строки;
+// «полу-отмечен» (indeterminate), если только часть.
+function syncSelectAll(){
+  const cb = document.getElementById('selectAll');
+  if (!cb) return;
+  const list = visibleList();
+  const sel = list.filter(e => SELECTED.has(e.id)).length;
+  cb.checked = list.length > 0 && sel === list.length;
+  cb.indeterminate = sel > 0 && sel < list.length;
+}
+
+// ── Панель массовых действий ──
+function buildActionBar(){
+  const chips = MODULE_CODES.map(c => `
+    <span class="chip">
+      <span class="chip-lbl">${esc(MODULE_LABELS[c]||c)}</span>
+      <button class="chip-btn plus"  title="Выдать всем выбранным"  onclick="bulkSet('${c}',true)">+</button>
+      <button class="chip-btn minus" title="Убрать у всех выбранных" onclick="bulkSet('${c}',false)">−</button>
+    </span>`).join('');
+  const opts = EMPLOYEES.map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('');
+  document.getElementById('actionBar').innerHTML = `
+    <div class="ab-head">
+      <span class="ab-count">Выбрано: <b id="selCount">0</b></span>
+      <button class="ab-clear" onclick="clearSelection()">Снять выделение</button>
+    </div>
+    <div class="ab-section">
+      <span class="ab-label">Модули — выдать (+) / убрать (−) всем выбранным</span>
+      <div class="chips">${chips}</div>
+    </div>
+    <div class="ab-section ab-copy">
+      <span class="ab-label">Скопировать доступ у сотрудника и применить ко всем выбранным</span>
+      <select id="copySource" class="ab-select"><option value="">— выберите сотрудника —</option>${opts}</select>
+      <button class="ab-apply" onclick="copyFrom()">Применить</button>
+    </div>`;
+}
+
+function updateActionBar(){
+  const bar = document.getElementById('actionBar');
+  const c = document.getElementById('selCount');
+  if (c) c.textContent = SELECTED.size;
+  if (bar) bar.hidden = SELECTED.size === 0;
+}
+
+function showNote(empId){
+  const note = document.getElementById('note-'+empId);
+  if (note) { note.classList.add('show'); setTimeout(()=>note.classList.remove('show'), 1400); }
+}
+
+// Сохранение одного сотрудника через существующий эндпоинт (модель уже обновлена).
+async function persistEmp(empId){
+  const emp = EMPLOYEES.find(e => e.id === empId);
+  if (!emp) return;
+  const r = await fetch('/admin/module-access/'+empId, {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ modules: emp.modules })
+  });
+  if (!r.ok) throw new Error('save failed for '+empId);
+}
+
+// Последовательное сохранение с ограничением параллелизма (не более 4 запросов).
+async function runPool(ids, worker, limit=4){
+  const queue = [...ids];
+  const runners = [];
+  for (let i = 0; i < Math.min(limit, queue.length); i++){
+    runners.push((async () => { while (queue.length){ await worker(queue.shift()); } })());
+  }
+  await Promise.all(runners);
+}
+
+// Массово выдать/убрать один модуль всем выбранным.
+async function bulkSet(code, grant){
+  const ids = [...SELECTED];
+  if (!ids.length) return;
+  ids.forEach(id => {
+    const emp = EMPLOYEES.find(e => e.id === id);
+    if (!emp) return;
+    const m = new Set(emp.modules);
+    if (grant) m.add(code); else m.delete(code);
+    emp.modules = [...m];
+  });
+  try { await runPool(ids, persistEmp); }
+  catch(e){ alert('Не удалось сохранить часть изменений.'); }
+  renderTable();
+  ids.forEach(showNote);
+}
+
+// Скопировать точный набор доступов у одного сотрудника всем выбранным.
+async function copyFrom(){
+  const sel = document.getElementById('copySource');
+  const srcId = parseInt(sel.value, 10);
+  const src = EMPLOYEES.find(e => e.id === srcId);
+  if (!src) { alert('Выберите сотрудника-источник.'); return; }
+  const ids = [...SELECTED];
+  if (!ids.length) return;
+  ids.forEach(id => {
+    const emp = EMPLOYEES.find(e => e.id === id);
+    if (emp) emp.modules = [...src.modules];   // перезаписываем набор целиком
+  });
+  try { await runPool(ids, persistEmp); }
+  catch(e){ alert('Не удалось сохранить часть изменений.'); }
+  renderTable();
+  ids.forEach(showNote);
 }
 
 load();
