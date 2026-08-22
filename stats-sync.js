@@ -18,12 +18,19 @@ const MANUF_FIELD = 'UF_CRM_1733300779';
 // моделей (в отличие от текстового UF_CRM_NAME_PRIOBOR, где встречается склейка-мусор).
 // Подтверждено probe-manufacturer.js. Читаем enum как основной источник, текст — фолбэк.
 const MODEL_FIELD = 'UF_CRM_1733300721';
+// «План продаж»: планируемый срок покупки (date) и «Наиболее вероятная сделка» (boolean).
+const PLANNED_PURCHASE_FIELD = 'UF_CRM_1731862888595';
+const LIKELY_DEAL_FIELD = 'UF_CRM_1752737840347';
 const CATEGORY_IDS = ['0', '1', '2', '3'];
 
 const SELECT_FIELDS = [
   'ID', 'TITLE', 'CATEGORY_ID', 'STAGE_ID', 'TYPE_ID', 'OPPORTUNITY', 'CURRENCY_ID', 'DATE_CREATE',
   'COMPANY_ID', 'ASSIGNED_BY_ID', REAL_CONTRACT_DATE_FIELD, INSTRUMENT_FIELD, DEPARTMENT_FIELD, MANUF_FIELD, MODEL_FIELD,
+  PLANNED_PURCHASE_FIELD, LIKELY_DEAL_FIELD,
 ];
+
+// Bitrix boolean-поля приходят как '1'/'0', 'Y'/'N', true/false — приводим к bool.
+function toBool(v) { return v === true || v === 1 || v === '1' || v === 'Y' || v === 'yes' || v === 'true'; }
 
 // Резолв значения поля-списка (ID→имя); поддерживает и множественный выбор.
 function resolveEnum(raw, map) {
@@ -112,20 +119,23 @@ async function upsertDeal(d) {
   const company = await getCompanyInfo(d.COMPANY_ID);
   const contractDate = d[REAL_CONTRACT_DATE_FIELD] ? d[REAL_CONTRACT_DATE_FIELD].slice(0, 10) : null;
   const dateCreate = d.DATE_CREATE ? d.DATE_CREATE.slice(0, 10) : null;
+  const plannedPurchase = d[PLANNED_PURCHASE_FIELD] ? String(d[PLANNED_PURCHASE_FIELD]).slice(0, 10) : null;
+  const likelyDeal = toBool(d[LIKELY_DEAL_FIELD]);
 
   await pool.query(
     `INSERT INTO ticketsmodule_stat_deals
       (deal_id, category_id, stage_id, deal_type_id, opportunity, currency_id, company_id, assigned_by_id,
-       contract_date, instrument_name, department_id, manufacturer, industry, deal_title, date_create, company_name, synced_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW())
+       contract_date, instrument_name, department_id, manufacturer, industry, deal_title, date_create, company_name,
+       planned_purchase_date, likely_deal, synced_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW())
      ON CONFLICT (deal_id) DO UPDATE SET
        category_id=$2, stage_id=$3, deal_type_id=$4, opportunity=$5, currency_id=$6, company_id=$7, assigned_by_id=$8,
        contract_date=$9, instrument_name=$10, department_id=$11, manufacturer=$12, industry=$13, deal_title=$14,
-       date_create=$15, company_name=$16, synced_at=NOW()`,
+       date_create=$15, company_name=$16, planned_purchase_date=$17, likely_deal=$18, synced_at=NOW()`,
     [d.ID, parseInt(d.CATEGORY_ID, 10), d.STAGE_ID, d.TYPE_ID || null, parseFloat(d.OPPORTUNITY) || 0, d.CURRENCY_ID || 'KZT',
      d.COMPANY_ID || null, d.ASSIGNED_BY_ID ? parseInt(d.ASSIGNED_BY_ID, 10) : null,
      contractDate, instrumentName, d[DEPARTMENT_FIELD] || null, manufacturer, company.industry, d.TITLE || null,
-     dateCreate, company.name || null]
+     dateCreate, company.name || null, plannedPurchase, likelyDeal]
   );
 }
 

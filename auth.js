@@ -278,6 +278,11 @@ async function initDB() {
     ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS date_create DATE;
     ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS company_name VARCHAR(400);
     CREATE INDEX IF NOT EXISTS idx_stat_deals_datecreate ON ticketsmodule_stat_deals(date_create);
+    -- Для модуля «План продаж»: планируемый срок покупки (по нему сделка попадает
+    -- в тот или иной месяц плана) и флаг «Наиболее вероятная сделка».
+    ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS planned_purchase_date DATE;
+    ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS likely_deal BOOLEAN DEFAULT FALSE;
+    CREATE INDEX IF NOT EXISTS idx_stat_deals_planned ON ticketsmodule_stat_deals(planned_purchase_date);
 
     -- ── Фаза 2 Статистики: история стадий сделок ───────────────────────────
     -- Каждая запись = момент входа сделки в стадию (из crm.stagehistory.list).
