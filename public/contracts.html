@@ -459,20 +459,28 @@ function toggleFilter(dep){const a=FILT.dept;const i=a.indexOf(dep);if(i>=0)a.sp
 
 let LAST_CONS=[];
 let PLANLINE={planMonthMln:0,maxM:1};
-// Ставим горизонтальную линию плана на ту же шкалу, что и столбцы: измеряем
-// реальную базовую линию столбца и высоту 100% по DOM (устойчиво к вёрстке).
-function positionPlanLine(){
-  const bars=document.getElementById('bars'); const line=document.getElementById('planLine'); if(!bars||!line)return;
-  const wrap=bars.querySelector('.bwrap'), col=bars.querySelector('.bcol'); if(!wrap||!col)return;
-  const {planMonthMln,maxM}=PLANLINE; if(!(planMonthMln>0)||!(maxM>0)){line.style.opacity='0';return;}
-  const barsTop=bars.getBoundingClientRect().top;
-  const baseY=wrap.getBoundingClientRect().bottom-barsTop;   // низ столбцов (базовая линия)
-  const H=col.clientHeight;                                   // высота, соответствующая 100%
-  const planPx=(planMonthMln/maxM)*H;
-  line.style.top=Math.max(0,baseY-planPx)+'px';
-  line.style.opacity='1';
+// Раскладываем столбцы и линию плана в ЕДИНОЙ пиксельной шкале, измеренной по DOM
+// (иначе flex-вёрстка «съедает» часть высоты и линия не совпадает с цифрами).
+function layoutBars(animate){
+  const bars=document.getElementById('bars'); if(!bars)return;
+  const cols=[...bars.querySelectorAll('.bcol')]; if(!cols.length)return;
+  const {maxM,planMonthMln}=PLANLINE; if(!(maxM>0))return;
+  const col=cols[0], bm=col.querySelector('.bm'), bval=col.querySelector('.bval');
+  // Зарезервировать место под подпись месяца снизу и цифру сверху.
+  const reserve=Math.max(((bm?bm.offsetHeight:14)+(bval?bval.offsetHeight:14)+12),34);
+  const plotH=Math.max(20, col.clientHeight - reserve);
+  const pxPerMln=plotH/maxM;
+  cols.forEach((c,i)=>{ const w=c.querySelector('.bwrap'); const v=+w.dataset.mln||0; const px=(v*pxPerMln).toFixed(1)+'px';
+    if(animate) setTimeout(()=>{ w.style.height=px; }, i*20); else w.style.height=px; });
+  const line=document.getElementById('planLine');
+  if(line&&planMonthMln>0){
+    const w0=col.querySelector('.bwrap');
+    const baseY=w0.getBoundingClientRect().bottom-bars.getBoundingClientRect().top; // базовая линия столбцов
+    line.style.top=Math.max(0,baseY-planMonthMln*pxPerMln).toFixed(1)+'px';
+    line.style.opacity='1';
+  }
 }
-window.addEventListener('resize',()=>{ if(!CMP) positionPlanLine(); });
+window.addEventListener('resize',()=>{ if(!CMP) layoutBars(false); });
 function renderAll(){
   const cons=getFiltered();
   LAST_CONS=cons;
@@ -673,16 +681,15 @@ function renderBars(deals){
   const planMonthMln=planYear/12/1e6;
   // Масштаб включает линию плана, чтобы она всегда была видна над столбцами.
   const maxM=Math.max(1,...totals,planMonthMln);
-  PLANLINE={planMonthMln,maxM};
+  PLANLINE={planMonthMln,maxM,totals};
   const depts=orderDepts([...new Set(deals.map(d=>d.saleType))]);
   const planLineHtml=planMonthMln>0?`<div class="planline" id="planLine"><span class="planline-lbl">план ${fmt(planMonthMln)} млн/мес${FILT.dept.length?'':' · всего'}</span></div>`:'';
   document.getElementById('bars').innerHTML=MONTHS.map((m,i)=>{
-    const o=byMonth[i],tot=totals[i],h=tot/maxM*100;
+    const o=byMonth[i],tot=totals[i];
     const segs=tot?depts.filter(dp=>o[dp]).map(dp=>`<div class="bseg" style="background:${stColor(dp,DEPT_ORDER.indexOf(dp))};height:${o[dp]/tot*100}%"></div>`).join(''):'';
-    return `<div class="bcol" data-i="${i}"><span class="bval">${tot?fmt(tot):''}</span><div class="bwrap" data-h="${h}" style="height:0">${segs}</div><span class="bm">${m}</span></div>`;
+    return `<div class="bcol" data-i="${i}"><span class="bval">${tot?fmt(tot):''}</span><div class="bwrap" data-mln="${tot}" style="height:0">${segs}</div><span class="bm">${m}</span></div>`;
   }).join('')+planLineHtml;
-  setTimeout(()=>document.querySelectorAll('#bars .bwrap').forEach((b,i)=>setTimeout(()=>b.style.height=b.dataset.h+'%',i*20)),200);
-  requestAnimationFrame(()=>requestAnimationFrame(positionPlanLine));
+  setTimeout(()=>layoutBars(true),200);
   document.querySelectorAll('#bars .bcol').forEach(c=>{const i=+c.dataset.i,o=byMonth[i];
     c.addEventListener('mousemove',e=>{const rows=Object.keys(o).sort((a,b)=>o[b]-o[a]).map(dp=>`<span style="color:${stColor(dp,DEPT_ORDER.indexOf(dp))}">■</span> ${esc(dp)}: ${fmt(o[dp])} млн`).join('<br>');
       let planRow='';
