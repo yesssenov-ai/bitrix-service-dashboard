@@ -79,6 +79,10 @@ h1{font-family:var(--font-display);font-size:30px;font-weight:600;letter-spacing
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;
 }
 .user-chip a,.user-chip button{white-space:nowrap;}
+/* На узком экране: имя на своей строке, а «Доступ к модулям» и «Выйти» — вместе в одну строку. */
+@media(max-width:640px){
+  .user-chip .name{flex:0 0 100%;}
+}
 .user-chip .name{font-size:13px;color:var(--text-dim);}
 .user-chip .name b{color:var(--text);font-weight:600;}
 .logout-btn{

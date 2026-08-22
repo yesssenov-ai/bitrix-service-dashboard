@@ -130,8 +130,9 @@ th:last-child,td:last-child{text-align:right;}
 /* ── Мобильная адаптация ──────────────────────────────────────────────────
    Шапка и вкладки не влезают в узкий экран — даём им горизонтальную прокрутку
    внутри своей области (а не всей странице), уменьшаем отступы, прячем e-mail. */
+.hscroll-fade{display:none;}
 @media(max-width:760px){
-  .header{padding:0 12px;height:auto;min-height:54px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;}
+  .header{padding:0 12px;height:auto;min-height:54px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;scroll-snap-type:x proximity;}
   .header > *{flex:0 0 auto;}
   .hdiv{margin:0 8px;}
   .h-nav a{padding:6px 8px;}
@@ -139,6 +140,15 @@ th:last-child,td:last-child{text-align:right;}
   .page{padding:18px 12px 60px;}
   .tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;}
   .tab{flex:0 0 auto;white-space:nowrap;}
+  /* Подсказка «шапку можно листать вправо»: залипающий градиент + стрелка у правого края. */
+  .hscroll-fade{display:block;position:sticky;right:0;flex:0 0 26px;align-self:stretch;margin-left:-26px;pointer-events:none;
+    background:linear-gradient(to right,transparent,var(--white) 80%);}
+  .hscroll-fade::after{content:"›";position:absolute;right:5px;top:50%;transform:translateY(-50%);color:var(--accent);font-size:20px;font-weight:700;animation:hswipe 1.4s ease-in-out infinite;}
+  @keyframes hswipe{0%,100%{transform:translateY(-50%) translateX(0);opacity:.55}50%{transform:translateY(-50%) translateX(3px);opacity:1}}
+  /* Кнопки в шапке карточки — одинаковой ширины в одну строку. */
+  .card-head{flex-wrap:wrap;gap:10px;}
+  .head-actions{width:100%;}
+  .head-actions .btn{flex:1 1 0;justify-content:center;padding-left:8px;padding-right:8px;}
 }
 </style>
 </head>
@@ -159,6 +169,7 @@ th:last-child,td:last-child{text-align:right;}
     <span class="user-badge" id="currentUser">—</span>
     <button class="btn" onclick="logout()">Выйти</button>
   </div>
+  <span class="hscroll-fade" aria-hidden="true"></span>
 </header>
 
 <div class="page">
@@ -180,7 +191,7 @@ th:last-child,td:last-child{text-align:right;}
     <div class="card">
       <div class="card-head">
         <span class="card-title">Пользователи системы</span>
-        <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <div class="head-actions" style="display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn" id="btnImportBitrix" onclick="importBitrixUsers()" title="Создать учётки по всем сотрудникам Bitrix (логин — почта, пароль 123qwerty, роль Просмотр)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
             Импорт из Битрикс
