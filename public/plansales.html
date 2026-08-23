@@ -487,7 +487,9 @@ function pipeData(offset){
   const dt=new Date(now.getFullYear(),now.getMonth()+offset,1);
   const y=dt.getFullYear(), m=dt.getMonth();
   const pipe=DATA.deals.filter(d=>pipeGeoPass(d)&&(d.step==='P60'||d.step==='P80')&&d.year===y&&d.monthIdx===m);
-  const signed=((DATA.meta&&DATA.meta.signed)||[]).filter(s=>pipeGeoPass(s)&&s.y===y&&s.monthIdx===m);
+  // «Подписано» — законтрактованные сделки этого месяца (по дате договора), как в
+  // модуле «Контракты». Показываем в блоке текущего месяца (offset 0).
+  const signed=offset===0 ? ((DATA.meta&&DATA.meta.signed)||[]).filter(s=>pipeGeoPass(s)&&s.y===y&&s.monthIdx===m) : [];
   const depts=new Set([...pipe.map(d=>d.dept),...signed.map(s=>s.dept)]);
   const rows=ordDept([...depts]).map(dep=>{
     const pl=pipe.filter(d=>d.dept===dep), sg=signed.filter(s=>s.dept===dep);

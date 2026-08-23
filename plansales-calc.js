@@ -18,6 +18,16 @@ const RAW = {
 const STAGE_STEP = {};
 for (const [st, ids] of Object.entries(RAW)) ids.forEach(id => { STAGE_STEP[id] = st; });
 const stepOf = s => STAGE_STEP[s] || null;             // null = не доконтрактная (в план не берём)
+// «Подписано» — законтрактованные сделки (от стадии договора до завершения), ровно
+// как в модуле «Контракты» (CONTRACT_SET, включая WON). Раскладываем по месяцам
+// по ДАТЕ ДОГОВОРА (contract_date) — так «Контракты авг = 284» бьётся с блоком.
+const CONTRACT_STAGES = {
+  0: ['FINAL_INVOICE', '1', 'UC_Q9J6VV', 'UC_9MBFR2', '2', '3', 'WON'],
+  1: ['C1:FINAL_INVOICE', 'C1:1', 'C1:UC_3MVK90', 'C1:UC_3SCB5K', 'C1:2', 'C1:3', 'C1:WON'],
+  2: ['C2:FINAL_INVOICE', 'C2:1', 'C2:2', 'C2:WON'],
+  3: ['C3:FINAL_INVOICE', 'C3:UC_YYTFYG', 'C3:2', 'C3:WON'],
+};
+const CONTRACT_SET = Object.values(CONTRACT_STAGES).flat();
 const STEP_LABELS = { P10: 'P10 · Новый лид', P30: 'P30 · Задача принята', P60: 'P60 · КП выставлено', P80: 'P80 · Покупка ≤3 мес' };
 
 // ── Направление (Отдел) — поле «Отдел», иначе короткое имя воронки ─────────────
@@ -175,10 +185,34 @@ async function getPlanSales() {
     e.count++; e.sum += d.sum; unMap.set(k, e);
   }
   const unassigned = [...unMap.values()].sort((a, b) => b.count - a.count);
+
+  // «Подписано» по месяцам (по дате договора), как в модуле «Контракты». Тянем
+  // текущий и следующий год; фронт берёт нужный месяц. Фильтр Отдел/Менеджер — на фронте.
+  const yrNow = new Date().getFullYear();
+  let signed = [];
+  try {
+    const { rows: sr } = await pool.query(
+      `SELECT category_id, department_id, assigned_by_id, opportunity, currency_id, manufacturer,
+              TO_CHAR(contract_date,'YYYY-MM-DD') AS cd
+         FROM ticketsmodule_stat_deals
+        WHERE contract_date BETWEEN $1 AND $2 AND stage_id = ANY($3)`,
+      [`${yrNow}-01-01`, `${yrNow + 1}-12-31`, CONTRACT_SET]
+    );
+    signed = sr.map(r => {
+      const raw = parseFloat(r.opportunity) || 0;
+      const sm = r.currency_id === 'USD' ? raw * rate : raw;
+      return {
+        dept: direction(r.category_id, r.department_id, r.assigned_by_id || null, r.manufacturer),
+        managerId: r.assigned_by_id || null,
+        y: +r.cd.slice(0, 4), monthIdx: +r.cd.slice(5, 7) - 1, sum: sm,
+      };
+    });
+  } catch (e) { /* best-effort */ }
+
   // Время последнего обновления зеркала
   let updatedAt = null;
   try { const { rows: u } = await pool.query('SELECT MAX(synced_at) AS m FROM ticketsmodule_stat_deals'); updatedAt = u[0] && u[0].m; } catch (e) { /* ignore */ }
-  return { deals, meta: { years, depts, managers, unassigned, rate, updatedAt, stepLabels: STEP_LABELS, deptOrder: DEPT_ORDER } };
+  return { deals, meta: { years, depts, managers, unassigned, signed, rate, updatedAt, stepLabels: STEP_LABELS, deptOrder: DEPT_ORDER } };
 }
 
 module.exports = { getPlanSales, DEPT_ORDER };
