@@ -32,23 +32,18 @@ router.post('/cover', requireAuth(VIEW_ROLES), express.json(), (req, res) => {
   res.json({ text: coverLetter({ greetingName: b.greetingName, equipment: b.equipment, sender: senderFor(req.user) }) });
 });
 
-// Собрать файл КП в нужном формате. Возвращает { buf, name, mime }.
-async function buildKpFile(kp, format) {
+// Собрать файл КП (DOCX 1:1 по оригинальному шаблону). Возвращает { buf, name, mime }.
+async function buildKpFile(kp) {
   const slug = String((kp && kp.client) || '').replace(/[^\wа-яА-Я0-9]+/g, '_').slice(0, 40);
-  if (format === 'docx') {
-    const { buildServiceKpDocx } = require('../kp-service-docx');
-    return { buf: await buildServiceKpDocx(kp), name: 'KP_Service_' + slug + '.docx',
-      mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' };
-  }
-  const { buildServiceKpPdf } = require('../kp-service-pdf');
-  return { buf: await buildServiceKpPdf(kp), name: 'KP_Service_' + slug + '.pdf', mime: 'application/pdf' };
+  const { buildServiceKpDocx } = require('../kp-service-docx');
+  return { buf: await buildServiceKpDocx(kp), name: 'KP_Service_' + slug + '.docx',
+    mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' };
 }
 
-// POST /api/kp-service/generate — сформировать КП (PDF по умолчанию, ?format=docx) и отдать на скачивание.
+// POST /api/kp-service/generate — сформировать КП (DOCX 1:1) и отдать на скачивание.
 router.post('/generate', requireAuth(VIEW_ROLES), express.json({ limit: '2mb' }), async (req, res) => {
   try {
-    const format = (req.query.format === 'docx' || (req.body && req.body.format) === 'docx') ? 'docx' : 'pdf';
-    const { buf, name, mime } = await buildKpFile(req.body || {}, format);
+    const { buf, name, mime } = await buildKpFile(req.body || {});
     res.setHeader('Content-Type', mime);
     res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
     res.send(buf);
@@ -69,8 +64,7 @@ router.post('/send', requireAuth(VIEW_ROLES), express.json({ limit: '2mb' }), as
     if (!to) return res.status(400).json({ error: 'Укажите e-mail получателя' });
     const sender = senderFor(req.user);
     const fromEmail = sender.email && /@prolabsupport\.kz$/i.test(sender.email) ? sender.email : 'service@prolabsupport.kz';
-    const format = (b.format === 'docx') ? 'docx' : 'pdf';
-    const { buf, name: fileName } = await buildKpFile(b.kp || {}, format);
+    const { buf, name: fileName } = await buildKpFile(b.kp || {});
     const html = '<div style="font-family:Arial,sans-serif;white-space:pre-wrap;font-size:14px;line-height:1.5">' +
       String(b.cover || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
     const payload = {
