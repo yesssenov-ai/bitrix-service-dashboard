@@ -36,8 +36,24 @@ const deptLabel = id => {
 // поэтому без заполненного «Отдела» её нельзя отнести → «Отдел не указан» (надо
 // проставить отдел в сделке Bitrix, чтобы она встала в свой отдел).
 const PIPE_FALLBACK = { 0: 'Отдел не указан', 1: 'ОРМ', 2: 'Тренинг-центр', 3: 'Сервис' };
-const direction = (catId, departmentId) => {
+
+// Привязка МЕНЕДЖЕР → ОТДЕЛ. Используется ТОЛЬКО когда у сделки не заполнено поле
+// «Отдел» в воронке «Приборы» (category 0) — тогда относим сделку к отделу по её
+// менеджеру (мы знаем, в каком отделе работает менеджер). Ключ — Bitrix-ID
+// менеджера (assigned_by_id), значение — название отдела (как в DEPARTMENT_LABELS,
+// напр. 'Элементный', 'Хроматография и клеточный анализ', 'Электрохимия',
+// 'General Lab', 'Материаловедение'). Заполняется по данным от Kuanysh.
+// (Категории 1/2/3 уже сами = отдел ОРМ/Тренинг-центр/Сервис, там привязка не нужна.)
+const MANAGER_DEPT = {
+  // '<bitrixUserId>': 'Элементный',
+};
+
+const direction = (catId, departmentId, managerId) => {
   if (departmentId && DEPARTMENT_LABELS[departmentId]) return deptLabel(departmentId);
+  // Пустой «Отдел» в воронке «Приборы» — пробуем определить по менеджеру.
+  if ((catId === 0 || catId === '0') && managerId != null && MANAGER_DEPT[String(managerId)]) {
+    return MANAGER_DEPT[String(managerId)];
+  }
   return PIPE_FALLBACK[catId] || 'Не указан';
 };
 const DEPT_ORDER = ['Элементный', 'Хроматография и клеточный анализ', 'Электрохимия', 'ОРМ', 'Сервис', 'General Lab', 'Тренинг-центр', 'Комплекс', 'Материаловедение', 'Отдел не указан'];
@@ -84,9 +100,9 @@ async function getPlanSales() {
     if (!(monthIdx >= 0 && monthIdx <= 11)) continue;
     const raw = parseFloat(r.opportunity) || 0;
     const sum = r.currency_id === 'USD' ? raw * rate : raw;
-    const dept = direction(r.category_id, r.department_id);
     const managerId = r.assigned_by_id || null;
     const managerName = uname(managerId);
+    const dept = direction(r.category_id, r.department_id, managerId);
     yearsSet.add(y); deptSet.add(dept);
     if (managerId) mgrMap.set(managerId, managerName);
     const lm = lastMoved[r.deal_id] || null;
@@ -111,10 +127,20 @@ async function getPlanSales() {
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
   });
   const managers = [...mgrMap.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  // Кто «не распределён по отделам» — менеджеры сделок, оставшихся «Отдел не указан»
+  // (нужно, чтобы назначить отдел по менеджеру). С количеством сделок.
+  const unMap = new Map();
+  for (const d of deals) {
+    if (d.dept !== 'Отдел не указан') continue;
+    const k = d.managerId || 0;
+    const e = unMap.get(k) || { id: d.managerId || null, name: d.managerName, count: 0, sum: 0 };
+    e.count++; e.sum += d.sum; unMap.set(k, e);
+  }
+  const unassigned = [...unMap.values()].sort((a, b) => b.count - a.count);
   // Время последнего обновления зеркала
   let updatedAt = null;
   try { const { rows: u } = await pool.query('SELECT MAX(synced_at) AS m FROM ticketsmodule_stat_deals'); updatedAt = u[0] && u[0].m; } catch (e) { /* ignore */ }
-  return { deals, meta: { years, depts, managers, rate, updatedAt, stepLabels: STEP_LABELS, deptOrder: DEPT_ORDER } };
+  return { deals, meta: { years, depts, managers, unassigned, rate, updatedAt, stepLabels: STEP_LABELS, deptOrder: DEPT_ORDER } };
 }
 
 module.exports = { getPlanSales, DEPT_ORDER };

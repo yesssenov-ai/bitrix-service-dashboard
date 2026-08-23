@@ -61,7 +61,7 @@
   .clock{text-align:right}.clock .c1{font-size:11px;color:var(--dim)}.clock .c2{font-size:14px;font-weight:700;color:#fff}
 
   .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;backdrop-filter:blur(8px)}
-  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:14px 16px;margin-bottom:16px}
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:14px 16px;margin-bottom:16px;position:relative;z-index:200}
   .ctl{display:flex;align-items:center;gap:7px;background:var(--panel2);border:1px solid var(--border);border-radius:11px;padding:8px 12px;font-size:13px;font-weight:600}
   .ctl label{color:var(--dim);font-weight:600}
   .ctl select{background:transparent;border:0;color:var(--text);font:inherit;font-weight:700;cursor:pointer;outline:none;max-width:220px}
@@ -235,6 +235,7 @@
       <span class="al" id="chartHint" style="color:var(--dim2)"></span>
     </div>
     <div id="chartWrap" style="overflow-x:auto"><svg id="chartSvg" width="100%" height="300" preserveAspectRatio="none"></svg></div>
+    <div id="unassignedNote" style="margin-top:12px"></div>
   </div>
 
   <div class="grid2" id="pipeBlock" style="display:none">
@@ -395,8 +396,19 @@ function renderAll(){
   document.getElementById('treeMode').textContent='· '+(GROUP==='dept'?'Месяцы → отделы → менеджеры → сделки':'Менеджеры → месяцы → сделки');
   renderKpis();
   renderChart();
+  renderUnassigned();
   renderPipe();
   renderTree();
+}
+
+// Список менеджеров, чьи сделки без «Отдела» (нужно назначить отдел по менеджеру).
+function renderUnassigned(){
+  const box=document.getElementById('unassignedNote'); if(!box)return;
+  const un=(DATA.meta&&DATA.meta.unassigned)||[];
+  if(!un.length){ box.innerHTML=''; return; }
+  const rows=un.map(u=>`<span style="display:inline-block;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:4px 9px;margin:3px 5px 0 0;font-size:12px"><b>${esc(u.name)}</b> · ${u.count} сдел. · ${fmtMln(u.sum)}</span>`).join('');
+  const total=un.reduce((s,u)=>s+u.count,0);
+  box.innerHTML=`<div style="font-size:12.5px;color:var(--warn);font-weight:700;margin-bottom:4px">⚠ Без отдела (пустой «Отдел» в воронке «Приборы»): ${total} сдел. — назначаются по менеджеру, когда пришлёшь соответствие менеджер → отдел</div>${rows}`;
 }
 
 // ── График плана продаж: стек P60 (синий) + P80 (жёлтый) по месяцам ────────────
