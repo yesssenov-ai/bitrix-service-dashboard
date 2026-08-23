@@ -48,6 +48,21 @@
   .pv-b{font-weight:700}
   .pv-sig{display:flex;justify-content:space-between;margin-top:16px}
   .muted{color:#666;font-size:11px}
+  /* брендовый предпросмотр (совпадает с итоговым файлом) */
+  .bpv{font-family:Arial,Helvetica,sans-serif;font-size:12.5px;line-height:1.5;color:#1a1a1a}
+  .bpv-logo{font-size:21px;font-weight:800;color:#222;display:inline-flex;align-items:center;gap:6px}
+  .bpv-logo i{display:inline-block;width:5px;height:16px;background:#c81e2a;box-shadow:7px 0 0 #c81e2a,14px 0 0 #c81e2a}
+  .bpv-tag{color:#c81e2a;font-size:11px;font-weight:700;margin:3px 0 16px}
+  .bpv-h1{font-size:27px;font-weight:900;letter-spacing:.4px;margin:4px 0 12px;color:#111}
+  .bpv-title{font-weight:800;font-size:14.5px;margin-bottom:12px;color:#111}
+  .bpv-date{display:inline-block;background:#c81e2a;color:#fff;font-weight:800;padding:6px 16px;border-radius:3px;margin-bottom:14px}
+  .bpv-for{margin-bottom:16px}.bpv-for b{font-size:14px}
+  .bpv-intro{color:#333;margin-bottom:12px}
+  .bpv-bar{background:#c81e2a;color:#fff;font-weight:800;font-size:12px;padding:5px 12px;border-radius:3px;margin:14px 0 8px}
+  .bpv-blk{margin-bottom:6px}
+  .bpv-tot{font-weight:800;margin:10px 0}
+  .bpv-sig{display:flex;justify-content:space-between;align-items:flex-end;margin-top:34px}
+  .bpv-note{margin-top:20px;color:#8a8a8a;font-size:10.5px;border-top:1px solid #ececec;padding-top:9px}
   /* кандидаты */
   .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:14px 16px}
   .chip{background:var(--panel2);border:1px solid var(--border);border-radius:9px;padding:6px 11px;font-size:12px;font-weight:700;color:var(--dim);cursor:pointer}
@@ -210,25 +225,33 @@ function collectKp(){
 }
 function renderPreview(){
   const d=collectKp();
-  const eq=(d.equipment||[]).map(e=>'• '+esc(e)).join('<br>');
-  const sc=(d.scope||[]).map(e=>'• '+esc(e)).join('<br>');
+  const eq=(d.equipment||[]).map(e=>'• '+esc(e)).join('<br>')||'—';
+  const sc=(d.scope||[]).map((e,i)=>(i+1)+'. '+esc(e)).join('<br>')||'—';
+  const vat=d.vatMode==='без'?'без учета':'с учетом';
+  const cond=(esc(d.conditions||'')+(d.term?'<br>Срок оказания услуги: '+esc(d.term):''))||'—';
   $('preview').innerHTML=`
-    <div class="pv-h">ТОО «ProLabSupport» · Республика Казахстан, г. Астана, пр. Мәңгілік Ел 55/22, ДЦ «EXPO»<br>www.prolabsupport.kz · service@prolabsupport.kz</div>
-    <div class="pv-date">${esc(d.date)}</div>
-    <div class="pv-title">Коммерческое предложение</div>
-    <table class="pv-tbl"><tr><td style="width:15%"><b>Кому:</b></td><td><b>${esc(d.client)||'—'}</b></td></tr></table>
-    <table class="pv-tbl">
-      <tr><td style="width:7%;text-align:center">№</td><td><b>Описание</b></td></tr>
-      <tr><td style="text-align:center">1</td><td><span class="pv-b">${esc(d.serviceTitle)||'—'}</span>
-        ${eq?`<br><br><span class="pv-b">Список оборудования:</span><br>${eq}`:''}
-        ${sc?`<br><br><span class="pv-b">Перечень работ:</span><br>${sc}`:''}</td></tr>
-      <tr><td style="text-align:center">1.1</td><td><span class="pv-b">Место проведения:</span><br>${esc(d.place)||'—'}</td></tr>
-      <tr><td style="text-align:center">1.2</td><td><span class="pv-b">Условия оказания:</span><br>${esc(d.conditions)||'—'}${d.term?'<br>Срок оказания услуги: '+esc(d.term):''}</td></tr>
-      <tr><td style="text-align:center">1.3</td><td><span class="pv-b">Состав и объёмы:</span><br>${esc(d.volume)||'—'}</td></tr>
-    </table>
-    <div class="pv-tot">ИТОГО ${d.vatMode==='без'?'без учёта':'с учётом'} НДС: ${money(d.total)} тенге</div>
-    <div class="pv-sig"><span>Директор ТОО «ProLabSupport»</span><span class="pv-b">Абылкасимов Р.С.</span></div>
-    <div class="muted" style="margin-top:8px">Ответственный: ${esc(d.responsible.name)}${d.responsible.phone?' '+esc(d.responsible.phone):''}${d.responsible.email?', e-mail: '+esc(d.responsible.email):''}</div>`;
+   <div class="bpv">
+    <div class="bpv-logo">Pro&nbsp;Lab&nbsp;Support<i></i></div>
+    <div class="bpv-tag">Качество, доверие, культура!</div>
+    <div class="bpv-h1">КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ</div>
+    <div class="bpv-title">${esc(d.serviceTitle)||'—'}</div>
+    <div class="bpv-date">Дата: ${esc(d.date)||'—'}</div>
+    <div class="bpv-for">Подготовлено для:<br><b>${esc(d.client)||'—'}</b></div>
+    <div class="bpv-intro">Компания Pro Lab Support занимается комплексным оснащением лабораторий, сервисным и методическим сопровождением пользователей аналитического оборудования. Официальный дистрибьютор Agilent Technologies, Metrohm, Malvern Panalytical, Struers, Elga и LNI Swissgas.</div>
+    <div class="bpv-bar">Сервис и методическая поддержка</div>
+    <div class="bpv-bar">Проведение диагностики оборудования на предприятии:</div>
+    <div class="bpv-blk"><b>Список оборудования:</b><br>${eq}</div>
+    <div class="bpv-blk"><b>Перечень услуг:</b><br>${sc}</div>
+    <div class="bpv-bar">Место проведения сервисных услуг:</div>
+    <div class="bpv-blk">${esc(d.place)||'—'}</div>
+    <div class="bpv-bar">Условия оказания сервисных услуг:</div>
+    <div class="bpv-blk">${cond}</div>
+    <div class="bpv-bar">Общая стоимость:</div>
+    <div class="bpv-blk">${esc(d.volume)||''}</div>
+    <div class="bpv-tot">Итого ${vat} НДС: ${money(d.total)} тенге.</div>
+    <div class="bpv-sig"><span>Директор<br>ТОО «ProLabSupport»</span><b>Абылкасимов Р.С.</b></div>
+    <div class="bpv-note">Предпросмотр приблизительный. Итоговый файл формируется 1:1 по фирменному шаблону: фото команды, иконки услуг, орнамент, QR-код, печать и подпись.</div>
+   </div>`;
 }
 async function downloadKp(){
   const kp=collectKp();
