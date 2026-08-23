@@ -51,9 +51,6 @@ const MANAGER_DEPT_LIST = [
   ['Бакытжан Шаймурат', 'Элементный'],
   ['Аманжол Сыздыков', 'Элементный'],
   ['Мурат Булегенов', 'Электрохимия'],
-  ['Назерке Марат', 'Электрохимия'],
-  ['Асем Жарылгап', 'Электрохимия'],
-  ['Айнель Сеитова', 'Электрохимия'],
   ['Аруна Болатова', 'General Lab'],
   ['Рабига Нуржанова', 'General Lab'],
   ['Акгулим Самиголлаева', 'General Lab'],
@@ -76,12 +73,20 @@ function nameKey(s) { return normName(s).split(' ').filter(Boolean).sort().join(
 const MANAGER_DEPT = {};
 for (const [nm, dep] of MANAGER_DEPT_LIST) MANAGER_DEPT[nameKey(nm)] = dep;
 
-const direction = (catId, departmentId, managerId) => {
+// Менеджеры, которые в «Приборах» ведут ДВА отдела — разводим по производителю.
+// Назерке Марат / Асем Жарылгап / Айнель Сеитова: Metrohm → Электрохимия, иначе General Lab.
+const MANAGER_SPLIT = {};
+[['Назерке Марат'], ['Асем Жарылгап'], ['Айнель Сеитова']].forEach(([nm]) => {
+  MANAGER_SPLIT[nameKey(nm)] = manuf => (/metrohm/i.test(manuf || '') ? 'Электрохимия' : 'General Lab');
+});
+
+const direction = (catId, departmentId, managerId, manufacturer) => {
   if (departmentId && DEPARTMENT_LABELS[departmentId]) return deptLabel(departmentId);
   // Пустой «Отдел» в воронке «Приборы» — определяем по менеджеру.
   if (catId === 0 || catId === '0') {
-    const dep = MANAGER_DEPT[nameKey(uname(managerId))];
-    if (dep) return dep;
+    const key = nameKey(uname(managerId));
+    if (MANAGER_SPLIT[key]) return MANAGER_SPLIT[key](manufacturer);
+    if (MANAGER_DEPT[key]) return MANAGER_DEPT[key];
   }
   return PIPE_FALLBACK[catId] || 'Не указан';
 };
@@ -104,7 +109,7 @@ async function getPlanSales() {
   const base = dealUrlBase();
   const { rows } = await pool.query(
     `SELECT deal_id, category_id, stage_id, opportunity, currency_id, assigned_by_id,
-            department_id, deal_title, company_name, planned_purchase_date, likely_deal
+            department_id, deal_title, company_name, planned_purchase_date, likely_deal, manufacturer
        FROM ticketsmodule_stat_deals
       WHERE planned_purchase_date IS NOT NULL`
   );
@@ -131,7 +136,7 @@ async function getPlanSales() {
     const sum = r.currency_id === 'USD' ? raw * rate : raw;
     const managerId = r.assigned_by_id || null;
     const managerName = uname(managerId);
-    const dept = direction(r.category_id, r.department_id, managerId);
+    const dept = direction(r.category_id, r.department_id, managerId, r.manufacturer);
     yearsSet.add(y); deptSet.add(dept);
     if (managerId) mgrMap.set(managerId, managerName);
     const lm = lastMoved[r.deal_id] || null;
