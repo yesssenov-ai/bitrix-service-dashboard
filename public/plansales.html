@@ -36,6 +36,15 @@
   html[data-theme="light"] .stg.P30{background:rgba(124,58,237,.14);color:#6d28d9}
   html[data-theme="light"] .stg.P60{background:rgba(37,99,235,.14);color:#1d4ed8}
   html[data-theme="light"] .stg.P80{background:rgba(217,119,6,.16);color:#b45309}
+  /* Светлая тема: строки свода были слишком светлыми/белыми — делаем читаемыми */
+  html[data-theme="light"] .lvl-month .lbl,html[data-theme="light"] .lvl-month .sum{color:#0f172a}
+  html[data-theme="light"] .lvl-dept .lbl{color:#1f2937}
+  html[data-theme="light"] .lvl-mgr .lbl{color:#374151}
+  html[data-theme="light"] .row .sum{color:#1f2937}
+  html[data-theme="light"] .dcm{color:#5b6472}
+  html[data-theme="light"] .dcm b{color:#111827}
+  /* Прошедшие месяцы — красным (аномалия), внизу списка */
+  .row.past .lbl,.row.past .sum{color:var(--bad)!important}
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{background:var(--bg);color:var(--text);font-family:"SF Pro Display","Segoe UI",Inter,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
   body{min-height:100vh;overflow-x:hidden;background:radial-gradient(1200px 600px at 15% -5%,rgba(255,45,85,.10),transparent 60%),radial-gradient(1000px 700px at 100% 0%,rgba(91,140,255,.10),transparent 55%),radial-gradient(900px 800px at 50% 120%,rgba(34,201,163,.07),transparent 60%),var(--bg)}
@@ -69,6 +78,8 @@
   .chip[data-s="P80"].on{background:rgba(255,176,32,.22);border-color:var(--p80);color:#ffd98a}
   .chip.act{background:rgba(255,45,85,.16);border-color:var(--brand);color:#ffb3c1}
   .chip.act.on{background:rgba(255,45,85,.28);color:#fff}
+  .chip.yr.on{background:rgba(91,140,255,.22);border-color:var(--accent);color:#bcd2ff}
+  html[data-theme="light"] .chip.yr.on{background:rgba(37,99,235,.14);border-color:var(--accent);color:#1d4ed8}
   .minibtn{background:var(--panel2);border:1px solid var(--border);border-radius:9px;padding:6px 11px;font-size:12px;font-weight:700;color:var(--dim);cursor:pointer}
   .minibtn:hover{color:#fff;border-color:var(--border2)}
 
@@ -124,10 +135,15 @@
   .spin{width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite;margin:40px auto}
   @keyframes sp{to{transform:rotate(360deg)}}
   .togglehint{font-size:11px;color:var(--dim2)}
-  .deal .cm{background:var(--panel2);border:1px solid var(--border);border-radius:7px;color:var(--dim);font-size:11px;font-weight:700;padding:3px 8px;cursor:pointer;flex-shrink:0}
-  .deal .cm:hover{color:#fff;border-color:var(--border2)}
-  html[data-theme="light"] .deal .cm:hover{color:#111827}
+  .deal .cm,.deal .tk{background:var(--panel2);border:1px solid var(--border);border-radius:7px;color:var(--dim);font-size:11px;font-weight:700;padding:3px 8px;cursor:pointer;flex-shrink:0}
+  .deal .cm:hover,.deal .tk:hover{color:#fff;border-color:var(--border2)}
+  html[data-theme="light"] .deal .cm:hover,html[data-theme="light"] .deal .tk:hover{color:#111827}
   .deal .cm .b{color:var(--brand2);margin-left:3px}
+  /* Инлайн-комментарий под сделкой (последний, сразу виден) */
+  .dcm{padding:1px 14px 9px 60px;font-size:11.5px;color:var(--dim);line-height:1.45}
+  .dcm b{color:var(--text)}
+  .dcm .more{color:var(--accent);cursor:pointer;font-weight:700;margin-left:6px}
+  .dcm.none{color:var(--dim2);font-style:italic}
   /* Модалка комментариев */
   .ov{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
   .ov.show{display:flex}
@@ -146,6 +162,10 @@
   .modal textarea:focus{border-color:var(--accent)}
   .modal .send{align-self:flex-end;background:var(--accent);color:#fff;border:0;border-radius:10px;padding:9px 18px;font:inherit;font-weight:700;font-size:13px;cursor:pointer}
   .modal .send:disabled{opacity:.6;cursor:default}
+  .modal input.ti,.modal input.dt,.modal select.rs{width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:10px;color:var(--text);font:inherit;font-size:13.5px;padding:9px 12px;outline:none}
+  .modal input.ti:focus,.modal input.dt:focus,.modal select.rs:focus{border-color:var(--accent)}
+  .modal .fl{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);font-weight:700;margin:4px 0 4px}
+  .modal .row2{display:flex;gap:10px}.modal .row2>div{flex:1}
 </style>
 </head>
 <body>
@@ -163,7 +183,7 @@
   </header>
 
   <div class="card controls" id="controls" style="display:none">
-    <div class="ctl"><label>Год</label><select id="yearSel"></select></div>
+    <div class="ctl" style="gap:9px"><label>Годы</label><span class="chips" id="yearChips"></span></div>
     <div class="chips" id="stageChips">
       <span class="chip" data-s="P10">P10</span>
       <span class="chip" data-s="P30">P30</span>
@@ -213,12 +233,34 @@
   </div>
 </div>
 
+<div class="ov" id="tkOv">
+  <div class="modal">
+    <div class="mh">
+      <div><div class="mt">Новая задача менеджеру</div><div class="ms" id="tkSub"></div></div>
+      <button class="mx" id="tkClose">×</button>
+    </div>
+    <div class="mb">
+      <div class="fl">Что нужно сделать</div>
+      <input class="ti" id="tkTitle" placeholder="Напр.: связаться с клиентом, дожать КП…">
+      <div class="row2" style="margin-top:10px">
+        <div><div class="fl">Ответственный</div><select class="rs" id="tkResp"></select></div>
+        <div><div class="fl">Срок</div><input class="dt" id="tkDeadline" type="date"></div>
+      </div>
+      <div class="fl" style="margin-top:10px">Описание (необязательно)</div>
+      <textarea id="tkDesc" placeholder="Детали задачи…"></textarea>
+    </div>
+    <div class="mf"><button class="send" id="tkSend">Поставить задачу</button></div>
+  </div>
+</div>
+
 <script>
 let DATA={deals:[],meta:{}};
-let YEAR=null;
+let YEARS=new Set();                  // выбранные годы (мультивыбор)
 let STAGES=new Set(['P60','P80']);
 let DEPT='', MGR='', LIKELY=false, GROUP='dept';
 const OPEN=new Set();                 // раскрытые узлы дерева (ключи)
+const CMCACHE=new Map();              // dealId → {items} (комментарии, кэш)
+const nowKey=new Date().getFullYear()*12+new Date().getMonth(); // для сортировки прошедших месяцев
 const MONTHS=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 const MONTHS_SH=['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
 const now=new Date();
@@ -242,8 +284,9 @@ async function load(){
   try{
     await fetchData();
     const yrs=(DATA.meta.years||[]);
-    YEAR=yrs.includes(now.getFullYear())?now.getFullYear():(yrs[yrs.length-1]||now.getFullYear());
-    if(YEAR===now.getFullYear()) OPEN.add('m'+now.getMonth());  // текущий месяц раскрыт сразу
+    const cy=yrs.includes(now.getFullYear())?now.getFullYear():(yrs[yrs.length-1]||now.getFullYear());
+    YEARS=new Set([cy]);                                         // по умолчанию — текущий год
+    OPEN.add('m'+cy+'-'+now.getMonth());                         // текущий месяц раскрыт сразу
     buildControls();
     renderAll();
     document.getElementById('controls').style.display='';
@@ -260,8 +303,11 @@ async function load(){
 }
 
 function buildControls(){
-  const ys=document.getElementById('yearSel'); ys.innerHTML=(DATA.meta.years||[]).map(y=>`<option value="${y}" ${y===YEAR?'selected':''}>${y}</option>`).join('');
-  ys.onchange=()=>{YEAR=+ys.value;renderAll();};
+  const yc=document.getElementById('yearChips');
+  yc.innerHTML=(DATA.meta.years||[]).map(y=>`<span class="chip yr ${YEARS.has(y)?'on':''}" data-y="${y}">${y}</span>`).join('');
+  yc.querySelectorAll('.chip').forEach(c=>{
+    c.onclick=()=>{const y=+c.dataset.y; if(YEARS.has(y)){ if(YEARS.size>1)YEARS.delete(y); } else YEARS.add(y); buildControls(); renderAll();};
+  });
   const ds=document.getElementById('deptSel'); ds.innerHTML='<option value="">Все отделы</option>'+(DATA.meta.depts||[]).map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('');
   ds.onchange=()=>{DEPT=ds.value;renderAll();};
   const ms=document.getElementById('mgrSel'); ms.innerHTML='<option value="">Все менеджеры</option>'+(DATA.meta.managers||[]).map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('');
@@ -286,10 +332,11 @@ function passBase(d){
   if(LIKELY && !d.likely)return false;
   return true;
 }
-function filtered(){ return DATA.deals.filter(d=>passBase(d) && d.year===YEAR); }
+function filtered(){ return DATA.deals.filter(d=>passBase(d) && YEARS.has(d.year)); }
+function yearsLabel(){ const a=[...YEARS].sort((x,y)=>x-y); return a.length<=2?a.join(', '):(a[0]+'–'+a[a.length-1]); }
 
 function renderAll(){
-  document.getElementById('treeMode').textContent='· '+(GROUP==='dept'?'Месяцы → отделы → менеджеры → сделки':'Месяцы → менеджеры → сделки');
+  document.getElementById('treeMode').textContent='· '+(GROUP==='dept'?'Месяцы → отделы → менеджеры → сделки':'Менеджеры → месяцы → сделки');
   renderKpis();
   renderPipe();
   renderTree();
@@ -302,7 +349,7 @@ function renderKpis(){
   const p60=sum(f.filter(d=>d.step==='P60')), p80=sum(f.filter(d=>d.step==='P80'));
   const hot=f.filter(d=>d.likely);
   document.getElementById('kTot').textContent=fmtMln(tot);
-  document.getElementById('kTotS').textContent=f.length+' сдел. · '+YEAR;
+  document.getElementById('kTotS').textContent=f.length+' сдел. · '+yearsLabel();
   document.getElementById('kP60').textContent=fmtMln(p60);
   document.getElementById('kP60S').textContent=f.filter(d=>d.step==='P60').length+' сдел.';
   document.getElementById('kP80').textContent=fmtMln(p80);
@@ -335,51 +382,70 @@ function group(arr,keyFn){const m=new Map();arr.forEach(x=>{const k=keyFn(x);if(
 function sumOf(a){return a.reduce((s,d)=>s+d.sum,0);}
 function ordDept(names){const ord=DATA.meta.deptOrder||[];return names.sort((a,b)=>{const ia=ord.indexOf(a),ib=ord.indexOf(b);return (ia<0?99:ia)-(ib<0?99:ib)||a.localeCompare(b);});}
 
-function rowHtml(cls,key,tw,label,cnt,sum){
+function rowHtml(cls,key,tw,label,cnt,sum,extra){
   const open=OPEN.has(key);
-  return `<div class="row ${cls} ${open?'open':''}" data-key="${esc(key)}"><span class="tw">${tw?'▶':''}</span><span class="lbl">${esc(label)}</span><span class="cnt">${cnt}</span><span class="sum tabular">${fmtMln(sum)}</span></div>`;
+  return `<div class="row ${cls} ${extra||''} ${open?'open':''}" data-key="${esc(key)}"><span class="tw">${tw?'▶':''}</span><span class="lbl">${esc(label)}</span><span class="cnt">${cnt}</span><span class="sum tabular">${fmtMln(sum)}</span></div>`;
+}
+function ymLabel(y,m){return MONTHS[m]+' '+y;}
+// Группировка по «год-месяц»: сначала текущий и будущие (по возрастанию), затем
+// прошедшие месяцы — в конце списка и красным (аномалия), как в Power BI.
+function orderedYM(deals){
+  const g=group(deals,d=>d.year+'-'+d.monthIdx);
+  const arr=[...g.entries()].map(([k,list])=>{const p=k.split('-'),y=+p[0],m=+p[1];return {y,m,key:k,list,past:(y*12+m)<nowKey};});
+  const fut=arr.filter(x=>!x.past).sort((a,b)=>(a.y*12+a.m)-(b.y*12+b.m));
+  const past=arr.filter(x=>x.past).sort((a,b)=>(a.y*12+a.m)-(b.y*12+b.m));
+  return fut.concat(past);
 }
 function dealHtml(d){
-  return `<div class="deal ${d.likely?'likely':''}">
-    <span class="dn"><b>${esc(d.title)}</b>${d.company?` · <span class="co">${esc(d.company)}</span>`:''}</span>
-    ${d.likely?'<span class="lk">⚡</span>':''}
-    <span class="stg ${d.step}">${d.step}</span>
-    <span class="dsum tabular">${fmt(d.sum)} ₸</span>
-    <button class="cm" data-cid="${d.id}" data-ctitle="${esc(d.title)}" title="Комментарии сделки">💬</button>
-    ${d.url?`<a class="ext" href="${esc(d.url)}" target="_blank" title="Открыть в Bitrix">↗</a>`:''}
+  return `<div class="dealwrap">
+    <div class="deal ${d.likely?'likely':''}">
+      <span class="dn"><b>${esc(d.title)}</b>${d.company?` · <span class="co">${esc(d.company)}</span>`:''}</span>
+      ${d.likely?'<span class="lk">⚡</span>':''}
+      <span class="stg ${d.step}">${d.step}</span>
+      <span class="dsum tabular">${fmt(d.sum)} ₸</span>
+      <button class="tk" data-tid="${d.id}" data-ttitle="${esc(d.title)}" data-tmgr="${d.managerId||''}" title="Поставить задачу менеджеру">＋ Задача</button>
+      <button class="cm" data-cid="${d.id}" data-ctitle="${esc(d.title)}" title="Комментарии сделки">💬</button>
+      ${d.url?`<a class="ext" href="${esc(d.url)}" target="_blank" title="Открыть в Bitrix">↗</a>`:''}
+    </div>
+    <div class="dcm" id="dcm-${d.id}" data-cid="${d.id}"><span style="opacity:.55">комментарий загружается…</span></div>
   </div>`;
 }
+function dealsBlock(list){ return '<div class="deals">'+list.slice().sort((a,b)=>b.sum-a.sum).map(dealHtml).join('')+'</div>'; }
 
 function renderTree(){
   const f=filtered();
   const box=document.getElementById('tree');
-  if(!f.length){box.innerHTML='<div class="empty">Нет сделок по текущему фильтру за '+YEAR+'. Проверь выбранные стадии/отдел/менеджера.</div>';return;}
-  const byMonth=group(f,d=>d.monthIdx);
-  const months=[...byMonth.keys()].sort((a,b)=>a-b);
+  if(!f.length){box.innerHTML='<div class="empty">Нет сделок по текущему фильтру за '+yearsLabel()+'. Проверь стадии / годы / отдел / менеджера.</div>';return;}
   let html='';
-  for(const mi of months){
-    const md=byMonth.get(mi); const mkey='m'+mi;
-    html+=rowHtml('lvl-month',mkey,true,MONTHS[mi]+' '+YEAR,md.length,sumOf(md));
-    if(!OPEN.has(mkey))continue;
-    if(GROUP==='dept'){
-      const byDept=group(md,d=>d.dept);
+  if(GROUP==='dept'){
+    for(const M of orderedYM(f)){
+      const mkey='m'+M.key;
+      html+=rowHtml('lvl-month',mkey,true,ymLabel(M.y,M.m)+(M.past?' · прошёл':''),M.list.length,sumOf(M.list),M.past?'past':'');
+      if(!OPEN.has(mkey))continue;
+      const byDept=group(M.list,d=>d.dept);
       for(const dep of ordDept([...byDept.keys()])){
         const dd=byDept.get(dep); const dkey=mkey+'|d:'+dep;
         html+=rowHtml('lvl-dept',dkey,true,dep,dd.length,sumOf(dd));
         if(!OPEN.has(dkey))continue;
         const byMgr=group(dd,d=>d.managerName);
         for(const mg of [...byMgr.keys()].sort((a,b)=>sumOf(byMgr.get(b))-sumOf(byMgr.get(a)))){
-          const gg=byMgr.get(mg); const gkey=dkey+'|m:'+mg;
+          const gg=byMgr.get(mg); const gkey=dkey+'|g:'+mg;
           html+=rowHtml('lvl-mgr',gkey,true,mg,gg.length,sumOf(gg));
-          if(OPEN.has(gkey)) html+='<div class="deals">'+gg.slice().sort((a,b)=>b.sum-a.sum).map(dealHtml).join('')+'</div>';
+          if(OPEN.has(gkey)) html+=dealsBlock(gg);
         }
       }
-    }else{
-      const byMgr=group(md,d=>d.managerName);
-      for(const mg of [...byMgr.keys()].sort((a,b)=>sumOf(byMgr.get(b))-sumOf(byMgr.get(a)))){
-        const gg=byMgr.get(mg); const gkey=mkey+'|m:'+mg;
-        html+=rowHtml('lvl-mgr',gkey,true,mg,gg.length,sumOf(gg));
-        if(OPEN.has(gkey)) html+='<div class="deals">'+gg.slice().sort((a,b)=>b.sum-a.sum).map(dealHtml).join('')+'</div>';
+    }
+  }else{
+    // Менеджеры → месяцы → сделки (взгляд на воронку каждого менеджера)
+    const byMgr=group(f,d=>d.managerName);
+    for(const mg of [...byMgr.keys()].sort((a,b)=>sumOf(byMgr.get(b))-sumOf(byMgr.get(a)))){
+      const list=byMgr.get(mg); const gkey='g:'+mg;
+      html+=rowHtml('lvl-month',gkey,true,mg,list.length,sumOf(list));
+      if(!OPEN.has(gkey))continue;
+      for(const M of orderedYM(list)){
+        const mkey=gkey+'|m'+M.key;
+        html+=rowHtml('lvl-dept',mkey,true,ymLabel(M.y,M.m)+(M.past?' · прошёл':''),M.list.length,sumOf(M.list),M.past?'past':'');
+        if(OPEN.has(mkey)) html+=dealsBlock(M.list);
       }
     }
   }
@@ -387,9 +453,30 @@ function renderTree(){
   box.querySelectorAll('.row').forEach(r=>{
     r.onclick=()=>{const k=r.dataset.key; if(OPEN.has(k))OPEN.delete(k); else OPEN.add(k); renderTree();};
   });
-  box.querySelectorAll('.deal .cm').forEach(b=>{
-    b.onclick=(e)=>{ e.stopPropagation(); openComments(b.dataset.cid, b.dataset.ctitle); };
-  });
+  box.querySelectorAll('.deal .cm').forEach(b=>{ b.onclick=(e)=>{ e.stopPropagation(); openComments(b.dataset.cid,b.dataset.ctitle); }; });
+  box.querySelectorAll('.deal .tk').forEach(b=>{ b.onclick=(e)=>{ e.stopPropagation(); openTask(b.dataset.tid,b.dataset.ttitle,b.dataset.tmgr); }; });
+  loadInlineComments();
+}
+
+// ── Инлайн-комментарии (последний комментарий сразу под сделкой) ───────────────
+function fillInline(el,items){
+  if(!items||!items.length){ el.className='dcm none'; el.textContent='нет комментариев'; return; }
+  el.className='dcm';
+  const c=items[0]; const when=c.created?new Date(c.created).toLocaleDateString('ru-RU'):'';
+  const txt=stripBB(c.text); const short=txt.length>170?txt.slice(0,170)+'…':txt;
+  el.innerHTML=`💬 <b>${esc(c.author)}</b>${when?' · '+when:''}: ${esc(short)}`+(items.length>1?`<span class="more">ещё ${items.length-1} →</span>`:'');
+  const more=el.querySelector('.more'); if(more) more.onclick=()=>openComments(el.dataset.cid,'');
+}
+async function loadInlineComments(){
+  const els=[...document.querySelectorAll('.dcm[data-cid]')];
+  els.forEach(el=>{ if(CMCACHE.has(el.dataset.cid)) fillInline(el,CMCACHE.get(el.dataset.cid)); });
+  const todo=els.filter(el=>!CMCACHE.has(el.dataset.cid));
+  let i=0;
+  async function worker(){ while(i<todo.length){ const el=todo[i++],id=el.dataset.cid;
+    try{ const r=await fetch('/api/plansales/'+id+'/comments'); const d=await r.json(); const items=d.items||[]; CMCACHE.set(id,items); fillInline(el,items); }
+    catch(e){ el.className='dcm none'; el.textContent='—'; }
+  }}
+  await Promise.all([worker(),worker(),worker()]);
 }
 
 // ── Комментарии сделки (таймлайн Bitrix) ──────────────────────────────────────
@@ -407,6 +494,8 @@ async function loadComments(id){
   try{
     const r=await fetch('/api/plansales/'+id+'/comments'); const d=await r.json();
     if(!r.ok) throw new Error(d.error||'Ошибка');
+    CMCACHE.set(String(id), d.items||[]);                       // обновляем кэш
+    const inl=document.getElementById('dcm-'+id); if(inl) fillInline(inl, d.items||[]);   // и инлайн-строку
     if(!d.items||!d.items.length){ box.innerHTML='<div class="empty" style="padding:24px">Пока нет комментариев. Будь первым.</div>'; return; }
     box.innerHTML=d.items.map(c=>`<div class="cmt"><div class="ch"><b>${esc(c.author)}</b>${c.created?' · '+new Date(c.created).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):''}</div><div class="ct">${esc(stripBB(c.text))}</div></div>`).join('');
   }catch(e){ box.innerHTML='<div class="empty" style="padding:24px">Ошибка: '+esc(e.message)+'</div>'; }
@@ -424,6 +513,37 @@ async function sendComment(){
 document.getElementById('cmClose').onclick=()=>document.getElementById('cmOv').classList.remove('show');
 document.getElementById('cmOv').onclick=(e)=>{ if(e.target.id==='cmOv') document.getElementById('cmOv').classList.remove('show'); };
 document.getElementById('cmSend').onclick=sendComment;
+
+// ── Задачи менеджерам (создаются в Bitrix, привязаны к сделке) ────────────────
+let TK_ID=null;
+function openTask(id,title,mgrId){
+  TK_ID=id;
+  document.getElementById('tkSub').textContent=(title||'')+' · сделка #'+id;
+  document.getElementById('tkTitle').value=''; document.getElementById('tkDesc').value=''; document.getElementById('tkDeadline').value='';
+  const sel=document.getElementById('tkResp');
+  sel.innerHTML='<option value="">— выберите —</option>'+(DATA.meta.managers||[]).map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('');
+  if(mgrId) sel.value=String(mgrId);
+  document.getElementById('tkOv').classList.add('show');
+  setTimeout(()=>document.getElementById('tkTitle').focus(),60);
+}
+async function sendTask(){
+  const title=document.getElementById('tkTitle').value.trim();
+  if(!title||TK_ID==null){ alert('Укажите, что нужно сделать'); return; }
+  const responsibleId=document.getElementById('tkResp').value||null;
+  const deadline=document.getElementById('tkDeadline').value||null;
+  const description=document.getElementById('tkDesc').value||'';
+  const btn=document.getElementById('tkSend'); btn.disabled=true; const o=btn.textContent; btn.textContent='Создаю…';
+  try{
+    const r=await fetch('/api/plansales/'+TK_ID+'/task',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,responsibleId,deadline:deadline||undefined,description})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.error||'Ошибка');
+    document.getElementById('tkOv').classList.remove('show');
+    alert('✅ Задача поставлена'+(d.id?(' (#'+d.id+')'):'')+'.');
+  }catch(e){ alert('Не удалось создать задачу: '+e.message); }
+  finally{ btn.disabled=false; btn.textContent=o; }
+}
+document.getElementById('tkClose').onclick=()=>document.getElementById('tkOv').classList.remove('show');
+document.getElementById('tkOv').onclick=(e)=>{ if(e.target.id==='tkOv') document.getElementById('tkOv').classList.remove('show'); };
+document.getElementById('tkSend').onclick=sendTask;
 
 // ↻ Обновить — инкрементальная синхронизация (как в Контрактах)
 document.getElementById('refreshBtn').onclick=async(e)=>{

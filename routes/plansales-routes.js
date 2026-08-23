@@ -80,6 +80,28 @@ router.post('/:id/comments', requireAuth(VIEW_ROLES), express.json(), async (req
   }
 });
 
+// POST /api/plansales/:id/task { title, description, deadline, responsibleId } —
+// поставить задачу менеджеру по сделке (создаётся в Bitrix, привязана к сделке).
+router.post('/:id/task', requireAuth(VIEW_ROLES), express.json(), async (req, res) => {
+  try {
+    const { b24 } = require('../bitrix');
+    const id = parseInt(req.params.id, 10);
+    const b = req.body || {};
+    const title = String(b.title || '').trim();
+    if (!title) return res.status(400).json({ error: 'Укажите название задачи' });
+    const fields = { TITLE: title, DESCRIPTION: String(b.description || ''), UF_CRM_TASK: ['D_' + id] };
+    if (b.responsibleId) fields.RESPONSIBLE_ID = parseInt(b.responsibleId, 10);
+    if (b.deadline) fields.DEADLINE = /^\d{4}-\d{2}-\d{2}$/.test(b.deadline) ? (b.deadline + 'T18:00:00') : b.deadline;
+    if (req.user && req.user.bitrix_user_id) fields.CREATED_BY = req.user.bitrix_user_id;
+    const { result } = await b24('tasks.task.add', { fields });
+    const taskId = result && result.task && (result.task.id || result.task.ID);
+    res.json({ ok: true, id: taskId });
+  } catch (e) {
+    console.error('POST /api/plansales/:id/task error:', e.message);
+    res.status(500).json({ error: 'Не удалось создать задачу: ' + e.message });
+  }
+});
+
 // POST /api/plansales/resync — полная пересинхронизация зеркала сделок (админ).
 // Нужна разово после релиза, чтобы у существующих сделок заполнились новые поля
 // (планируемый срок покупки, «наиболее вероятная»). Запускается в фоне.

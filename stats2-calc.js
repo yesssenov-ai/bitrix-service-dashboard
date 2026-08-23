@@ -54,7 +54,7 @@ const funnelName = c => FUNNEL[c] || '—';
 // Направление (Отдел) — для разрезов внутри продаж
 const DEPARTMENT_LABELS = {
   '4857': 'Элементный', '4858': 'Хроматография', '4859': 'Электрохимия',
-  '4860': 'Клеточный анализ', '4862': 'Расходники', '4863': 'Сервис',
+  '4860': 'Клеточный анализ', '4862': 'ОРМ', '4863': 'Сервис',
   '4864': 'Обучение', '4865': 'General Lab', '4866': 'Комплекс', '8384': 'Материаловедение',
 };
 const deptLabel = id => {
@@ -68,7 +68,7 @@ const CAT_GROUP = { 0: 'Приборы', 1: 'Расходники', 2: 'Обуч
 // пуст — падаем на короткое имя воронки (Расходники/Обучение/Сервис/Инструменты),
 // иначе сервис/расходка с пустым отделом терялись бы в «Не указан».
 // Это совпадает с логикой Power BI и с модулем «Контракты».
-const PIPE_FALLBACK = { 0: 'Инструменты', 1: 'Расходники', 2: 'Обучение', 3: 'Сервис' };
+const PIPE_FALLBACK = { 0: 'Инструменты', 1: 'ОРМ', 2: 'Обучение', 3: 'Сервис' };
 const direction = (catId, departmentId) => {
   if (departmentId && DEPARTMENT_LABELS[departmentId]) return deptLabel(departmentId);
   return PIPE_FALLBACK[catId] || 'Не указан';
@@ -196,7 +196,7 @@ function byManufacturer(deals) {
   manufacturers.forEach(m => { const p = manufParent(m); (groupSets[p] = groupSets[p] || new Set()).add(m); });
   const parents = Object.keys(groupSets).sort();
   const groups = {}; parents.forEach(p => { groups[p] = [...groupSets[p]].sort(); });
-  const typeOrder = ['Элементный', 'Хроматография и клеточный анализ', 'Электрохимия', 'Расходники', 'Сервис', 'Обучение', 'General Lab', 'Комплекс', 'Материаловедение'];
+  const typeOrder = ['Элементный', 'Хроматография и клеточный анализ', 'Электрохимия', 'ОРМ', 'Сервис', 'Обучение', 'General Lab', 'Комплекс', 'Материаловедение'];
   const present = new Set(deals.map(d => d.dept));
   const types = typeOrder.filter(t => present.has(t));
   [...present].forEach(t => { if (!types.includes(t)) types.push(t); });
