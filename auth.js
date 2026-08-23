@@ -283,6 +283,11 @@ async function initDB() {
     ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS planned_purchase_date DATE;
     ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS likely_deal BOOLEAN DEFAULT FALSE;
     CREATE INDEX IF NOT EXISTS idx_stat_deals_planned ON ticketsmodule_stat_deals(planned_purchase_date);
+    -- Для модуля «КП · Сервис» (таргетинг по установочной базе): дата установки/
+    -- начала гарантии и окончание гарантии из сделки Bitrix.
+    ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS install_date DATE;
+    ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS warranty_end DATE;
+    CREATE INDEX IF NOT EXISTS idx_stat_deals_warranty ON ticketsmodule_stat_deals(warranty_end);
 
     -- ── Фаза 2 Статистики: история стадий сделок ───────────────────────────
     -- Каждая запись = момент входа сделки в стадию (из crm.stagehistory.list).

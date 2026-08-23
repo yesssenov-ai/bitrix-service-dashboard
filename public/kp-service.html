@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ЦУП · КП Сервис</title>
+<link rel="icon" href="/favicon.svg">
+<style>
+  :root{--bg:#070b16;--panel:rgba(20,27,45,.55);--panel2:rgba(30,40,64,.55);--border:rgba(255,255,255,.08);--border2:rgba(255,255,255,.16);
+    --text:#e8edf7;--dim:#8592ad;--dim2:#5c6884;--brand:#ff2d55;--brand2:#ff6b81;--signal:#35d0c0;--accent:#5b8cff;--good:#22c9a3;--warn:#ffb020;--bad:#ff5b6e;}
+  html[data-theme="light"]{--bg:#f5f6fa;--panel:#fff;--panel2:#eef1f7;--border:#e4e7ef;--border2:#d3d8e6;--text:#111827;--dim:#5b6472;--dim2:#8b93a3;--accent:#2563eb;--good:#059669;--warn:#c77700;--bad:#dc2626;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:"SF Pro Display","Segoe UI",Inter,system-ui,sans-serif;min-height:100vh;
+    background-image:radial-gradient(1000px 500px at 15% -5%,rgba(255,45,85,.08),transparent 60%),radial-gradient(900px 600px at 100% 0%,rgba(91,140,255,.08),transparent 55%);}
+  .wrap{max-width:1460px;margin:0 auto;padding:18px 22px 60px}
+  a{color:inherit;text-decoration:none}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+  .back{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--panel);border:1px solid var(--border);font-size:16px}
+  h1{font-size:20px;font-weight:800}h1 span{color:var(--brand)}
+  .lead{font-size:11.5px;color:var(--dim);margin-top:2px}
+  .seg{display:inline-flex;background:var(--panel2);border:1px solid var(--border);border-radius:11px;padding:3px;margin-left:auto}
+  .seg button{background:none;border:0;color:var(--dim);font:inherit;font-size:13px;font-weight:700;padding:7px 14px;border-radius:8px;cursor:pointer}
+  .seg button.on{background:var(--accent);color:#fff}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:16px}
+  .grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+  @media(max-width:1000px){.grid{grid-template-columns:1fr}}
+  .pad{padding:18px}
+  h3{font-size:15px;font-weight:800;margin-bottom:12px}
+  label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--dim);font-weight:700;margin:12px 0 5px}
+  input,textarea,select{width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:9px;color:var(--text);font:inherit;font-size:13.5px;padding:9px 11px;outline:none}
+  input:focus,textarea:focus,select:focus{border-color:var(--accent)}
+  textarea{resize:vertical;min-height:56px;line-height:1.5}
+  .row2{display:flex;gap:10px}.row2>div{flex:1}
+  .hint{font-size:11px;color:var(--dim2);margin-top:4px}
+  .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+  .btn{border:1px solid var(--border2);background:var(--panel2);color:var(--text);border-radius:10px;padding:10px 16px;font:inherit;font-weight:700;font-size:13px;cursor:pointer}
+  .btn:hover{border-color:var(--accent)}
+  .btn-p{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn-g{background:linear-gradient(135deg,var(--brand),var(--brand2));border-color:transparent;color:#fff}
+  .btn:disabled{opacity:.55;cursor:default}
+  /* превью */
+  .preview{background:#fff;color:#111;border-radius:10px;padding:26px 30px;font-family:"Times New Roman",Georgia,serif;font-size:13px;line-height:1.5;max-height:76vh;overflow:auto}
+  .pv-h{color:#444;font-size:11px}.pv-title{text-align:center;font-size:19px;font-weight:700;margin:14px 0}
+  .pv-date{text-align:right;color:#333;font-size:12px}
+  .pv-tbl{width:100%;border-collapse:collapse;margin:8px 0}
+  .pv-tbl td{border:1px solid #bbb;padding:6px 8px;vertical-align:top}
+  .pv-tot{text-align:right;font-weight:700;font-size:15px;margin:12px 0}
+  .pv-b{font-weight:700}
+  .pv-sig{display:flex;justify-content:space-between;margin-top:16px}
+  .muted{color:#666;font-size:11px}
+  /* кандидаты */
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:14px 16px}
+  .chip{background:var(--panel2);border:1px solid var(--border);border-radius:9px;padding:6px 11px;font-size:12px;font-weight:700;color:var(--dim);cursor:pointer}
+  .chip.on{color:#fff;background:var(--accent);border-color:var(--accent)}
+  .search{flex:1;min-width:180px}
+  table.cand{width:100%;border-collapse:collapse;font-size:13px}
+  table.cand th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--dim);font-weight:700;padding:9px 10px;border-bottom:1px solid var(--border)}
+  table.cand td{padding:10px;border-bottom:1px solid var(--border);vertical-align:top}
+  table.cand tr:hover td{background:rgba(255,255,255,.03)}
+  html[data-theme="light"] table.cand tr:hover td{background:rgba(0,0,0,.03)}
+  .fl{display:inline-block;font-size:10px;font-weight:800;border-radius:6px;padding:2px 7px;margin:1px 3px 1px 0;white-space:nowrap}
+  .fl.warranty{background:rgba(255,176,32,.2);color:#ffce7a}
+  .fl.old{background:rgba(133,146,173,.2);color:#c8d0e0}
+  .fl.no_active_service{background:rgba(91,140,255,.2);color:#bcd2ff}
+  .fl.sold_not_serviced{background:rgba(255,45,85,.18);color:#ffb3c1}
+  .fl.service_expired{background:rgba(165,107,255,.2);color:#d6bcff}
+  html[data-theme="light"] .fl.warranty{color:#b45309}html[data-theme="light"] .fl.old{color:#374151}html[data-theme="light"] .fl.no_active_service{color:#1d4ed8}html[data-theme="light"] .fl.sold_not_serviced{color:#b91c1c}html[data-theme="light"] .fl.service_expired{color:#6d28d9}
+  .mk{font-weight:700;color:var(--accent);cursor:pointer;white-space:nowrap;background:none;border:0;font:inherit;font-size:12.5px}
+  .empty{padding:40px;text-align:center;color:var(--dim)}
+  .spin{width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite;margin:40px auto}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  /* модалка письма */
+  .ov{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
+  .ov.show{display:flex}
+  .modal{background:#0d1524;border:1px solid var(--border2);border-radius:16px;width:100%;max-width:620px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
+  html[data-theme="light"] .modal{background:#fff}
+  .mh{display:flex;justify-content:space-between;align-items:center;padding:16px 18px;border-bottom:1px solid var(--border)}
+  .mh .mt{font-weight:800}.mx{background:none;border:0;color:var(--dim);font-size:22px;cursor:pointer}
+  .mb{padding:16px 18px;overflow:auto}
+  .mf{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a href="/kp-hub.html" class="back" title="К подмодулям">←</a>
+    <div><h1>КП · <span>Сервис</span></h1><div class="lead">Конструктор сервисных КП и таргетинг «кому предложить сервис»</div></div>
+    <div class="seg" id="tabs"><button data-t="build" class="on">Конструктор</button><button data-t="cand">Кандидаты</button></div>
+  </header>
+
+  <!-- КОНСТРУКТОР -->
+  <div id="viewBuild" class="grid">
+    <div class="card pad">
+      <h3>Данные КП</h3>
+      <div class="row2"><div><label>Клиент (Кому)</label><input id="f_client" placeholder="ТОО «...»"></div><div><label>Дата</label><input id="f_date"></div></div>
+      <label>Пресет услуги</label>
+      <select id="f_preset"></select>
+      <label>Заголовок услуги</label>
+      <textarea id="f_title"></textarea>
+      <label>Оборудование (по одному в строке)</label>
+      <textarea id="f_equipment" placeholder="Прибор 1&#10;Прибор 2"></textarea>
+      <label>Перечень работ (по одному в строке)</label>
+      <textarea id="f_scope" style="min-height:120px"></textarea>
+      <label>Место проведения</label>
+      <textarea id="f_place" placeholder="РК, г. ..., лаборатория заказчика"></textarea>
+      <label>Условия оказания</label>
+      <textarea id="f_conditions"></textarea>
+      <label>Срок оказания услуги (необязательно)</label>
+      <input id="f_term" placeholder="в течение 30 дней после получения информации о готовности принятия специалиста">
+      <label>Условия оплаты</label>
+      <input id="f_payment">
+      <div class="row2"><div><label>Объём услуг</label><input id="f_volume"></div><div><label>Что включено в стоимость</label><input id="f_inclusions"></div></div>
+      <div class="row2">
+        <div><label>Сумма, тенге</label><input id="f_total" type="number" min="0" step="any" placeholder="0"></div>
+        <div><label>НДС</label><select id="f_vat"><option value="с">с учётом НДС</option><option value="без">без учёта НДС</option></select></div>
+      </div>
+      <label>Ответственный</label>
+      <div class="row2"><div><input id="f_resp_name" placeholder="Имя"></div><div><input id="f_resp_phone" placeholder="Телефон"></div></div>
+      <input id="f_resp_email" placeholder="e-mail" style="margin-top:8px">
+      <div class="btns">
+        <button class="btn btn-p" onclick="downloadKp('pdf')">⬇ Скачать PDF</button>
+        <button class="btn" onclick="downloadKp('docx')">⬇ DOCX</button>
+        <button class="btn" onclick="openLetter()">✉ Сопроводительное письмо</button>
+        <button class="btn btn-g" onclick="openSend()">Отправить клиенту →</button>
+      </div>
+      <div class="hint" id="buildMsg"></div>
+    </div>
+    <div class="card pad">
+      <h3>Предпросмотр</h3>
+      <div class="preview" id="preview"></div>
+    </div>
+  </div>
+
+  <!-- КАНДИДАТЫ -->
+  <div id="viewCand" style="display:none">
+    <div class="card" style="margin-bottom:14px">
+      <div class="toolbar">
+        <span class="chip on" data-f="all">Все</span>
+        <span class="chip" data-f="warranty">Гарантия ≤3 мес</span>
+        <span class="chip" data-f="sold_not_serviced">Продали, без сервиса</span>
+        <span class="chip" data-f="service_expired">Сервис истёк</span>
+        <span class="chip" data-f="no_active_service">Нет активного сервиса</span>
+        <span class="chip" data-f="old">Установлен &gt;1 года</span>
+        <input class="search" id="candSearch" placeholder="Поиск по компании/прибору…" oninput="renderCand()">
+        <span class="hint" id="candCount"></span>
+      </div>
+    </div>
+    <div class="card"><div id="candBody"><div class="spin"></div></div></div>
+  </div>
+</div>
+
+<!-- модалка письма/отправки -->
+<div class="ov" id="letterOv">
+  <div class="modal">
+    <div class="mh"><div class="mt" id="letterTitle">Сопроводительное письмо</div><button class="mx" onclick="closeOv('letterOv')">×</button></div>
+    <div class="mb">
+      <div id="sendFields" style="display:none">
+        <label>E-mail получателя</label><input id="s_to" placeholder="client@example.com">
+        <label>Копия (cc), необязательно</label><input id="s_cc" placeholder="">
+        <label>Тема</label><input id="s_subject" value="Коммерческое предложение на сервисное обслуживание — ProLabSupport">
+      </div>
+      <label>Текст письма</label>
+      <textarea id="s_cover" style="min-height:280px"></textarea>
+      <div class="hint" id="sendMsg"></div>
+    </div>
+    <div class="mf">
+      <button class="btn" onclick="copyCover()">Копировать</button>
+      <button class="btn btn-g" id="sendBtn" style="display:none" onclick="doSend()">Отправить</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let META={presets:[],sender:{},today:''};
+let CAND=[]; let CFILTER='all';
+const PAYMENT_DEF='100% предоплата. Услуга оказывается только после получения полной оплаты.';
+const INCLUSIONS_DEF='В стоимость услуги включены расходы по проезду и проживанию специалиста Поставщика. В стоимость услуги не включена стоимость запасных частей и расходных материалов.';
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const money=n=>(Number(n)||0).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2});
+const $=id=>document.getElementById(id);
+const linesOf=v=>String(v||'').split('\n').map(s=>s.trim()).filter(Boolean);
+
+async function init(){
+  META=await (await fetch('/api/kp-service/meta')).json();
+  $('f_preset').innerHTML='<option value="">— выберите пресет —</option>'+META.presets.map((p,i)=>`<option value="${i}">${esc(p.name)}</option>`).join('');
+  $('f_preset').onchange=applyPreset;
+  $('f_date').value=META.today||'';
+  $('f_payment').value=PAYMENT_DEF; $('f_inclusions').value=INCLUSIONS_DEF;
+  const s=META.sender||{}; $('f_resp_name').value=s.name||''; $('f_resp_email').value=s.email||''; $('f_resp_phone').value=s.phone||'';
+  if(META.presets[0]){ $('f_preset').value='0'; applyPreset(); }
+  ['f_client','f_date','f_title','f_equipment','f_scope','f_place','f_conditions','f_term','f_payment','f_volume','f_inclusions','f_total','f_vat','f_resp_name','f_resp_phone','f_resp_email']
+    .forEach(id=>$(id).addEventListener('input',renderPreview));
+  $('f_vat').addEventListener('change',renderPreview);
+  renderPreview();
+  document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.t,b));
+  document.querySelectorAll('.toolbar .chip').forEach(c=>c.onclick=()=>{CFILTER=c.dataset.f;document.querySelectorAll('.toolbar .chip').forEach(x=>x.classList.toggle('on',x===c));renderCand();});
+}
+function applyPreset(){
+  const i=$('f_preset').value; if(i==='')return; const p=META.presets[+i]; if(!p)return;
+  $('f_title').value=p.title||''; $('f_scope').value=(p.scope||[]).join('\n');
+  $('f_conditions').value=p.conditions||''; $('f_volume').value=p.volume||'';
+  if(p.price>0 && !$('f_total').value) $('f_total').value=p.price;
+  renderPreview();
+}
+function collectKp(){
+  return {
+    date:$('f_date').value, client:$('f_client').value,
+    serviceTitle:$('f_title').value, equipment:linesOf($('f_equipment').value), scope:linesOf($('f_scope').value),
+    place:$('f_place').value, conditions:$('f_conditions').value, term:$('f_term').value,
+    payment:$('f_payment').value, volume:$('f_volume').value, inclusions:$('f_inclusions').value,
+    total:Number($('f_total').value)||0, currency:'тенге', vatMode:$('f_vat').value,
+    responsible:{name:$('f_resp_name').value,phone:$('f_resp_phone').value,email:$('f_resp_email').value},
+  };
+}
+function renderPreview(){
+  const d=collectKp();
+  const eq=(d.equipment||[]).map(e=>'• '+esc(e)).join('<br>');
+  const sc=(d.scope||[]).map(e=>'• '+esc(e)).join('<br>');
+  $('preview').innerHTML=`
+    <div class="pv-h">ТОО «ProLabSupport» · Республика Казахстан, г. Астана, пр. Мәңгілік Ел 55/22, ДЦ «EXPO»<br>www.prolabsupport.kz · service@prolabsupport.kz</div>
+    <div class="pv-date">${esc(d.date)}</div>
+    <div class="pv-title">Коммерческое предложение</div>
+    <table class="pv-tbl"><tr><td style="width:15%"><b>Кому:</b></td><td><b>${esc(d.client)||'—'}</b></td></tr></table>
+    <table class="pv-tbl">
+      <tr><td style="width:7%;text-align:center">№</td><td><b>Описание</b></td></tr>
+      <tr><td style="text-align:center">1</td><td><span class="pv-b">${esc(d.serviceTitle)||'—'}</span>
+        ${eq?`<br><br><span class="pv-b">Список оборудования:</span><br>${eq}`:''}
+        ${sc?`<br><br><span class="pv-b">Перечень работ:</span><br>${sc}`:''}</td></tr>
+      <tr><td style="text-align:center">1.1</td><td><span class="pv-b">Место проведения:</span><br>${esc(d.place)||'—'}</td></tr>
+      <tr><td style="text-align:center">1.2</td><td><span class="pv-b">Условия оказания:</span><br>${esc(d.conditions)||'—'}${d.term?'<br>Срок оказания услуги: '+esc(d.term):''}</td></tr>
+      <tr><td style="text-align:center">1.3</td><td><span class="pv-b">Условия оплаты:</span><br>${esc(d.payment)||'—'}</td></tr>
+      <tr><td style="text-align:center">1.4</td><td><span class="pv-b">Состав и объёмы:</span><br>${esc(d.volume)||'—'}<br>${esc(d.inclusions)}</td></tr>
+    </table>
+    <div class="pv-tot">ИТОГО ${d.vatMode==='без'?'без учёта':'с учётом'} НДС: ${money(d.total)} тенге</div>
+    <div class="pv-sig"><span>Директор ТОО «ProLabSupport»</span><span class="pv-b">Абылкасимов Р.С.</span></div>
+    <div class="muted" style="margin-top:8px">Ответственный: ${esc(d.responsible.name)}${d.responsible.phone?' '+esc(d.responsible.phone):''}${d.responsible.email?', e-mail: '+esc(d.responsible.email):''}</div>`;
+}
+async function downloadKp(format){
+  const kp=collectKp();
+  if(!kp.client){alert('Укажите клиента');return;}
+  const ext=format==='docx'?'docx':'pdf';
+  $('buildMsg').textContent='Готовлю '+ext.toUpperCase()+'…';
+  try{
+    const r=await fetch('/api/kp-service/generate?format='+ext,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(kp)});
+    if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||'Ошибка');}
+    const blob=await r.blob(); const u=URL.createObjectURL(blob); const a=document.createElement('a');
+    a.href=u; a.download='KP_Service_'+(kp.client||'').replace(/[^\wа-яА-Я0-9]+/g,'_').slice(0,40)+'.'+ext; a.click(); URL.revokeObjectURL(u);
+    $('buildMsg').textContent=ext.toUpperCase()+' скачан ✓';
+  }catch(e){$('buildMsg').textContent='';alert('Не удалось: '+e.message);}
+}
+// ── Сопроводительное письмо / отправка ──
+let SEND_MODE=false;
+async function loadCover(){
+  const kp=collectKp();
+  const r=await fetch('/api/kp-service/cover',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({greetingName:'',equipment:kp.serviceTitle})});
+  const d=await r.json(); $('s_cover').value=d.text||'';
+}
+async function openLetter(){ SEND_MODE=false; $('letterTitle').textContent='Сопроводительное письмо'; $('sendFields').style.display='none'; $('sendBtn').style.display='none'; $('sendMsg').textContent=''; await loadCover(); openOv('letterOv'); }
+async function openSend(){ const kp=collectKp(); if(!kp.client){alert('Укажите клиента');return;} SEND_MODE=true; $('letterTitle').textContent='Отправить КП клиенту'; $('sendFields').style.display=''; $('sendBtn').style.display=''; $('sendMsg').textContent=''; if(!$('s_cover').value) await loadCover(); openOv('letterOv'); }
+async function doSend(){
+  const to=$('s_to').value.trim(); if(!to){alert('Укажите e-mail получателя');return;}
+  const btn=$('sendBtn'); btn.disabled=true; const o=btn.textContent; btn.textContent='Отправка…'; $('sendMsg').textContent='';
+  try{
+    const body={to, cc:$('s_cc').value.trim()||undefined, subject:$('s_subject').value, cover:$('s_cover').value, kp:collectKp()};
+    const r=await fetch('/api/kp-service/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json(); if(!r.ok)throw new Error(d.error||'Ошибка');
+    $('sendMsg').textContent='Отправлено с '+d.from+' ✓'; setTimeout(()=>closeOv('letterOv'),1200);
+  }catch(e){$('sendMsg').textContent='Ошибка: '+e.message;}
+  finally{btn.disabled=false;btn.textContent=o;}
+}
+function copyCover(){ navigator.clipboard.writeText($('s_cover').value).then(()=>{$('sendMsg').textContent='Скопировано ✓';}); }
+function openOv(id){$(id).classList.add('show');}
+function closeOv(id){$(id).classList.remove('show');}
+$('letterOv').addEventListener('click',e=>{if(e.target.id==='letterOv')closeOv('letterOv');});
+
+// ── Вкладки ──
+function switchTab(t,btn){
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b===btn));
+  $('viewBuild').style.display=t==='build'?'':'none';
+  $('viewCand').style.display=t==='cand'?'':'none';
+  if(t==='cand'&&!CAND.length) loadCand();
+}
+async function loadCand(){
+  try{ const d=await (await fetch('/api/kp-service/candidates')).json(); CAND=d.items||[]; renderCand(); }
+  catch(e){ $('candBody').innerHTML='<div class="empty">Ошибка загрузки: '+esc(e.message)+'</div>'; }
+}
+const FLAG_LABELS={warranty:'Гарантия ≤3 мес',old:'Установлен >1 года',no_active_service:'Нет активного сервиса',sold_not_serviced:'Продали, без сервиса',service_expired:'Сервис истёк'};
+function renderCand(){
+  const q=($('candSearch').value||'').trim().toLowerCase();
+  let list=CAND.filter(c=>CFILTER==='all'||c.flags.includes(CFILTER));
+  if(q) list=list.filter(c=>(c.company+' '+c.instrument+' '+c.manufacturer).toLowerCase().includes(q));
+  $('candCount').textContent=list.length+' из '+CAND.length;
+  if(!list.length){$('candBody').innerHTML='<div class="empty">Нет кандидатов по фильтру. Если пусто вообще — запусти полную пересинхронизацию (данные установки/гарантии подтянутся).</div>';return;}
+  const rows=list.slice(0,400).map(c=>`<tr>
+    <td><b>${esc(c.company)}</b><div class="hint">${esc(c.managerName)}</div></td>
+    <td>${esc(c.instrument)||'—'}<div class="hint">${esc(c.manufacturer)}</div></td>
+    <td>${c.installDate?esc(c.installDate):'—'}</td>
+    <td>${c.warrantyEnd?esc(c.warrantyEnd):'—'}${c.daysToWarrantyEnd!=null&&c.flags.includes('warranty')?`<div class="hint" style="color:var(--warn)">через ${c.daysToWarrantyEnd} дн.</div>`:''}</td>
+    <td>${c.flags.map(f=>`<span class="fl ${f}">${esc(FLAG_LABELS[f]||f)}</span>`).join('')}</td>
+    <td><button class="mk" onclick='makeKp(${JSON.stringify({company:c.company,instrument:c.instrument,mf:c.manufacturer}).replace(/'/g,"&#39;")})'>Сформировать КП →</button></td>
+  </tr>`).join('');
+  $('candBody').innerHTML=`<div style="overflow-x:auto"><table class="cand"><thead><tr><th>Компания</th><th>Прибор</th><th>Установлен</th><th>Гарантия до</th><th>Признаки</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function makeKp(c){
+  $('f_client').value=c.company||'';
+  const eq=c.instrument?(c.instrument+(c.mf?(' ('+c.mf+')'):'')):'';
+  $('f_equipment').value=eq;
+  if($('f_preset').value===''||$('f_preset').value==null){ if(META.presets[0]){$('f_preset').value='0';applyPreset();} }
+  renderPreview();
+  switchTab('build',document.querySelector('#tabs button[data-t="build"]'));
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+init();
+</script>
+</body>
+</html>

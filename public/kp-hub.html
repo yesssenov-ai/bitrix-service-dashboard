@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ЦУП · Коммерческие предложения</title>
+<link rel="icon" href="/favicon.svg">
+<style>
+  :root{--bg:#070b16;--panel:rgba(20,27,45,.55);--border:rgba(255,255,255,.08);--border2:rgba(255,255,255,.16);--text:#e8edf7;--dim:#8592ad;--brand:#ff2d55;--signal:#35d0c0;--accent:#5b8cff;}
+  html[data-theme="light"]{--bg:#f5f6fa;--panel:#fff;--border:#e4e7ef;--border2:#d3d8e6;--text:#111827;--dim:#5b6472;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:"SF Pro Display","Segoe UI",Inter,system-ui,sans-serif;min-height:100vh;
+    background-image:radial-gradient(1000px 500px at 15% -5%,rgba(255,45,85,.10),transparent 60%),radial-gradient(900px 600px at 100% 0%,rgba(91,140,255,.10),transparent 55%);}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px 24px 60px}
+  header{display:flex;align-items:center;gap:13px;margin-bottom:8px}
+  .back{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--panel);border:1px solid var(--border);text-decoration:none;color:inherit;font-size:16px}
+  h1{font-size:22px;font-weight:800}h1 span{color:var(--brand)}
+  .sub{color:var(--dim);font-size:13.5px;margin:2px 0 26px 47px}
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:760px){.cards{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:24px;text-decoration:none;color:inherit;transition:.15s;display:block}
+  .card:hover{border-color:var(--border2);transform:translateY(-2px)}
+  .ic{font-size:30px;margin-bottom:12px}
+  .card h2{font-size:18px;font-weight:800;margin-bottom:6px}
+  .card p{color:var(--dim);font-size:13px;line-height:1.55}
+  .tag{display:inline-block;margin-top:14px;font-size:12px;font-weight:700;color:var(--signal)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><a href="/" class="back" title="В ЦУП">←</a><h1>Коммерческие <span>предложения</span></h1></header>
+  <div class="sub">Выберите подмодуль</div>
+  <div class="cards">
+    <a class="card" href="/kp.html">
+      <div class="ic">🧩</div>
+      <h2>МЛК</h2>
+      <p>Сборка КП по категориям: каталог оборудования, сбор позиций от экспертов, формирование и согласование предложения. Существующий рабочий процесс.</p>
+      <span class="tag">Открыть →</span>
+    </a>
+    <a class="card" href="/kp-service.html">
+      <div class="ic">🛠️</div>
+      <h2>Сервис</h2>
+      <p>Конструктор сервисных КП по единому шаблону (клиент · оборудование · работы · цена) с предпросмотром, DOCX, сопроводительным письмом и отправкой клиенту. Плюс таргетинг «кому предложить сервис» по установочной базе.</p>
+      <span class="tag">Открыть →</span>
+    </a>
+  </div>
+</div>
+</body>
+</html>

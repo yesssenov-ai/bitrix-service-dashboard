@@ -121,6 +121,8 @@ app.get('/relations.html', requireModule('REL'), (_, res) => res.sendFile(path.j
 app.get('/admin.html', requirePageAuth(['admin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/mail.html', requireModule('MAIL'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'mail.html')));
 app.get('/kp.html', requireModule('KP'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'kp.html')));
+app.get('/kp-hub.html', requireModule('KP'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'kp-hub.html')));
+app.get('/kp-service.html', requireModule('KP'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'kp-service.html')));
 app.get('/bonus.html', requireModule('BONUS'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'bonus.html')));
 app.get('/stats.html', requireModule('STATS'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'stats.html')));
 app.get('/contracts.html', requireModule('CONTR'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'contracts.html')));
@@ -144,6 +146,7 @@ app.use('/licenses', require('./routes/licenses-routes'));
 app.use('/api/planner', require('./routes/planner-routes').router);
 app.use('/api/mail', require('./routes/mail-routes').router);
 app.use('/api/kp', require('./routes/kp-routes').router);
+app.use('/api/kp-service', require('./routes/kp-service-routes').router);
 app.use('/api/bonus', require('./routes/bonus-routes').router);
 app.use('/api/stats', require('./routes/stats-routes').router);
 app.use('/api/contracts', require('./routes/contracts-routes').router);
