@@ -122,6 +122,15 @@
   .pl-row .v{font-weight:800;font-size:13.5px;white-space:nowrap}
   .pl-row.tot{border-top:1px solid var(--border2);border-bottom:0;margin-top:4px;padding-top:9px}
   .pl-row.tot .n{color:#fff;font-weight:800}.pl-row.tot .v{color:var(--good)}
+  .ptbl{width:100%;border-collapse:collapse;font-size:12.5px}
+  .ptbl th{color:var(--dim);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.3px;padding:6px 8px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap}
+  .ptbl td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap;color:var(--text)}
+  .ptbl td.pd,.ptbl th:first-child{text-align:left}
+  .ptbl td.pd{font-weight:600}
+  .ptbl tr:last-child td{border-bottom:0}
+  .ptbl tr.pt td{border-top:1px solid var(--border2);font-weight:800;color:#fff}
+  html[data-theme="light"] .ptbl tr.pt td{color:#0f172a}
+  .ptbl td.strong{font-weight:800;color:var(--good)}
 
   .tree h3{font-size:15px;font-weight:800;padding:16px 18px 0}
   .tree .sub{font-size:11.5px;color:var(--dim);padding:2px 18px 12px}
@@ -239,8 +248,8 @@
   </div>
 
   <div class="grid2" id="pipeBlock" style="display:none">
-    <div class="card sect"><h3>📅 Pipeline · текущий месяц <span class="togglehint" id="pmCur"></span></h3><div class="sub">Сделки с планируемой покупкой в этом месяце (по выбранным стадиям)</div><div id="plCur"></div></div>
-    <div class="card sect"><h3>⏭️ Pipeline · следующий месяц <span class="togglehint" id="pmNext"></span></h3><div class="sub">Ближайший месяц — на что жать сейчас</div><div id="plNext"></div></div>
+    <div class="card sect"><h3>📅 Pipeline · текущий месяц <span class="togglehint" id="pmCur"></span></h3><div class="sub">Pipeline (P60+P80) · наиболее вероятное · подписанное · НВ+П — по отделам. Фильтр: только Отдел/Менеджер.</div><div id="plCur"></div></div>
+    <div class="card sect"><h3>⏭️ Pipeline · следующий месяц <span class="togglehint" id="pmNext"></span></h3><div class="sub">Pipeline и наиболее вероятное по отделам — на что жать сейчас.</div><div id="plNext"></div></div>
   </div>
 
   <div class="card tree" id="treeCard">
@@ -464,24 +473,46 @@ function renderKpis(){
   document.getElementById('kHotS').textContent=hot.length+' сдел.';
 }
 
-function pipeFor(offset){
+// Блоки Pipeline фильтруются только по Отдел/Менеджер (не по стадиям/годам/флагам) —
+// это самостоятельная сводка по логике PBI «Продажи по отделам».
+function pipeGeoPass(d){
+  if(DEPTS.size && !DEPTS.has(d.dept))return false;
+  if(MGRS.size && !MGRS.has(String(d.managerId)))return false;
+  return true;
+}
+// Данные блока за месяц (offset 0 — текущий, 1 — следующий):
+// pipeline = весь доконтрактный pipeline (P10–P80) месяца; likely = «наиболее
+// вероятные»; signed = подписанные (по дате договора); both = likely + signed.
+function pipeData(offset){
   const dt=new Date(now.getFullYear(),now.getMonth()+offset,1);
   const y=dt.getFullYear(), m=dt.getMonth();
-  const ds=DATA.deals.filter(d=>passBase(d)&&d.year===y&&d.monthIdx===m);
-  const byDept={}; ds.forEach(d=>{byDept[d.dept]=(byDept[d.dept]||0)+d.sum;});
-  const rows=Object.entries(byDept).sort((a,b)=>b[1]-a[1]);
-  const total=ds.reduce((s,d)=>s+d.sum,0);
-  return {y,m,rows,total,count:ds.length};
+  const pipe=DATA.deals.filter(d=>pipeGeoPass(d)&&(d.step==='P60'||d.step==='P80')&&d.year===y&&d.monthIdx===m);
+  const signed=((DATA.meta&&DATA.meta.signed)||[]).filter(s=>pipeGeoPass(s)&&s.y===y&&s.monthIdx===m);
+  const depts=new Set([...pipe.map(d=>d.dept),...signed.map(s=>s.dept)]);
+  const rows=ordDept([...depts]).map(dep=>{
+    const pl=pipe.filter(d=>d.dept===dep), sg=signed.filter(s=>s.dept===dep);
+    const pipeline=sumOf(pl), lk=sumOf(pl.filter(d=>d.likely)), sd=sumOf(sg);
+    return {dep, pipeline, likely:lk, signed:sd, both:lk+sd};
+  });
+  const tot={pipeline:sumOf(pipe), likely:sumOf(pipe.filter(d=>d.likely)), signed:sumOf(signed), both:0};
+  tot.both=tot.likely+tot.signed;
+  return {y,m,rows,tot,count:pipe.length};
 }
 function renderPipe(){
-  [['plCur','pmCur',0],['plNext','pmNext',1]].forEach(([el,lbl,off])=>{
-    const p=pipeFor(off);
-    document.getElementById(lbl).textContent='· '+MONTHS[p.m]+' '+p.y;
-    const box=document.getElementById(el);
-    if(!p.rows.length){box.innerHTML='<div class="empty" style="padding:24px">Нет сделок на этот месяц по текущему фильтру.</div>';return;}
-    box.innerHTML=p.rows.map(([d,v])=>`<div class="pl-row"><span class="n">${esc(d)}</span><span class="v tabular">${fmtMln(v)}</span></div>`).join('')
-      +`<div class="pl-row tot"><span class="n">Итого · ${p.count} сдел.</span><span class="v tabular">${fmtMln(p.total)}</span></div>`;
-  });
+  // текущий месяц: 4 колонки; следующий: 2 колонки
+  const cur=pipeData(0), nxt=pipeData(1);
+  document.getElementById('pmCur').textContent='· '+MONTHS[cur.m]+' '+cur.y;
+  document.getElementById('pmNext').textContent='· '+MONTHS[nxt.m]+' '+nxt.y;
+  document.getElementById('plCur').innerHTML=pipeTable(cur,['pipeline','likely','signed','both']);
+  document.getElementById('plNext').innerHTML=pipeTable(nxt,['pipeline','likely']);
+}
+const PIPE_COLS={pipeline:'Pipeline',likely:'Наиб. вероятное',signed:'Подписано',both:'НВ + П'};
+function pipeTable(p,cols){
+  if(!p.rows.length) return '<div class="empty" style="padding:24px">Нет сделок на этот месяц по фильтру.</div>';
+  const head=`<tr><th style="text-align:left">Отдел</th>${cols.map(c=>`<th>${PIPE_COLS[c]}</th>`).join('')}</tr>`;
+  const body=p.rows.map(r=>`<tr><td class="pd">${esc(r.dep)}</td>${cols.map(c=>`<td class="tabular ${c==='both'?'strong':''}">${r[c]?fmtMln(r[c]):'—'}</td>`).join('')}</tr>`).join('');
+  const tot=`<tr class="pt"><td class="pd">Итого</td>${cols.map(c=>`<td class="tabular ${c==='both'?'strong':''}">${p.tot[c]?fmtMln(p.tot[c]):'—'}</td>`).join('')}</tr>`;
+  return `<div style="overflow-x:auto"><table class="ptbl">${head}${body}${tot}</table></div>`;
 }
 
 function group(arr,keyFn){const m=new Map();arr.forEach(x=>{const k=keyFn(x);if(!m.has(k))m.set(k,[]);m.get(k).push(x);});return m;}
