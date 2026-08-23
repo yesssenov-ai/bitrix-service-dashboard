@@ -1,5 +1,5 @@
 // Выгрузка по сферам (xlsx). Для каждой сферы и компании внутри неё показывает:
-//  • подписанные контракты (в разрезе 4 воронок: Приборы/Расходники/Сервис/Обучение)
+//  • подписанные контракты (в разрезе 4 воронок: Приборы/Расходники/Сервис/Тренинг-центр)
 //  • неподписанные сделки (в разрезе воронок И стадий P10–P80)
 // Везде — и сумма, и КОЛИЧЕСТВО сделок, из которого сумма складывается.
 // Листы: свод по сферам, свод по компаниям, компании×стадии, детализация сделок.
@@ -40,7 +40,7 @@ async function buildSphereWorkbook(years, sphereFilter) {
   let pipe = all.filter(d => isPre(d.stage) && inSel(yr(d.createDate)));
   if (sphereFilter) { signed = signed.filter(d => d.industry === sphereFilter); pipe = pipe.filter(d => d.industry === sphereFilter); }
 
-  const zeroF = () => ({ Приборы: 0, Расходники: 0, Сервис: 0, Обучение: 0 });
+  const zeroF = () => ({ 'Приборы': 0, 'Расходники': 0, 'Сервис': 0, 'Тренинг-центр': 0 });
   const spheres = {};
   const ensureSph = ind => (spheres[ind] = spheres[ind] || {
     industry: ind, companies: {},

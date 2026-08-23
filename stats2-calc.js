@@ -47,28 +47,28 @@ const isSold = s => SOLD_STEPS.has(step(s));
 const isKp = s => KP_STEPS.has(step(s));
 const isPre = s => PRE_STEPS.has(step(s));
 // 4 воронки Bitrix (по category_id): именно так, как просит бизнес — Сервис, а не «Услуги».
-const FUNNEL = { 0: 'Приборы', 1: 'Расходники', 2: 'Обучение', 3: 'Сервис' };
-const FUNNEL_ORDER = ['Приборы', 'Расходники', 'Сервис', 'Обучение'];
+const FUNNEL = { 0: 'Приборы', 1: 'Расходники', 2: 'Тренинг-центр', 3: 'Сервис' };
+const FUNNEL_ORDER = ['Приборы', 'Расходники', 'Сервис', 'Тренинг-центр'];
 const funnelName = c => FUNNEL[c] || '—';
 
 // Направление (Отдел) — для разрезов внутри продаж
 const DEPARTMENT_LABELS = {
   '4857': 'Элементный', '4858': 'Хроматография', '4859': 'Электрохимия',
   '4860': 'Клеточный анализ', '4862': 'ОРМ', '4863': 'Сервис',
-  '4864': 'Обучение', '4865': 'General Lab', '4866': 'Комплекс', '8384': 'Материаловедение',
+  '4864': 'Тренинг-центр', '4865': 'General Lab', '4866': 'Комплекс', '8384': 'Материаловедение',
 };
 const deptLabel = id => {
   const l = DEPARTMENT_LABELS[id] || id || 'Не указан';
   return (l === 'Хроматография' || l === 'Клеточный анализ') ? 'Хроматография и клеточный анализ' : l;
 };
 // Категория воронки → крупная группа (приборы/расходка/услуги/обучение)
-const CAT_GROUP = { 0: 'Приборы', 1: 'Расходники', 2: 'Обучение', 3: 'Услуги' };
+const CAT_GROUP = { 0: 'Приборы', 1: 'Расходники', 2: 'Тренинг-центр', 3: 'Услуги' };
 // «Направление» = поле «Отдел», КОГДА оно заполнено (тогда сделка идёт в свой
 // отдел — напр. Материаловедение — в какой бы воронке ни была). Если «Отдел»
 // пуст — падаем на короткое имя воронки (Расходники/Обучение/Сервис/Инструменты),
 // иначе сервис/расходка с пустым отделом терялись бы в «Не указан».
 // Это совпадает с логикой Power BI и с модулем «Контракты».
-const PIPE_FALLBACK = { 0: 'Инструменты', 1: 'ОРМ', 2: 'Обучение', 3: 'Сервис' };
+const PIPE_FALLBACK = { 0: 'Инструменты', 1: 'ОРМ', 2: 'Тренинг-центр', 3: 'Сервис' };
 const direction = (catId, departmentId) => {
   if (departmentId && DEPARTMENT_LABELS[departmentId]) return deptLabel(departmentId);
   return PIPE_FALLBACK[catId] || 'Не указан';
@@ -196,7 +196,7 @@ function byManufacturer(deals) {
   manufacturers.forEach(m => { const p = manufParent(m); (groupSets[p] = groupSets[p] || new Set()).add(m); });
   const parents = Object.keys(groupSets).sort();
   const groups = {}; parents.forEach(p => { groups[p] = [...groupSets[p]].sort(); });
-  const typeOrder = ['Элементный', 'Хроматография и клеточный анализ', 'Электрохимия', 'ОРМ', 'Сервис', 'Обучение', 'General Lab', 'Комплекс', 'Материаловедение'];
+  const typeOrder = ['Элементный', 'Хроматография и клеточный анализ', 'Электрохимия', 'ОРМ', 'Сервис', 'Тренинг-центр', 'General Lab', 'Комплекс', 'Материаловедение'];
   const present = new Set(deals.map(d => d.dept));
   const types = typeOrder.filter(t => present.has(t));
   [...present].forEach(t => { if (!types.includes(t)) types.push(t); });
@@ -262,7 +262,7 @@ function byCompany(deals) {
     if (d.instrument) c.instruments[d.instrument] = (c.instruments[d.instrument] || 0) + d.sum;
     if (d.industry && d.industry !== 'Не указана') c.industry = d.industry;
   }
-  const CAT_ORDER = ['Приборы', 'Расходники', 'Услуги', 'Обучение'];
+  const CAT_ORDER = ['Приборы', 'Расходники', 'Услуги', 'Тренинг-центр'];
   return Object.values(by).map(c => {
     const byCat = topEntries(c.byCat);
     const cats = CAT_ORDER.filter(k => c.byCat[k]); // какие категории покупали (в порядке)

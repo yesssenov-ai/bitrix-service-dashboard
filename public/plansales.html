@@ -80,6 +80,25 @@
   .chip.act.on{background:rgba(255,45,85,.28);color:#fff}
   .chip.yr.on{background:rgba(91,140,255,.22);border-color:var(--accent);color:#bcd2ff}
   html[data-theme="light"] .chip.yr.on{background:rgba(37,99,235,.14);border-color:var(--accent);color:#1d4ed8}
+  .chip.warn{background:rgba(255,176,32,.14);border-color:var(--warn);color:#ffd98a}
+  .chip.warn.on{background:rgba(255,176,32,.30);color:#fff}
+  html[data-theme="light"] .chip.warn{color:#b45309}
+  html[data-theme="light"] .chip.warn.on{color:#fff;background:rgba(217,119,6,.85)}
+  /* Мультивыбор (Отдел / Менеджер) */
+  .msf{position:relative}
+  .msf-btn{display:flex;align-items:center;gap:7px;background:var(--panel2);border:1px solid var(--border);border-radius:11px;padding:8px 12px;font:inherit;font-size:13px;font-weight:700;color:var(--text);cursor:pointer;white-space:nowrap}
+  .msf-btn .lab-dim{color:var(--dim);font-weight:600}
+  .msf-panel{display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:50;min-width:240px;max-height:320px;overflow:auto;background:#0d1524;border:1px solid var(--border2);border-radius:12px;padding:8px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+  html[data-theme="light"] .msf-panel{background:#fff;box-shadow:0 12px 40px rgba(0,0,0,.15)}
+  .msf.open .msf-panel{display:block}
+  .msf-opt{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}
+  .msf-opt:hover{background:rgba(255,255,255,.05)}
+  html[data-theme="light"] .msf-opt:hover{background:rgba(0,0,0,.04)}
+  .msf-opt input{width:15px;height:15px;accent-color:var(--accent);cursor:pointer}
+  .msf-head{display:flex;justify-content:space-between;gap:8px;padding:4px 6px 8px;border-bottom:1px solid var(--border);margin-bottom:6px}
+  .msf-head button{background:none;border:0;color:var(--accent);font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+  .deal .stuckb{color:var(--warn);font-size:12px;font-weight:800;cursor:help;flex-shrink:0}
+  .row .rstuck{color:var(--warn);font-size:11px;font-weight:800;margin-left:2px}
   .minibtn{background:var(--panel2);border:1px solid var(--border);border-radius:9px;padding:6px 11px;font-size:12px;font-weight:700;color:var(--dim);cursor:pointer}
   .minibtn:hover{color:#fff;border-color:var(--border2)}
 
@@ -191,9 +210,10 @@
       <span class="chip" data-s="P80">P80</span>
       <span class="minibtn" id="stAll">Все</span>
     </div>
-    <div class="ctl"><label>Отдел</label><select id="deptSel"><option value="">Все</option></select></div>
-    <div class="ctl"><label>Менеджер</label><select id="mgrSel"><option value="">Все</option></select></div>
+    <div class="msf" id="deptMs"><button class="msf-btn" type="button" id="deptMsBtn"><span class="lab-dim">Отдел:</span> <span id="deptMsLab">Все</span> ▾</button><div class="msf-panel" id="deptMsPanel"></div></div>
+    <div class="msf" id="mgrMs"><button class="msf-btn" type="button" id="mgrMsBtn"><span class="lab-dim">Менеджер:</span> <span id="mgrMsLab">Все</span> ▾</button><div class="msf-panel" id="mgrMsPanel"></div></div>
     <span class="chip act" id="likelyChip" data-on="0">⚡ Наиболее вероятные</span>
+    <span class="chip warn" id="stuckChip" data-on="0" title="Сделки, стоящие на одной стадии дольше 3 месяцев">🕒 Зависшие &gt;3 мес</span>
     <div class="seg" id="groupSeg">
       <button data-g="dept" class="on">По отделам</button>
       <button data-g="mgr">По менеджерам</button>
@@ -205,6 +225,16 @@
     <div class="card kpi p60"><div class="kl"><span class="dotb" style="background:var(--p60)"></span> P60 · КП выставлено</div><div class="kv tabular" id="kP60">—</div><div class="ks" id="kP60S"></div></div>
     <div class="card kpi p80"><div class="kl"><span class="dotb" style="background:var(--p80)"></span> P80 · горячие ≤3 мес</div><div class="kv tabular" id="kP80">—</div><div class="ks" id="kP80S"></div></div>
     <div class="card kpi hot"><div class="kl"><span class="dotb" style="background:var(--brand)"></span> Наиболее вероятные</div><div class="kv tabular" id="kHot">—</div><div class="ks" id="kHotS"></div></div>
+  </div>
+
+  <div class="card sect" id="chartCard" style="display:none;margin-bottom:16px">
+    <h3>📊 График плана продаж <span class="togglehint">· по месяцам планируемой покупки</span></h3>
+    <div class="sub" style="display:flex;gap:16px;align-items:center">
+      <span class="al"><i style="display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--p60);vertical-align:middle"></i> P60 · КП выставлено</span>
+      <span class="al"><i style="display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--p80);vertical-align:middle"></i> P80 · горячие ≤3 мес</span>
+      <span class="al" id="chartHint" style="color:var(--dim2)"></span>
+    </div>
+    <div id="chartWrap" style="overflow-x:auto"><svg id="chartSvg" width="100%" height="300" preserveAspectRatio="none"></svg></div>
   </div>
 
   <div class="grid2" id="pipeBlock" style="display:none">
@@ -257,7 +287,8 @@
 let DATA={deals:[],meta:{}};
 let YEARS=new Set();                  // выбранные годы (мультивыбор)
 let STAGES=new Set(['P60','P80']);
-let DEPT='', MGR='', LIKELY=false, GROUP='dept';
+let DEPTS=new Set(), MGRS=new Set();     // мультивыбор (пусто = все)
+let LIKELY=false, STUCK=false, GROUP='dept';
 const OPEN=new Set();                 // раскрытые узлы дерева (ключи)
 const CMCACHE=new Map();              // dealId → {items} (комментарии, кэш)
 const nowKey=new Date().getFullYear()*12+new Date().getMonth(); // для сортировки прошедших месяцев
@@ -291,6 +322,7 @@ async function load(){
     renderAll();
     document.getElementById('controls').style.display='';
     document.getElementById('kpis').style.display='';
+    document.getElementById('chartCard').style.display='';
     document.getElementById('pipeBlock').style.display='';
     document.getElementById('updated').textContent=fmtUpd(DATA.meta.updatedAt);
     document.getElementById('liveDot').style.display='';
@@ -308,10 +340,10 @@ function buildControls(){
   yc.querySelectorAll('.chip').forEach(c=>{
     c.onclick=()=>{const y=+c.dataset.y; if(YEARS.has(y)){ if(YEARS.size>1)YEARS.delete(y); } else YEARS.add(y); buildControls(); renderAll();};
   });
-  const ds=document.getElementById('deptSel'); ds.innerHTML='<option value="">Все отделы</option>'+(DATA.meta.depts||[]).map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('');
-  ds.onchange=()=>{DEPT=ds.value;renderAll();};
-  const ms=document.getElementById('mgrSel'); ms.innerHTML='<option value="">Все менеджеры</option>'+(DATA.meta.managers||[]).map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('');
-  ms.onchange=()=>{MGR=ms.value;renderAll();};
+  buildMsf('dept',(DATA.meta.depts||[]).map(d=>({v:d,l:d})),DEPTS,'Все');
+  buildMsf('mgr',(DATA.meta.managers||[]).map(m=>({v:String(m.id),l:m.name})),MGRS,'Все');
+  const sk=document.getElementById('stuckChip'); sk.classList.toggle('on',STUCK);
+  sk.onclick=()=>{STUCK=!STUCK; sk.classList.toggle('on',STUCK); renderAll();};
   document.querySelectorAll('#stageChips .chip').forEach(c=>{
     if(STAGES.has(c.dataset.s))c.classList.add('on');
     c.onclick=()=>{const s=c.dataset.s; if(STAGES.has(s))STAGES.delete(s); else STAGES.add(s); c.classList.toggle('on'); renderAll();};
@@ -324,12 +356,36 @@ function buildControls(){
   });
 }
 
+// Универсальный мультивыбор (Отдел / Менеджер). set — выбранные значения (пусто = все).
+function msfLabel(kind,set,allLabel,opts){
+  const lab=document.getElementById(kind+'MsLab');
+  if(!set.size){ lab.textContent=allLabel; return; }
+  if(set.size===1){ const v=[...set][0]; const o=opts.find(x=>x.v===v); lab.textContent=o?o.l:v; return; }
+  lab.textContent='выбрано '+set.size;
+}
+function buildMsf(kind,opts,set,allLabel){
+  const panel=document.getElementById(kind+'MsPanel');
+  panel.innerHTML=`<div class="msf-head"><button data-a="all">Все</button><button data-a="clear">Сбросить</button></div>`+
+    opts.map(o=>`<label class="msf-opt"><input type="checkbox" value="${esc(o.v)}" ${set.has(o.v)?'checked':''}><span>${esc(o.l)}</span></label>`).join('');
+  msfLabel(kind,set,allLabel,opts);
+  panel.querySelectorAll('input').forEach(inp=>{
+    inp.onchange=()=>{ if(inp.checked)set.add(inp.value); else set.delete(inp.value); msfLabel(kind,set,allLabel,opts); renderAll(); };
+  });
+  panel.querySelectorAll('.msf-head button').forEach(b=>{
+    b.onclick=()=>{ set.clear(); if(b.dataset.a==='all'){ } /* all=пусто=все */ buildMsf(kind,opts,set,allLabel); renderAll(); };
+  });
+  const btn=document.getElementById(kind+'MsBtn'); const root=document.getElementById(kind+'Ms');
+  btn.onclick=(e)=>{ e.stopPropagation(); document.querySelectorAll('.msf').forEach(m=>{ if(m!==root)m.classList.remove('open'); }); root.classList.toggle('open'); };
+}
+document.addEventListener('click',(e)=>{ if(!e.target.closest('.msf')) document.querySelectorAll('.msf').forEach(m=>m.classList.remove('open')); });
+
 // Фильтр без учёта года (для pipeline текущего/следующего месяца)
 function passBase(d){
   if(!STAGES.has(d.step))return false;
-  if(DEPT && d.dept!==DEPT)return false;
-  if(MGR && String(d.managerId)!==String(MGR))return false;
+  if(DEPTS.size && !DEPTS.has(d.dept))return false;
+  if(MGRS.size && !MGRS.has(String(d.managerId)))return false;
   if(LIKELY && !d.likely)return false;
+  if(STUCK && !d.stuck)return false;
   return true;
 }
 function filtered(){ return DATA.deals.filter(d=>passBase(d) && YEARS.has(d.year)); }
@@ -338,8 +394,46 @@ function yearsLabel(){ const a=[...YEARS].sort((x,y)=>x-y); return a.length<=2?a
 function renderAll(){
   document.getElementById('treeMode').textContent='· '+(GROUP==='dept'?'Месяцы → отделы → менеджеры → сделки':'Менеджеры → месяцы → сделки');
   renderKpis();
+  renderChart();
   renderPipe();
   renderTree();
+}
+
+// ── График плана продаж: стек P60 (синий) + P80 (жёлтый) по месяцам ────────────
+function renderChart(){
+  const svg=document.getElementById('chartSvg'); if(!svg)return;
+  const f=filtered().filter(d=>d.step==='P60'||d.step==='P80');   // график про КП (P60/P80)
+  const g=group(f,d=>d.year+'-'+d.monthIdx);
+  let cols=[...g.entries()].map(([k,list])=>{const p=k.split('-'),y=+p[0],m=+p[1];
+    const p60=list.filter(d=>d.step==='P60').reduce((s,d)=>s+d.sum,0);
+    const p80=list.filter(d=>d.step==='P80').reduce((s,d)=>s+d.sum,0);
+    return {y,m,p60,p80,tot:p60+p80,past:(y*12+m)<nowKey};});
+  cols.sort((a,b)=>(a.y*12+a.m)-(b.y*12+b.m));
+  const hint=document.getElementById('chartHint');
+  if(!cols.length){ svg.innerHTML=''; hint.textContent='нет данных P60/P80 по фильтру'; return; }
+  hint.textContent='';
+  const multiYear=new Set(cols.map(c=>c.y)).size>1;
+  const W=Math.max(560, cols.length*90), H=300, padL=8, padR=8, padT=26, padB=42;
+  svg.setAttribute('viewBox','0 0 '+W+' '+H); svg.setAttribute('width', Math.max(100, cols.length*90));
+  const maxV=Math.max(1,...cols.map(c=>c.tot))*1.16;
+  const plotH=H-padT-padB;
+  const bw=Math.min(64,(W-padL-padR)/cols.length*0.62);
+  const step=(W-padL-padR)/cols.length;
+  const Y=v=>padT+plotH-(v/maxV)*plotH;
+  let g1='';for(let k=0;k<=3;k++){const gy=padT+k*plotH/3;g1+=`<line x1="0" y1="${gy.toFixed(1)}" x2="${W}" y2="${gy.toFixed(1)}" stroke="rgba(128,128,128,.14)"/>`;}
+  let bars='';
+  cols.forEach((c,i)=>{
+    const cx=padL+step*i+step/2, x=cx-bw/2;
+    const h80=(c.p80/maxV)*plotH, h60=(c.p60/maxV)*plotH;
+    const y80=padT+plotH-h80, y60=y80-h60;
+    if(c.p60>0) bars+=`<rect x="${x.toFixed(1)}" y="${y60.toFixed(1)}" width="${bw.toFixed(1)}" height="${h60.toFixed(1)}" rx="2" fill="var(--p60)"><title>${MONTHS[c.m]} ${c.y} · P60: ${fmt(c.p60)} ₸</title></rect>`;
+    if(c.p80>0) bars+=`<rect x="${x.toFixed(1)}" y="${y80.toFixed(1)}" width="${bw.toFixed(1)}" height="${h80.toFixed(1)}" rx="2" fill="var(--p80)"><title>${MONTHS[c.m]} ${c.y} · P80: ${fmt(c.p80)} ₸</title></rect>`;
+    bars+=`<text x="${cx.toFixed(1)}" y="${(y60-6).toFixed(1)}" fill="var(--dim)" font-size="11" font-weight="700" text-anchor="middle">${fmtMln(c.tot)}</text>`;
+    const lbl=MONTHS_SH[c.m]+(multiYear?(' '+String(c.y).slice(2)):'');
+    bars+=`<text x="${cx.toFixed(1)}" y="${(H-24).toFixed(1)}" fill="${c.past?'var(--bad)':'var(--dim2)'}" font-size="11" text-anchor="middle">${lbl}</text>`;
+    if(c.past) bars+=`<text x="${cx.toFixed(1)}" y="${(H-10).toFixed(1)}" fill="var(--bad)" font-size="8.5" text-anchor="middle">прошёл</text>`;
+  });
+  svg.innerHTML=g1+bars;
 }
 
 function renderKpis(){
@@ -382,10 +476,12 @@ function group(arr,keyFn){const m=new Map();arr.forEach(x=>{const k=keyFn(x);if(
 function sumOf(a){return a.reduce((s,d)=>s+d.sum,0);}
 function ordDept(names){const ord=DATA.meta.deptOrder||[];return names.sort((a,b)=>{const ia=ord.indexOf(a),ib=ord.indexOf(b);return (ia<0?99:ia)-(ib<0?99:ib)||a.localeCompare(b);});}
 
-function rowHtml(cls,key,tw,label,cnt,sum,extra){
+function rowHtml(cls,key,tw,label,cnt,sum,extra,stuckN){
   const open=OPEN.has(key);
-  return `<div class="row ${cls} ${extra||''} ${open?'open':''}" data-key="${esc(key)}"><span class="tw">${tw?'▶':''}</span><span class="lbl">${esc(label)}</span><span class="cnt">${cnt}</span><span class="sum tabular">${fmtMln(sum)}</span></div>`;
+  const sb=stuckN?`<span class="rstuck" title="${stuckN} сделок зависли >3 мес">⚠${stuckN}</span>`:'';
+  return `<div class="row ${cls} ${extra||''} ${open?'open':''}" data-key="${esc(key)}"><span class="tw">${tw?'▶':''}</span><span class="lbl">${esc(label)}</span><span class="cnt">${cnt}</span>${sb}<span class="sum tabular">${fmtMln(sum)}</span></div>`;
 }
+function stuckN(list){return list.reduce((n,d)=>n+(d.stuck?1:0),0);}
 function ymLabel(y,m){return MONTHS[m]+' '+y;}
 // Группировка по «год-месяц»: сначала текущий и будущие (по возрастанию), затем
 // прошедшие месяцы — в конце списка и красным (аномалия), как в Power BI.
@@ -400,6 +496,7 @@ function dealHtml(d){
   return `<div class="dealwrap">
     <div class="deal ${d.likely?'likely':''}">
       <span class="dn"><b>${esc(d.title)}</b>${d.company?` · <span class="co">${esc(d.company)}</span>`:''}</span>
+      ${d.stuck?`<span class="stuckb" title="Не двигается ${d.stuckDays} дн.${d.lastMoved?' (с '+d.lastMoved+')':''} — стоит на одной стадии больше 3 мес.">⚠</span>`:''}
       ${d.likely?'<span class="lk">⚡</span>':''}
       <span class="stg ${d.step}">${d.step}</span>
       <span class="dsum tabular">${fmt(d.sum)} ₸</span>
@@ -420,17 +517,17 @@ function renderTree(){
   if(GROUP==='dept'){
     for(const M of orderedYM(f)){
       const mkey='m'+M.key;
-      html+=rowHtml('lvl-month',mkey,true,ymLabel(M.y,M.m)+(M.past?' · прошёл':''),M.list.length,sumOf(M.list),M.past?'past':'');
+      html+=rowHtml('lvl-month',mkey,true,ymLabel(M.y,M.m)+(M.past?' · прошёл':''),M.list.length,sumOf(M.list),M.past?'past':'',stuckN(M.list));
       if(!OPEN.has(mkey))continue;
       const byDept=group(M.list,d=>d.dept);
       for(const dep of ordDept([...byDept.keys()])){
         const dd=byDept.get(dep); const dkey=mkey+'|d:'+dep;
-        html+=rowHtml('lvl-dept',dkey,true,dep,dd.length,sumOf(dd));
+        html+=rowHtml('lvl-dept',dkey,true,dep,dd.length,sumOf(dd),'',stuckN(dd));
         if(!OPEN.has(dkey))continue;
         const byMgr=group(dd,d=>d.managerName);
         for(const mg of [...byMgr.keys()].sort((a,b)=>sumOf(byMgr.get(b))-sumOf(byMgr.get(a)))){
           const gg=byMgr.get(mg); const gkey=dkey+'|g:'+mg;
-          html+=rowHtml('lvl-mgr',gkey,true,mg,gg.length,sumOf(gg));
+          html+=rowHtml('lvl-mgr',gkey,true,mg,gg.length,sumOf(gg),'',stuckN(gg));
           if(OPEN.has(gkey)) html+=dealsBlock(gg);
         }
       }
@@ -440,11 +537,11 @@ function renderTree(){
     const byMgr=group(f,d=>d.managerName);
     for(const mg of [...byMgr.keys()].sort((a,b)=>sumOf(byMgr.get(b))-sumOf(byMgr.get(a)))){
       const list=byMgr.get(mg); const gkey='g:'+mg;
-      html+=rowHtml('lvl-month',gkey,true,mg,list.length,sumOf(list));
+      html+=rowHtml('lvl-month',gkey,true,mg,list.length,sumOf(list),'',stuckN(list));
       if(!OPEN.has(gkey))continue;
       for(const M of orderedYM(list)){
         const mkey=gkey+'|m'+M.key;
-        html+=rowHtml('lvl-dept',mkey,true,ymLabel(M.y,M.m)+(M.past?' · прошёл':''),M.list.length,sumOf(M.list),M.past?'past':'');
+        html+=rowHtml('lvl-dept',mkey,true,ymLabel(M.y,M.m)+(M.past?' · прошёл':''),M.list.length,sumOf(M.list),M.past?'past':'',stuckN(M.list));
         if(OPEN.has(mkey)) html+=dealsBlock(M.list);
       }
     }

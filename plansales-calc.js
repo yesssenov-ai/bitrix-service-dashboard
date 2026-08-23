@@ -24,18 +24,23 @@ const STEP_LABELS = { P10: 'P10 · Новый лид', P30: 'P30 · Задача
 const DEPARTMENT_LABELS = {
   '4857': 'Элементный', '4858': 'Хроматография', '4859': 'Электрохимия',
   '4860': 'Клеточный анализ', '4862': 'ОРМ', '4863': 'Сервис',
-  '4864': 'Обучение', '4865': 'General Lab', '4866': 'Комплекс', '8384': 'Материаловедение',
+  '4864': 'Тренинг-центр', '4865': 'General Lab', '4866': 'Комплекс', '8384': 'Материаловедение',
 };
 const deptLabel = id => {
   const l = DEPARTMENT_LABELS[id] || id || 'Не указан';
   return (l === 'Хроматография' || l === 'Клеточный анализ') ? 'Хроматография и клеточный анализ' : l;
 };
-const PIPE_FALLBACK = { 0: 'Инструменты', 1: 'ОРМ', 2: 'Обучение', 3: 'Сервис' };
+// Если поле «Отдел» у сделки пустое — падаем на смысл воронки. Воронки 1/2/3 сами
+// по себе = отдел (ОРМ / Тренинг-центр / Сервис). А воронка 0 (Приборы) — общая для
+// пяти отделов (Хроматография, Элементный, Электрохимия, General Lab, Материаловедение),
+// поэтому без заполненного «Отдела» её нельзя отнести → «Отдел не указан» (надо
+// проставить отдел в сделке Bitrix, чтобы она встала в свой отдел).
+const PIPE_FALLBACK = { 0: 'Отдел не указан', 1: 'ОРМ', 2: 'Тренинг-центр', 3: 'Сервис' };
 const direction = (catId, departmentId) => {
   if (departmentId && DEPARTMENT_LABELS[departmentId]) return deptLabel(departmentId);
   return PIPE_FALLBACK[catId] || 'Не указан';
 };
-const DEPT_ORDER = ['Элементный', 'Хроматография и клеточный анализ', 'Электрохимия', 'ОРМ', 'Сервис', 'General Lab', 'Обучение', 'Комплекс', 'Материаловедение', 'Инструменты'];
+const DEPT_ORDER = ['Элементный', 'Хроматография и клеточный анализ', 'Электрохимия', 'ОРМ', 'Сервис', 'General Lab', 'Тренинг-центр', 'Комплекс', 'Материаловедение', 'Отдел не указан'];
 
 const uname = id => id ? (USERS[id] || `#${id}`) : '—';
 const ymd = v => {
@@ -58,6 +63,15 @@ async function getPlanSales() {
        FROM ticketsmodule_stat_deals
       WHERE planned_purchase_date IS NOT NULL`
   );
+  // Дата последней смены стадии (из истории стадий) — чтобы подсветить «зависшие»
+  // сделки, которые стоят на одной стадии дольше 3 месяцев (не двигаются).
+  const lastMoved = {};
+  try {
+    const { rows: hm } = await pool.query('SELECT deal_id, MAX(created_time) AS t FROM ticketsmodule_stage_history GROUP BY deal_id');
+    hm.forEach(h => { if (h.t) lastMoved[h.deal_id] = new Date(h.t).getTime(); });
+  } catch (e) { /* best-effort: без истории просто не подсветим */ }
+  const NOWMS = Date.now();
+  const STUCK_DAYS = 90;
   const deals = [];
   const yearsSet = new Set(), deptSet = new Set(), mgrMap = new Map();
   for (const r of rows) {
@@ -75,6 +89,8 @@ async function getPlanSales() {
     const managerName = uname(managerId);
     yearsSet.add(y); deptSet.add(dept);
     if (managerId) mgrMap.set(managerId, managerName);
+    const lm = lastMoved[r.deal_id] || null;
+    const stuckDays = lm ? Math.floor((NOWMS - lm) / 86400000) : null;
     deals.push({
       id: r.deal_id,
       title: r.deal_title || ('Сделка #' + r.deal_id),
@@ -84,6 +100,8 @@ async function getPlanSales() {
       step, stageLabel: STEP_LABELS[step] || step,
       planned, year: y, monthIdx,
       likely: !!r.likely_deal,
+      stuckDays, stuck: stuckDays != null && stuckDays >= STUCK_DAYS,
+      lastMoved: lm ? new Date(lm).toISOString().slice(0, 10) : null,
       url: base ? (base + r.deal_id + '/') : null,
     });
   }

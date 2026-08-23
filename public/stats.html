@@ -368,7 +368,7 @@ function renderInstruments(){
 function setInstr(v){INSTR=v;renderTab();}
 
 function aggCompanies(deals){
-  const CAT_ORDER=['Приборы','Расходники','Услуги','Обучение'];
+  const CAT_ORDER=['Приборы','Расходники','Услуги','Тренинг-центр'];
   const by={};
   for(const d of deals){
     const k=d.cId||d.co;
@@ -416,7 +416,7 @@ function renderCompanies(){
     <div class="seg"><button class="${CX==='all'?'on':''}" onclick="CX='all';renderTab()">Все компании</button><button class="${CX==='complex'?'on':''}" onclick="CX='complex';renderTab()">В комплексе · ${complexCount}</button></div>
   </div>`;
   if(!list.length)return bar+'<div class="empty">Ничего не найдено.</div>';
-  const catColor={'Приборы':'var(--p10)','Расходники':'var(--good)','Услуги':'var(--warn)','Обучение':'var(--p60)'};
+  const catColor={'Приборы':'var(--p10)','Расходники':'var(--good)','Услуги':'var(--warn)','Тренинг-центр':'var(--p60)'};
   const mixBadges=c=>c.cats.map(k=>`<span class="cbadge" style="border-color:${catColor[k]};color:${catColor[k]}">${k}</span>`).join('');
   const rows=list.slice(0,200).map((c,i)=>`<div class="row" id="co${i}">
     <div class="rhead" onclick="document.getElementById('co${i}').classList.toggle('open')">
@@ -427,7 +427,7 @@ function renderCompanies(){
     </div>
     <div class="rbody">
       ${c.complexity>=2?`<div class="cxbox">📦 Купили в комплексе: <b>${c.cats.join(' + ')}</b> — ${c.cats.length} категории на ${M(c.sum)} ₸</div>`:''}
-      <div class="mini">${['Приборы','Расходники','Услуги','Обучение'].map(cat=>{const e=c.byCat.find(x=>x.key===cat);return `<div class="mcell"><div class="mv" style="color:${e?'var(--good)':'var(--faint)'}">${e?M(e.sum)+' ₸':'—'}</div><div class="ml">${cat}</div></div>`;}).join('')}</div>
+      <div class="mini">${['Приборы','Расходники','Услуги','Тренинг-центр'].map(cat=>{const e=c.byCat.find(x=>x.key===cat);return `<div class="mcell"><div class="mv" style="color:${e?'var(--good)':'var(--faint)'}">${e?M(e.sum)+' ₸':'—'}</div><div class="ml">${cat}</div></div>`;}).join('')}</div>
       <div class="breaks">${brk('Топ приборы',c.topInstruments,c.sum)}${brk('Бренды',c.byManuf.slice(0,6),c.sum)}</div>
     </div>
   </div>`).join('');
@@ -435,7 +435,7 @@ function renderCompanies(){
 }
 function refocus(){const s=document.getElementById('csearch');if(s){const v=s.value;s.focus();s.setSelectionRange(v.length,v.length);}}
 
-const SPH_FUNNELS=['Приборы','Расходники','Сервис','Обучение'];
+const SPH_FUNNELS=['Приборы','Расходники','Сервис','Тренинг-центр'];
 function renderSpheres(){
   const scope=SPH_SCOPE;
   const list=(scope==='sold'?BOARD.spheres:BOARD.spheresPipe)||[];
