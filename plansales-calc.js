@@ -111,7 +111,9 @@ async function getPlanSales() {
   const base = dealUrlBase();
   const { rows } = await pool.query(
     `SELECT deal_id, category_id, stage_id, opportunity, currency_id, assigned_by_id,
-            department_id, deal_title, company_name, planned_purchase_date, likely_deal, manufacturer
+            department_id, deal_title, company_name,
+            TO_CHAR(planned_purchase_date,'YYYY-MM-DD') AS planned_purchase_date,
+            likely_deal, manufacturer
        FROM ticketsmodule_stat_deals
       WHERE planned_purchase_date IS NOT NULL`
   );
