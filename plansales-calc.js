@@ -169,7 +169,15 @@ async function getPlanSales() {
       url: base ? (base + r.deal_id + '/') : null,
     });
   }
-  const years = [...yearsSet].sort((a, b) => a - b);
+  // Годы: непрерывный диапазон, всегда включающий последние годы (2024/2025/…),
+  // даже если в pipeline пока нет сделок с такой планируемой датой — чтобы год
+  // можно было выбрать. Раньше показывались только годы, реально встреченные в данных.
+  const yrNow0 = new Date().getFullYear();
+  const dataYears = [...yearsSet];
+  const minY = Math.min(...(dataYears.length ? dataYears : [yrNow0]), yrNow0 - 2);
+  const maxY = Math.max(...(dataYears.length ? dataYears : [yrNow0]), yrNow0);
+  const years = [];
+  for (let y = minY; y <= maxY; y++) years.push(y);
   const depts = [...deptSet].sort((a, b) => {
     const ia = DEPT_ORDER.indexOf(a), ib = DEPT_ORDER.indexOf(b);
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);

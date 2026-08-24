@@ -2,6 +2,23 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../auth');
 
+// Определяем Bitrix-ID автора действия: сначала явная связка (bitrix_user_id из
+// карточки пользователя), иначе — по совпадению имени учётки с сотрудником Bitrix.
+// Если ничего не нашли — вернём null (тогда автором станет владелец вебхука).
+function resolveBitrixId(user) {
+  if (!user) return null;
+  if (user.bitrix_user_id) return parseInt(user.bitrix_user_id, 10);
+  const nm = user.engineer_name || user.display_name;
+  if (nm) {
+    try {
+      const { USERS } = require('../constants');
+      const found = Object.entries(USERS).find(([, n]) => n === nm);
+      if (found) return parseInt(found[0], 10);
+    } catch (e) { /* ignore */ }
+  }
+  return null;
+}
+
 // Модуль «План продаж» доступен по гранту модуля (страница закрыта requireModule),
 // а API — любому авторизованному с доступом; ограничим ролями просмотра аналитики.
 const VIEW_ROLES = ['admin', 'coordinator', 'manager', 'store', 'accountant'];
@@ -70,10 +87,19 @@ router.post('/:id/comments', requireAuth(VIEW_ROLES), express.json(), async (req
     const id = parseInt(req.params.id, 10);
     const text = String((req.body || {}).text || '').trim();
     if (!text) return res.status(400).json({ error: 'Пустой комментарий' });
-    const fields = { ENTITY_ID: id, ENTITY_TYPE: 'deal', COMMENT: text };
-    if (req.user && req.user.bitrix_user_id) fields.AUTHOR_ID = req.user.bitrix_user_id; // автор = текущий пользователь
+    const bid = resolveBitrixId(req.user);
+    const fields = { ENTITY_ID: id, ENTITY_TYPE: 'deal' };
+    if (bid) {
+      fields.AUTHOR_ID = bid;            // автор = текущий пользователь (по связке/имени)
+      fields.COMMENT = text;
+    } else {
+      // Учётка не связана с Bitrix и имя не совпало — иначе автором стал бы
+      // владелец вебхука. Сохраняем настоящего автора в тексте комментария.
+      const who = (req.user && (req.user.display_name || req.user.engineer_name)) || 'сотрудник ЦУП';
+      fields.COMMENT = `[${who}]: ${text}`;
+    }
     const { result } = await b24('crm.timeline.comment.add', { fields });
-    res.json({ ok: true, id: result });
+    res.json({ ok: true, id: result, linked: !!bid });
   } catch (e) {
     console.error('POST /api/plansales/:id/comments error:', e.message);
     res.status(500).json({ error: 'Не удалось сохранить комментарий: ' + e.message });
@@ -92,7 +118,8 @@ router.post('/:id/task', requireAuth(VIEW_ROLES), express.json(), async (req, re
     const fields = { TITLE: title, DESCRIPTION: String(b.description || ''), UF_CRM_TASK: ['D_' + id] };
     if (b.responsibleId) fields.RESPONSIBLE_ID = parseInt(b.responsibleId, 10);
     if (b.deadline) fields.DEADLINE = /^\d{4}-\d{2}-\d{2}$/.test(b.deadline) ? (b.deadline + 'T18:00:00') : b.deadline;
-    if (req.user && req.user.bitrix_user_id) fields.CREATED_BY = req.user.bitrix_user_id;
+    const cby = resolveBitrixId(req.user);
+    if (cby) fields.CREATED_BY = cby;
     const { result } = await b24('tasks.task.add', { fields });
     const taskId = result && result.task && (result.task.id || result.task.ID);
     res.json({ ok: true, id: taskId });

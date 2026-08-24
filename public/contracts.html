@@ -702,24 +702,29 @@ function renderArea(deals){
   const mln=Array(12).fill(0);deals.forEach(d=>{if(d.month!=null)mln[d.month]+=d.sumKzt;});
   const cum=[];mln.reduce((r,v,i)=>cum[i]=r+v,0);
   const bit=cum.map(v=>v/1e9);
-  // Факт (Bitrix) — накопительная линия обрывается на текущем месяце: будущие месяцы = null (не тянем плоскую линию до дек)
-  const CUR=new Date().getMonth(),LAST=Math.min(CUR,11);
-  for(let i=LAST+1;i<12;i++)bit[i]=null;
+  // Факт (Bitrix) — накопительная линия идёт до конца ФАКТИЧЕСКИ наступившего периода:
+  // прошедшие годы — до декабря (факт известен весь год), текущий год — до текущего
+  // месяца, будущие годы — факта нет. Раньше обрывалось на текущем месяце для любого года.
+  const NY=new Date().getFullYear(),CM=new Date().getMonth();
+  const LAST = YEAR<NY ? 11 : (YEAR>NY ? -1 : CM);
+  for(let i=(LAST<0?0:LAST+1);i<12;i++)bit[i]=null;
   const planTotal=(FILT.dept.length?FILT.dept.reduce((a,dp)=>a+(PLAN[dp]||0),0):Object.values(PLAN).reduce((a,v)=>a+v,0))/1e9;
   const svg=document.getElementById('areaSvg'),W=520,H=200,pad=6;
   const maxV=Math.max(planTotal,...bit,.001)*1.08;
   const X=i=>pad+i*(W-2*pad)/11,Y=v=>H-pad-(v/maxV)*(H-2*pad);
   let g='';for(let k=0;k<=3;k++){const y=pad+k*(H-2*pad)/3;g+=`<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="rgba(255,255,255,.05)"/>`;}
   const defs=`<defs><linearGradient id="afill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5b8cff" stop-opacity=".35"/><stop offset="1" stop-color="#5b8cff" stop-opacity="0"/></linearGradient></defs>`;
-  // Заливка факта — только до текущего месяца (LAST), не до дек
-  let ap=`M${X(0)} ${Y(bit[0])}`;for(let i=0;i<=LAST;i++)ap+=` L${X(i)} ${Y(bit[i])}`;ap+=` L${X(LAST)} ${H-pad} L${X(0)} ${H-pad} Z`;
-  let paths=`<path d="${ap}" fill="url(#afill)"/>`;
+  // Заливка факта — до конца наступившего периода (LAST)
+  let paths='';
+  if(LAST>=0){let ap=`M${X(0)} ${Y(bit[0])}`;for(let i=0;i<=LAST;i++)ap+=` L${X(i)} ${Y(bit[i])}`;ap+=` L${X(LAST)} ${H-pad} L${X(0)} ${H-pad} Z`;paths+=`<path d="${ap}" fill="url(#afill)"/>`;}
   let pl=`M${X(0)} ${Y(planTotal/12)}`;for(let i=0;i<12;i++)pl+=` L${X(i)} ${Y(planTotal*(i+1)/12)}`;
   if(planTotal>0)paths+=`<path class="path-anim" d="${pl}" fill="none" stroke="#8592ad" stroke-width="2" stroke-dasharray="6 5" stroke-linecap="round"/>`;
-  // Линия факта — обрывается на текущем месяце
-  let bp=`M${X(0)} ${Y(bit[0])}`;for(let i=1;i<=LAST;i++)bp+=` L${X(i)} ${Y(bit[i])}`;
-  paths+=`<path class="path-anim" d="${bp}" fill="none" stroke="#5b8cff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`;
-  paths+=`<circle cx="${X(LAST)}" cy="${Y(bit[LAST])}" r="3.5" fill="#5b8cff"/>`;
+  // Линия факта — до конца наступившего периода
+  if(LAST>=0){
+    let bp=`M${X(0)} ${Y(bit[0])}`;for(let i=1;i<=LAST;i++)bp+=` L${X(i)} ${Y(bit[i])}`;
+    paths+=`<path class="path-anim" d="${bp}" fill="none" stroke="#5b8cff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`;
+    paths+=`<circle cx="${X(LAST)}" cy="${Y(bit[LAST])}" r="3.5" fill="#5b8cff"/>`;
+  }
   let labels='';MONTHS.forEach((m,i)=>labels+=`<text x="${X(i)}" y="${H+2}" fill="#5c6884" font-size="9" text-anchor="middle">${m}</text>`);
   svg.innerHTML=defs+g+paths+labels;
   document.getElementById('areaLegend').innerHTML=`<span class="al"><i style="background:transparent;border-top:2px dashed #8592ad;height:2px"></i>План${FILT.dept.length?' (выбрано)':''}</span><span class="al"><i style="background:#5b8cff"></i>Bitrix (факт)</span>`;

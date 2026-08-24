@@ -230,6 +230,7 @@
       <button data-g="dept" class="on">По отделам</button>
       <button data-g="mgr">По менеджерам</button>
     </div>
+    <button class="minibtn" id="resetFilters" title="Сбросить фильтры к значениям по умолчанию" style="margin-left:4px">✕ Сброс</button>
   </div>
 
   <div class="kpis" id="kpis" style="display:none">
@@ -331,6 +332,8 @@ async function load(){
     const cy=yrs.includes(now.getFullYear())?now.getFullYear():(yrs[yrs.length-1]||now.getFullYear());
     YEARS=new Set([cy]);                                         // по умолчанию — текущий год
     OPEN.add('m'+cy+'-'+now.getMonth());                         // текущий месяц раскрыт сразу
+    // По умолчанию — все отделы, кроме «Комплекса» (его можно включить вручную).
+    if(!DEPTS.size){ const dl=(DATA.meta.depts||[]); if(dl.includes('Комплекс')) DEPTS=new Set(dl.filter(d=>d!=='Комплекс')); }
     buildControls();
     renderAll();
     document.getElementById('controls').style.display='';
@@ -367,6 +370,19 @@ function buildControls(){
   document.querySelectorAll('#groupSeg button').forEach(b=>{
     b.onclick=()=>{GROUP=b.dataset.g;document.querySelectorAll('#groupSeg button').forEach(x=>x.classList.toggle('on',x===b));renderAll();};
   });
+  const rf=document.getElementById('resetFilters'); if(rf) rf.onclick=resetFilters;
+}
+
+// Сброс всех фильтров к значениям по умолчанию (стадии P60/P80, текущий год,
+// все отделы кроме Комплекса, без менеджера/флагов, группировка по отделам).
+function resetFilters(){
+  STAGES=new Set(['P60','P80']); MGRS=new Set(); LIKELY=false; STUCK=false; GROUP='dept';
+  const yrs=(DATA.meta.years||[]);
+  const cy=yrs.includes(now.getFullYear())?now.getFullYear():(yrs[yrs.length-1]||now.getFullYear());
+  YEARS=new Set([cy]);
+  const dl=(DATA.meta.depts||[]);
+  DEPTS = dl.includes('Комплекс') ? new Set(dl.filter(d=>d!=='Комплекс')) : new Set();
+  buildControls(); renderAll();
 }
 
 // Универсальный мультивыбор (Отдел / Менеджер). set — выбранные значения (пусто = все).
