@@ -121,7 +121,7 @@ async function getPlanSales() {
   const base = dealUrlBase();
   const { rows } = await pool.query(
     `SELECT deal_id, category_id, stage_id, opportunity, currency_id, assigned_by_id,
-            department_id, deal_title, company_name,
+            department_id, deal_title, company_name, end_user,
             TO_CHAR(planned_purchase_date,'YYYY-MM-DD') AS planned_purchase_date,
             likely_deal, manufacturer
        FROM ticketsmodule_stat_deals
@@ -159,6 +159,10 @@ async function getPlanSales() {
       id: r.deal_id,
       title: r.deal_title || ('Сделка #' + r.deal_id),
       company: r.company_name || '',
+      // Конечный пользователь: если поле заполнено — отдельный конечный пользователь;
+      // если пусто — совпадает с компанией (показываем компанию).
+      endUser: r.end_user || r.company_name || '',
+      endUserDiffers: !!(r.end_user && r.end_user !== r.company_name),
       dept, managerId, managerName,
       sum, rawSum: raw, currency: r.currency_id || 'KZT',
       step, stageLabel: STEP_LABELS[step] || step,

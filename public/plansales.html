@@ -560,7 +560,7 @@ function orderedYM(deals){
 function dealHtml(d){
   return `<div class="dealwrap">
     <div class="deal ${d.likely?'likely':''}">
-      <span class="dn"><b>${esc(d.title)}</b>${d.company?` · <span class="co">${esc(d.company)}</span>`:''}</span>
+      <span class="dn"><b>${esc(d.title)}</b>${d.company?` · <span class="co">${esc(d.company)}</span>`:''}${d.endUserDiffers?` · <span class="co" title="Конечный пользователь">🏭 ${esc(d.endUser)}</span>`:''}</span>
       ${d.stuck?`<span class="stuckb" title="Не двигается ${d.stuckDays} дн.${d.lastMoved?' (с '+d.lastMoved+')':''} — стоит на одной стадии больше 3 мес.">⚠</span>`:''}
       ${d.likely?'<span class="lk">⚡</span>':''}
       <span class="stg ${d.step}">${d.step}</span>

@@ -288,6 +288,9 @@ async function initDB() {
     ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS install_date DATE;
     ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS warranty_end DATE;
     CREATE INDEX IF NOT EXISTS idx_stat_deals_warranty ON ticketsmodule_stat_deals(warranty_end);
+    -- «Конечный пользователь» сделки (UF_CRM_1731862784, привязка к компании/контакту).
+    -- Хранится уже РЕЗОЛВЛЕННОЕ имя; пусто = конечный пользователь совпадает с компанией.
+    ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS end_user VARCHAR(500);
 
     -- ── Фаза 2 Статистики: история стадий сделок ───────────────────────────
     -- Каждая запись = момент входа сделки в стадию (из crm.stagehistory.list).
