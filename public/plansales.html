@@ -155,6 +155,8 @@
   .deal .dn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .deal .dn b{font-weight:600}
   .deal .dn .co{color:var(--dim2);font-size:11.5px}
+.dn .eu{color:var(--dim2);font-size:11.5px}
+.dn .eu.diff{color:var(--warn);font-weight:700}
   .deal .stg{font-size:10px;font-weight:800;border-radius:6px;padding:2px 7px;white-space:nowrap}
   .stg.P10{background:rgba(133,146,173,.2);color:#c8d0e0}.stg.P30{background:rgba(165,107,255,.2);color:#d6bcff}
   .stg.P60{background:rgba(91,140,255,.2);color:#bcd2ff}.stg.P80{background:rgba(255,176,32,.2);color:#ffd98a}
@@ -560,7 +562,7 @@ function orderedYM(deals){
 function dealHtml(d){
   return `<div class="dealwrap">
     <div class="deal ${d.likely?'likely':''}">
-      <span class="dn"><b>${esc(d.title)}</b>${d.company?` · <span class="co">${esc(d.company)}</span>`:''}${d.endUserDiffers?` · <span class="co" title="Конечный пользователь">🏭 ${esc(d.endUser)}</span>`:''}</span>
+      <span class="dn"><b>${esc(d.title)}</b>${d.company?` · <span class="co">${esc(d.company)}</span>`:''}${d.endUser?` · <span class="eu${d.endUserDiffers?' diff':''}" title="Конечный пользователь${d.endUserDiffers?' — отличается от компании':' (совпадает с компанией)'}">🏭 ${esc(d.endUser)}</span>`:''}</span>
       ${d.stuck?`<span class="stuckb" title="Не двигается ${d.stuckDays} дн.${d.lastMoved?' (с '+d.lastMoved+')':''} — стоит на одной стадии больше 3 мес.">⚠</span>`:''}
       ${d.likely?'<span class="lk">⚡</span>':''}
       <span class="stg ${d.step}">${d.step}</span>
