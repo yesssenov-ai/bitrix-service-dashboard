@@ -27,8 +27,17 @@ const VIEW_ROLES = ['admin', 'coordinator', 'manager', 'store', 'accountant'];
 router.get('/', requireAuth(VIEW_ROLES), async (req, res) => {
   try {
     const { getPlanSales } = require('../plansales-calc');
+    const { canCommentDeal, EMPLOYEE_DEPT } = require('../dept-map');
+    const data = await getPlanSales();
+    // Права на комментарии: помечаем каждую сделку — может ли текущий пользователь
+    // её комментировать (свои + своего отдела; админ — любые). Фронт по этому флагу
+    // прячет поле ввода, сервер всё равно проверяет на POST.
+    const bid = resolveBitrixId(req.user);
+    (data.deals || []).forEach(d => { d.canComment = canCommentDeal(req.user, d.managerId, bid); });
+    data.meta = data.meta || {};
+    data.meta.me = { bid: bid || null, isAdmin: !!(req.user && req.user.role === 'admin'), dept: bid ? (EMPLOYEE_DEPT[bid] || null) : null };
     res.set('Cache-Control', 'no-store');
-    res.json(await getPlanSales());
+    res.json(data);
   } catch (e) {
     console.error('GET /api/plansales error:', e.message);
     res.status(500).json({ error: e.message, deals: [], meta: {} });
@@ -88,6 +97,15 @@ router.post('/:id/comments', requireAuth(VIEW_ROLES), express.json(), async (req
     const text = String((req.body || {}).text || '').trim();
     if (!text) return res.status(400).json({ error: 'Пустой комментарий' });
     const bid = resolveBitrixId(req.user);
+    // Проверка прав: комментировать можно только свои сделки и сделки своего отдела
+    // (админ — любые). Менеджера сделки берём из зеркала.
+    const { canCommentDeal } = require('../dept-map');
+    const { pool } = require('../auth');
+    let dealMgr = null;
+    try { const { rows } = await pool.query('SELECT assigned_by_id FROM ticketsmodule_stat_deals WHERE deal_id=$1', [id]); dealMgr = rows[0] ? rows[0].assigned_by_id : null; } catch (e) { /* ignore */ }
+    if (!canCommentDeal(req.user, dealMgr, bid)) {
+      return res.status(403).json({ error: 'Комментировать можно только свои сделки и сделки своего отдела.' });
+    }
     const fields = { ENTITY_ID: id, ENTITY_TYPE: 'deal' };
     if (bid) {
       fields.AUTHOR_ID = bid;            // автор = текущий пользователь (по связке/имени)

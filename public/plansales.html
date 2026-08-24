@@ -270,7 +270,8 @@
       <button class="mx" id="cmClose">×</button>
     </div>
     <div class="mb" id="cmList"><div class="spin"></div></div>
-    <div class="mf">
+    <div class="mf" id="cmNoPerm" style="display:none;color:var(--dim);font-size:12.5px;padding:12px 16px">🔒 Комментировать можно только свои сделки и сделки своего отдела.</div>
+    <div class="mf" id="cmFoot">
       <textarea id="cmInput" placeholder="Новый комментарий к сделке… (сохранится в Bitrix)"></textarea>
       <button class="send" id="cmSend">Отправить</button>
     </div>
@@ -643,10 +644,14 @@ async function loadInlineComments(){
 // ── Комментарии сделки (таймлайн Bitrix) ──────────────────────────────────────
 let CM_ID=null;
 function stripBB(t){return String(t||'').replace(/\[\/?[^\]]+\]/g,'');}
+function canAddFor(id){ const d=(DATA.deals||[]).find(x=>String(x.id)===String(id)); return d?!!d.canComment:false; }
 function openComments(id,title){
   CM_ID=id;
   document.getElementById('cmSub').textContent=(title||'')+' · сделка #'+id;
   document.getElementById('cmInput').value='';
+  const canAdd=canAddFor(id);
+  document.getElementById('cmFoot').style.display=canAdd?'':'none';
+  document.getElementById('cmNoPerm').style.display=canAdd?'none':'';
   document.getElementById('cmOv').classList.add('show');
   loadComments(id);
 }
