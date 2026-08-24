@@ -100,6 +100,8 @@
   .deal .stuckb{color:var(--warn);font-size:12px;font-weight:800;cursor:help;flex-shrink:0}
   .row .rstuck{color:var(--warn);font-size:11px;font-weight:800;margin-left:2px}
   .minibtn{background:var(--panel2);border:1px solid var(--border);border-radius:9px;padding:6px 11px;font-size:12px;font-weight:700;color:var(--dim);cursor:pointer}
+  .meetbtn{background:linear-gradient(135deg,var(--brand),#ff6b81);border:1px solid transparent;border-radius:9px;padding:8px 14px;font-size:12.5px;font-weight:800;color:#fff;cursor:pointer}
+  .meetbtn.on{box-shadow:0 0 0 2px rgba(255,45,85,.35)}
   .minibtn:hover{color:#fff;border-color:var(--border2)}
 
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
@@ -204,6 +206,7 @@
       <div class="logo"><div class="lg1">ЦУП · <span>План продаж</span></div><div class="lg2">Незаконтрактованный pipeline по планируемому сроку покупки</div></div>
     </div>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <button class="meetbtn" id="meetBtn" title="Крупный вид для планёрки — увеличивает весь дашборд, все функции работают. Клик переключает масштаб.">▶ Митинг</button>
       <button class="minibtn" id="refreshBtn" title="Подтянуть из Bitrix сделки, изменённые с последней синхронизации" style="padding:8px 12px">↻ Обновить</button>
       <button class="minibtn" id="resyncBtn" title="Полная пересинхронизация всех сделок из Bitrix (для админа). Нужна разово после обновления, чтобы заполнились новые поля." style="padding:8px 12px">⟲ Полная</button>
       <div class="clock"><div class="c1"><span id="liveDot" style="display:none">🟢 онлайн · </span>обновлено</div><div class="c2" id="updated">…</div></div>
@@ -710,6 +713,20 @@ document.getElementById('resyncBtn').onclick=async(e)=>{
   }catch(err){alert('Ошибка запуска: '+err.message);}
   finally{b.disabled=false; b.textContent=old;}
 };
+// ── Режим «Митинг»: крупный вид всего дашборда (все функции работают) ──────────
+// Клик циклически меняет масштаб: 100% → 125% → 150% → 100%.
+const MEET_LEVELS=[1,1.25,1.5];
+let meetIdx=0;
+(function(){
+  const btn=document.getElementById('meetBtn'); if(!btn)return;
+  btn.onclick=()=>{
+    meetIdx=(meetIdx+1)%MEET_LEVELS.length;
+    const z=MEET_LEVELS[meetIdx];
+    document.querySelector('.wrap').style.zoom=z;
+    btn.textContent = z>1 ? ('🔍 '+Math.round(z*100)+'%') : '▶ Митинг';
+    btn.classList.toggle('on', z>1);
+  };
+})();
 load();
 </script>
 </body>
