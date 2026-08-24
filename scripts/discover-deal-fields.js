@@ -10,6 +10,8 @@
 //
 // Paste the output back into the chat and I'll wire the exact codes into operational.js.
 
+// Читаем локальный .env, чтобы BITRIX_WEBHOOK подхватился сам (как на сервере).
+try { require('dotenv').config(); } catch (e) { /* dotenv не обязателен */ }
 const { b24 } = require('./bitrix');
 
 // Keywords → which column each likely belongs to. Purely to help eyeball the dump.
@@ -23,6 +25,10 @@ const HINTS = [
   { col: 'Комментарий',                 re: /коммент|примечан|comment|note/i },
   { col: 'Дата договора (подписание)',  re: /дата.*договор|подписан|contract.*date/i },
   { col: 'Конечный пользователь',       re: /конечн|пользовател|end.?user|грузополуч|заказчик|потребител/i },
+  { col: 'Тип КП / Договора (Complex)', re: /тип.*(кп|договор)|dogovor_type|тип\s*кп/i },
+  { col: 'Комплексная сделка (Да/Нет)', re: /комплексн.*сделк|complex.*deal|это.*комплексн/i },
+  { col: 'Родительская сделка (Complex)', re: /родительск.*сделк|parent.*deal|основн.*сделк|родит.*complex/i },
+  { col: 'Группа компаний',             re: /групп.*компан|холдинг|group.*compan/i },
 ];
 
 function typeOf(f) {

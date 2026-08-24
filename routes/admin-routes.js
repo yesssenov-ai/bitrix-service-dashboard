@@ -303,4 +303,32 @@ router.put('/module-access/:bitrixUserId', requireAuth(['admin']), async (req, r
   } catch (e) { sanitizeError(e, res); }
 });
 
+// GET /admin/discover-fields — временная разведка полей сделки для настройки
+// модуля «Проекты / Комплексные сделки». Дёргает поля рабочим серверным вебхуком
+// и показывает совпадения по ключевым словам + значения «Тип КП/Договора».
+// Только админ. Можно удалить после настройки.
+router.get('/discover-fields', requireAuth(['admin']), async (req, res) => {
+  try {
+    const { b24 } = require('../bitrix');
+    const { result } = await b24('crm.deal.fields', {});
+    const fields = result || {};
+    const RE = /комплексн|родительск|complex|тип\s*(кп|договор)|dogovor|групп.*компан|холдинг|конечн|end.?user|parent|основн.*сделк/i;
+    const matches = [];
+    let dogovorType = null;
+    for (const [code, f] of Object.entries(fields)) {
+      const label = f.formLabel || f.title || f.listLabel || '';
+      const items = Array.isArray(f.items) ? f.items.map(i => ({ id: i.ID, value: i.VALUE })) : null;
+      if (RE.test(label) || RE.test(code)) {
+        matches.push({ code, type: (f.type || '') + (f.isMultiple ? '[]' : ''), label, items });
+      }
+      if (code === 'UF_CRM_DOGOVOR_TYPE') dogovorType = items;
+    }
+    res.set('Cache-Control', 'no-store');
+    res.json({ ok: true, total: Object.keys(fields).length, dogovorType, matches });
+  } catch (e) {
+    console.error('discover-fields error:', e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 module.exports = router;
