@@ -27,13 +27,33 @@ const WARRANTY_END_FIELD = 'UF_CRM_GUARANT_END';
 // «Конечный пользователь» — привязка к компании/контакту (тип crm). Пусто = совпадает
 // с компанией сделки. Значение приходит как "CO_<id>" (компания) или "C_<id>" (контакт).
 const END_USER_FIELD = 'UF_CRM_1731862784';
+// Модуль «Проекты»: тип КП/договора (родитель=Complex), флаг «комплексная сделка»
+// (дочерняя), привязка к родительской сделке, группа компаний.
+const KP_TYPE_FIELD = 'UF_CRM_DOGOVOR_TYPE';                 // enumeration; Complex = 3558
+const COMPLEX_FLAG_FIELD = 'UF_CRM_1787574242475';           // enumeration; Да = 8961, Нет = 8960
+const PARENT_DEAL_FIELD = 'UF_CRM_1787572985';               // crm[] — привязка к родительской сделке
+const COMPANY_GROUP_FIELD = 'UF_CRM_1731862481';             // iblock_element — Группа компаний (УС)
+const KP_TYPE_MAP = {
+  '3553': 'Instrument', '3554': 'Service', '3555': 'Spares', '3556': 'Robots',
+  '3557': 'General lab equipment', '3558': 'Complex', '3559': 'Закуп', '3560': 'Training', '8385': 'Материаловедение',
+};
+const COMPLEX_YES = '8961';
 const CATEGORY_IDS = ['0', '1', '2', '3'];
 
 const SELECT_FIELDS = [
   'ID', 'TITLE', 'CATEGORY_ID', 'STAGE_ID', 'TYPE_ID', 'OPPORTUNITY', 'CURRENCY_ID', 'DATE_CREATE',
   'COMPANY_ID', 'ASSIGNED_BY_ID', REAL_CONTRACT_DATE_FIELD, INSTRUMENT_FIELD, DEPARTMENT_FIELD, MANUF_FIELD, MODEL_FIELD,
   PLANNED_PURCHASE_FIELD, LIKELY_DEAL_FIELD, INSTALL_DATE_FIELD, WARRANTY_END_FIELD, END_USER_FIELD,
+  KP_TYPE_FIELD, COMPLEX_FLAG_FIELD, PARENT_DEAL_FIELD, COMPANY_GROUP_FIELD,
 ];
+
+// «Родительская сделка» приходит как crm-привязка: "D_<id>" (или массив). Достаём id сделки.
+function parseParentDealId(raw) {
+  if (raw == null || raw === '') return null;
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  const m = String(v == null ? '' : v).match(/D_?(\d+)/i) || String(v).match(/^(\d+)$/);
+  return m ? parseInt(m[1], 10) : null;
+}
 
 // Bitrix boolean-поля приходят как '1'/'0', 'Y'/'N', true/false — приводим к bool.
 function toBool(v) { return v === true || v === 1 || v === '1' || v === 'Y' || v === 'yes' || v === 'true'; }
@@ -161,21 +181,28 @@ async function upsertDeal(d) {
   const installDate = d[INSTALL_DATE_FIELD] ? String(d[INSTALL_DATE_FIELD]).slice(0, 10) : null;
   const warrantyEnd = d[WARRANTY_END_FIELD] ? String(d[WARRANTY_END_FIELD]).slice(0, 10) : null;
   const endUser = await resolveEndUser(d[END_USER_FIELD]);
+  const kpType = d[KP_TYPE_FIELD] ? (KP_TYPE_MAP[String(d[KP_TYPE_FIELD])] || String(d[KP_TYPE_FIELD])) : null;
+  const isComplex = String(d[COMPLEX_FLAG_FIELD] || '') === COMPLEX_YES;
+  const parentDealId = parseParentDealId(d[PARENT_DEAL_FIELD]);
+  const groupRef = d[COMPANY_GROUP_FIELD] ? String(Array.isArray(d[COMPANY_GROUP_FIELD]) ? d[COMPANY_GROUP_FIELD][0] : d[COMPANY_GROUP_FIELD]) : null;
 
   await pool.query(
     `INSERT INTO ticketsmodule_stat_deals
       (deal_id, category_id, stage_id, deal_type_id, opportunity, currency_id, company_id, assigned_by_id,
        contract_date, instrument_name, department_id, manufacturer, industry, deal_title, date_create, company_name,
-       planned_purchase_date, likely_deal, install_date, warranty_end, end_user, synced_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,NOW())
+       planned_purchase_date, likely_deal, install_date, warranty_end, end_user,
+       kp_type, is_complex, parent_deal_id, group_ref, synced_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,NOW())
      ON CONFLICT (deal_id) DO UPDATE SET
        category_id=$2, stage_id=$3, deal_type_id=$4, opportunity=$5, currency_id=$6, company_id=$7, assigned_by_id=$8,
        contract_date=$9, instrument_name=$10, department_id=$11, manufacturer=$12, industry=$13, deal_title=$14,
-       date_create=$15, company_name=$16, planned_purchase_date=$17, likely_deal=$18, install_date=$19, warranty_end=$20, end_user=$21, synced_at=NOW()`,
+       date_create=$15, company_name=$16, planned_purchase_date=$17, likely_deal=$18, install_date=$19, warranty_end=$20, end_user=$21,
+       kp_type=$22, is_complex=$23, parent_deal_id=$24, group_ref=$25, synced_at=NOW()`,
     [d.ID, parseInt(d.CATEGORY_ID, 10), d.STAGE_ID, d.TYPE_ID || null, parseFloat(d.OPPORTUNITY) || 0, d.CURRENCY_ID || 'KZT',
      d.COMPANY_ID || null, d.ASSIGNED_BY_ID ? parseInt(d.ASSIGNED_BY_ID, 10) : null,
      contractDate, instrumentName, d[DEPARTMENT_FIELD] || null, manufacturer, company.industry, d.TITLE || null,
-     dateCreate, company.name || null, plannedPurchase, likelyDeal, installDate, warrantyEnd, endUser]
+     dateCreate, company.name || null, plannedPurchase, likelyDeal, installDate, warrantyEnd, endUser,
+     kpType, isComplex, parentDealId, groupRef]
   );
 }
 

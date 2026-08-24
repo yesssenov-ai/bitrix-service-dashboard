@@ -292,6 +292,33 @@ async function initDB() {
     -- Хранится уже РЕЗОЛВЛЕННОЕ имя; пусто = конечный пользователь совпадает с компанией.
     ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS end_user VARCHAR(500);
 
+    -- ── Модуль «Проекты» (комплексные сделки / БДМ) ────────────────────────────
+    -- kp_type: «Тип КП/Договора» (UF_CRM_DOGOVOR_TYPE), напр. 'Complex' — комплексная
+    --   (родительская) сделка, ведёт БДМ.
+    -- is_complex: «Комплексная сделка = Да» (UF_CRM_1787574242475) — это дочерняя
+    --   продакт-сделка, привязанная к комплексной.
+    -- parent_deal_id: «Родительская сделка (Complex)» (UF_CRM_1787572985) — id родителя.
+    -- group_ref: «Группа компаний» (UF_CRM_1731862481) — id элемента справочника (как есть).
+    ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS kp_type VARCHAR(60);
+    ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS is_complex BOOLEAN DEFAULT FALSE;
+    ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS parent_deal_id INTEGER;
+    ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS group_ref VARCHAR(100);
+    CREATE INDEX IF NOT EXISTS idx_stat_deals_parent ON ticketsmodule_stat_deals(parent_deal_id);
+    CREATE INDEX IF NOT EXISTS idx_stat_deals_kptype ON ticketsmodule_stat_deals(kp_type);
+
+    -- Справочник ЦУП: Клиент (компания Bitrix) → БДМ и Группа компаний. Управляется
+    -- в модуле «Проекты» (можно переназначать; позже — переключение на уровень группы).
+    CREATE TABLE IF NOT EXISTS ticketsmodule_project_clients (
+      company_id     VARCHAR(50) PRIMARY KEY,
+      company_name   VARCHAR(500),
+      bdm_bitrix_id  INTEGER,
+      group_name     VARCHAR(300),
+      updated_at     TIMESTAMPTZ DEFAULT NOW(),
+      updated_by     VARCHAR(120)
+    );
+    CREATE INDEX IF NOT EXISTS idx_project_clients_group ON ticketsmodule_project_clients(group_name);
+    CREATE INDEX IF NOT EXISTS idx_project_clients_bdm ON ticketsmodule_project_clients(bdm_bitrix_id);
+
     -- ── Фаза 2 Статистики: история стадий сделок ───────────────────────────
     -- Каждая запись = момент входа сделки в стадию (из crm.stagehistory.list).
     -- По ней считаем РЕАЛЬНЫЕ конверсии между стадиями и время на каждой стадии.

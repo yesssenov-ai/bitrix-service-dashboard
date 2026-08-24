@@ -127,6 +127,7 @@ app.get('/bonus.html', requireModule('BONUS'), (_, res) => res.sendFile(path.joi
 app.get('/stats.html', requireModule('STATS'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'stats.html')));
 app.get('/contracts.html', requireModule('CONTR'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'contracts.html')));
 app.get('/plansales.html', requireModule('SALE'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'plansales.html')));
+app.get('/projects.html', requireModule('PROJ'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'projects.html')));
 app.get('/logistics.html', requireModule('LOG'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'logistics.html')));
 app.get('/operational.html', requireModule('OPS'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'operational.html')));
 app.get('/procurement.html', requireModule('PROC'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'procurement.html')));
@@ -151,6 +152,7 @@ app.use('/api/bonus', require('./routes/bonus-routes').router);
 app.use('/api/stats', require('./routes/stats-routes').router);
 app.use('/api/contracts', require('./routes/contracts-routes').router);
 app.use('/api/plansales', require('./routes/plansales-routes').router);
+app.use('/api/projects', require('./routes/projects-routes').router);
 app.use('/api/logistics', require('./routes/logistics-routes').router);
 app.use('/api/operational', require('./routes/operational-routes').router);
 app.use('/api/procurement', require('./routes/procurement-routes').router);

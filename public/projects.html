@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ЦУП · Проекты</title>
+<link rel="icon" href="/favicon.svg">
+<script src="/assets/theme.js"></script>
+<style>
+  :root{--bg:#070b16;--panel:rgba(20,27,45,.55);--panel2:rgba(30,40,64,.55);--border:rgba(255,255,255,.08);--border2:rgba(255,255,255,.16);
+    --text:#e8edf7;--dim:#8592ad;--dim2:#5c6884;--brand:#ff2d55;--signal:#35d0c0;--accent:#5b8cff;--good:#22c9a3;--warn:#ffb020;--bad:#ff5b6e;--p60:#5b8cff;--p80:#ffb020;}
+  html[data-theme="light"]{--bg:#f5f6fa;--panel:#fff;--panel2:#eef1f7;--border:#e4e7ef;--border2:#d3d8e6;--text:#111827;--dim:#5b6472;--dim2:#8b93a3;--accent:#2563eb;--good:#059669;--warn:#c77700;--bad:#dc2626;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:"SF Pro Display","Segoe UI",Inter,system-ui,sans-serif;min-height:100vh;
+    background-image:radial-gradient(1000px 500px at 15% -5%,rgba(255,45,85,.08),transparent 60%),radial-gradient(900px 600px at 100% 0%,rgba(91,140,255,.08),transparent 55%);}
+  .wrap{max-width:1500px;margin:0 auto;padding:18px 22px 70px}
+  a{color:inherit;text-decoration:none}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+  .back{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--panel);border:1px solid var(--border);font-size:16px}
+  h1{font-size:20px;font-weight:800}h1 span{color:var(--brand)}
+  .lead{font-size:11.5px;color:var(--dim);margin-top:2px}
+  .sp{flex:1}
+  .minibtn{background:var(--panel2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;font-size:12px;font-weight:700;color:var(--dim);cursor:pointer}
+  .seg{display:inline-flex;background:var(--panel2);border:1px solid var(--border);border-radius:11px;padding:3px;flex-wrap:wrap}
+  .seg button{background:none;border:0;color:var(--dim);font:inherit;font-size:13px;font-weight:700;padding:7px 14px;border-radius:8px;cursor:pointer}
+  .seg button.on{background:var(--accent);color:#fff}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:8px 0 16px}
+  @media(max-width:800px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px 16px}
+  .kpi .kl{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.4px;font-weight:700}
+  .kpi .kv{font-size:22px;font-weight:800;margin-top:5px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:16px}
+  .pad{padding:16px 18px}
+  .spin{width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite;margin:40px auto}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .empty{padding:34px;text-align:center;color:var(--dim)}
+  .tabular{font-variant-numeric:tabular-nums}
+  /* дерево */
+  .grp{margin-bottom:14px}
+  .grp-h{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--panel2);border:1px solid var(--border);border-radius:12px;cursor:pointer;font-weight:800}
+  .grp-h .cnt{color:var(--dim);font-weight:700;font-size:12px}
+  .grp-h .sum{margin-left:auto;color:var(--signal);font-weight:800}
+  .cli{border:1px solid var(--border);border-radius:12px;margin:8px 0 0 14px;background:var(--panel)}
+  .cli-h{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer}
+  .cli-h .nm{font-weight:700}
+  .bdm{font-size:11px;font-weight:800;border-radius:999px;padding:3px 10px;background:rgba(91,140,255,.16);color:#bcd2ff;white-space:nowrap}
+  html[data-theme="light"] .bdm{background:#e5edff;color:#1d4ed8}
+  .bdm.none{background:rgba(255,91,110,.16);color:#ffb3c1}
+  html[data-theme="light"] .bdm.none{background:#fde8e8;color:#b91c1c}
+  .cli-h .sum{margin-left:auto;font-weight:800}
+  .cli-body{padding:2px 14px 12px 14px;display:none}
+  .cli.open .cli-body{display:block}
+  .proj{border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:10px;margin:8px 0;background:var(--panel2)}
+  .proj-h{display:flex;align-items:center;gap:9px;padding:9px 12px;cursor:pointer;flex-wrap:wrap}
+  .proj-h .t{font-weight:700}
+  .proj-h .sum{margin-left:auto;font-weight:800;color:var(--signal)}
+  .tag{font-size:10px;font-weight:800;border-radius:6px;padding:2px 7px;background:rgba(255,45,85,.16);color:#ffb3c1}
+  html[data-theme="light"] .tag{background:#fde8e8;color:#b91c1c}
+  .kids{display:none;padding:0 12px 10px 12px}
+  .proj.open .kids{display:block}
+  .deal{display:flex;align-items:center;gap:8px;padding:7px 9px;border-top:1px solid var(--border);font-size:13px;flex-wrap:wrap}
+  .deal .dt{flex:1;min-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .deal .co2{color:var(--dim2);font-size:11.5px}
+  .stg{font-size:10.5px;font-weight:800;border-radius:6px;padding:2px 7px;background:var(--panel);border:1px solid var(--border);color:var(--dim)}
+  .stg.P60{color:#bcd2ff}.stg.P80{color:#ffce7a}.stg.CONTRACT{color:#7ee0c6}
+  .prod{font-size:10.5px;color:var(--dim);background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:2px 7px}
+  .mgr{font-size:11px;color:var(--dim)}
+  .dsum{font-weight:700}
+  .stand{margin:8px 0}
+  .stand .lbl{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.4px;font-weight:700;margin:6px 0 3px}
+  .ext{color:var(--dim2)}
+  .tw{color:var(--dim);width:14px;display:inline-block}
+  /* клиенты */
+  table.dir{width:100%;border-collapse:collapse;font-size:13px}
+  table.dir th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--dim);font-weight:700;padding:9px 10px;border-bottom:1px solid var(--border)}
+  table.dir td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+  input,select{background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);font:inherit;font-size:13px;padding:7px 9px;outline:none}
+  input:focus,select:focus{border-color:var(--accent)}
+  .save{background:var(--accent);border:1px solid var(--accent);color:#fff;border-radius:8px;padding:7px 12px;font:inherit;font-weight:700;font-size:12px;cursor:pointer}
+  .save:disabled{opacity:.5;cursor:default}
+  .search{width:100%;max-width:340px;margin-bottom:12px}
+  /* аудит */
+  .aud{margin-bottom:16px}
+  .aud h3{font-size:14px;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+  .aud .badge{font-size:11px;font-weight:800;border-radius:999px;padding:2px 9px;background:rgba(255,176,32,.18);color:#ffce7a}
+  html[data-theme="light"] .aud .badge{background:#fef0d8;color:#a15c00}
+  .chiprow{display:flex;flex-wrap:wrap;gap:6px}
+  .achip{font-size:12px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:5px 9px}
+  .hint{font-size:11.5px;color:var(--dim2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a href="/" class="back" title="В ЦУП">←</a>
+    <div><h1>Проекты · <span>БДМ</span></h1><div class="lead">Единый вход через БДМ: Группа → Клиент → БДМ → Проект → продакт-сделки</div></div>
+    <div class="sp"></div>
+    <button class="minibtn" id="resyncBtn" title="Полная пересинхронизация (админ) — заполнит новые поля комплексных сделок">⟲ Полная</button>
+    <div class="seg" id="tabs"><button data-t="tree" class="on">Дерево</button><button data-t="clients">Клиенты</button><button data-t="audit">Аудит</button></div>
+  </header>
+
+  <div class="kpis" id="kpis" style="display:none">
+    <div class="kpi"><div class="kl">Группы компаний</div><div class="kv tabular" id="kGroups">—</div></div>
+    <div class="kpi"><div class="kl">Клиенты</div><div class="kv tabular" id="kClients">—</div></div>
+    <div class="kpi"><div class="kl">Проекты (Complex)</div><div class="kv tabular" id="kProjects">—</div></div>
+    <div class="kpi"><div class="kl">⚠ Без БДМ</div><div class="kv tabular" id="kNoBdm" style="color:var(--bad)">—</div></div>
+  </div>
+
+  <div id="viewTree"><div class="card"><div id="tree"><div class="spin"></div></div></div></div>
+  <div id="viewClients" style="display:none">
+    <div class="card pad">
+      <input class="search" id="dirSearch" placeholder="Поиск клиента…" oninput="renderDir()">
+      <div id="dir"><div class="spin"></div></div>
+    </div>
+  </div>
+  <div id="viewAudit" style="display:none"><div class="card pad" id="audit"><div class="spin"></div></div></div>
+</div>
+
+<datalist id="groupList"></datalist>
+
+<script>
+let DATA=null, DIR=[], ROLE='viewer', CANEDIT=false;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const fmt=n=>Math.round(n||0).toLocaleString('ru-RU').replace(/,/g,' ');
+const fmtMln=v=>{const m=(v||0)/1e6; if(Math.abs(m)>=100)return fmt(m)+' млн'; return (Math.round(m*10)/10).toLocaleString('ru-RU')+' млн';};
+const OPENG=new Set(), OPENC=new Set(), OPENP=new Set();
+
+async function init(){
+  try{const r=await fetch('/auth/me');if(r.ok){const {user}=await r.json();ROLE=user.role;CANEDIT=['admin','coordinator'].includes(ROLE);}}catch(e){}
+  document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.t,b));
+  $('resyncBtn').onclick=doResync;
+  await load();
+}
+async function load(){
+  try{
+    DATA=await (await fetch('/api/projects')).json();
+    const c=DATA.meta&&DATA.meta.counts||{};
+    $('kGroups').textContent=c.groups??'—'; $('kClients').textContent=c.clients??'—';
+    $('kProjects').textContent=c.projects??'—'; $('kNoBdm').textContent=(DATA.audit&&DATA.audit.noBdm||[]).length;
+    $('kpis').style.display='';
+    $('groupList').innerHTML=(DATA.meta.groups||[]).map(g=>`<option value="${esc(g)}">`).join('');
+    renderTree(); renderAudit();
+  }catch(e){ $('tree').innerHTML='<div class="empty">Не удалось загрузить: '+esc(e.message)+'</div>'; }
+}
+function switchTab(t,btn){
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b===btn));
+  $('viewTree').style.display=t==='tree'?'':'none';
+  $('viewClients').style.display=t==='clients'?'':'none';
+  $('viewAudit').style.display=t==='audit'?'':'none';
+  if(t==='clients'&&!DIR.length) loadDir();
+}
+
+/* ── Дерево ── */
+function dealRow(d){
+  return `<div class="deal">
+    <span class="dt"><b>${esc(d.title)}</b>${d.company?` · <span class="co2">${esc(d.company)}</span>`:''}</span>
+    <span class="prod">${esc(d.product)}</span>
+    <span class="stg ${esc(d.step)}">${esc(d.step)}</span>
+    <span class="mgr">👤 ${esc(d.owner)}</span>
+    <span class="dsum tabular">${fmt(d.sum)} ₸</span>
+    ${d.url?`<a class="ext" href="${esc(d.url)}" target="_blank" title="Открыть в Bitrix">↗</a>`:''}
+  </div>`;
+}
+function renderTree(){
+  const box=$('tree');
+  const groups=DATA.groupsTree||[];
+  if(!groups.length){box.innerHTML='<div class="empty">Нет данных. Запусти ⟲ Полная, чтобы подтянуть комплексные сделки.</div>';return;}
+  let html='';
+  for(const g of groups){
+    const gk='g:'+g.group, go=OPENG.has(gk);
+    html+=`<div class="grp"><div class="grp-h" data-g="${esc(gk)}"><span class="tw">${go?'▾':'▶'}</span><span>${esc(g.group)}</span><span class="cnt">${g.clientCount} клиент.</span><span class="sum tabular">${fmtMln(g.totalSum)} ₸</span></div>`;
+    if(go){
+      for(const c of g.clients){
+        const ck='c:'+(c.companyId||c.company), co=OPENC.has(ck);
+        html+=`<div class="cli ${co?'open':''}"><div class="cli-h" data-c="${esc(ck)}"><span class="tw">${co?'▾':'▶'}</span><span class="nm">${esc(c.company)}</span>${c.bdmId?`<span class="bdm" title="БДМ (${esc(c.bdmSource||'')})">БДМ: ${esc(c.bdm)}</span>`:`<span class="bdm none">БДМ не назначен</span>`}<span class="sum tabular">${fmtMln(c.totalSum)} ₸</span></div><div class="cli-body">`;
+        for(const p of c.projects){
+          const pk='p:'+p.dealId, po=OPENP.has(pk);
+          html+=`<div class="proj ${po?'open':''}"><div class="proj-h" data-p="${pk}"><span class="tw">${po?'▾':'▶'}</span><span class="tag">Complex</span><span class="t">${esc(p.title)}</span><span class="mgr">БДМ: ${esc(p.bdm)}</span><span class="stg ${esc(p.step)}">${esc(p.step)}</span><span class="sum tabular">${fmtMln(p.totalSum)} ₸</span>${p.url?` <a class="ext" href="${esc(p.url)}" target="_blank">↗</a>`:''}</div><div class="kids">${p.children.length?p.children.map(dealRow).join(''):'<div class="hint" style="padding:8px">Нет привязанных продакт-сделок</div>'}</div></div>`;
+        }
+        if(c.standalone.length){
+          html+=`<div class="stand"><div class="lbl">Единичные сделки (вне комплексных)</div>${c.standalone.map(dealRow).join('')}</div>`;
+        }
+        if(!c.projects.length&&!c.standalone.length) html+='<div class="hint" style="padding:8px">Нет активных сделок</div>';
+        html+=`</div></div>`;
+      }
+    }
+    html+=`</div>`;
+  }
+  box.innerHTML=html;
+  box.querySelectorAll('.grp-h').forEach(e=>e.onclick=()=>{tog(OPENG,e.dataset.g);renderTree();});
+  box.querySelectorAll('.cli-h').forEach(e=>e.onclick=()=>{tog(OPENC,e.dataset.c);renderTree();});
+  box.querySelectorAll('.proj-h').forEach(e=>e.onclick=(ev)=>{if(ev.target.closest('a'))return;tog(OPENP,e.dataset.p);renderTree();});
+}
+function tog(set,k){ if(set.has(k))set.delete(k); else set.add(k); }
+
+/* ── Клиенты (справочник БДМ/группы) ── */
+async function loadDir(){
+  try{ DIR=(await (await fetch('/api/projects/clients')).json()).items||[]; renderDir(); }
+  catch(e){ $('dir').innerHTML='<div class="empty">Ошибка: '+esc(e.message)+'</div>'; }
+}
+function bdmOptions(sel){
+  const emps=(DATA.meta&&DATA.meta.employees)||[];
+  return '<option value="">— не назначен —</option>'+emps.map(e=>`<option value="${e.id}" ${String(sel)===String(e.id)?'selected':''}>${esc(e.name)} · ${esc(e.dept)}</option>`).join('');
+}
+function renderDir(){
+  const q=($('dirSearch').value||'').trim().toLowerCase();
+  let list=DIR;
+  if(q) list=DIR.filter(c=>(c.company+' '+(c.group||'')+' '+(c.bdm||'')).toLowerCase().includes(q));
+  if(!list.length){$('dir').innerHTML='<div class="empty">Нет клиентов по фильтру.</div>';return;}
+  const rows=list.slice(0,600).map(c=>`<tr data-cid="${esc(c.companyId)}">
+    <td><b>${esc(c.company)}</b><div class="hint">${c.dealCount} сдел.</div></td>
+    <td>${CANEDIT?`<select class="e-bdm">${bdmOptions(c.bdmId)}</select>`:(c.bdm?esc(c.bdm):'—')}</td>
+    <td>${CANEDIT?`<input class="e-grp" list="groupList" value="${esc(c.group||'')}" placeholder="Группа компаний" style="min-width:180px">`:(c.group?esc(c.group):'—')}</td>
+    <td>${CANEDIT?`<button class="save" onclick="saveClient(this)">Сохранить</button>`:''}</td>
+  </tr>`).join('');
+  $('dir').innerHTML=`<div style="overflow-x:auto"><table class="dir"><thead><tr><th>Клиент</th><th>БДМ</th><th>Группа компаний</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+async function saveClient(btn){
+  const tr=btn.closest('tr'); const cid=tr.dataset.cid;
+  const bdmId=tr.querySelector('.e-bdm').value||null;
+  const group=tr.querySelector('.e-grp').value.trim()||null;
+  const company=tr.querySelector('td b').textContent;
+  btn.disabled=true; const o=btn.textContent; btn.textContent='…';
+  try{
+    const r=await fetch('/api/projects/client',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({companyId:cid,companyName:company,bdmId,group})});
+    const d=await r.json(); if(!r.ok)throw new Error(d.error||'Ошибка');
+    const it=DIR.find(x=>String(x.companyId)===String(cid)); if(it){it.bdmId=bdmId;it.group=group;}
+    btn.textContent='✓'; setTimeout(()=>{btn.textContent=o;btn.disabled=false;},1200);
+  }catch(e){ alert('Не удалось: '+e.message); btn.textContent=o; btn.disabled=false; }
+}
+
+/* ── Аудит ── */
+function renderAudit(){
+  const a=DATA.audit||{};
+  const noBdm=a.noBdm||[], orphan=a.orphanP60||[], multi=a.multiManager||[];
+  let html='';
+  html+=`<div class="aud"><h3>🚫 Клиенты без БДМ <span class="badge">${noBdm.length}</span></h3><div class="hint" style="margin-bottom:6px">Есть активные сделки, но не назначен единый вход. Назначь БДМ во вкладке «Клиенты».</div><div class="chiprow">${noBdm.length?noBdm.map(c=>`<span class="achip"><b>${esc(c.company)}</b> · ${fmtMln(c.totalSum)} ₸ · ${c.dealCount} сдел.${c.group?' · '+esc(c.group):''}</span>`).join(''):'<span class="hint">Нет — у всех клиентов есть БДМ 👍</span>'}</div></div>`;
+  html+=`<div class="aud"><h3>🔗 P60+ без привязки к комплексной <span class="badge">${orphan.length}</span></h3><div class="hint" style="margin-bottom:6px">Сделка на P60/P80, но «Комплексная сделка» не заполнена и нет родителя — по новой модели должна быть привязана.</div><div class="chiprow">${orphan.length?orphan.slice(0,200).map(d=>`<span class="achip"><b>${esc(d.title)}</b> · ${esc(d.company)} · ${esc(d.product)} · ${esc(d.step)} · 👤 ${esc(d.owner)}${d.url?` <a class="ext" href="${esc(d.url)}" target="_blank">↗</a>`:''}</span>`).join(''):'<span class="hint">Нет — все P60+ привязаны 👍</span>'}</div></div>`;
+  html+=`<div class="aud"><h3>👥 Один продукт — разные менеджеры <span class="badge">${multi.length}</span></h3><div class="hint" style="margin-bottom:6px">У одного клиента по одному направлению работают несколько менеджеров — то, что убираем.</div><div class="chiprow">${multi.length?multi.map(m=>`<span class="achip"><b>${esc(m.company)}</b> · ${esc(m.product)}: ${esc(m.managers.join(', '))}</span>`).join(''):'<span class="hint">Нет пересечений 👍</span>'}</div></div>`;
+  $('audit').innerHTML=html;
+}
+
+async function doResync(){
+  if(!confirm('Запустить полную пересинхронизацию? Займёт пару минут, идёт на сервере. После неё обнови страницу.'))return;
+  const b=$('resyncBtn'); b.disabled=true; const o=b.textContent; b.textContent='⏳…';
+  try{
+    const r=await fetch('/api/projects/resync',{method:'POST'});
+    if(r.status===403){alert('Только для админа.');}
+    else{const d=await r.json();alert(d.busy?'Синк уже идёт — подожди и обнови.':'Запущено. Через 2–5 мин обнови страницу.');}
+  }catch(e){alert('Ошибка: '+e.message);}
+  finally{b.disabled=false;b.textContent=o;}
+}
+init();
+</script>
+</body>
+</html>
