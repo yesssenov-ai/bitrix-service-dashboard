@@ -209,7 +209,12 @@ async function deleteDeal(dealId) {
 let syncing = false, syncingSince = 0;
 const LOCK_STALE_MS = 15 * 60 * 1000; // если прошлый синк «завис» дольше — снимаем блокировку
 
-function isSyncing() { return syncing; }
+// ВАЖНО: считаем «идёт синк» только если блокировка СВЕЖАЯ. Если прошлый запуск
+// завис/был убит рестартом дольше LOCK_STALE_MS — флаг «залип», и раньше это
+// намертво блокировало догоняющую сверку (самолечение не срабатывало). Теперь
+// залипший флаг = «не синкается» → catchup спокойно перезапустит (fullSync внутри
+// сам снимет залипшую блокировку).
+function isSyncing() { return syncing && (Date.now() - syncingSince) < LOCK_STALE_MS; }
 
 async function fullSync(opts = {}) {
   const source = opts.source || 'nightly';

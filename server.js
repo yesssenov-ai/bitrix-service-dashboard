@@ -592,7 +592,10 @@ initDB().then(() => {
     // приходят через вебхук ONCRMDEALADD/UPDATE (см. relations-routes).
     const { fullSync: operationalFullSync, isSyncing: opIsSyncing } = require('./operational-sync');
     const { getSyncMeta: getOpSyncMeta } = require('./operational');
-    setTimeout(() => operationalFullSync({ source: 'boot' }).catch(e => console.error('operational boot sync error:', e.message)), 20000);
+    // Boot: быстрый прогон БЕЗ автоматизаций — данные по сделкам коммитятся быстро
+    // (не зависнет на медленном пересчёте автоматизаций, если контейнер передеплоят).
+    // Полный пересчёт с автоматизациями делает ночной прогон.
+    setTimeout(() => operationalFullSync({ source: 'boot', withAutomation: false }).catch(e => console.error('operational boot sync error:', e.message)), 20000);
     // Авто-рассылка операционного отчёта руководству (вт 18:00 Алматы = 13:00 UTC).
     try { require('./ops-report-scheduler').startOpsReportScheduler(); } catch (e) { console.error('ops-report scheduler start error:', e.message); }
     // Логистика: считается тяжело (~1 мин), поэтому НЕ на каждый заход страницы, а
@@ -608,34 +611,48 @@ initDB().then(() => {
     // Карта оборудования: кэш в БД, карта открывается мгновенно. Поднимаем кэш из
     // БД на старте; если пусто — полная сборка в фоне.
     setTimeout(() => equipmentRoutes.bootPreload().catch(e => console.error('equipment bootPreload error:', e.message)), 30000);
-    let lastOpSyncDate = null, lastEquipSyncDate = null, lastOpCatchup = 0;
-    setInterval(async () => {
-      const now = new Date();
-      const dateKey = now.toISOString().slice(0, 10);
-      if (now.getUTCHours() === 20 && lastOpSyncDate !== dateKey) {
-        lastOpSyncDate = dateKey;
-        // 01:00 Кызылорда, последовательно (чтобы не долбить Битрикс разом):
-        // операционная сверка → статистика → полный пересбор логистики.
-        operationalFullSync({ source: 'nightly' })
-          .catch(e => console.error('operational nightly sync error:', e.message))
-          .then(() => fullSyncStatsDeals().catch(e => console.error('stats nightly sync error:', e.message)))
-          .then(() => refreshAndAlert('nightly'));
-      }
-      // ── Самолечение «Реализации» ─────────────────────────────────────────────
-      // Ночной синк — процессный setInterval: если контейнер в 20:00 UTC спал/
-      // рестартился ИЛИ сверка упала, данные «замирали» (как встали на 11-м).
-      // Догоняем автоматически: последняя УСПЕШНАЯ сверка старше 24ч и синк не
-      // идёт → запускаем (не чаще раза в 25 мин, чтобы не спамить при сбое).
+    let lastOpNightlyDate = null, lastEquipSyncDate = null, lastOpCatchup = 0;
+    // ── Ночной синк «Реализации» + самолечение (устойчиво к рестартам) ─────────
+    // Прежняя схема падала так: (1) ночной прогон срабатывал только если процесс
+    // жив ровно в 20:00 UTC — пропущенный тик = нет обновления; (2) догоняющая
+    // сверка блокировалась «залипшим» флагом синка (при обрыве/рестарте mid-sync,
+    // а деплоим часто). Итог — данные «замерзали» на неделю.
+    // Теперь: ночной прогон привязан к ДАТЕ (не к точному часу) — если тик 20:00
+    // пропущен, добьём при следующем тике после 20:00 UTC. Плюс самолечение при
+    // устаревании >20ч. isSyncing() теперь игнорирует залипший флаг, так что
+    // catchup уже ничем не блокируется.
+    const runOpNightly = async () => {
       try {
-        const meta = await getOpSyncMeta();
+        const now = new Date();
+        const dateKey = now.toISOString().slice(0, 10);
+        const meta = await getOpSyncMeta().catch(() => ({}));
         const okAt = meta.lastOkAt || meta.lastFullSync;
         const ageH = okAt ? (Date.now() - new Date(okAt).getTime()) / 3600000 : Infinity;
-        if (ageH > 24 && !opIsSyncing() && Date.now() - lastOpCatchup > 25 * 60 * 1000) {
+        // Ночной прогон: после 20:00 UTC (01:00 Кызылорда) и ещё не делали сегодня.
+        const nightlyDue = now.getUTCHours() >= 20 && lastOpNightlyDate !== dateKey;
+        // Самолечение: данные старше 20ч (при живом ночном такого быть не должно).
+        const staleDue = ageH > 20;
+        if ((nightlyDue || staleDue) && !opIsSyncing() && Date.now() - lastOpCatchup > 20 * 60 * 1000) {
           lastOpCatchup = Date.now();
-          console.log(`operational: данные старше ${Math.round(ageH)}ч — запускаю догоняющую сверку`);
-          operationalFullSync({ source: 'catchup' }).catch(e => console.error('operational catchup error:', e.message));
+          const source = nightlyDue ? 'nightly' : 'catchup';
+          if (nightlyDue) lastOpNightlyDate = dateKey;
+          console.log(`operational ${source}: age=${ageH === Infinity ? '∞' : Math.round(ageH) + 'ч'} → запускаю сверку`);
+          const chain = operationalFullSync({ source })
+            .catch(e => console.error(`operational ${source} sync error:`, e.message));
+          // Тяжёлые статистику+логистику гоним только в НОЧНОМ прогоне.
+          if (nightlyDue) {
+            chain
+              .then(() => fullSyncStatsDeals().catch(e => console.error('stats nightly sync error:', e.message)))
+              .then(() => refreshAndAlert('nightly'));
+          }
         }
-      } catch (e) { /* мета недоступна — пропускаем */ }
+      } catch (e) { console.error('runOpNightly error:', e.message); }
+    };
+    setInterval(runOpNightly, 5 * 60 * 1000);
+    setTimeout(runOpNightly, 90 * 1000); // ранняя проверка вскоре после старта (догнать, если данные устарели)
+    setInterval(() => {
+      const now = new Date();
+      const dateKey = now.toISOString().slice(0, 10);
       // 03:00 Алматы (UTC+5) = 22:00 UTC — полная сборка Карты оборудования + геокодирование.
       if (now.getUTCHours() === 22 && lastEquipSyncDate !== dateKey) {
         lastEquipSyncDate = dateKey;

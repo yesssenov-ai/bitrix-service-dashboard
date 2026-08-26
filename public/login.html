@@ -166,6 +166,15 @@ input:focus{border-color:var(--signal);box-shadow:0 0 0 3px rgba(53,208,192,.12)
         <label>Пароль</label>
         <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
       </div>
+      <div class="field">
+        <label>Запомнить это устройство</label>
+        <select id="rememberSel" style="width:100%">
+          <option value="0">Не запоминать (обычный вход)</option>
+          <option value="5">5 дней — не спрашивать пароль/2ФА/Face ID</option>
+          <option value="15">15 дней — не спрашивать пароль/2ФА/Face ID</option>
+          <option value="30">30 дней — не спрашивать пароль/2ФА/Face ID</option>
+        </select>
+      </div>
       <button class="btn" id="btnLogin" onclick="doLogin()">Войти</button>
       <div class="or-sep" id="faceSep" style="display:none"><span>или</span></div>
       <button class="btn-face" id="btnFaceId" onclick="loginFaceId()" style="display:none">
@@ -213,6 +222,8 @@ input:focus{border-color:var(--signal);box-shadow:0 0 0 3px rgba(53,208,192,.12)
 
 <script>
 let tempToken = '';
+// «Запомнить это устройство»: 0 = обычная сессия, иначе 5/15/30 дней.
+function rememberVal(){ const s=document.getElementById('rememberSel'); return s?(parseInt(s.value,10)||0):0; }
 
 async function doLogin() {
   const username = document.getElementById('username').value.trim();
@@ -252,7 +263,7 @@ async function doSetupConfirm() {
   try {
     const r = await fetch('/auth/setup-confirm', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ tempToken, code })
+      body: JSON.stringify({ tempToken, code, rememberDays: rememberVal() })
     });
     const d = await r.json();
     if (!d.ok) { showErr(d.error); return; }
@@ -268,7 +279,7 @@ async function doTotp() {
   try {
     const r = await fetch('/auth/totp', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ tempToken, code })
+      body: JSON.stringify({ tempToken, code, rememberDays: rememberVal() })
     });
     const d = await r.json();
     if (!d.ok) { showErr(d.error); return; }
@@ -351,7 +362,7 @@ async function loginFaceId(){
       },
       clientExtensionResults: cred.getClientExtensionResults ? cred.getClientExtensionResults() : {},
     };
-    const vr = await fetch('/auth/webauthn/login/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ response }) });
+    const vr = await fetch('/auth/webauthn/login/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ response, rememberDays: rememberVal() }) });
     const d = await vr.json();
     if(!vr.ok || !d.ok){
       // Ключ на этом устройстве не признан сервером — снимаем метку и прячем кнопку.

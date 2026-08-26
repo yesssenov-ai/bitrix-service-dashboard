@@ -192,8 +192,18 @@ async function loadFaceId(){
   let st={enabled:false,count:0};
   try{ const r=await fetch('/auth/webauthn/status'); if(r.ok) st=await r.json(); }catch(e){}
   if(!supported){
-    box.innerHTML=`<div class="ro"><span>Статус</span><span><span class="badge off">устройство не поддерживает</span></span></div>
-      <div class="hint" style="margin-top:8px">На этом устройстве нет Face ID / Touch ID / Windows Hello, либо браузер их не отдаёт. ${st.count?`Привязано устройств: <b>${st.count}</b>.`:''}</div>`;
+    const ua=navigator.userAgent||'';
+    const isIOS=/iPhone|iPad|iPod/.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1);
+    const inApp=/(Telegram|FBAN|FBAV|Instagram|Line\/|GSA\/|; wv\)|OKApp|VKClient|MicroMessenger|WhatsApp)/i.test(ua);
+    const iosNotSafari=isIOS && !/Safari/.test(ua);
+    let tip='На этом устройстве нет Face ID / Touch ID / Windows Hello, либо браузер их не отдаёт.';
+    if(inApp||iosNotSafari){
+      tip='Похоже, страница открыта во встроенном браузере приложения (например, по ссылке из Telegram). Face ID/Touch ID работают только в обычном Safari. Нажми «···» или «Поделиться» → «Открыть в Safari», затем снова зайди в этот раздел — статус станет доступным. Привязка на устройстве при этом не потеряна.';
+    } else if(isIOS){
+      tip='На iPhone Face ID доступен только в обычной вкладке Safari (не в приватной). Открой ЦУП в обычной вкладке Safari и зайди сюда снова.';
+    }
+    box.innerHTML=`<div class="ro"><span>Статус</span><span><span class="badge off">недоступно в этом браузере</span></span></div>
+      <div class="hint" style="margin-top:8px">${tip} ${st.count?`Привязано устройств: <b>${st.count}</b>.`:''}</div>`;
     return;
   }
   box.innerHTML=`<div class="ro"><span>Статус</span><span>${st.count?`<span class="badge on">включён</span> · устройств: <b>${st.count}</b>`:'<span class="badge off">не настроен</span>'}</span></div>
