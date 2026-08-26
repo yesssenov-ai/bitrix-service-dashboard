@@ -148,18 +148,16 @@
       if (d.options && d.options.length) ch += '<div class="pai-opts">' + d.options.map(function (o) { return '<button class="pai-opt" data-q="' + esc(o.q) + '">' + esc(o.label) + '</button>'; }).join('') + '</div>';
       return ch;
     }
-    // Прогноз продаж на месяц.
+    // Прогноз продаж на месяц (честный, от факта и темпа).
     if (d.forecast) {
-      var e = d.estimate || {}, pb = d.pipeline || {}, rf = d.refs || {}, cm = d.comments || {};
-      var fh = '<div class="pai-int">🔮 Прогноз продаж · ' + esc(d.period && d.period.label) + '</div>';
-      fh += '<div class="pai-kpi"><div class="c"><div class="l">Наиболее вероятно</div><div class="v">' + fmtMln(e.point) + '</div></div>' +
-        '<div class="c"><div class="l">Коридор 80%</div><div class="v" style="font-size:12.5px">' + fmtMln(e.low) + ' – ' + fmtMln(e.high) + '</div></div></div>';
+      var e = d.estimate || {}, rf = d.refs || {}, cm = d.comments || {}, dy = d.days || {};
+      var fh = '<div class="pai-int">🔮 Прогноз продаж · ' + esc(d.period && d.period.label) + (dy.remaining != null ? ' · осталось ' + dy.remaining + ' раб. дн.' : '') + '</div>';
+      fh += '<div class="pai-kpi"><div class="c"><div class="l">Реалистичный итог</div><div class="v">' + fmtMln(e.point) + '</div></div>' +
+        '<div class="c"><div class="l">Диапазон</div><div class="v" style="font-size:12.5px">' + fmtMln(e.low) + ' – ' + fmtMln(e.high) + '</div></div></div>';
       fh += '<div class="pai-fc">';
       fh += '<div class="pai-fc-r"><span>✅ Уже подписано</span><b>' + fmtMln(d.actual.sum) + '</b><i>' + d.actual.count + ' сд.</i></div>';
-      fh += '<div class="pai-fc-r"><span>📊 Воронка (взвеш.)</span><b>+' + fmtMln(d.weighted) + '</b><i></i></div>';
-      if (pb.P80 && pb.P80.c) fh += '<div class="pai-fc-sub">P80 · 80%: ' + fmtMln(pb.P80.s) + ' · ' + pb.P80.c + ' сд.</div>';
-      if (pb.P60 && pb.P60.c) fh += '<div class="pai-fc-sub">P60 · 60%: ' + fmtMln(pb.P60.s) + ' · ' + pb.P60.c + ' сд.</div>';
-      if (pb.likely && pb.likely.c) fh += '<div class="pai-fc-sub">⭐ Наиболее вероятные: ' + fmtMln(pb.likely.s) + ' · ' + pb.likely.c + ' сд.</div>';
+      fh += '<div class="pai-fc-r"><span>➕ Реально до конца месяца</span><b>+' + fmtMln(d.expectedRemaining) + '</b><i></i></div>';
+      if (d.basis) fh += '<div class="pai-fc-sub">' + esc(d.basis) + '</div>';
       fh += '</div>';
       // На подписании (по комментариям).
       if (cm.signing && cm.signing.length) {
@@ -168,12 +166,12 @@
           return '<div class="pai-sign"><span>' + esc(s.company || '—') + '</span><b>' + fmtMln(s.sum) + '</b>' + (s.snippet ? '<div class="pai-sn">«' + esc(s.snippet) + '»</div>' : '') + '</div>';
         }).join('');
       }
-      if (cm.stalled) fh += '<div class="pai-hint" style="margin-top:6px">⚠ Застряли по комментариям (перенос/заморозка): ' + cm.stalled + ' сд. — вероятность снижена.</div>';
-      if (d.noDate && d.noDate.count) fh += '<div class="pai-hint" style="margin-top:6px">💡 Ещё P80/наиболее вероятные без даты покупки: ' + fmtMln(d.noDate.sum) + ' · ' + d.noDate.count + ' сд. (в оценку не включены — проставьте план).</div>';
+      fh += '<div class="pai-hint" style="margin-top:8px">📦 Воронка на месяц целиком: ' + fmtMln(d.weighted) + ' (взвеш.). Потолок, если бы всё закрылось: ' + fmtMln(d.ceiling) + '. Вероятно уедет на след. месяц: <b>' + fmtMln(d.slip) + '</b>.</div>';
+      if (cm.stalled) fh += '<div class="pai-hint" style="margin-top:6px">⚠ Застряли по комментариям (согласование/ожидание): ' + cm.stalled + ' сд.</div>';
       var refLine = 'Ориентиры: темп с начала года ~' + fmtMln(rf.runRate) + '/мес · этот месяц год назад ' + fmtMln(rf.lastYear && rf.lastYear.sum);
-      if (rf.plannedHitRate != null) refLine += ' · сбыча планов ' + rf.plannedHitRate + '%';
+      if (rf.onTimeRate != null) refLine += ' · планов в срок ' + rf.onTimeRate + '%';
       fh += '<div class="pai-hint" style="margin-top:8px">' + refLine + '.</div>';
-      fh += '<div class="pai-hint" style="margin-top:6px">Оценка: стадии воронки (P = вероятность) + комментарии' + (cm.scanned ? ' (' + cm.scanned + ' проверено)' : '') + '. Диапазон — статистический (P10–P90). Не гарантия.</div>';
+      fh += '<div class="pai-hint" style="margin-top:6px">Прогноз ведётся от факта и темпа по дням' + (rf.paceMonths ? ' (' + rf.paceMonths + ' мес. истории)' : '') + ', воронка ужата на оставшееся время. Не гарантия.</div>';
       return fh;
     }
     // Рейтинг/агрегация (кто больше всех, топ, разбивка). Показываем выбранную метрику + сделки.
