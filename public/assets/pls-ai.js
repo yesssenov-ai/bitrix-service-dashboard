@@ -47,6 +47,9 @@
   .pai-kpi .c{flex:1;background:#0e1626;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:8px 10px}
   .pai-kpi .l{font-size:10px;color:#8592ad;text-transform:uppercase;letter-spacing:.4px;font-weight:700}
   .pai-kpi .v{font-size:16px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums}
+  .pai-opts{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}
+  .pai-opt{background:#5b8cff;border:0;color:#fff;border-radius:9px;padding:8px 13px;font:inherit;font-weight:700;font-size:12.5px;cursor:pointer}
+  .pai-opt:hover{filter:brightness(1.08)}
   .pai-dl{display:inline-flex;align-items:center;gap:7px;background:linear-gradient(135deg,#22c9a3,#1aa17f);border:0;color:#04140f;border-radius:10px;padding:8px 13px;font:inherit;font-weight:800;font-size:12px;cursor:pointer}
   .pai-dl:disabled{opacity:.5;cursor:default}
   .pai-tbl{width:100%;border-collapse:collapse;font-size:11px;margin-top:9px}
@@ -116,7 +119,25 @@
   function botHTML(d, q) {
     if (d.error) return '<div class="pai-err">' + esc(d.error) + '</div>';
     if (d.answer) return '<div class="pai-int">🧠 Ассистент ЦУП</div><div class="pai-answer">' + esc(d.answer).replace(/\n/g, '<br>') + '</div>';
-    if (d.clarify) return '<div class="pai-int">🧠 Уточните, пожалуйста</div><div class="pai-hint">' + esc(d.clarify) + '</div>';
+    if (d.clarify) {
+      var ch = '<div class="pai-int">🧠 Уточните, пожалуйста</div><div class="pai-hint">' + esc(d.clarify) + '</div>';
+      if (d.options && d.options.length) ch += '<div class="pai-opts">' + d.options.map(function (o) { return '<button class="pai-opt" data-q="' + esc(o.q) + '">' + esc(o.label) + '</button>'; }).join('') + '</div>';
+      return ch;
+    }
+    // Рейтинг/агрегация (кто больше всех, топ, разбивка).
+    if (d.aggregate) {
+      var mSum = d.metric === 'sum';
+      var rr = (d.rows || []).map(function (x, i) {
+        return '<tr><td class="num">' + (i + 1) + '</td><td>' + esc(x.label) + '</td>' +
+          '<td class="num"' + (!mSum ? ' style="font-weight:800;color:#22c9a3"' : '') + '>' + fmt(x.count) + '</td>' +
+          '<td class="num"' + (mSum ? ' style="font-weight:800;color:#22c9a3"' : '') + '>' + fmtMln(x.sumKzt) + '</td></tr>';
+      }).join('');
+      var ah = '<div class="pai-int">🏆 ' + esc(d.interpreted || '') + '</div>' +
+        '<div class="pai-wrap"><table class="pai-tbl"><thead><tr><th class="num">#</th><th>Название</th><th class="num">Кол-во</th><th class="num">Сумма ₸</th></tr></thead><tbody>' + rr + '</tbody></table></div>';
+      if (d.total) ah += '<div class="pai-hint" style="margin-top:7px">Всего: ' + fmt(d.total.count) + ' — ' + fmtMln(d.total.sumKzt) + '</div>';
+      ah += '<button class="pai-dl" data-q="' + esc(q) + '" style="margin-top:8px">⬇ Excel</button>';
+      return ah;
+    }
     var head = (d.ai ? '🧠 ' : (d.ops ? '📦 ' : '')) + esc(d.interpreted || '') + (d.ai && !d.ops ? ' · понято ИИ' : '');
     var h = '<div class="pai-int">' + head + '</div>';
     if (d.note) h += '<div class="pai-hint" style="margin:-2px 0 8px">💡 ' + esc(d.note) + '</div>';
@@ -210,8 +231,11 @@
 
   input.addEventListener('keydown', function (e) { if (e.key === 'Enter') run(); });
   send.onclick = run;
-  // Скачивание Excel по кнопке внутри любого сообщения.
-  thread.addEventListener('click', function (e) { var b = e.target.closest('.pai-dl'); if (b) doExport(b.getAttribute('data-q'), b); });
+  // Клики внутри ленты: скачать Excel / выбрать вариант уточнения.
+  thread.addEventListener('click', function (e) {
+    var dl = e.target.closest('.pai-dl'); if (dl) { doExport(dl.getAttribute('data-q'), dl); return; }
+    var op = e.target.closest('.pai-opt'); if (op) { input.value = op.getAttribute('data-q'); run(); }
+  });
 
   async function run() {
     var q = input.value.trim(); if (!q) return;

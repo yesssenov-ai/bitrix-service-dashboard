@@ -134,15 +134,10 @@ function parseQuery(qRaw) {
   return f;
 }
 
-async function runQuery(f) {
-  const rate = await getTodayRate();
+// Собрать WHERE + список параметров по фильтру f (общее для списка и агрегатов).
+function buildDealWhere(f) {
   const where = [], args = [];
-  const P = v => { args.push(v); return '$' + args.length; };   // добавить параметр, вернуть плейсхолдер
-  // Набор стадий и поле даты по режиму:
-  //  steps — явные P10/P30/P60/P80 (или «выданные КП» = P60+P80); дата = создания.
-  //  pipe  — все доконтрактные P10–P80; дата = создания.
-  //  won   — только успешно завершённые (WON); дата = договора.
-  //  sold  — законтрактовано: от «Контракт» до «Завершена» (CONTRACT_SET); дата = договора.
+  const P = v => { args.push(v); return '$' + args.length; };
   let stageIds, dateField;
   if (f.mode === 'steps') { stageIds = (f.steps || []).flatMap(s => STEP_STAGES[s] || []); dateField = 'date_create'; }
   else if (f.mode === 'pipe') { stageIds = PRECONTRACT; dateField = 'date_create'; }
@@ -153,16 +148,17 @@ async function runQuery(f) {
   if (f.period.from) { where.push(`${dateField} >= ${P(f.period.from)}`); where.push(`${dateField} <= ${P(f.period.to)}`); }
   else if (dateField === 'contract_date') where.push('contract_date IS NOT NULL');
   if (f.brand) where.push(`manufacturer ILIKE ${P('%' + f.brand.split(' ')[0] + '%')}`);
-  // Тип прибора (OR по шаблонам) и явные модели (каждая — AND по вхождению номера).
-  if (f.instr && f.instr.likes && f.instr.likes.length) {
-    where.push('(' + f.instr.likes.map(l => `instrument_name ILIKE ${P(l)}`).join(' OR ') + ')');
-  }
-  if (f.instr && f.instr.models && f.instr.models.length) {
-    for (const m of f.instr.models) where.push(`instrument_name ILIKE ${P('%' + m + '%')}`);
-  }
+  if (f.instr && f.instr.likes && f.instr.likes.length) where.push('(' + f.instr.likes.map(l => `instrument_name ILIKE ${P(l)}`).join(' OR ') + ')');
+  if (f.instr && f.instr.models && f.instr.models.length) for (const m of f.instr.models) where.push(`instrument_name ILIKE ${P('%' + m + '%')}`);
   if (f.depts.length) where.push(`department_id = ANY(${P(f.depts)})`);
   if (f.managers.length) where.push(`assigned_by_id = ANY(${P(f.managers.map(m => m.id))})`);
   if (f.text) { const p = P('%' + f.text + '%'); where.push(`(instrument_name ILIKE ${p} OR deal_title ILIKE ${p} OR company_name ILIKE ${p})`); }
+  return { where, args, dateField };
+}
+
+async function runQuery(f) {
+  const rate = await getTodayRate();
+  const { where, args } = buildDealWhere(f);
   const sql = `SELECT deal_id, company_name, manufacturer, instrument_name, opportunity, currency_id,
                       TO_CHAR(contract_date,'YYYY-MM-DD') AS contract_date, TO_CHAR(date_create,'YYYY-MM-DD') AS date_create,
                       stage_id, category_id, assigned_by_id, department_id
@@ -183,6 +179,56 @@ async function runQuery(f) {
   });
   const sumKzt = items.reduce((s, x) => s + x.sumKzt, 0);
   return { items, count: items.length, sumKzt, rate };
+}
+
+// ── Агрегация/рейтинг: группировка по менеджеру/отделу/производителю/месяцу ──
+const GROUP_LABELS = { manager: 'менеджерам', department: 'отделам', producer: 'производителям', month: 'месяцам' };
+async function runAggregate(f) {
+  const rate = await getTodayRate();
+  const { where, args, dateField } = buildDealWhere(f);
+  const gb = ['manager', 'department', 'producer', 'month'].includes(f.groupBy) ? f.groupBy : 'manager';
+  const metric = f.metric === 'sum' ? 'sum' : 'count';
+  let groupExpr;
+  if (gb === 'department') groupExpr = 'department_id';
+  else if (gb === 'producer') groupExpr = "COALESCE(NULLIF(manufacturer,''),'—')";
+  else if (gb === 'month') groupExpr = `TO_CHAR(${dateField},'YYYY-MM')`;
+  else groupExpr = 'assigned_by_id';
+  const sumExpr = `SUM(CASE WHEN currency_id='USD' THEN opportunity*${rate} ELSE opportunity END)`;
+  const sql = `SELECT ${groupExpr} AS grp, COUNT(*)::int AS cnt, ${sumExpr} AS sumkzt
+               FROM ticketsmodule_stat_deals WHERE ${where.join(' AND ')}
+               GROUP BY ${groupExpr} ORDER BY ${metric === 'sum' ? 'sumkzt' : 'cnt'} DESC NULLS LAST`;
+  const { rows } = await pool.query(sql, args);
+  const label = (g) => {
+    if (g == null || g === '') return gb === 'manager' ? '(не указан)' : '—';
+    if (gb === 'manager') return USERS[g] || ('#' + g);
+    if (gb === 'department') return DEPARTMENT_LABELS[g] || String(g);
+    return String(g);
+  };
+  const list = rows.map(r => ({ label: label(r.grp), count: r.cnt, sumKzt: Math.round(parseFloat(r.sumkzt) || 0) }))
+    .filter(x => x.label !== '(не указан)' || x.count);   // оставляем «не указан», если там реально есть сделки
+  const total = { count: list.reduce((s, x) => s + x.count, 0), sumKzt: list.reduce((s, x) => s + x.sumKzt, 0) };
+  return { rows: list, metric, groupBy: gb, total };
+}
+function interpretAggregate(f) {
+  const metric = f.metric === 'sum' ? 'по сумме' : 'по количеству';
+  const scope = f.mode === 'won' ? 'завершённых сделок' : (f.mode === 'sold' ? 'контрактов' : 'сделок');
+  const parts = [`Рейтинг по ${GROUP_LABELS[f.groupBy] || 'менеджерам'} · ${scope} · ${metric}`];
+  if (f.brand) parts.push(f.brand);
+  if (f.deptLabel && f.groupBy !== 'department') parts.push('отдел ' + f.deptLabel);
+  if (f.period && f.period.label) parts.push(f.period.label);
+  return parts.join(' · ');
+}
+function buildAggXlsx(agg, title) {
+  const header = ['#', 'Название', 'Количество', 'Сумма (₸)'];
+  const aoa = [header, ...agg.rows.map((x, i) => [i + 1, x.label, x.count, x.sumKzt])];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [5, 40, 14, 18].map(w => ({ wch: w }));
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  for (let r = 1; r <= range.e.r; r++) { const ref = XLSX.utils.encode_cell({ r, c: 3 }); if (ws[ref] && typeof ws[ref].v === 'number') ws[ref].z = '#,##0'; }
+  ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, (title || 'Рейтинг').slice(0, 28));
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
 
 function interpret(f) {
@@ -251,7 +297,9 @@ async function llmIntent(qRaw) {
     'Ты разбираешь запрос менеджера ProLabSupport в СТРОГИЙ JSON. Отвечай ТОЛЬКО одним JSON-объектом, без пояснений.',
     `Сегодня ${today} (Астана, UTC+5). Даты в ответе — строки YYYY-MM-DD.`,
     'Поля JSON:',
-    'kind: "deals" — если это запрос-ВЫБОРКА по сделкам (посчитать/найти/выгрузить сделки по критериям: производитель, прибор, стадия, менеджер, отдел, период, клиент). "assistant" — если это вопрос О СИСТЕМЕ ЦУП: что делает модуль, определения, статус/свежесть данных, «когда обновлялось», «как работает», или общий вопрос НЕ про выборку сделок. Если сомневаешься между ними, но есть явные фильтры сделок — ставь "deals".',
+    'kind: "deals" — запрос-ВЫБОРКА по сделкам (найти/выгрузить сделки по критериям). "aggregate" — вопрос-РЕЙТИНГ/ПОДСЧЁТ по группам: «кто больше всех», «топ менеджеров», «сколько у каждого», «разбивка по отделам/производителям/месяцам», «у кого больше контрактов». "assistant" — вопрос О СИСТЕМЕ ЦУП: что делает модуль, определения, статус/свежесть данных, «когда обновлялось». Если есть явные фильтры сделок и это не рейтинг — ставь "deals".',
+    'group_by: "manager"|"department"|"producer"|"month"|null — по чему группировать (только для kind="aggregate"). «кто из менеджеров»→manager, «по отделам»→department, «по производителям»→producer, «по месяцам»→month.',
+    'metric: "count"|"sum"|null — считать по КОЛИЧЕСТВУ сделок или по СУММЕ. Ставь ТОЛЬКО если явно сказано (по количеству/по числу/сколько штук → count; по сумме/на сумму/по обороту/по деньгам → sum). Если не указано — оставь null (система переспросит).',
     'producer: строка или null — производитель (напр. Agilent, Metrohm, Malvern, LECO, Sciaps, Peak, ELGA, LNI, Struers, Waters).',
     'instrument_type: строка или null — тип прибора (AAS/атомно-абсорбционный, ICP-MS, ICP-OES, MP-AES, GC/газовый хроматограф, HPLC/ВЭЖХ, GC-MS, IC/ионная хроматография, titrator/титратор, XRF/РФА). Пиши код латиницей.',
     'models: массив строк — конкретные номера моделей (напр. ["55","240","8890"]). Пусто если не назван.',
@@ -463,6 +511,13 @@ function intentToFilter(intent, qRaw) {
     const to = intent.date_to || intent.date_from;
     f.period = { from: intent.date_from, to, label: intent.period_label || `${intent.date_from} … ${to}` };
   } else f.period = detectPeriod('');   // не указан — текущий год (как в keyword)
+  // Агрегация: по чему группировать и по какой метрике.
+  if (['manager', 'department', 'producer', 'month'].includes(intent.group_by)) f.groupBy = intent.group_by;
+  f.metric = (intent.metric === 'count' || intent.metric === 'sum') ? intent.metric : null;
+  // Детерминированное определение метрики из текста (перекрывает LLM при явных словах).
+  const ql = String(qRaw || '').toLowerCase();
+  if (/по сумм|на сумм|по оборот|по деньг|в деньг|по выручк/.test(ql)) f.metric = 'sum';
+  else if (/по количеств|по числ|по кол-?ву|сколько штук|штук\b|по штук/.test(ql)) f.metric = 'count';
   return f;
 }
 
@@ -482,6 +537,14 @@ async function analyze(qRaw) {
       if (answer) return { f: null, ai: true, kind: 'assistant', answer };
       // не смог ответить — падаем на обычную логику ниже
     }
+    // Агрегация/рейтинг (кто больше всех, топ, разбивка).
+    if (intent.kind === 'aggregate' && ['manager', 'department', 'producer', 'month'].includes(intent.group_by)) {
+      try {
+        const f = intentToFilter(intent, qRaw);
+        if (!f.metric) return { f, ai: true, aggregate: true, needMetric: true };
+        return { f, ai: true, aggregate: true };
+      } catch (e) { /* упадём ниже */ }
+    }
     if (intent.clarify && !intentHasFilter(intent)) return { f: null, ai: true, clarify: String(intent.clarify) };
     try { return { f: intentToFilter(intent, qRaw), ai: true, clarify: intent.clarify ? String(intent.clarify) : null }; }
     catch (e) { /* упадём на keyword */ }
@@ -492,4 +555,4 @@ async function analyze(qRaw) {
 // Совместимость: только фильтр (без clarify).
 async function parseSmart(qRaw) { const a = await analyze(qRaw); return a.f || parseQuery(qRaw); }
 
-module.exports = { parseQuery, parseSmart, analyze, runQuery, interpret, buildXlsx, intentToFilter, getVocab, llmSelfTest, assistantAnswer, getSystemFacts };
+module.exports = { parseQuery, parseSmart, analyze, runQuery, interpret, buildXlsx, intentToFilter, getVocab, llmSelfTest, assistantAnswer, getSystemFacts, runAggregate, interpretAggregate, buildAggXlsx };

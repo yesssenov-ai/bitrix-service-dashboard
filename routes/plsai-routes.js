@@ -7,7 +7,7 @@ const VIEW_ROLES = ['admin', 'coordinator', 'manager', 'store', 'accountant'];
 // POST /api/plsai/query { q } — разобрать запрос и вернуть сводку + образец строк.
 router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) => {
   try {
-    const { analyze, runQuery, interpret } = require('../plsai-calc');
+    const { analyze, runQuery, interpret, runAggregate, interpretAggregate } = require('../plsai-calc');
     const ops = require('../plsai-ops');
     const history = require('../plsai-history');
     const uid = req.user && req.user.id;
@@ -22,6 +22,18 @@ router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) 
       return res.json({ ok: true, interpreted: ops.interpret(f), ai: false, ops: true, dateLabel: f.field.label, count, sumKzt, sample: items.slice(0, 50) });
     }
     const a = await analyze(q);
+    // Агрегация/рейтинг: «кто больше всех», «топ», «разбивка по…».
+    if (a.aggregate) {
+      if (a.needMetric) {
+        res.set('Cache-Control', 'no-store');
+        return res.json({ ok: true, ai: true, clarify: 'Считать по количеству или по сумме?', options: [{ label: '📊 По количеству', q: q + ' по количеству' }, { label: '💰 По сумме', q: q + ' по сумме' }] });
+      }
+      const agg = await runAggregate(a.f);
+      const interpreted = interpretAggregate(a.f);
+      history.save(uid, q, { type: 'aggregate', interpreted, aggregate: true, metric: agg.metric, rows: agg.rows.slice(0, 20), total: agg.total });
+      res.set('Cache-Control', 'no-store');
+      return res.json({ ok: true, ai: true, aggregate: true, interpreted, metric: agg.metric, groupBy: agg.groupBy, rows: agg.rows.slice(0, 20), total: agg.total });
+    }
     // Ассистент ответил текстом (вопрос про систему/модули/статус, не выборка сделок).
     if (a.kind === 'assistant' && a.answer) {
       history.save(uid, q, { type: 'assistant', answer: a.answer, ai: true });
@@ -44,7 +56,7 @@ router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) 
 // POST /api/plsai/export { q } — тот же запрос, но отдаём Excel-файл.
 router.post('/export', requireAuth(VIEW_ROLES), express.json(), async (req, res) => {
   try {
-    const { parseSmart, runQuery, interpret, buildXlsx } = require('../plsai-calc');
+    const { parseQuery, analyze, runQuery, interpret, buildXlsx, runAggregate, interpretAggregate, buildAggXlsx } = require('../plsai-calc');
     const ops = require('../plsai-ops');
     const q = String((req.body || {}).q || '').trim();
     if (!q) return res.status(400).json({ error: 'Пустой запрос' });
@@ -58,7 +70,18 @@ router.post('/export', requireAuth(VIEW_ROLES), express.json(), async (req, res)
       res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(nm)}`);
       return res.send(buf);
     }
-    const f = await parseSmart(q);
+    // Один разбор запроса (без повторного вызова ИИ).
+    const a = await analyze(q);
+    // Рейтинг/агрегация — выгрузка сгруппированной таблицы.
+    if (a.aggregate && a.f) {
+      const agg = await runAggregate(a.f);
+      const buf = buildAggXlsx(agg, interpretAggregate(a.f));
+      const nm = 'ProLabAI_Рейтинг_' + q.replace(/[^\wа-яА-Я0-9]+/g, '_').slice(0, 34) + '.xlsx';
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(nm)}`);
+      return res.send(buf);
+    }
+    const f = a.f || parseQuery(q);
     const { items } = await runQuery(f);
     const buf = buildXlsx(items, interpret(f));
     const name = 'ProLabAI_' + q.replace(/[^\wа-яА-Я0-9]+/g, '_').slice(0, 40) + '.xlsx';
