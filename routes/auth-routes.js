@@ -12,13 +12,19 @@ const COOKIE_OPTS = (maxAge) => ({
   maxAge,
 });
 
-// «Запомнить на N дней»: если пользователь выбрал 5/15/30 — выдаём длинную сессию,
-// и в течение этого срока вход не спрашивает ни пароль, ни 2ФА, ни Face ID.
-// Иначе — обычная короткая сессия SESSION_HOURS.
-const REMEMBER_DAYS = new Set([1, 3, 5]);
-function sessionSpec(rememberDays) {
-  const d = parseInt(rememberDays, 10);
-  if (REMEMBER_DAYS.has(d)) return { expiresIn: `${d}d`, maxAge: d * 86400000 };
+// «Запомнить устройство»: если галочка стоит — держим сессию до конца ТЕКУЩЕГО дня
+// (23:59 по времени Астаны, UTC+5), и весь этот день вход не спрашивает ни пароль,
+// ни 2ФА, ни Face ID. Иначе — обычная короткая сессия SESSION_HOURS.
+const ASTANA_OFFSET_MS = 5 * 3600000;
+function sessionSpec(remember) {
+  if (remember === true || remember === 'true' || remember === 1 || remember === '1') {
+    const now = Date.now();
+    const a = new Date(now + ASTANA_OFFSET_MS);       // «стенные» часы Астаны
+    const endAstanaMs = Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate(), 23, 59, 59);
+    let ms = (endAstanaMs - ASTANA_OFFSET_MS) - now;   // сколько осталось до 23:59 Астаны в UTC
+    if (ms < 3600000) ms = 3600000;                    // подстраховка: хотя бы час
+    return { expiresIn: `${Math.round(ms / 1000)}s`, maxAge: ms };
+  }
   return { expiresIn: `${SESSION_HOURS}h`, maxAge: SESSION_HOURS * 3600000 };
 }
 
@@ -121,7 +127,7 @@ router.post('/setup-confirm', async (req, res) => {
 
     await clearLoginAttempts(ip + ':setup');
     await pool.query('UPDATE ticketsmodule_users SET totp_enabled=true, updated_at=NOW() WHERE id=$1', [user.id]);
-    const spec = sessionSpec((req.body || {}).rememberDays);
+    const spec = sessionSpec((req.body || {}).remember);
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: spec.expiresIn });
     res.cookie('token', token, COOKIE_OPTS(spec.maxAge));
     await auditLog(user.id, user.username, 'TOTP_ENABLED', null, {}, ip, ua);
@@ -164,10 +170,10 @@ router.post('/totp', async (req, res) => {
     }
 
     await clearLoginAttempts(ip + ':totp');
-    const spec = sessionSpec((req.body || {}).rememberDays);
+    const spec = sessionSpec((req.body || {}).remember);
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: spec.expiresIn });
     res.cookie('token', token, COOKIE_OPTS(spec.maxAge));
-    await auditLog(user.id, user.username, 'LOGIN_2FA_SUCCESS', null, { rememberDays: spec.maxAge / 86400000 }, ip, ua);
+    await auditLog(user.id, user.username, 'LOGIN_2FA_SUCCESS', null, { remember: true, sessionMs: spec.maxAge }, ip, ua);
     res.json({ ok: true, user: { id: user.id, username: user.username, displayName: user.display_name, role: user.role, engineerName: user.engineer_name } });
   } catch(e) {
     res.status(401).json({ ok: false, error: 'Сессия истекла, войдите заново' });
@@ -292,10 +298,10 @@ router.post('/webauthn/login/verify', async (req, res) => {
     if (!ur.rows.length) return res.status(401).json({ ok: false, error: 'Пользователь не найден или отключён' });
     const user = ur.rows[0];
     await clearLoginAttempts(ip + ':wa');
-    const spec = sessionSpec((req.body || {}).rememberDays);
+    const spec = sessionSpec((req.body || {}).remember);
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: spec.expiresIn });
     res.cookie('token', token, COOKIE_OPTS(spec.maxAge));
-    await auditLog(user.id, user.username, 'LOGIN_FACEID_SUCCESS', null, { rememberDays: spec.maxAge / 86400000 }, ip, ua);
+    await auditLog(user.id, user.username, 'LOGIN_FACEID_SUCCESS', null, { remember: true, sessionMs: spec.maxAge }, ip, ua);
     res.json({ ok: true, user: { id: user.id, username: user.username, displayName: user.display_name, role: user.role, engineerName: user.engineer_name } });
   } catch (e) {
     console.error('webauthn login/verify:', e.message);

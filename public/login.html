@@ -176,12 +176,7 @@ input:focus{border-color:var(--signal);box-shadow:0 0 0 3px rgba(53,208,192,.12)
       </div>
       <div class="field remember">
         <label class="rem-check"><input type="checkbox" id="rememberChk"><span>Запомнить устройство</span></label>
-        <div class="rem-days" id="remDays" hidden>
-          <button type="button" class="rem-day" data-d="1">1 день</button>
-          <button type="button" class="rem-day on" data-d="3">3 дня</button>
-          <button type="button" class="rem-day" data-d="5">5 дней</button>
-        </div>
-        <div class="rem-hint" id="remHint" hidden>В течение выбранного срока не спрашиваем пароль, 2ФА и Face ID на этом устройстве.</div>
+        <div class="rem-hint">Запоминает вход на этом устройстве до конца дня (до 23:59) — не спрашивает пароль, 2ФА и Face ID.</div>
       </div>
       <button class="btn" id="btnLogin" onclick="doLogin()">Войти</button>
       <div class="or-sep" id="faceSep" style="display:none"><span>или</span></div>
@@ -230,22 +225,8 @@ input:focus{border-color:var(--signal);box-shadow:0 0 0 3px rgba(53,208,192,.12)
 
 <script>
 let tempToken = '';
-// «Запомнить устройство»: галочка + выбор 5/15/30 дней (0 = обычная сессия).
-function rememberVal(){
-  const c=document.getElementById('rememberChk');
-  if(!c||!c.checked) return 0;
-  const on=document.querySelector('.rem-day.on');
-  return on?(parseInt(on.dataset.d,10)||3):3;
-}
-(function initRemember(){
-  const chk=document.getElementById('rememberChk');
-  const days=document.getElementById('remDays'), hint=document.getElementById('remHint');
-  if(!chk) return;
-  chk.addEventListener('change',()=>{ const v=chk.checked; days.hidden=!v; hint.hidden=!v; });
-  document.querySelectorAll('.rem-day').forEach(b=>b.addEventListener('click',()=>{
-    document.querySelectorAll('.rem-day').forEach(x=>x.classList.toggle('on',x===b));
-  }));
-})();
+// «Запомнить устройство»: галочка. Если стоит — сессия до конца дня (23:59 Астана).
+function rememberVal(){ const c=document.getElementById('rememberChk'); return !!(c&&c.checked); }
 
 async function doLogin() {
   const username = document.getElementById('username').value.trim();
@@ -285,7 +266,7 @@ async function doSetupConfirm() {
   try {
     const r = await fetch('/auth/setup-confirm', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ tempToken, code, rememberDays: rememberVal() })
+      body: JSON.stringify({ tempToken, code, remember: rememberVal() })
     });
     const d = await r.json();
     if (!d.ok) { showErr(d.error); return; }
@@ -301,7 +282,7 @@ async function doTotp() {
   try {
     const r = await fetch('/auth/totp', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ tempToken, code, rememberDays: rememberVal() })
+      body: JSON.stringify({ tempToken, code, remember: rememberVal() })
     });
     const d = await r.json();
     if (!d.ok) { showErr(d.error); return; }
@@ -384,7 +365,7 @@ async function loginFaceId(){
       },
       clientExtensionResults: cred.getClientExtensionResults ? cred.getClientExtensionResults() : {},
     };
-    const vr = await fetch('/auth/webauthn/login/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ response, rememberDays: rememberVal() }) });
+    const vr = await fetch('/auth/webauthn/login/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ response, remember: rememberVal() }) });
     const d = await vr.json();
     if(!vr.ok || !d.ok){
       // Ключ на этом устройстве не признан сервером — снимаем метку и прячем кнопку.
