@@ -116,4 +116,4 @@ async function cohortMaturation() {
   return out;
 }
 
-module.exports = { empiricalStageProbs, salesTrend, cohortMaturation };
+module.exports = { empiricalStageProbs, salesTrend, cohortMaturation, holtWinters };

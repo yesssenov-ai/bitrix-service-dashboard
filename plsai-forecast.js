@@ -240,6 +240,8 @@ async function runForecast(qRaw) {
 
   // Holt-Winters: тренд+сезонность (независимый top-down ориентир на след. месяц).
   let hw = null; try { hw = await salesTrend(); } catch (_) {}
+  // Ансамбль методов с бэктестом точности (самокорректирующийся top-down).
+  let ensemble = null; try { ensemble = await require('./plsai-wave3').ensembleBacktest(); } catch (_) {}
 
   // Pacing-вердикт: идём ли мы в графике (факт vs типичный уровень к этому дню).
   let pacing = null;
@@ -253,7 +255,7 @@ async function runForecast(qRaw) {
     forecast: true, period: per,
     days: { total: totalWD, elapsed: elapsedWD, remaining: remainingWD },
     estimate: { point, low, high }, expectedRemaining, basis,
-    actual, weighted, pipeline: buck, ceiling, slip, pacing, slipRisk, deptBreak, typCycle,
+    actual, weighted, pipeline: buck, ceiling, slip, pacing, slipRisk, deptBreak, typCycle, ensemble,
     comments: { scanned, signing, stalled },
     refs: { runRate, lastYear, onTimeRate, pacePct: pace.frac ? Math.round(pace.frac * 100) : null, paceMonths: pace.months,
             empiricalSource: emp.source, empiricalProbs: emp.probs, hwNext: hw && hw.nextMonth, hwSeasonPct: hw && hw.seasonalPct, hwMonths: hw && hw.months },

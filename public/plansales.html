@@ -768,6 +768,7 @@ load();
   var st=document.createElement('style'); st.textContent =
     '.pstab{background:var(--card,#141d2e);border:1px solid rgba(128,128,128,.28);color:var(--dim,#8592ad);border-radius:10px;padding:9px 16px;font:inherit;font-weight:700;font-size:13.5px;cursor:pointer}'+
     '.pstab.on{background:linear-gradient(135deg,#ff2d55,#5b8cff);color:#fff;border-color:transparent}'+
+    '.fcsel{background:var(--card,#141d2e);border:1px solid rgba(128,128,128,.3);color:inherit;border-radius:10px;padding:9px 12px;font:inherit;font-weight:700;font-size:13.5px;cursor:pointer}'+
     '.fcgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px}'+
     '.fcbox{background:var(--card,#141d2e);border:1px solid rgba(128,128,128,.22);border-radius:12px;padding:14px 16px}'+
     '.fcbox .l{font-size:11px;color:var(--dim,#8592ad);text-transform:uppercase;letter-spacing:.4px;font-weight:700}'+
@@ -793,12 +794,48 @@ load();
   function mln(v){return (typeof fmtMln==='function')?fmtMln(v):(Math.round((v||0)/1e6)+' млн');}
   function E(s){return (typeof esc==='function')?esc(s):String(s==null?'':s);}
 
+  var MONTHS_RU=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+  var fcSel={m:new Date().getMonth()+1,y:new Date().getFullYear()};
+  function cap(s){return s.charAt(0).toUpperCase()+s.slice(1);}
+  function fcControls(){
+    var mo='';for(var i=1;i<=12;i++)mo+='<option value="'+i+'"'+(i===fcSel.m?' selected':'')+'>'+cap(MONTHS_RU[i-1])+'</option>';
+    var cy=new Date().getFullYear();var yo='';for(var y=cy-2;y<=cy+1;y++)yo+='<option value="'+y+'"'+(y===fcSel.y?' selected':'')+'>'+y+'</option>';
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">'+
+      '<button class="pstab" id="fcPrev" style="padding:9px 13px">◀</button>'+
+      '<select id="fcMonth" class="fcsel">'+mo+'</select>'+
+      '<select id="fcYear" class="fcsel">'+yo+'</select>'+
+      '<button class="pstab" id="fcNext" style="padding:9px 13px">▶</button></div>';
+  }
+  function syncFcSel(){var m=document.getElementById('fcMonth'),y=document.getElementById('fcYear');if(m)m.value=fcSel.m;if(y)y.value=fcSel.y;}
+  async function loadML(){
+    var el=document.getElementById('mlPanel'); if(!el)return;
+    try{ var r=await fetch('/api/plsai/dash/ml'); var d=await r.json(); if(!d.ok||!d.ml)return; el.innerHTML=renderML(d.ml); }catch(e){}
+  }
+  function renderML(m){
+    if(!m.trained) return '<div class="card sect"><h3>ML-скоринг сделок</h3><div class="sub">'+E(m.reason||'Недостаточно данных для обучения.')+'</div></div>';
+    var row=function(x){return '<div class="fcrow"><span>'+E(x.company)+(x.manager?' · '+E(x.manager):'')+'</span><b>'+x.prob+'%</b><i>'+mln(x.sum)+'</i></div>';};
+    return '<div class="card sect"><h3>ML-скоринг сделок (эксперим.)</h3><div class="sub">Логистическая регрессия на '+m.trainN+' закрытых сделках (точность на обучении ~'+m.accuracy+'%). Вероятность подписания по признакам: сумма, отдел, производитель, возраст, флаг «вероятная». Ожидание по открытой воронке ~'+mln(m.expectedByML)+'.</div>'+
+      '<div style="font-weight:700;margin:8px 0 4px">Самые перспективные:</div>'+(m.top||[]).map(row).join('')+
+      '<div style="font-weight:700;margin:10px 0 4px">Самые слабые:</div>'+(m.bottom||[]).map(row).join('')+'</div>';
+  }
   async function loadForecast(){
     var box=document.getElementById('tab-forecast');
-    try{ var r=await fetch('/api/plsai/dash/forecast'); var d=await r.json();
-      if(!r.ok||!d.forecast){box.innerHTML='<div class="card sect">Не удалось построить прогноз.</div>';return;}
-      box.innerHTML=renderForecast(d);
-    }catch(e){box.innerHTML='<div class="card sect">Ошибка: '+E(e.message)+'</div>';}
+    box.innerHTML=fcControls()+'<div id="fcContent"><div class="spin"></div></div><div id="mlPanel"></div>';
+    loadML();
+    document.getElementById('fcMonth').onchange=function(){fcSel.m=+this.value;reloadForecast();};
+    document.getElementById('fcYear').onchange=function(){fcSel.y=+this.value;reloadForecast();};
+    document.getElementById('fcPrev').onclick=function(){fcSel.m--;if(fcSel.m<1){fcSel.m=12;fcSel.y--;}syncFcSel();reloadForecast();};
+    document.getElementById('fcNext').onclick=function(){fcSel.m++;if(fcSel.m>12){fcSel.m=1;fcSel.y++;}syncFcSel();reloadForecast();};
+    await reloadForecast();
+  }
+  async function reloadForecast(){
+    var c=document.getElementById('fcContent'); if(!c)return; c.innerHTML='<div class="spin"></div>';
+    try{
+      var q=MONTHS_RU[fcSel.m-1]+' '+fcSel.y;
+      var r=await fetch('/api/plsai/dash/forecast?q='+encodeURIComponent(q)); var d=await r.json();
+      if(!r.ok||!d.forecast){c.innerHTML='<div class="card sect">Не удалось построить прогноз.</div>';return;}
+      c.innerHTML=renderForecast(d);
+    }catch(e){c.innerHTML='<div class="card sect">Ошибка: '+E(e.message)+'</div>';}
   }
   function renderForecast(d){
     var e=d.estimate||{},rf=d.refs||{},cm=d.comments||{},dy=d.days||{};
@@ -813,6 +850,13 @@ load();
     if(cm.signing&&cm.signing.length){h+='<div class="card sect"><h3>🖊 На подписании (из комментариев)</h3>'+cm.signing.map(function(s){return '<div class="fcrow"><span>'+E(s.company)+(s.snippet?'<div style="color:#8592ad;font-size:11.5px;font-style:italic">«'+E(s.snippet)+'»</div>':'')+'</span><b>'+mln(s.sum)+'</b></div>';}).join('')+'</div>';}
     if(d.slipRisk&&d.slipRisk.count){h+='<div class="card sect"><h3>🐌 Риск переноса — '+d.slipRisk.count+' сд. на '+mln(d.slipRisk.sum)+'</h3>'+(d.slipRisk.items||[]).map(function(s){return '<div class="fcrow"><span>'+E(s.company)+'</span><b style="color:#e0455e">'+mln(s.sum)+'</b><i>возраст '+s.age+' дн.</i></div>';}).join('')+'</div>';}
     if(d.deptBreak&&d.deptBreak.length){h+='<div class="card sect"><h3>🏢 По отделам</h3><table class="fctbl"><thead><tr><th>Отдел</th><th class="num">Подписано</th><th class="num">Воронка (взвеш.)</th></tr></thead><tbody>'+d.deptBreak.map(function(x){return '<tr><td>'+E(x.dept)+'</td><td class="num" style="color:#12a37e">'+mln(x.signed)+'</td><td class="num" style="color:#8592ad">'+mln(x.pipeline)+'</td></tr>';}).join('')+'</tbody></table></div>';}
+    if(d.ensemble&&d.ensemble.methods&&d.ensemble.methods.length){
+      var en=d.ensemble;
+      h+='<div class="card sect"><h3>Ансамбль методов (бэктест '+en.backtestMonths+' мес.)</h3><div class="sub">Каждый метод проверен на прошлых месяцах; вес больше у того, кто ошибается меньше. Прогноз — на следующий полный месяц.</div>'+
+        '<table class="fctbl"><thead><tr><th>Метод</th><th class="num">Ошибка</th><th class="num">Смещение</th><th class="num">Вес</th><th class="num">След. месяц</th></tr></thead><tbody>'+
+        en.methods.map(function(m){return '<tr><td>'+E(m.name)+'</td><td class="num">'+m.mape+'%</td><td class="num" style="color:'+(m.bias>5?'#e0455e':m.bias<-5?'#c98a12':'#8592ad')+'">'+(m.bias>0?'+':'')+m.bias+'%</td><td class="num" style="font-weight:800">'+m.weight+'%</td><td class="num">'+mln(m.next)+'</td></tr>';}).join('')+
+        '</tbody></table>'+(en.blended!=null?'<div style="margin-top:8px;font-size:13px">Взвешенный прогноз на след. полный месяц: <b style="color:#12a37e">'+mln(en.blended)+'</b></div>':'')+'</div>';
+    }
     var extra='';
     if(rf.hwNext) extra+=' · Holt-Winters (тренд+сезон): след. месяц ~'+mln(rf.hwNext)+(rf.hwSeasonPct!=null?' (сезон '+(rf.hwSeasonPct>0?'+':'')+rf.hwSeasonPct+'%)':'');
     if(rf.empiricalSource==='history') extra+=' · вероятности стадий эмпирические (по истории)';
