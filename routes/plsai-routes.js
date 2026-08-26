@@ -17,7 +17,7 @@ router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) 
     // Прогноз продаж на месяц.
     if (forecast.looksLikeForecast(q)) {
       const fc = await forecast.runForecast(q);
-      history.save(uid, q, { type: 'forecast', forecast: true, period: fc.period, estimate: fc.estimate, actual: fc.actual, weighted: fc.weighted, pipeline: fc.pipeline, faceSum: fc.faceSum, refs: fc.refs, hasPlanned: fc.hasPlanned });
+      history.save(uid, q, Object.assign({ type: 'forecast' }, fc));
       res.set('Cache-Control', 'no-store');
       return res.json(Object.assign({ ok: true, ai: true }, fc));
     }
