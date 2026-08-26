@@ -8,8 +8,16 @@ const VIEW_ROLES = ['admin', 'coordinator', 'manager', 'store', 'accountant'];
 router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) => {
   try {
     const { analyze, runQuery, interpret } = require('../plsai-calc');
+    const ops = require('../plsai-ops');
     const q = String((req.body || {}).q || '').trim();
     if (!q) return res.status(400).json({ error: 'Пустой запрос' });
+    // Ветка «Реализация»: запросы по отгрузке от завода / поставке по договору и т.п.
+    if (ops.looksLikeOps(q)) {
+      const f = ops.parseOps(q);
+      const { items, count, sumKzt } = await ops.runOps(f);
+      res.set('Cache-Control', 'no-store');
+      return res.json({ ok: true, interpreted: ops.interpret(f), ai: false, ops: true, dateLabel: f.field.label, count, sumKzt, sample: items.slice(0, 50) });
+    }
     const a = await analyze(q);
     // Ассистент ответил текстом (вопрос про систему/модули/статус, не выборка сделок).
     if (a.kind === 'assistant' && a.answer) { res.set('Cache-Control', 'no-store'); return res.json({ ok: true, answer: a.answer, ai: true, kind: 'assistant' }); }
@@ -27,8 +35,19 @@ router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) 
 router.post('/export', requireAuth(VIEW_ROLES), express.json(), async (req, res) => {
   try {
     const { parseSmart, runQuery, interpret, buildXlsx } = require('../plsai-calc');
+    const ops = require('../plsai-ops');
     const q = String((req.body || {}).q || '').trim();
     if (!q) return res.status(400).json({ error: 'Пустой запрос' });
+    // Ветка «Реализация» — выгрузка с датами отгрузки/поставки.
+    if (ops.looksLikeOps(q)) {
+      const of = ops.parseOps(q);
+      const { items } = await ops.runOps(of);
+      const buf = ops.buildOpsXlsx(items, ops.interpret(of), of.field);
+      const nm = 'ProLabAI_Реализация_' + q.replace(/[^\wа-яА-Я0-9]+/g, '_').slice(0, 34) + '.xlsx';
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(nm)}`);
+      return res.send(buf);
+    }
     const f = await parseSmart(q);
     const { items } = await runQuery(f);
     const buf = buildXlsx(items, interpret(f));

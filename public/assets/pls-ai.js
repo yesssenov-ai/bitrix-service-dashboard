@@ -65,7 +65,7 @@
     '<div class="pai-b">' +
       '<div class="pai-q"><input id="pai-input" placeholder="Напр.: приборы Agilent проданные в этом году" autocomplete="off"><button class="pai-send" id="pai-send">Найти</button></div>' +
       '<div class="pai-ex" id="pai-ex"></div>' +
-      '<div class="pai-hint"><b>Выборка сделок:</b> производитель, тип прибора (ААС, ICP-MS, ГХ, ВЭЖХ…), модель (55, 240, 8890), период, стадии (P10–P80, «выданные КП» = P60+P80), продали, выигранные, в работе, отдел, менеджер, клиент — с выгрузкой в Excel.<br><b>Вопросы о ЦУП:</b> что делает модуль, определения, когда обновлялись данные, статус синка — отвечу словами.</div>' +
+      '<div class="pai-hint"><b>Выборка сделок:</b> производитель, тип прибора (ААС, ICP-MS, ГХ, ВЭЖХ…), модель (55, 240, 8890), период, стадии (P10–P80, «выданные КП» = P60+P80), продали, выигранные, в работе, отдел, менеджер, клиент — с выгрузкой в Excel.<br><b>Реализация:</b> отгрузка от завода / поставка по договору за месяц, отдел, менеджер, красный флаг — с датами в Excel.<br><b>Вопросы о ЦУП:</b> что делает модуль, определения, когда обновлялись данные, статус синка — отвечу словами.</div>' +
       '<div class="pai-res" id="pai-res"></div>' +
     '</div>';
   document.body.appendChild(panel);
@@ -73,7 +73,7 @@
   var input = panel.querySelector('#pai-input');
   var res = panel.querySelector('#pai-res');
   var lastQ = '';
-  var EX = ['приборы Agilent проданные в этом году', 'выданные КП по хроматографии в этом году', 'когда последний раз обновлялась Реализация?', 'что делает модуль Контракты?'];
+  var EX = ['приборы Agilent проданные в этом году', 'сделки с отгрузкой от завода в августе', 'выданные КП по хроматографии в этом году', 'что делает модуль Контракты?'];
   panel.querySelector('#pai-ex').innerHTML = EX.map(function (e) { return '<button>' + e + '</button>'; }).join('');
   panel.querySelectorAll('#pai-ex button').forEach(function (b) { b.onclick = function () { input.value = b.textContent; run(); }; });
 
@@ -102,16 +102,26 @@
         return;
       }
       if (d.clarify) { res.innerHTML = '<div class="pai-int">🧠 Уточни, пожалуйста</div><div class="pai-hint" style="margin-top:0">' + esc(d.clarify) + '</div>'; input.focus(); return; }
-      var rows = (d.sample || []).map(function (x) {
-        return '<tr><td>' + esc(x.company) + '</td><td>' + esc(x.instrument || '—') + '</td><td>' + esc(x.manufacturer || '—') + '</td><td class="num">' + fmt(x.sumKzt) + '</td><td>' + esc(x.manager || '') + '</td></tr>';
-      }).join('');
+      var thead, rows;
+      if (d.ops) {
+        var shipCol = esc(d.dateLabel || 'Отгрузка от завода');
+        thead = '<th>Компания</th><th>Поставка по дог.</th><th>' + shipCol + '</th><th>Менеджер</th>';
+        rows = (d.sample || []).map(function (x) {
+          return '<tr><td>' + esc(x.company) + '</td><td class="num">' + esc(x.deliveryDate || '—') + '</td><td class="num" style="color:#22c9a3;font-weight:700">' + esc(x.factoryShipDate || '—') + '</td><td>' + esc(x.manager || '') + '</td></tr>';
+        }).join('');
+      } else {
+        thead = '<th>Компания</th><th>Прибор</th><th>Произв.</th><th class="num">Сумма ₸</th><th>Менеджер</th>';
+        rows = (d.sample || []).map(function (x) {
+          return '<tr><td>' + esc(x.company) + '</td><td>' + esc(x.instrument || '—') + '</td><td>' + esc(x.manufacturer || '—') + '</td><td class="num">' + fmt(x.sumKzt) + '</td><td>' + esc(x.manager || '') + '</td></tr>';
+        }).join('');
+      }
       res.innerHTML =
-        '<div class="pai-int">' + (d.ai ? '🧠 ' : '') + esc(d.interpreted) + (d.ai ? ' <span style="opacity:.7">· понято ИИ</span>' : '') + '</div>' +
+        '<div class="pai-int">' + (d.ai ? '🧠 ' : (d.ops ? '📦 ' : '')) + esc(d.interpreted) + (d.ai ? ' <span style="opacity:.7">· понято ИИ</span>' : '') + '</div>' +
         (d.note ? '<div class="pai-hint" style="margin:-4px 0 10px">💡 ' + esc(d.note) + '</div>' : '') +
         '<div class="pai-kpi"><div class="c"><div class="l">Найдено сделок</div><div class="v">' + fmt(d.count) + '</div></div>' +
         '<div class="c"><div class="l">Сумма</div><div class="v">' + fmtMln(d.sumKzt) + '</div></div></div>' +
-        (d.count ? '<button class="pai-dl" id="pai-dl">⬇ Скачать Excel (' + fmt(d.count) + ')</button>' : '<div class="pai-hint">Ничего не нашлось по этому запросу. Попробуй переформулировать (бренд, период, отдел).</div>') +
-        (rows ? '<div class="pai-wrap"><table class="pai-tbl"><thead><tr><th>Компания</th><th>Прибор</th><th>Произв.</th><th class="num">Сумма ₸</th><th>Менеджер</th></tr></thead><tbody>' + rows + '</tbody></table></div>' + (d.count > d.sample.length ? '<div class="pai-hint" style="margin-top:6px">Показаны первые ' + d.sample.length + '. В Excel — все ' + fmt(d.count) + '.</div>' : '') : '');
+        (d.count ? '<button class="pai-dl" id="pai-dl">⬇ Скачать Excel (' + fmt(d.count) + ')</button>' : '<div class="pai-hint">Ничего не нашлось по этому запросу. Попробуй переформулировать (период, отдел, менеджер).</div>') +
+        (rows ? '<div class="pai-wrap"><table class="pai-tbl"><thead><tr>' + thead + '</tr></thead><tbody>' + rows + '</tbody></table></div>' + (d.count > d.sample.length ? '<div class="pai-hint" style="margin-top:6px">Показаны первые ' + d.sample.length + '. В Excel — все ' + fmt(d.count) + ' с датами.</div>' : '') : '');
       var dl = panel.querySelector('#pai-dl'); if (dl) dl.onclick = doExport;
     } catch (e) { res.innerHTML = '<div class="pai-err">Ошибка сети</div>'; }
     finally { btn.disabled = false; btn.textContent = o; }
