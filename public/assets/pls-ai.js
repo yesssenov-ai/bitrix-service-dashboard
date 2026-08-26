@@ -98,7 +98,7 @@
         return '<tr><td>' + esc(x.company) + '</td><td>' + esc(x.instrument || '—') + '</td><td>' + esc(x.manufacturer || '—') + '</td><td class="num">' + fmt(x.sumKzt) + '</td><td>' + esc(x.manager || '') + '</td></tr>';
       }).join('');
       res.innerHTML =
-        '<div class="pai-int">' + esc(d.interpreted) + '</div>' +
+        '<div class="pai-int">' + (d.ai ? '🧠 ' : '') + esc(d.interpreted) + (d.ai ? ' <span style="opacity:.7">· понято ИИ</span>' : '') + '</div>' +
         '<div class="pai-kpi"><div class="c"><div class="l">Найдено сделок</div><div class="v">' + fmt(d.count) + '</div></div>' +
         '<div class="c"><div class="l">Сумма</div><div class="v">' + fmtMln(d.sumKzt) + '</div></div></div>' +
         (d.count ? '<button class="pai-dl" id="pai-dl">⬇ Скачать Excel (' + fmt(d.count) + ')</button>' : '<div class="pai-hint">Ничего не нашлось по этому запросу. Попробуй переформулировать (бренд, период, отдел).</div>') +

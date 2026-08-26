@@ -214,4 +214,108 @@ function buildXlsx(items, title) {
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
 
-module.exports = { parseQuery, runQuery, interpret, buildXlsx };
+// ── Умный разбор через Claude API (если задан ANTHROPIC_API_KEY) ───────────────
+// В ИИ уходит ТОЛЬКО текст запроса + список полей/значений — никаких данных клиентов.
+// Возвращает структуру намерения (intent) либо null (тогда — откат на keyword-движок).
+const LLM_MODEL = process.env.PLSAI_MODEL || 'claude-3-5-haiku-latest';
+function astanaToday() { return new Date(Date.now() + 5 * 3600000).toISOString().slice(0, 10); }
+
+async function llmIntent(qRaw) {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return null;
+  const today = astanaToday();
+  const system = [
+    'Ты разбираешь запрос менеджера ProLabSupport о сделках CRM в СТРОГИЙ JSON. Отвечай ТОЛЬКО одним JSON-объектом, без пояснений.',
+    `Сегодня ${today} (Астана, UTC+5). Даты в ответе — строки YYYY-MM-DD.`,
+    'Поля JSON:',
+    'producer: строка или null — производитель (напр. Agilent, Metrohm, Malvern, LECO, Sciaps, Peak, ELGA, LNI, Struers, Waters).',
+    'instrument_type: строка или null — тип прибора (AAS/атомно-абсорбционный, ICP-MS, ICP-OES, MP-AES, GC/газовый хроматограф, HPLC/ВЭЖХ, GC-MS, IC/ионная хроматография, titrator/титратор, XRF/РФА). Пиши код латиницей.',
+    'models: массив строк — конкретные номера моделей (напр. ["55","240","8890"]). Пусто если не назван.',
+    'stage: одно из "kp"|"contract"|"won"|"pipeline"|"custom"|null. "kp"=выдано/выставлено КП (P60,P80); "contract"=продано/законтрактовано/заключён договор (от Контракт до Завершена); "won"=успешно завершено; "pipeline"=в работе (P10-P80); "custom"=явно названы стадии.',
+    'steps: массив из "P10","P30","P60","P80" — заполняй только при stage="custom" (диапазон P10-P80 разворачивай в перечисление).',
+    'manager: строка или null — имя менеджера как в запросе.',
+    'department: строка или null — отдел (Элементный, Хроматография, Электрохимия, ОРМ, Сервис, Тренинг-центр, General Lab, Материаловедение, Комплекс).',
+    'client: строка или null — название компании-клиента.',
+    'all_time: true если явно просят за всё время/все годы; иначе false.',
+    'date_from, date_to: период по датам (YYYY-MM-DD) или null. "этот год"→01.01–31.12 текущего; "прошлый год"→прошлый; "за 2024"→весь 2024; месяц→границы месяца. Если период не указан и all_time=false — оставь null (движок подставит текущий год).',
+    'period_label: короткая подпись периода на русском (напр. "за 2024 год") или null.',
+  ].join('\n');
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 15000);
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: LLM_MODEL, max_tokens: 400, system, messages: [{ role: 'user', content: String(qRaw || '').slice(0, 500) }] }),
+      signal: controller.signal,
+    });
+    clearTimeout(t);
+    if (!r.ok) { console.error('plsai llm HTTP', r.status); return null; }
+    const d = await r.json();
+    const txt = (d.content || []).map(c => c.text || '').join('');
+    const m = txt.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    return JSON.parse(m[0]);
+  } catch (e) { console.error('plsai llm error:', e.message); return null; }
+}
+
+// intent (из ИИ) → та же структура фильтра f, что и у keyword-парсера.
+function intentToFilter(intent, qRaw) {
+  const f = { raw: qRaw, brand: null, depts: [], deptLabel: null, managers: [], period: null, mode: 'sold', steps: null,
+    instr: { likes: null, label: null, models: [] }, text: null, via: 'ai' };
+  // Производитель
+  if (intent.producer) {
+    const pl = String(intent.producer).toLowerCase();
+    let matched = null;
+    for (const [k, v] of Object.entries(BRANDS)) if (pl.includes(k) || k.includes(pl)) { matched = v; break; }
+    f.brand = matched || intent.producer;
+  }
+  // Тип прибора
+  if (intent.instrument_type) {
+    const tl = String(intent.instrument_type).toLowerCase();
+    let hit = null;
+    for (const t of INSTR_TYPES) if (t.re.test(tl) || t.re.test(String(intent.instrument_type))) { hit = t; break; }
+    if (hit) { f.instr.likes = hit.likes; f.instr.label = hit.name; }
+    else { f.instr.likes = ['%' + intent.instrument_type + '%']; f.instr.label = intent.instrument_type; }
+  }
+  if (Array.isArray(intent.models)) f.instr.models = intent.models.map(x => String(x).trim()).filter(Boolean);
+  // Отдел
+  if (intent.department) {
+    const dl = String(intent.department).toLowerCase();
+    for (const [k, ids] of Object.entries(DEPT_ALIASES)) if (dl.includes(k)) { f.depts = ids; f.deptLabel = DEPARTMENT_LABELS[ids[0]]; break; }
+    if (!f.depts.length) { for (const [id, lbl] of Object.entries(DEPARTMENT_LABELS)) if (lbl.toLowerCase().includes(dl) || dl.includes(lbl.toLowerCase())) { f.depts = [id]; f.deptLabel = lbl; break; } }
+  }
+  // Менеджер
+  if (intent.manager) f.managers = managerMatch(String(intent.manager).toLowerCase());
+  // Клиент
+  if (intent.client) f.text = String(intent.client).trim();
+  // Режим/стадии
+  switch (intent.stage) {
+    case 'kp': f.mode = 'steps'; f.steps = ['P60', 'P80']; break;
+    case 'won': f.mode = 'won'; break;
+    case 'pipeline': f.mode = 'pipe'; break;
+    case 'custom': {
+      const s = (Array.isArray(intent.steps) ? intent.steps : []).map(x => String(x).toUpperCase()).filter(x => STEP_ORDER.includes(x));
+      if (s.length) { f.mode = 'steps'; f.steps = s.sort((a, b) => STEP_ORDER.indexOf(a) - STEP_ORDER.indexOf(b)); }
+      else f.mode = 'sold';
+      break;
+    }
+    case 'contract': default: f.mode = 'sold';
+  }
+  // Период
+  if (intent.all_time) f.period = { from: null, to: null, label: 'за всё время' };
+  else if (intent.date_from) {
+    const to = intent.date_to || intent.date_from;
+    f.period = { from: intent.date_from, to, label: intent.period_label || `${intent.date_from} … ${to}` };
+  } else f.period = detectPeriod('');   // не указан — текущий год (как в keyword)
+  return f;
+}
+
+// Главный вход: пробуем ИИ, иначе — keyword-движок. Всегда возвращает f.
+async function parseSmart(qRaw) {
+  const intent = await llmIntent(qRaw);
+  if (intent) { try { return intentToFilter(intent, qRaw); } catch (e) { /* упадём на keyword */ } }
+  return parseQuery(qRaw);
+}
+
+module.exports = { parseQuery, parseSmart, runQuery, interpret, buildXlsx, intentToFilter };
