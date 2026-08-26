@@ -11,8 +11,16 @@ router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) 
     const ops = require('../plsai-ops');
     const history = require('../plsai-history');
     const uid = req.user && req.user.id;
+    const forecast = require('../plsai-forecast');
     const q = String((req.body || {}).q || '').trim();
     if (!q) return res.status(400).json({ error: 'Пустой запрос' });
+    // Прогноз продаж на месяц.
+    if (forecast.looksLikeForecast(q)) {
+      const fc = await forecast.runForecast(q);
+      history.save(uid, q, { type: 'forecast', forecast: true, period: fc.period, estimate: fc.estimate, actual: fc.actual, weighted: fc.weighted, pipeline: fc.pipeline, faceSum: fc.faceSum, refs: fc.refs, hasPlanned: fc.hasPlanned });
+      res.set('Cache-Control', 'no-store');
+      return res.json(Object.assign({ ok: true, ai: true }, fc));
+    }
     // Ветка «Реализация»: запросы по отгрузке от завода / поставке по договору и т.п.
     if (ops.looksLikeOps(q)) {
       const f = ops.parseOps(q);
@@ -103,6 +111,13 @@ router.get('/health', requireAuth(['admin']), async (req, res) => {
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
+});
+
+// GET /api/plsai/me — имя текущего сотрудника для персонального приветствия.
+router.get('/me', requireAuth(VIEW_ROLES), async (req, res) => {
+  const u = req.user || {};
+  res.set('Cache-Control', 'no-store');
+  res.json({ ok: true, name: u.display_name || u.engineer_name || u.username || '' });
 });
 
 // GET /api/plsai/history — история обращений текущего сотрудника (свой диалог).

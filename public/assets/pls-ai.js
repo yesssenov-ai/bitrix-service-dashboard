@@ -58,6 +58,11 @@
   .pai-tbl td{padding:5px 6px;border-bottom:1px solid rgba(255,255,255,.06);vertical-align:top}
   .pai-tbl .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   .pai-wrap{max-height:210px;overflow:auto;border:1px solid rgba(255,255,255,.08);border-radius:10px;margin-top:8px}
+  .pai-fc{margin-top:4px;border:1px solid rgba(255,255,255,.08);border-radius:11px;overflow:hidden}
+  .pai-fc-r{display:flex;align-items:center;gap:8px;padding:8px 11px;border-bottom:1px solid rgba(255,255,255,.06);font-size:12.5px}
+  .pai-fc-r span{flex:1}.pai-fc-r b{font-weight:800;color:#22c9a3;font-variant-numeric:tabular-nums}.pai-fc-r i{color:#8592ad;font-style:normal;font-size:11px;min-width:52px;text-align:right}
+  .pai-fc-sub{padding:6px 11px 6px 24px;font-size:11.5px;color:#8592ad;border-bottom:1px solid rgba(255,255,255,.04)}
+  .pai-fc-sub:last-child{border-bottom:0}
   .pai-err{color:#ff9db0;font-size:12.5px}
   .pai-time{font-size:10px;color:#6b7690;margin-top:7px}
   @media (prefers-color-scheme: light){
@@ -74,6 +79,8 @@
   html[data-theme="light"] .pai-tbl th{background:#f4f6fb;color:#5b6472}
   html[data-theme="light"] .pai-answer{color:#111827}
   html[data-theme="light"] .pai-composer{border-color:#eef1f7}
+  html[data-theme="light"] .pai-fc,html[data-theme="light"] .pai-fc-r,html[data-theme="light"] .pai-fc-sub{border-color:#e6e9f1}
+  @media (prefers-color-scheme: light){ .pai-fc,.pai-fc-r,.pai-fc-sub{border-color:#e6e9f1} }
   `;
   var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
 
@@ -104,12 +111,23 @@
 
   // ── Лента сообщений ─────────────────────────────────────────────────────────
   function scrollBottom() { thread.scrollTop = thread.scrollHeight; }
+  var MYNAME = '';
+  function firstName(n) { return String(n || '').trim().split(/\s+/)[0] || ''; }
+  function greetWord() { var h = new Date().getHours(); return h < 6 ? 'Доброй ночи' : h < 12 ? 'Доброе утро' : h < 18 ? 'Добрый день' : 'Добрый вечер'; }
+  function greetLine() { return greetWord() + (MYNAME ? ', ' + MYNAME : '') + '!'; }
+  var meLoaded = false;
+  function loadMe() {
+    if (meLoaded) return; meLoaded = true;
+    fetch('/api/plsai/me').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      if (d && d.name) { MYNAME = firstName(d.name); var t = thread.querySelector('.pai-em-t'); if (t) t.textContent = greetLine(); }
+    }).catch(function () {});
+  }
   function updateEmpty() {
     var msgs = thread.querySelectorAll('.pai-msg').length;
     var empt = thread.querySelector('.pai-empty');
     if (!msgs && !empt) {
       var d = document.createElement('div'); d.className = 'pai-empty';
-      d.innerHTML = '<div class="pai-em-t">Чем помочь?</div>';
+      d.innerHTML = '<div class="pai-em-t">' + greetLine() + '</div><div>Спросите что угодно по ЦУП — сделки, рейтинги, прогноз, статус модулей.</div>';
       thread.appendChild(d);
     } else if (msgs && empt) { empt.remove(); }
   }
@@ -124,6 +142,24 @@
       var ch = '<div class="pai-int">🧠 Уточните, пожалуйста</div><div class="pai-hint">' + esc(d.clarify) + '</div>';
       if (d.options && d.options.length) ch += '<div class="pai-opts">' + d.options.map(function (o) { return '<button class="pai-opt" data-q="' + esc(o.q) + '">' + esc(o.label) + '</button>'; }).join('') + '</div>';
       return ch;
+    }
+    // Прогноз продаж на месяц.
+    if (d.forecast) {
+      var e = d.estimate || {}, pb = d.pipeline || {}, rf = d.refs || {};
+      var fh = '<div class="pai-int">🔮 Прогноз продаж · ' + esc(d.period && d.period.label) + '</div>';
+      fh += '<div class="pai-kpi"><div class="c"><div class="l">Ожидаемо</div><div class="v">' + fmtMln(e.point) + '</div></div>' +
+        '<div class="c"><div class="l">Диапазон</div><div class="v" style="font-size:12.5px">' + fmtMln(e.low) + ' – ' + fmtMln(e.high) + '</div></div></div>';
+      fh += '<div class="pai-fc">';
+      fh += '<div class="pai-fc-r"><span>✅ Уже подписано</span><b>' + fmtMln(d.actual.sum) + '</b><i>' + d.actual.count + ' сд.</i></div>';
+      fh += '<div class="pai-fc-r"><span>📊 Воронка (взвеш.)</span><b>+' + fmtMln(d.weighted) + '</b><i></i></div>';
+      if (pb.P80 && pb.P80.c) fh += '<div class="pai-fc-sub">P80 · 80%: ' + fmtMln(pb.P80.s) + ' · ' + pb.P80.c + ' сд.</div>';
+      if (pb.P60 && pb.P60.c) fh += '<div class="pai-fc-sub">P60 · 60%: ' + fmtMln(pb.P60.s) + ' · ' + pb.P60.c + ' сд.</div>';
+      if (pb.likely && pb.likely.c) fh += '<div class="pai-fc-sub">⭐ Наиболее вероятные: ' + fmtMln(pb.likely.s) + ' · ' + pb.likely.c + ' сд.</div>';
+      fh += '</div>';
+      fh += '<div class="pai-hint" style="margin-top:8px">Ориентиры: темп с начала года ~' + fmtMln(rf.runRate) + '/мес · этот месяц год назад ' + fmtMln(rf.lastYear && rf.lastYear.sum) + '.</div>';
+      if (!d.hasPlanned) fh += '<div class="pai-hint" style="margin-top:6px;color:#e6a01e">⚠ У сделок не проставлены даты плановой покупки — оценка по воронке занижена.</div>';
+      fh += '<div class="pai-hint" style="margin-top:6px">Оценка по стадиям воронки (P = вероятность) и планам покупки. Не гарантия.</div>';
+      return fh;
     }
     // Рейтинг/агрегация (кто больше всех, топ, разбивка). Показываем выбранную метрику + сделки.
     if (d.aggregate) {
@@ -194,7 +230,7 @@
     } catch (e) { /* без истории — не критично */ }
   }
 
-  function open() { panel.classList.add('on'); positionPanel(); updateEmpty(); loadHistory(); setTimeout(function () { try { input.focus(); } catch (e) {} scrollBottom(); }, 50); }
+  function open() { panel.classList.add('on'); positionPanel(); updateEmpty(); loadMe(); loadHistory(); setTimeout(function () { try { input.focus(); } catch (e) {} scrollBottom(); }, 50); }
   function close() { panel.classList.remove('on'); }
   panel.querySelector('.pai-x').onclick = close;
   panel.querySelector('#pai-clear').onclick = async function () {

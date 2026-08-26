@@ -562,4 +562,4 @@ async function analyze(qRaw) {
 // Совместимость: только фильтр (без clarify).
 async function parseSmart(qRaw) { const a = await analyze(qRaw); return a.f || parseQuery(qRaw); }
 
-module.exports = { parseQuery, parseSmart, analyze, runQuery, interpret, buildXlsx, intentToFilter, getVocab, llmSelfTest, assistantAnswer, getSystemFacts, runAggregate, interpretAggregate, buildAggXlsx };
+module.exports = { parseQuery, parseSmart, analyze, runQuery, interpret, buildXlsx, intentToFilter, getVocab, llmSelfTest, assistantAnswer, getSystemFacts, runAggregate, interpretAggregate, buildAggXlsx, STEP_STAGES, PRECONTRACT, CONTRACT_SET };
