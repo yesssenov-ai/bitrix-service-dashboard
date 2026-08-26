@@ -178,6 +178,38 @@
       vh += '<div class="pai-hint" style="margin-top:7px">Формула: (сделок × win-rate × чек) ÷ цикл. Рычаги — что сильнее двигает выручку: количество, конверсия, чек или скорость цикла.</div>';
       return vh;
     }
+    // ML-скоринг сделок.
+    if (d.ml) {
+      var m = d.ml;
+      if (!m.trained) return '<div class="pai-int">🤖 ML-скоринг</div><div class="pai-hint">' + esc(m.reason || 'Недостаточно данных для обучения.') + '</div>';
+      var rrow = function (x) { return '<tr><td>' + esc(x.company) + '</td><td>' + esc(x.manager || '') + '</td><td class="num" style="font-weight:800;color:#22c9a3">' + x.prob + '%</td><td class="num">' + fmtMln(x.sum) + '</td></tr>'; };
+      return '<div class="pai-int">🤖 ML-скоринг · точность обучения ~' + m.accuracy + '%</div>' +
+        '<div class="pai-hint" style="margin-bottom:8px">Логрегрессия на ' + m.trainN + ' закрытых сделках. Ожидание по открытой воронке ~' + fmtMln(m.expectedByML) + '. Топ по вероятности подписания:</div>' +
+        '<div class="pai-wrap"><table class="pai-tbl"><thead><tr><th>Компания</th><th>Менеджер</th><th class="num">P(win)</th><th class="num">Сумма</th></tr></thead><tbody>' + (m.top || []).map(rrow).join('') + '</tbody></table></div>';
+    }
+    // Ансамбль методов (бэктест).
+    if (d.ensembleOnly && d.ensemble) {
+      var en = d.ensemble;
+      if (!en.methods || !en.methods.length) return '<div class="pai-int">📐 Ансамбль методов</div><div class="pai-hint">Недостаточно истории для бэктеста.</div>';
+      return '<div class="pai-int">📐 Ансамбль методов · бэктест ' + en.backtestMonths + ' мес.</div>' +
+        '<div class="pai-wrap"><table class="pai-tbl"><thead><tr><th>Метод</th><th class="num">Ошибка</th><th class="num">Вес</th><th class="num">След. мес.</th></tr></thead><tbody>' +
+        en.methods.map(function (mm) { return '<tr><td>' + esc(mm.name) + '</td><td class="num">' + mm.mape + '%</td><td class="num" style="font-weight:800">' + mm.weight + '%</td><td class="num">' + fmtMln(mm.next) + '</td></tr>'; }).join('') +
+        '</tbody></table></div>' + (en.blended != null ? '<div class="pai-hint" style="margin-top:6px">Взвешенный прогноз на след. месяц: <b>' + fmtMln(en.blended) + '</b></div>' : '');
+    }
+    // Диапазонный прогноз (до конца года / весь год).
+    if (d.forecast && d.range) {
+      var mr = (d.months || []).map(function (x) {
+        var c = x.type === 'signed' ? '#22c9a3' : x.type === 'current' ? '#5b8cff' : '#8592ad';
+        var t = x.type === 'signed' ? 'факт' : x.type === 'current' ? 'тек.' : 'прогноз';
+        var lbl = String(x.label || ''); lbl = lbl.charAt(0).toUpperCase() + lbl.slice(1);
+        return '<tr><td>' + esc(lbl) + '</td><td class="num" style="color:' + c + ';font-weight:700">' + fmtMln(x.value) + '</td><td style="color:#8592ad;font-size:11px">' + t + '</td></tr>';
+      }).join('');
+      return '<div class="pai-int">🔮 Прогноз · ' + esc(d.period && d.period.label) + '</div>' +
+        '<div class="pai-kpi"><div class="c"><div class="l">Итого прогноз</div><div class="v">' + fmtMln(d.total) + '</div></div>' +
+        '<div class="c"><div class="l">Типичный месяц</div><div class="v" style="font-size:13px">' + fmtMln(d.typical) + '</div></div></div>' +
+        '<div class="pai-wrap"><table class="pai-tbl"><thead><tr><th>Месяц</th><th class="num">Сумма</th><th>Тип</th></tr></thead><tbody>' + mr + '</tbody></table></div>' +
+        '<div class="pai-hint" style="margin-top:6px">Факт — подписано; тек. — текущий месяц (факт + остаток); прогноз — сезонная модель × типичный месяц (взвешенный ансамбль). Не гарантия.</div>';
+    }
     // Прогноз продаж на месяц (честный, от факта и темпа).
     if (d.forecast) {
       var e = d.estimate || {}, rf = d.refs || {}, cm = d.comments || {}, dy = d.days || {};
@@ -218,6 +250,12 @@
       var refLine = 'Ориентиры: темп с начала года ~' + fmtMln(rf.runRate) + '/мес · этот месяц год назад ' + fmtMln(rf.lastYear && rf.lastYear.sum);
       if (rf.onTimeRate != null) refLine += ' · планов в срок ' + rf.onTimeRate + '%';
       fh += '<div class="pai-hint" style="margin-top:8px">' + refLine + '.</div>';
+      if (d.ensemble && d.ensemble.methods && d.ensemble.methods.length) {
+        fh += '<div class="pai-fc-h">📐 Ансамбль (бэктест ' + d.ensemble.backtestMonths + ' мес.) — на след. полный месяц:</div>';
+        fh += '<div class="pai-wrap"><table class="pai-tbl"><thead><tr><th>Метод</th><th class="num">Ошибка</th><th class="num">Вес</th><th class="num">Прогноз</th></tr></thead><tbody>' +
+          d.ensemble.methods.map(function (mm) { return '<tr><td>' + esc(mm.name) + '</td><td class="num">' + mm.mape + '%</td><td class="num" style="font-weight:800">' + mm.weight + '%</td><td class="num">' + fmtMln(mm.next) + '</td></tr>'; }).join('') +
+          '</tbody></table></div>' + (d.ensemble.blended != null ? '<div class="pai-hint" style="margin-top:5px">Взвешенно: <b>' + fmtMln(d.ensemble.blended) + '</b></div>' : '');
+      }
       fh += '<div class="pai-hint" style="margin-top:6px">Прогноз ведётся от факта и темпа по дням' + (rf.paceMonths ? ' (' + rf.paceMonths + ' мес. истории)' : '') + ', воронка ужата на оставшееся время. Не гарантия.</div>';
       return fh;
     }

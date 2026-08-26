@@ -49,6 +49,71 @@ function detectForecastMonth(qRaw) {
   return { year: y, month, from: ymd(y, month, 1), to: ymd(y, month, lastDay(y, month)), label: `${MON_NAME[month]} ${y}` };
 }
 
+// Какие месяцы названы в запросе (в порядке появления).
+function monthsInQuery(ql) {
+  const byM = {};
+  for (const [k, v] of Object.entries(MONTHS)) { const i = ql.indexOf(k); if (i >= 0 && (byM[v] == null || i < byM[v])) byM[v] = i; }
+  return Object.entries(byM).map(([m, i]) => ({ m: +m, i })).sort((a, b) => a.i - b.i);
+}
+// Диапазонный прогноз: квартал / полугодие / до конца года / весь год / «с X по Y».
+function detectRange(qRaw) {
+  const ql = String(qRaw || '').toLowerCase();
+  const now = astanaNow(); const curY = now.getFullYear(); const curM = now.getMonth() + 1;
+  const ym = ql.match(/20\d\d/); const year = ym ? +ym[0] : curY;
+  const clamp = (a, b) => ({ fromM: Math.max(1, Math.min(12, a)), toM: Math.max(1, Math.min(12, b)) });
+  // Квартал
+  const qm = ql.match(/([1-4])\s*-?\s*квартал|квартал\s*([1-4])/);
+  if (qm) { const q = +(qm[1] || qm[2]); const c = clamp((q - 1) * 3 + 1, (q - 1) * 3 + 3); return { year, fromM: c.fromM, toM: c.toM, label: `${q}-й квартал ${year}` }; }
+  // Полугодие
+  if (/полугод/.test(ql)) { const first = /(перв|1)/.test(ql); return { year, fromM: first ? 1 : 7, toM: first ? 6 : 12, label: `${first ? '1-е' : '2-е'} полугодие ${year}` }; }
+  // До конца года / остаток года
+  if (/до конца года|остат[ок][а-яё]* года|оставш[а-яё]* месяц|конца года|до нового года/.test(ql)) { const fromM = (year === curY) ? curM : 1; return { year, fromM, toM: 12, label: `остаток ${year} (${MON_NAME[fromM]}–декабрь)` }; }
+  // «с сентября по декабрь» / «от … до …»
+  const mm = monthsInQuery(ql);
+  if (mm.length >= 2 && /(^|\s)(с|со|от)\s/.test(ql) && /(по|до)\s/.test(ql)) { const a = mm[0].m, b = mm[1].m; return { year, fromM: Math.min(a, b), toM: Math.max(a, b), label: `${MON_NAME[Math.min(a, b)]}–${MON_NAME[Math.max(a, b)]} ${year}` }; }
+  // Весь год / за год / за 20XX год (без конкретного месяца)
+  if (mm.length === 0 && (/в этом году|за весь год|весь год|целый год|годов[а-яё]* прогноз|прогноз на год|за год/.test(ql) || (ym && /год/.test(ql) && /(прод|прогноз|план|подпиш|выручк)/.test(ql)))) return { year, fromM: 1, toM: 12, label: `${year} год · прогноз` };
+  return null;
+}
+async function runRangeForecast(year, fromM, toM, label) {
+  const rate = await getTodayRate();
+  const kzt = `CASE WHEN currency_id='USD' THEN opportunity*${rate} ELSE opportunity END`;
+  const num = v => Math.round(parseFloat(v) || 0);
+  const now = astanaNow(); const curY = now.getFullYear(); const curM = now.getMonth() + 1;
+  // Сезонные индексы по месяцам (доля месяца от среднего в его году).
+  const idx = {}; for (let m = 1; m <= 12; m++) idx[m] = 1;
+  try {
+    const { rows } = await pool.query(`SELECT EXTRACT(YEAR FROM contract_date)::int y, EXTRACT(MONTH FROM contract_date)::int m, SUM(${kzt}) s FROM ticketsmodule_stat_deals WHERE stage_id = ANY($1) AND contract_date IS NOT NULL GROUP BY 1,2`, [CONTRACT_SET]);
+    const byY = {}; rows.forEach(r => { (byY[r.y] = byY[r.y] || {})[r.m] = parseFloat(r.s) || 0; });
+    const acc = {};
+    for (const y in byY) { const ms = byY[y]; const vals = Object.values(ms); const avg = vals.reduce((a, b) => a + b, 0) / vals.length; if (avg <= 0) continue; for (const m in ms) (acc[m] = acc[m] || []).push(ms[m] / avg); }
+    for (let m = 1; m <= 12; m++) { const a = acc[m] || []; if (a.length) idx[m] = a.reduce((x, z) => x + z, 0) / a.length; }
+  } catch (_) {}
+  // Типичный месяц: взвешенный ансамбль, иначе средний темп года.
+  let typical = 0;
+  try { const en = await require('./plsai-wave3').ensembleBacktest(); if (en && en.blended) typical = en.blended; } catch (_) {}
+  if (!typical) { try { const rr = await pool.query(`SELECT AVG(s) a FROM (SELECT SUM(${kzt}) s FROM ticketsmodule_stat_deals WHERE stage_id = ANY($1) AND EXTRACT(YEAR FROM contract_date)=$2 GROUP BY date_trunc('month',contract_date)) t`, [CONTRACT_SET, curY]); typical = num(rr.rows[0].a); } catch (_) {} }
+  // Факт по месяцам целевого года.
+  const actualM = {};
+  try { const am = await pool.query(`SELECT EXTRACT(MONTH FROM contract_date)::int m, SUM(${kzt}) s FROM ticketsmodule_stat_deals WHERE stage_id = ANY($1) AND EXTRACT(YEAR FROM contract_date)=$2 GROUP BY 1`, [CONTRACT_SET, year]); am.rows.forEach(r => { actualM[r.m] = num(r.s); }); } catch (_) {}
+  const months = []; let total = 0, signedTotal = 0, projTotal = 0;
+  for (let m = fromM; m <= toM; m++) {
+    const isPast = (year < curY) || (year === curY && m < curM);
+    const isCur = (year === curY && m === curM);
+    let val, type;
+    if (isPast) { val = actualM[m] || 0; type = 'signed'; signedTotal += val; }
+    else if (isCur) { const a = actualM[m] || 0; val = Math.max(a, Math.round(typical * idx[m])); type = 'current'; projTotal += (val - a); signedTotal += a; }
+    else { val = Math.round(typical * idx[m]); type = 'projected'; projTotal += val; }
+    months.push({ month: m, label: MON_NAME[m], value: val, type });
+    total += val;
+  }
+  return {
+    forecast: true, range: true, year, typical: Math.round(typical),
+    period: { label: label || `${MON_NAME[fromM]}–${MON_NAME[toM]} ${year}` },
+    months, total: Math.round(total), signedTotal: Math.round(signedTotal), projTotal: Math.round(projTotal),
+  };
+}
+
 let _tablesReady = false;
 async function ensureTables() {
   if (_tablesReady) return;
@@ -105,6 +170,8 @@ async function pacingFraction(per, elapsedWD, kzt) {
 }
 
 async function runForecast(qRaw) {
+  const range = detectRange(qRaw);
+  if (range) return await runRangeForecast(range.year, range.fromM, range.toM, range.label);
   const rate = await getTodayRate();
   const per = detectForecastMonth(qRaw);
   const kzt = `CASE WHEN currency_id='USD' THEN opportunity*${rate} ELSE opportunity END`;

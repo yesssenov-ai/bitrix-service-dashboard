@@ -22,6 +22,18 @@ router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) 
       res.set('Cache-Control', 'no-store');
       return res.json(Object.assign({ ok: true, ai: true }, fc));
     }
+    // Ансамбль методов / бэктест точности.
+    if (/ансамбл|бэктест|бектест|точност[а-яё]* метод|какой метод точн|сравни методы/.test(q.toLowerCase())) {
+      const en = await require('../plsai-wave3').ensembleBacktest();
+      history.save(uid, q, { type: 'ensemble', ensembleOnly: true, ensemble: en });
+      res.set('Cache-Control', 'no-store'); return res.json({ ok: true, ai: true, ensembleOnly: true, ensemble: en });
+    }
+    // ML-скоринг сделок (propensity).
+    if (/\bml\b|скоринг|propensity|перспективн[а-яё]* сделк|вероятн[а-яё]* подписани/.test(q.toLowerCase())) {
+      const ml = await require('../plsai-wave3').mlPropensity();
+      history.save(uid, q, { type: 'ml', ml });
+      res.set('Cache-Control', 'no-store'); return res.json({ ok: true, ai: true, ml });
+    }
     // Win-rate / конверсия по менеджерам и отделам.
     if (analytics.looksLikeWinrate(q)) {
       const w = await analytics.runWinrates(q);
@@ -134,11 +146,11 @@ router.get('/dash/forecast', requireAuth(VIEW_ROLES), async (req, res) => {
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 router.get('/dash/winrate', requireAuth(VIEW_ROLES), async (req, res) => {
-  try { const analytics = require('../plsai-analytics'); const g = req.query.group === 'department' ? 'по отделам' : ''; res.set('Cache-Control', 'no-store'); res.json(await analytics.runWinrates(g)); }
+  try { const analytics = require('../plsai-analytics'); const q = (req.query.group === 'department' ? 'по отделам ' : '') + String(req.query.period || ''); res.set('Cache-Control', 'no-store'); res.json(await analytics.runWinrates(q)); }
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 router.get('/dash/velocity', requireAuth(VIEW_ROLES), async (req, res) => {
-  try { const analytics = require('../plsai-analytics'); res.set('Cache-Control', 'no-store'); res.json(await analytics.runVelocity(String(req.query.q || ''))); }
+  try { const analytics = require('../plsai-analytics'); res.set('Cache-Control', 'no-store'); res.json(await analytics.runVelocity(String(req.query.period || req.query.q || ''))); }
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 router.get('/dash/cohort', requireAuth(VIEW_ROLES), async (req, res) => {

@@ -796,17 +796,29 @@ load();
 
   var MONTHS_RU=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
   var fcSel={m:new Date().getMonth()+1,y:new Date().getFullYear()};
+  var fcRange=null;   // null | 'year' | 'rest'
   function cap(s){return s.charAt(0).toUpperCase()+s.slice(1);}
   function fcControls(){
     var mo='';for(var i=1;i<=12;i++)mo+='<option value="'+i+'"'+(i===fcSel.m?' selected':'')+'>'+cap(MONTHS_RU[i-1])+'</option>';
     var cy=new Date().getFullYear();var yo='';for(var y=cy-2;y<=cy+1;y++)yo+='<option value="'+y+'"'+(y===fcSel.y?' selected':'')+'>'+y+'</option>';
-    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">'+
+    return '<div id="fcBar" style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">'+
       '<button class="pstab" id="fcPrev" style="padding:9px 13px">◀</button>'+
       '<select id="fcMonth" class="fcsel">'+mo+'</select>'+
       '<select id="fcYear" class="fcsel">'+yo+'</select>'+
-      '<button class="pstab" id="fcNext" style="padding:9px 13px">▶</button></div>';
+      '<button class="pstab" id="fcNext" style="padding:9px 13px">▶</button>'+
+      '<span style="width:1px;height:22px;background:rgba(128,128,128,.3);margin:0 2px"></span>'+
+      '<button class="pstab'+(fcRange==='rest'?' on':'')+'" id="fcRest" style="padding:9px 13px">До конца года</button>'+
+      '<button class="pstab'+(fcRange==='year'?' on':'')+'" id="fcAll" style="padding:9px 13px">Весь год</button></div>';
   }
-  function syncFcSel(){var m=document.getElementById('fcMonth'),y=document.getElementById('fcYear');if(m)m.value=fcSel.m;if(y)y.value=fcSel.y;}
+  function bindFc(){
+    document.getElementById('fcMonth').onchange=function(){fcSel.m=+this.value;fcRange=null;redrawFcBar();reloadForecast();};
+    document.getElementById('fcYear').onchange=function(){fcSel.y=+this.value;reloadForecast();};
+    document.getElementById('fcPrev').onclick=function(){fcRange=null;fcSel.m--;if(fcSel.m<1){fcSel.m=12;fcSel.y--;}redrawFcBar();reloadForecast();};
+    document.getElementById('fcNext').onclick=function(){fcRange=null;fcSel.m++;if(fcSel.m>12){fcSel.m=1;fcSel.y++;}redrawFcBar();reloadForecast();};
+    document.getElementById('fcRest').onclick=function(){fcRange=(fcRange==='rest'?null:'rest');redrawFcBar();reloadForecast();};
+    document.getElementById('fcAll').onclick=function(){fcRange=(fcRange==='year'?null:'year');redrawFcBar();reloadForecast();};
+  }
+  function redrawFcBar(){var old=document.getElementById('fcBar');if(!old)return;old.outerHTML=fcControls();bindFc();}
   async function loadML(){
     var el=document.getElementById('mlPanel'); if(!el)return;
     try{ var r=await fetch('/api/plsai/dash/ml'); var d=await r.json(); if(!d.ok||!d.ml)return; el.innerHTML=renderML(d.ml); }catch(e){}
@@ -821,23 +833,28 @@ load();
   async function loadForecast(){
     var box=document.getElementById('tab-forecast');
     box.innerHTML=fcControls()+'<div id="fcContent"><div class="spin"></div></div><div id="mlPanel"></div>';
-    loadML();
-    document.getElementById('fcMonth').onchange=function(){fcSel.m=+this.value;reloadForecast();};
-    document.getElementById('fcYear').onchange=function(){fcSel.y=+this.value;reloadForecast();};
-    document.getElementById('fcPrev').onclick=function(){fcSel.m--;if(fcSel.m<1){fcSel.m=12;fcSel.y--;}syncFcSel();reloadForecast();};
-    document.getElementById('fcNext').onclick=function(){fcSel.m++;if(fcSel.m>12){fcSel.m=1;fcSel.y++;}syncFcSel();reloadForecast();};
+    loadML(); bindFc();
     await reloadForecast();
   }
   async function reloadForecast(){
     var c=document.getElementById('fcContent'); if(!c)return; c.innerHTML='<div class="spin"></div>';
     try{
-      var q=MONTHS_RU[fcSel.m-1]+' '+fcSel.y;
+      var q=fcRange==='year'?('весь '+fcSel.y+' год'):fcRange==='rest'?('до конца '+fcSel.y):(MONTHS_RU[fcSel.m-1]+' '+fcSel.y);
       var r=await fetch('/api/plsai/dash/forecast?q='+encodeURIComponent(q)); var d=await r.json();
       if(!r.ok||!d.forecast){c.innerHTML='<div class="card sect">Не удалось построить прогноз.</div>';return;}
       c.innerHTML=renderForecast(d);
     }catch(e){c.innerHTML='<div class="card sect">Ошибка: '+E(e.message)+'</div>';}
   }
   function renderForecast(d){
+    if(d.range){
+      var mr=(d.months||[]).map(function(x){var c=x.type==='signed'?'#12a37e':x.type==='current'?'#5b8cff':'#8592ad';var t=x.type==='signed'?'факт':x.type==='current'?'текущий':'прогноз';return '<tr><td>'+E(cap(x.label))+'</td><td class="num" style="font-weight:700;color:'+c+'">'+mln(x.value)+'</td><td style="color:#8592ad">'+t+'</td></tr>';}).join('');
+      return '<div class="card sect"><h3>Прогноз · '+E(d.period&&d.period.label)+'</h3>'+
+        '<div class="fcgrid"><div class="fcbox"><div class="l">Итого прогноз</div><div class="v">'+mln(d.total)+'</div></div>'+
+        '<div class="fcbox"><div class="l">Уже подписано</div><div class="v" style="font-size:17px">'+mln(d.signedTotal)+'</div></div>'+
+        '<div class="fcbox"><div class="l">Типичный месяц</div><div class="v" style="font-size:17px">'+mln(d.typical)+'</div></div></div>'+
+        '<table class="fctbl"><thead><tr><th>Месяц</th><th class="num">Сумма</th><th>Тип</th></tr></thead><tbody>'+mr+'</tbody></table>'+
+        '<div style="margin-top:8px;font-size:12.5px;color:var(--dim,#8592ad)">Факт — подписано; текущий — факт + остаток по темпу; прогноз — сезонная модель × типичный месяц (взвешенный ансамбль). Не гарантия.</div></div>';
+    }
     var e=d.estimate||{},rf=d.refs||{},cm=d.comments||{},dy=d.days||{};
     var pace='';
     if(d.pacing){var pv=d.pacing;var c=pv.verdict==='ahead'?'#12a37e':pv.verdict==='behind'?'#e0455e':'#c98a12';var w=pv.verdict==='ahead'?'🟢 опережаем':pv.verdict==='behind'?'🔴 отстаём':'🟡 в графике';pace='<div class="fcbox" style="border-color:'+c+'66"><div class="l">Темп</div><div class="v" style="font-size:16px;color:'+c+'">'+w+' '+(pv.pct>0?'+':'')+pv.pct+'%</div><div class="l" style="text-transform:none;margin-top:4px">обычно к сегодня ~'+mln(pv.expectedByNow)+'</div></div>';}
@@ -864,14 +881,23 @@ load();
     return h;
   }
 
+  var convPeriod='';   // '' = последние 12 мес; иначе год
+  function convPeriodControl(){
+    var cy=new Date().getFullYear();
+    var opts='<option value=""'+(convPeriod===''?' selected':'')+'>Последние 12 мес</option>';
+    for(var y=cy;y>=cy-2;y--)opts+='<option value="'+y+'"'+(convPeriod==String(y)?' selected':'')+'>'+y+' год</option>';
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap"><span style="color:var(--dim,#8592ad);font-size:12.5px">Период:</span><select id="convPer" class="fcsel">'+opts+'</select></div>';
+  }
   async function loadConversion(group){
     var box=document.getElementById('tab-conversion'); box.innerHTML='<div class="spin"></div>';
     try{
-      var wr=await (await fetch('/api/plsai/dash/winrate?group='+group)).json();
-      var vel=await (await fetch('/api/plsai/dash/velocity')).json();
+      var per='&period='+encodeURIComponent(convPeriod);
+      var wr=await (await fetch('/api/plsai/dash/winrate?group='+group+per)).json();
+      var vel=await (await fetch('/api/plsai/dash/velocity?period='+encodeURIComponent(convPeriod))).json();
       var co=await (await fetch('/api/plsai/dash/cohort')).json();
-      box.innerHTML=renderConversion(wr,vel,group)+renderCohort(co);
+      box.innerHTML=convPeriodControl()+renderConversion(wr,vel,group)+renderCohort(co);
       box.querySelectorAll('[data-cg]').forEach(function(b){b.onclick=function(){loadConversion(b.getAttribute('data-cg'));};});
+      var cp=document.getElementById('convPer'); if(cp)cp.onchange=function(){convPeriod=this.value;loadConversion(group);};
     }catch(e){box.innerHTML='<div class="card sect">Ошибка: '+E(e.message)+'</div>';}
   }
   function renderConversion(wr,vel,group){
@@ -912,6 +938,6 @@ load();
   }
 })();
 </script>
-  <script src="/assets/pls-ai.js?v=8" defer></script>
+  <script src="/assets/pls-ai.js?v=9" defer></script>
 </body>
 </html>
