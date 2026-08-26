@@ -141,6 +141,8 @@ html[data-theme="light"] .admin-panel{background:#eef2f8;}
 html[data-theme="light"] .apr select,html[data-theme="light"] .apr input{background:#fff;}
 .detail-bar{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:10px 18px 0;}
 .detail-sync{font-size:11px;color:var(--text-faint);font-family:var(--font-mono);}
+.detail-sync.live{color:var(--ok);font-weight:600;}
+.detail-sync.stale{color:var(--warn);font-weight:700;background:rgba(230,160,30,.12);border:1px solid var(--warn);padding:3px 9px;border-radius:7px;}
 .admin-panel{margin:10px 18px 0;padding:12px 14px;background:#171b22;border:1px solid var(--line-2);border-radius:10px;}
 .admin-panel h4{font-family:var(--font-display);font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--warn);margin-bottom:10px;}
 .apw{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;}
@@ -806,8 +808,12 @@ function renderDetail(d){
       <span class="bp-arrow">→ Выполняется</span>
       <span class="pstage">авто</span></div>`;
   }).join(''):'<div class="empty">Нет активных БП</div>';
+  const syncTxt=d.syncedAt?fmtDateTime(d.syncedAt):'';
+  const syncLabel=d.cached
+    ?`<span class="detail-sync stale">⚠ данные из кэша · ${syncTxt} — нажмите «↻ Обновить» для актуальных</span>`
+    :`<span class="detail-sync live">● актуально из Битрикса · ${syncTxt}</span>`;
   const bar=`<div class="detail-bar">
-    <span class="detail-sync">${d.cached?'из кэша':'обновлено'}${d.syncedAt?' · '+fmtDateTime(d.syncedAt):''}</span>
+    ${syncLabel}
     ${window.CAN_MANAGE&&window.EDIT_META?`<button class="reset-btn" onclick="toggleAdmin(${d.dealId})" title="Управление сделкой">✏️ Управление</button>`:''}
     <button class="reset-btn" onclick="refreshDetail(${d.dealId},this)" title="Подтянуть свежие данные из Битрикса">↻ Обновить</button>
   </div>`;

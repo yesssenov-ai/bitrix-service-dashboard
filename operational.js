@@ -665,13 +665,36 @@ async function buildDealDetailLive(dealId) {
   return { dealId, processes, tasks, comments, automations };
 }
 
+// Деталь считается свежей не дольше этого срока — иначе при открытии тянем живьё.
+const DETAIL_MAX_AGE_MS = 15 * 60 * 1000; // 15 минут
+
 // Cached drill-down: served instantly from Postgres. Built lazily on first open,
 // rebuilt on force (the «↻ Обновить» button), invalidated by the deal webhook.
-async function getDealDetail(dealId, force = false) {
+// autoFresh=true (по умолчанию при открытии сделки): деталь автоматически
+// перестраивается живьём, если она СТАРШЕ последнего обновления доски или старше
+// DETAIL_MAX_AGE_MS. Это убирает ловушку «шапка свежая (сегодня), а внутри сделки
+// данные вчерашние». Отчёты вызывают с autoFresh=false — только кэш, без нагрузки на Битрикс.
+async function getDealDetail(dealId, force = false, autoFresh = true) {
   if (!force) {
     try {
       const { rows } = await pool.query('SELECT detail, synced_at FROM ticketsmodule_operational_detail WHERE deal_id=$1', [dealId]);
-      if (rows.length) return { ok: true, cached: true, syncedAt: rows[0].synced_at, ...rows[0].detail };
+      if (rows.length) {
+        const syncedAt = rows[0].synced_at;
+        let stale = false;
+        if (autoFresh) {
+          const cachedMs = new Date(syncedAt).getTime();
+          if (Date.now() - cachedMs > DETAIL_MAX_AGE_MS) stale = true;
+          else {
+            // Если доску обновляли ПОЗЖЕ, чем кэшировали деталь — деталь устарела.
+            try {
+              const { rows: mt } = await pool.query('SELECT last_full_sync FROM ticketsmodule_operational_meta WHERE id=1');
+              const lfs = mt[0] && mt[0].last_full_sync;
+              if (lfs && cachedMs < new Date(lfs).getTime()) stale = true;
+            } catch (_) { /* нет меты — не критично */ }
+          }
+        }
+        if (!stale) return { ok: true, cached: true, syncedAt, ...rows[0].detail };
+      }
     } catch (e) { console.error('getDealDetail cache read:', e.message); }
   }
   const detail = await buildDealDetailLive(dealId);

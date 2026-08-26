@@ -176,7 +176,7 @@ router.get('/export', requireCap('view'), async (req, res) => {
 
     const meta = { date: new Date().toLocaleString('ru-RU'), filterText: buildFilterText(req.query, board), detailsMap: {} };
     if (type === 'detailed') {
-      for (const r of rows.slice(0, 300)) { try { meta.detailsMap[r.id] = await getDealDetail(r.id, false); } catch (e) { /* skip one */ } }
+      for (const r of rows.slice(0, 300)) { try { meta.detailsMap[r.id] = await getDealDetail(r.id, false, false); } catch (e) { /* skip one */ } }
     }
 
     let buf, ct, ext;
