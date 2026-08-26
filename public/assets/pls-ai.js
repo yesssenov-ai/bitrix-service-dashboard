@@ -4,9 +4,11 @@
 (function () {
   if (window.__prolabAI) return; window.__prolabAI = true;
   var css = `
-  #pai-fab{position:fixed;right:18px;bottom:18px;z-index:99998;display:inline-flex;align-items:center;gap:8px;
+  #pai-fab{position:fixed;right:18px;bottom:72px;z-index:99998;display:inline-flex;align-items:center;gap:8px;
     background:linear-gradient(135deg,#ff2d55,#5b8cff);color:#fff;border:0;border-radius:999px;padding:11px 16px;
-    font:600 13px/1 "SF Pro Display","Segoe UI",Inter,system-ui,sans-serif;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.28)}
+    font:600 13px/1 "SF Pro Display","Segoe UI",Inter,system-ui,sans-serif;cursor:grab;box-shadow:0 8px 24px rgba(0,0,0,.28);
+    touch-action:none;user-select:none;-webkit-user-select:none}
+  #pai-fab.dragging{cursor:grabbing}
   #pai-fab:hover{filter:brightness(1.06)}
   #pai-fab svg{width:16px;height:16px}
   #pai-panel{position:fixed;right:18px;bottom:70px;z-index:99999;width:min(440px,calc(100vw - 28px));max-height:min(74vh,640px);
@@ -81,10 +83,53 @@
   function fmt(n) { return Math.round(n || 0).toLocaleString('ru-RU').replace(/,/g, ' '); }
   function fmtMln(v) { var m = (v || 0) / 1e6; return (Math.abs(m) >= 100 ? fmt(m) : (Math.round(m * 10) / 10).toLocaleString('ru-RU')) + ' млн ₸'; }
 
-  function open() { panel.classList.add('on'); setTimeout(function () { input.focus(); }, 40); }
+  // ── Позиционирование панели рядом с кнопкой (куда бы её ни перетащили) ──────
+  function positionPanel() {
+    var r = fab.getBoundingClientRect();
+    var pw = panel.offsetWidth || Math.min(440, window.innerWidth - 28);
+    var ph = panel.offsetHeight || 420;
+    var left = Math.max(8, Math.min(r.right - pw, window.innerWidth - pw - 8));
+    var top;
+    if (r.top - ph - 10 >= 8) top = r.top - ph - 10;                         // над кнопкой
+    else if (r.bottom + ph + 10 <= window.innerHeight - 8) top = r.bottom + 10; // под кнопкой
+    else top = Math.max(8, window.innerHeight - ph - 8);                     // прижать по высоте
+    panel.style.left = left + 'px'; panel.style.top = top + 'px';
+    panel.style.right = 'auto'; panel.style.bottom = 'auto';
+  }
+  function open() { panel.classList.add('on'); positionPanel(); setTimeout(function () { try { input.focus(); } catch (e) {} }, 40); }
   function close() { panel.classList.remove('on'); }
-  fab.onclick = function () { panel.classList.contains('on') ? close() : open(); };
   panel.querySelector('.pai-x').onclick = close;
+
+  // ── Перетаскивание кнопки в любое место экрана (мышь + тач) ─────────────────
+  var POSKEY = 'pls-ai-pos';
+  function applyFabPos(left, top) {
+    var r = fab.getBoundingClientRect(); var w = r.width || 120, h = r.height || 44;
+    left = Math.max(6, Math.min(left, window.innerWidth - w - 6));
+    top = Math.max(6, Math.min(top, window.innerHeight - h - 6));
+    fab.style.left = left + 'px'; fab.style.top = top + 'px'; fab.style.right = 'auto'; fab.style.bottom = 'auto';
+  }
+  try { var sp = JSON.parse(localStorage.getItem(POSKEY) || 'null'); if (sp && typeof sp.left === 'number') applyFabPos(sp.left, sp.top); } catch (e) {}
+
+  var dragging = false, moved = false, sx = 0, sy = 0, ox = 0, oy = 0;
+  fab.addEventListener('pointerdown', function (e) {
+    dragging = true; moved = false;
+    var r = fab.getBoundingClientRect(); ox = e.clientX - r.left; oy = e.clientY - r.top; sx = e.clientX; sy = e.clientY;
+    fab.classList.add('dragging'); try { fab.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  fab.addEventListener('pointermove', function (e) {
+    if (!dragging) return;
+    if (Math.abs(e.clientX - sx) > 4 || Math.abs(e.clientY - sy) > 4) moved = true;
+    if (moved) { applyFabPos(e.clientX - ox, e.clientY - oy); if (panel.classList.contains('on')) positionPanel(); }
+  });
+  function endDrag(e) {
+    if (!dragging) return; dragging = false; fab.classList.remove('dragging');
+    try { fab.releasePointerCapture(e.pointerId); } catch (_) {}
+    if (moved) { var r = fab.getBoundingClientRect(); try { localStorage.setItem(POSKEY, JSON.stringify({ left: r.left, top: r.top })); } catch (_) {} }
+    else { panel.classList.contains('on') ? close() : open(); }   // не двигали → это клик
+  }
+  fab.addEventListener('pointerup', endDrag);
+  fab.addEventListener('pointercancel', endDrag);
+  window.addEventListener('resize', function () { var r = fab.getBoundingClientRect(); applyFabPos(r.left, r.top); if (panel.classList.contains('on')) positionPanel(); });
   input.addEventListener('keydown', function (e) { if (e.key === 'Enter') run(); });
   panel.querySelector('#pai-send').onclick = run;
 
