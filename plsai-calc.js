@@ -33,11 +33,17 @@ const CONTRACT_SET = [
   'C2:FINAL_INVOICE', 'C2:1', 'C2:2', 'C2:WON',
   'C3:FINAL_INVOICE', 'C3:UC_YYTFYG', 'C3:2', 'C3:WON',
 ];
-const PRECONTRACT = [
-  'NEW', 'C1:NEW', 'C2:NEW', 'C3:NEW', 'PREPARATION', 'C1:PREPARATION', 'C2:PREPARATION', 'C3:PREPARATION',
-  'PREPAYMENT_INVOICE', 'C1:PREPAYMENT_INVOICE', 'C2:PREPAYMENT_INVOICE', 'C3:PREPAYMENT_INVOICE',
-  'EXECUTING', 'C1:EXECUTING', 'C2:EXECUTING', 'C3:EXECUTING',
-];
+// Стадии по шагам воронки (все 4 воронки). P10 новый лид … P80 покупка ≤3мес.
+const STEP_STAGES = {
+  P10: ['NEW', 'C1:NEW', 'C2:NEW', 'C3:NEW'],
+  P30: ['PREPARATION', 'C1:PREPARATION', 'C2:PREPARATION', 'C3:PREPARATION'],
+  P60: ['PREPAYMENT_INVOICE', 'C1:PREPAYMENT_INVOICE', 'C2:PREPAYMENT_INVOICE', 'C3:PREPAYMENT_INVOICE'],
+  P80: ['EXECUTING', 'C1:EXECUTING', 'C2:EXECUTING', 'C3:EXECUTING'],
+};
+const STEP_ORDER = ['P10', 'P30', 'P60', 'P80'];
+const PRECONTRACT = STEP_ORDER.flatMap(s => STEP_STAGES[s]);
+const WON_SET = ['WON', 'C1:WON', 'C2:WON', 'C3:WON'];   // только успешно завершённые
+const STEP_LABELS = { P10: 'P10 · Новый', P30: 'P30 · Подготовка', P60: 'P60 · КП выставлено', P80: 'P80 · Покупка ≤3 мес' };
 
 // Точные шаблоны месяцев с границами (чтобы «Малверн» не ловился как «май» и т.п.).
 const MONTH_RE = [/\bянвар/, /\bфеврал/, /\bмарт/, /\bапрел/, /\bма[йея]\b/, /\bиюн/, /\bиюл/, /\bавгуст/, /\bсентябр/, /\bоктябр/, /\bноябр/, /\bдекабр/];
@@ -73,10 +79,21 @@ function managerMatch(q) {
 
 function parseQuery(qRaw) {
   const q = String(qRaw || '').toLowerCase().trim();
-  const f = { raw: qRaw, brand: null, depts: [], deptLabel: null, managers: [], period: detectPeriod(q), mode: 'sold', text: null };
-  // Режим: продали (по умолчанию) vs в работе
-  if (/в\s+работе|pipeline|пайплайн|потенциаль|не\s+подписан|доконтракт|в\s+процессе/.test(q)) f.mode = 'pipe';
-  else if (/продал|проданн|законтракт|подписал|контракт|выигран|закрыт[а-яё]*\s+сделк/.test(q)) f.mode = 'sold';
+  const f = { raw: qRaw, brand: null, depts: [], deptLabel: null, managers: [], period: detectPeriod(q), mode: 'sold', steps: null, text: null };
+  // ── Явные стадии: P10, P30, P60, P80, диапазоны «P10-P80», «P60 и P80» ──
+  const stepTokens = [...new Set((q.match(/p\s?-?\s?(10|30|60|80)/gi) || []).map(s => 'P' + s.match(/(10|30|60|80)/)[1]))]
+    .sort((a, b) => STEP_ORDER.indexOf(a) - STEP_ORDER.indexOf(b));
+  if (stepTokens.length) {
+    const isRange = stepTokens.length >= 2 && /p\s?-?\s?(?:10|30|60|80)\s*[-–—]\s*p\s?-?\s?(?:10|30|60|80)/i.test(q);
+    if (isRange) { const lo = STEP_ORDER.indexOf(stepTokens[0]), hi = STEP_ORDER.indexOf(stepTokens[stepTokens.length - 1]); f.steps = STEP_ORDER.slice(lo, hi + 1); }
+    else f.steps = stepTokens;
+    f.mode = 'steps';
+  }
+  // ── Семантика режима (если явные стадии не заданы) ──
+  else if ((/выдан|выставл/.test(q) && /кп/.test(q)) || /кп\s*выставл/.test(q)) { f.mode = 'steps'; f.steps = ['P60', 'P80']; }
+  else if (/выигран|завершён|завершен|успешн|\bwon\b/.test(q)) f.mode = 'won';
+  else if (/в\s+работе|pipeline|пайплайн|потенциаль|не\s+подписан|доконтракт|в\s+процессе/.test(q)) f.mode = 'pipe';
+  else if (/продал|проданн|законтракт|подписал|контракт|закрыт[а-яё]*\s+сделк/.test(q)) f.mode = 'sold';
   // Бренд
   for (const [k, v] of Object.entries(BRANDS)) if (q.includes(k)) { f.brand = v; break; }
   // Отдел
@@ -95,15 +112,20 @@ async function runQuery(f) {
   const rate = await getTodayRate();
   const where = [], args = [];
   const P = v => { args.push(v); return '$' + args.length; };   // добавить параметр, вернуть плейсхолдер
-  // Режим/период
-  if (f.mode === 'sold') {
-    where.push(`stage_id = ANY('{${CONTRACT_SET.join(',')}}')`);
-    if (f.period.from) { where.push(`contract_date >= ${P(f.period.from)}`); where.push(`contract_date <= ${P(f.period.to)}`); }
-    else where.push('contract_date IS NOT NULL');
-  } else {
-    where.push(`stage_id = ANY('{${PRECONTRACT.join(',')}}')`);
-    if (f.period.from) { where.push(`date_create >= ${P(f.period.from)}`); where.push(`date_create <= ${P(f.period.to)}`); }
-  }
+  // Набор стадий и поле даты по режиму:
+  //  steps — явные P10/P30/P60/P80 (или «выданные КП» = P60+P80); дата = создания.
+  //  pipe  — все доконтрактные P10–P80; дата = создания.
+  //  won   — только успешно завершённые (WON); дата = договора.
+  //  sold  — законтрактовано: от «Контракт» до «Завершена» (CONTRACT_SET); дата = договора.
+  let stageIds, dateField;
+  if (f.mode === 'steps') { stageIds = (f.steps || []).flatMap(s => STEP_STAGES[s] || []); dateField = 'date_create'; }
+  else if (f.mode === 'pipe') { stageIds = PRECONTRACT; dateField = 'date_create'; }
+  else if (f.mode === 'won') { stageIds = WON_SET; dateField = 'contract_date'; }
+  else { stageIds = CONTRACT_SET; dateField = 'contract_date'; }
+  if (!stageIds.length) stageIds = CONTRACT_SET;
+  where.push(`stage_id = ANY('{${stageIds.join(',')}}')`);
+  if (f.period.from) { where.push(`${dateField} >= ${P(f.period.from)}`); where.push(`${dateField} <= ${P(f.period.to)}`); }
+  else if (dateField === 'contract_date') where.push('contract_date IS NOT NULL');
   if (f.brand) where.push(`manufacturer ILIKE ${P('%' + f.brand.split(' ')[0] + '%')}`);
   if (f.depts.length) where.push(`department_id = ANY(${P(f.depts)})`);
   if (f.managers.length) where.push(`assigned_by_id = ANY(${P(f.managers.map(m => m.id))})`);
@@ -132,7 +154,10 @@ async function runQuery(f) {
 
 function interpret(f) {
   const parts = [];
-  parts.push(f.mode === 'sold' ? 'Продано (законтрактовано)' : 'В работе (доконтракт)');
+  if (f.mode === 'steps') parts.push('Стадии: ' + (f.steps || []).map(s => STEP_LABELS[s] || s).join(', '));
+  else if (f.mode === 'pipe') parts.push('В работе (P10–P80)');
+  else if (f.mode === 'won') parts.push('Завершённые (успешные)');
+  else parts.push('Продано (законтрактовано: Контракт→Завершена)');
   if (f.brand) parts.push('производитель: ' + f.brand);
   if (f.deptLabel) parts.push('отдел: ' + f.deptLabel);
   if (f.managers.length) parts.push('менеджер: ' + f.managers.map(m => m.name).join(', '));

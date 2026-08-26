@@ -62,7 +62,7 @@
     '<div class="pai-b">' +
       '<div class="pai-q"><input id="pai-input" placeholder="Напр.: приборы Agilent проданные в этом году" autocomplete="off"><button class="pai-send" id="pai-send">Найти</button></div>' +
       '<div class="pai-ex" id="pai-ex"></div>' +
-      '<div class="pai-hint">Понимаю: <b>производитель</b>, <b>период</b> (этот/прошлый год, месяц, за 2024), <b>продали / в работе</b>, <b>отдел</b>, <b>менеджер</b>, <b>клиент</b>. Результат можно выгрузить в Excel.</div>' +
+      '<div class="pai-hint">Понимаю: <b>производитель</b>, <b>период</b> (этот/прошлый год, месяц, за 2024), <b>стадии</b> (P10–P80, «выданные КП» = P60+P80), <b>продали</b> (Контракт→Завершена), <b>выигранные</b>, <b>в работе</b>, <b>отдел</b>, <b>менеджер</b>, <b>клиент</b>. Результат можно выгрузить в Excel.</div>' +
       '<div class="pai-res" id="pai-res"></div>' +
     '</div>';
   document.body.appendChild(panel);
@@ -70,7 +70,7 @@
   var input = panel.querySelector('#pai-input');
   var res = panel.querySelector('#pai-res');
   var lastQ = '';
-  var EX = ['приборы Agilent проданные в этом году', 'ICP-MS за 2024', 'Metrohm в работе', 'сделки по отделу хроматография за прошлый год'];
+  var EX = ['приборы Agilent проданные в этом году', 'выданные КП по хроматографии в этом году', 'сделки Семена Жарова на этапе P10-P80 за 2025', 'выигранные сделки Metrohm за прошлый год'];
   panel.querySelector('#pai-ex').innerHTML = EX.map(function (e) { return '<button>' + e + '</button>'; }).join('');
   panel.querySelectorAll('#pai-ex button').forEach(function (b) { b.onclick = function () { input.value = b.textContent; run(); }; });
 
