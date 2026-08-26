@@ -290,6 +290,28 @@ async function llmIntent(qRaw) {
   } catch (e) { console.error('plsai llm error:', e.message); return null; }
 }
 
+// Диагностика подключения ИИ: показывает, есть ли ключ, какая модель, и что
+// реально отвечает Anthropic (401 = неверный ключ, 404 = нет такой модели,
+// 400 = нет кредитов/ошибка запроса). Открывается админом через /api/plsai/health.
+async function llmSelfTest() {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return { keyPresent: false, model: LLM_MODEL, ok: false, error: 'Переменная ANTHROPIC_API_KEY не задана (Railway → Variables) или сервис не передеплоился' };
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 15000);
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: LLM_MODEL, max_tokens: 16, messages: [{ role: 'user', content: 'ответь одним словом: тест' }] }),
+      signal: controller.signal,
+    });
+    clearTimeout(t);
+    const txt = await r.text();
+    if (!r.ok) return { keyPresent: true, model: LLM_MODEL, ok: false, status: r.status, error: txt.slice(0, 400) };
+    return { keyPresent: true, model: LLM_MODEL, ok: true, status: r.status };
+  } catch (e) { return { keyPresent: true, model: LLM_MODEL, ok: false, error: e.message }; }
+}
+
 // intent (из ИИ) → та же структура фильтра f, что и у keyword-парсера.
 function intentToFilter(intent, qRaw) {
   const f = { raw: qRaw, brand: null, depts: [], deptLabel: null, managers: [], period: null, mode: 'sold', steps: null,
@@ -366,4 +388,4 @@ async function analyze(qRaw) {
 // Совместимость: только фильтр (без clarify).
 async function parseSmart(qRaw) { const a = await analyze(qRaw); return a.f || parseQuery(qRaw); }
 
-module.exports = { parseQuery, parseSmart, analyze, runQuery, interpret, buildXlsx, intentToFilter, getVocab };
+module.exports = { parseQuery, parseSmart, analyze, runQuery, interpret, buildXlsx, intentToFilter, getVocab, llmSelfTest };

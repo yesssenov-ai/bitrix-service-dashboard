@@ -40,4 +40,15 @@ router.post('/export', requireAuth(VIEW_ROLES), express.json(), async (req, res)
   }
 });
 
+// GET /api/plsai/health — диагностика LLM-слоя (только админ): виден ли ключ, отвечает ли Anthropic.
+router.get('/health', requireAuth(['admin']), async (req, res) => {
+  try {
+    const { llmSelfTest } = require('../plsai-calc');
+    res.set('Cache-Control', 'no-store');
+    res.json(await llmSelfTest());
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 module.exports = { router };
