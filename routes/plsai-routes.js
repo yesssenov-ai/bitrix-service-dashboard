@@ -11,6 +11,8 @@ router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) 
     const q = String((req.body || {}).q || '').trim();
     if (!q) return res.status(400).json({ error: 'Пустой запрос' });
     const a = await analyze(q);
+    // Ассистент ответил текстом (вопрос про систему/модули/статус, не выборка сделок).
+    if (a.kind === 'assistant' && a.answer) { res.set('Cache-Control', 'no-store'); return res.json({ ok: true, answer: a.answer, ai: true, kind: 'assistant' }); }
     if (!a.f && a.clarify) { res.set('Cache-Control', 'no-store'); return res.json({ ok: true, clarify: a.clarify, ai: true }); }
     const { items, count, sumKzt } = await runQuery(a.f);
     res.set('Cache-Control', 'no-store');

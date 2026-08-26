@@ -248,9 +248,10 @@ async function llmIntent(qRaw) {
   const today = astanaToday();
   const vocab = await getVocab();
   const system = [
-    'Ты разбираешь запрос менеджера ProLabSupport о сделках CRM в СТРОГИЙ JSON. Отвечай ТОЛЬКО одним JSON-объектом, без пояснений.',
+    'Ты разбираешь запрос менеджера ProLabSupport в СТРОГИЙ JSON. Отвечай ТОЛЬКО одним JSON-объектом, без пояснений.',
     `Сегодня ${today} (Астана, UTC+5). Даты в ответе — строки YYYY-MM-DD.`,
     'Поля JSON:',
+    'kind: "deals" — если это запрос-ВЫБОРКА по сделкам (посчитать/найти/выгрузить сделки по критериям: производитель, прибор, стадия, менеджер, отдел, период, клиент). "assistant" — если это вопрос О СИСТЕМЕ ЦУП: что делает модуль, определения, статус/свежесть данных, «когда обновлялось», «как работает», или общий вопрос НЕ про выборку сделок. Если сомневаешься между ними, но есть явные фильтры сделок — ставь "deals".',
     'producer: строка или null — производитель (напр. Agilent, Metrohm, Malvern, LECO, Sciaps, Peak, ELGA, LNI, Struers, Waters).',
     'instrument_type: строка или null — тип прибора (AAS/атомно-абсорбционный, ICP-MS, ICP-OES, MP-AES, GC/газовый хроматограф, HPLC/ВЭЖХ, GC-MS, IC/ионная хроматография, titrator/титратор, XRF/РФА). Пиши код латиницей.',
     'models: массив строк — конкретные номера моделей (напр. ["55","240","8890"]). Пусто если не назван.',
@@ -322,6 +323,93 @@ async function llmSelfTest() {
   } catch (e) { return { keyPresent: true, model: LLM_MODEL, ok: false, error: e.message }; }
 }
 
+// ── Ассистент ЦУП: ответы на вопросы о системе/модулях/статусе (не выборка сделок) ──
+// Знания о модулях (что делает каждый). Источник — карточки на портале ЦУП.
+const MODULE_KB = `Модули ЦУП ProLabSupport (17):
+- Планировщик (PLN): календарь занятости инженеров, выезды и командировки, синхронизация с заявками Bitrix.
+- Сервисные заявки (SVC): учёт и обработка заявок на сервисное обслуживание оборудования.
+- Карта оборудования (EQP): география установленного оборудования клиентов по стране.
+- Карта лицензий ГМК (LIC): реестр недропользователей и лицензий на добычу.
+- Связи сделок (REL): иерархия сделок и смарт-процессов CRM по клиенту.
+- Почта (MAIL): учёт и классификация писем по ящикам, контроль ответов клиентам.
+- Коммерческие предложения (KP): два подмодуля — МЛК (сборка КП по категориям) и Сервис (конструктор сервисных КП + таргетинг).
+- Бонусы инженеров (BONUS): квартальный расчёт бонусов по сервисным контрактам и установкам.
+- Статистика (STATS): сводная статистика продаж по производителям, менеджерам, приборам.
+- Контракты (CONTR): портфель контрактов — структура по услугам, выполнение плана, динамика.
+- План продаж (SALE): незаконтрактованный pipeline (P10–P80) по планируемому сроку покупки.
+- Проекты БДМ (PROJ): Группа → Клиент → БДМ → Проект (комплексная сделка) → продакт-сделки.
+- Логистика (LOG): отслеживание заказанных приборов в пути — ETA, таможня, склад, трек-номера.
+- Реализация (OPS): операционный контроль сделок ПОСЛЕ подписания — воронка исполнения, смарт-процессы, задачи и сроки.
+- Закупки (PROC): дашборд менеджера склада — заявки на закупки, синхронизация со смарт-процессом «Закупки».
+- Рассылки (CAM): массовые письма клиентам через Resend с отпиской и стоп-листом.
+- Управление (ADM): пользователи, роли доступа и журнал действий.`;
+
+// Ключевые определения предметной области ЦУП (факты, не выдумка).
+const DOMAIN_KB = `Определения и устройство:
+- Воронка сделки по шагам: P10 = новый лид (NEW), P30 = подготовка (PREPARATION), P60 = счёт на предоплату (PREPAYMENT_INVOICE), P80 = исполнение (EXECUTING). «Выдано/выставлено КП» = стадии P60 и P80. «Продано/законтрактовано» = от стадии Контракт (FINAL_INVOICE) до Успешно завершена (WON).
+- Отделы: Элементный, Хроматография, Электрохимия, Клеточный анализ, ОРМ (расходка), Сервис, Тренинг-центр, General Lab, Материаловедение, Комплекс.
+- Комплексная сделка (Complex): «зонтичная» родительская сделка, к которой привязаны продакт-сделки по отделам. Модель Проекты БДМ строит дерево Группа → Клиент → БДМ (бизнес-девелопер) → Проект(Complex) → продакт-сделки.
+- Данные берутся из Bitrix24 CRM в зеркала Postgres. Обновление: живые вебхуки при изменении сделки + ночной полный синк.
+- Свежесть данных отличается по модулям: STATS/План продаж/Контракты/Проекты читают общее зеркало сделок и «последнее обновление» = максимум времени синка строк этого зеркала; Реализация ведёт отдельную таблицу и хранит время последнего полного синка отдельно; начинка отдельной сделки в Реализации (смарт-процессы, задачи, комментарии) кэшируется по сделке и авто-обновляется при открытии, если устарела.`;
+
+// Живые показатели системы — только реальные значения из БД. Кэш 2 минуты.
+let _sysFacts = null, _sysFactsAt = 0;
+async function getSystemFacts() {
+  if (_sysFacts && Date.now() - _sysFactsAt < 120000) return _sysFacts;
+  const f = {};
+  const q = async (sql, params) => { try { const { rows } = await pool.query(sql, params || []); return rows; } catch (e) { return null; } };
+  const sd = await q("SELECT COUNT(*)::int c, to_char(MAX(synced_at),'DD.MM.YYYY HH24:MI') last, MIN(EXTRACT(YEAR FROM contract_date))::int y0, MAX(EXTRACT(YEAR FROM COALESCE(contract_date,date_create)))::int y1 FROM ticketsmodule_stat_deals");
+  if (sd && sd[0]) f.deals_mirror = { rows: sd[0].c, last_sync: sd[0].last, years: `${sd[0].y0 || ''}–${sd[0].y1 || ''}` };
+  const om = await q("SELECT to_char(last_full_sync,'DD.MM.YYYY HH24:MI') lfs, to_char(last_ok_at,'DD.MM.YYYY HH24:MI') ok, deal_count, last_source, last_error, to_char(last_error_at,'DD.MM.YYYY HH24:MI') eat FROM ticketsmodule_operational_meta WHERE id=1");
+  if (om && om[0]) f.realizations_OPS = { last_full_sync: om[0].lfs, last_ok: om[0].ok, deal_count: om[0].deal_count, source: om[0].last_source, last_error: om[0].last_error || null, last_error_at: om[0].eat || null };
+  const eq = await q("SELECT to_char(last_full_sync,'DD.MM.YYYY HH24:MI') lfs FROM ticketsmodule_equipment_meta LIMIT 1");
+  if (eq && eq[0]) f.equipment_EQP = { last_full_sync: eq[0].lfs };
+  const u = await q("SELECT COUNT(*)::int c FROM ticketsmodule_users WHERE active");
+  if (u && u[0]) f.active_users = u[0].c;
+  _sysFacts = f; _sysFactsAt = Date.now();
+  return f;
+}
+
+// Ответ ассистента в свободной форме — строго из контекста (модули + определения + живые факты).
+async function assistantAnswer(qRaw) {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return null;
+  const today = astanaToday();
+  let facts = {};
+  try { facts = await getSystemFacts(); } catch (e) { /* best-effort */ }
+  const system = [
+    'Ты — ассистент внутренней системы ЦУП ProLabSupport (центр управления проектами на базе Bitrix24 CRM).',
+    'Отвечай на русском, кратко и по делу, обычным текстом (без markdown-заголовков).',
+    'Используй ТОЛЬКО факты из блока КОНТЕКСТ ниже: описание модулей, определения и живые показатели системы.',
+    'Если в контексте нет ответа — честно скажи, что таких данных у тебя нет, и подскажи, в каком модуле ЦУП это искать. НИКОГДА не выдумывай числа, даты, названия и статусы.',
+    'Если вопрос про выборку/подсчёт конкретных сделок — скажи, что это можно спросить прямым запросом (напр. «проданные Agilent в 2025») и он посчитает точно.',
+    `Сегодня ${today} (Астана, UTC+5).`,
+    '',
+    'КОНТЕКСТ:',
+    MODULE_KB,
+    '',
+    DOMAIN_KB,
+    '',
+    'ЖИВЫЕ ПОКАЗАТЕЛИ СИСТЕМЫ (реальные значения из БД сейчас):',
+    JSON.stringify(facts, null, 1),
+  ].join('\n');
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 20000);
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: LLM_MODEL, max_tokens: 700, system, messages: [{ role: 'user', content: String(qRaw || '').slice(0, 600) }] }),
+      signal: controller.signal,
+    });
+    clearTimeout(t);
+    if (!r.ok) { console.error('plsai assistant HTTP', r.status); return null; }
+    const d = await r.json();
+    const txt = (d.content || []).map(c => c.text || '').join('').trim();
+    return txt || null;
+  } catch (e) { console.error('plsai assistant error:', e.message); return null; }
+}
+
 // intent (из ИИ) → та же структура фильтра f, что и у keyword-парсера.
 function intentToFilter(intent, qRaw) {
   const f = { raw: qRaw, brand: null, depts: [], deptLabel: null, managers: [], period: null, mode: 'sold', steps: null,
@@ -388,6 +476,12 @@ function intentHasFilter(intent) {
 async function analyze(qRaw) {
   const intent = await llmIntent(qRaw);
   if (intent) {
+    // Вопрос о системе/модулях/статусе (не выборка сделок) → ассистент отвечает текстом.
+    if (intent.kind === 'assistant' && !intentHasFilter(intent)) {
+      const answer = await assistantAnswer(qRaw);
+      if (answer) return { f: null, ai: true, kind: 'assistant', answer };
+      // не смог ответить — падаем на обычную логику ниже
+    }
     if (intent.clarify && !intentHasFilter(intent)) return { f: null, ai: true, clarify: String(intent.clarify) };
     try { return { f: intentToFilter(intent, qRaw), ai: true, clarify: intent.clarify ? String(intent.clarify) : null }; }
     catch (e) { /* упадём на keyword */ }
@@ -398,4 +492,4 @@ async function analyze(qRaw) {
 // Совместимость: только фильтр (без clarify).
 async function parseSmart(qRaw) { const a = await analyze(qRaw); return a.f || parseQuery(qRaw); }
 
-module.exports = { parseQuery, parseSmart, analyze, runQuery, interpret, buildXlsx, intentToFilter, getVocab, llmSelfTest };
+module.exports = { parseQuery, parseSmart, analyze, runQuery, interpret, buildXlsx, intentToFilter, getVocab, llmSelfTest, assistantAnswer, getSystemFacts };

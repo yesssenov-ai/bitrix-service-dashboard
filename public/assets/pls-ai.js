@@ -26,6 +26,7 @@
   .pai-hint b{color:#c7d2e6}
   .pai-res{margin-top:12px}
   .pai-int{font-size:12px;color:#bcd2ff;background:rgba(91,140,255,.12);border:1px solid rgba(91,140,255,.25);border-radius:9px;padding:8px 10px;margin-bottom:10px}
+  .pai-answer{font-size:13.5px;line-height:1.55;color:#e8edf7;white-space:normal}
   .pai-kpi{display:flex;gap:10px;margin-bottom:10px}
   .pai-kpi .c{flex:1;background:#161f33;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:9px 11px}
   .pai-kpi .l{font-size:10px;color:#8592ad;text-transform:uppercase;letter-spacing:.4px;font-weight:700}
@@ -49,6 +50,8 @@
   html[data-theme="light"] #pai-panel{background:#fff;color:#111827;border-color:#e4e7ef}
   html[data-theme="light"] .pai-q input,html[data-theme="light"] .pai-kpi .c,html[data-theme="light"] .pai-ex button{background:#f4f6fb;border-color:#e4e7ef;color:#111827}
   html[data-theme="light"] .pai-tbl th{background:#fff;color:#5b6472}
+  @media (prefers-color-scheme: light){ .pai-answer{color:#111827} }
+  html[data-theme="light"] .pai-answer{color:#111827}
   `;
   var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
 
@@ -62,7 +65,7 @@
     '<div class="pai-b">' +
       '<div class="pai-q"><input id="pai-input" placeholder="Напр.: приборы Agilent проданные в этом году" autocomplete="off"><button class="pai-send" id="pai-send">Найти</button></div>' +
       '<div class="pai-ex" id="pai-ex"></div>' +
-      '<div class="pai-hint">Понимаю: <b>производитель</b>, <b>тип прибора</b> (ААС, ICP-MS, ГХ, ВЭЖХ…) и <b>модель</b> (55, 240, 8890), <b>период</b>, <b>стадии</b> (P10–P80, «выданные КП» = P60+P80), <b>продали</b> (Контракт→Завершена), <b>выигранные</b>, <b>в работе</b>, <b>отдел</b>, <b>менеджер</b>, <b>клиент</b>. Можно сужать несколькими критериями сразу и выгрузить в Excel.</div>' +
+      '<div class="pai-hint"><b>Выборка сделок:</b> производитель, тип прибора (ААС, ICP-MS, ГХ, ВЭЖХ…), модель (55, 240, 8890), период, стадии (P10–P80, «выданные КП» = P60+P80), продали, выигранные, в работе, отдел, менеджер, клиент — с выгрузкой в Excel.<br><b>Вопросы о ЦУП:</b> что делает модуль, определения, когда обновлялись данные, статус синка — отвечу словами.</div>' +
       '<div class="pai-res" id="pai-res"></div>' +
     '</div>';
   document.body.appendChild(panel);
@@ -70,7 +73,7 @@
   var input = panel.querySelector('#pai-input');
   var res = panel.querySelector('#pai-res');
   var lastQ = '';
-  var EX = ['приборы Agilent проданные в этом году', 'выданные КП по хроматографии в этом году', 'сделки Семена Жарова на этапе P10-P80 за 2025', 'выигранные сделки Metrohm за прошлый год'];
+  var EX = ['приборы Agilent проданные в этом году', 'выданные КП по хроматографии в этом году', 'когда последний раз обновлялась Реализация?', 'что делает модуль Контракты?'];
   panel.querySelector('#pai-ex').innerHTML = EX.map(function (e) { return '<button>' + e + '</button>'; }).join('');
   panel.querySelectorAll('#pai-ex button').forEach(function (b) { b.onclick = function () { input.value = b.textContent; run(); }; });
 
@@ -94,6 +97,10 @@
       if (r.status === 401) { res.innerHTML = '<div class="pai-err">Нужно войти в ЦУП.</div>'; return; }
       var d = await r.json();
       if (!r.ok) { res.innerHTML = '<div class="pai-err">' + esc(d.error || 'Ошибка') + '</div>'; return; }
+      if (d.answer) {
+        res.innerHTML = '<div class="pai-int">🧠 Ассистент ЦУП</div><div class="pai-answer">' + esc(d.answer).replace(/\n/g, '<br>') + '</div>';
+        return;
+      }
       if (d.clarify) { res.innerHTML = '<div class="pai-int">🧠 Уточни, пожалуйста</div><div class="pai-hint" style="margin-top:0">' + esc(d.clarify) + '</div>'; input.focus(); return; }
       var rows = (d.sample || []).map(function (x) {
         return '<tr><td>' + esc(x.company) + '</td><td>' + esc(x.instrument || '—') + '</td><td>' + esc(x.manufacturer || '—') + '</td><td class="num">' + fmt(x.sumKzt) + '</td><td>' + esc(x.manager || '') + '</td></tr>';

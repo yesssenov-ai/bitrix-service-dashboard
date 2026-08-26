@@ -220,6 +220,9 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
 .ms-opt .o-lbl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .ms-opt .o-cnt{font-size:10.5px;color:var(--text-4);}
 .ms-empty{padding:10px;font-size:12px;color:var(--text-3);text-align:center;}
+.ms-search{position:sticky;top:0;background:var(--card);padding:2px 2px 6px;z-index:2;}
+.ms-search input{width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--stroke);border-radius:6px;padding:7px 10px;font-size:12.5px;color:var(--text);font-family:var(--font);outline:none;}
+.ms-search input:focus{border-color:var(--brand);}
 </style>
 </head>
 <body>
@@ -345,6 +348,7 @@ html,body{height:100%;font-family:var(--font);background:var(--surface);color:va
 // ── State ─────────────────────────────────────────────────────────────────────
 let allItems = [], filteredItems = [];
 let manufacturers = [], deviceNames = [], cities = [], companies = [];
+let modelQuery = '', modelFullList = [];
 let mode = 'equipment';
 // Мультивыбор фильтров — множества выбранных значений.
 let mfrSet = new Set(), modelSet = new Set(), statusSet = new Set();
@@ -553,16 +557,31 @@ function buildMfrChips() {
 function buildModelSelect() {
   const p = document.getElementById('panelModel'); if (!p) return;
   // Модели ограничиваем выбранными производителями (объединение).
-  let list = deviceNames;
+  let list = deviceNames.slice();
   if (mfrSet.size) {
     const items = allItems.filter(i => i.manufacturerIds.some(x => mfrSet.has(String(x))));
     list = deviceNames.filter(d => items.some(i => i.deviceNameIds.includes(d.id)));
   }
+  // Сортировка по алфавиту (с учётом чисел: «55» < «240» < «8890»).
+  list.sort((a, b) => String(a.name).localeCompare(String(b.name), 'ru', { numeric: true, sensitivity: 'base' }));
+  modelFullList = list;
   // Уберём из выбора модели, которых больше нет в списке.
   [...modelSet].forEach(id => { if (!list.some(d => String(d.id) === id)) modelSet.delete(id); });
-  p.innerHTML = list.length ? list.map(d => msOptRow('Model', d.id, esc(d.name), d.count)).join('') : '<div class="ms-empty">Нет моделей</div>';
+  p.innerHTML =
+    '<div class="ms-search"><input type="text" id="modelSearch" placeholder="🔍 Поиск модели…" autocomplete="off" oninput="onModelSearch(this.value)"></div>' +
+    '<div id="panelModelOpts"></div>';
+  const si = document.getElementById('modelSearch'); if (si) si.value = modelQuery;
+  renderModelOpts();
   renderMsSummary('Model');
 }
+function renderModelOpts() {
+  const box = document.getElementById('panelModelOpts'); if (!box) return;
+  const q = modelQuery.trim().toLowerCase();
+  const list = q ? modelFullList.filter(d => String(d.name).toLowerCase().includes(q)) : modelFullList;
+  box.innerHTML = list.length ? list.map(d => msOptRow('Model', d.id, esc(d.name), d.count)).join('')
+    : ('<div class="ms-empty">' + (q ? 'Ничего не найдено' : 'Нет моделей') + '</div>');
+}
+function onModelSearch(v) { modelQuery = v; renderModelOpts(); }
 function buildStatusMs() {
   const p = document.getElementById('panelStatus'); if (!p) return;
   p.innerHTML = STATUS_OPTS.map(o => msOptRow('Status', o.id, o.label, null)).join('');
@@ -600,7 +619,10 @@ function toggleMs(kind) {
   const panel = document.getElementById('panel' + kind);
   const open = panel.classList.contains('show');
   document.querySelectorAll('.ms-panel').forEach(p => p.classList.remove('show'));
-  if (!open) panel.classList.add('show');
+  if (!open) {
+    panel.classList.add('show');
+    if (kind === 'Model') { const si = document.getElementById('modelSearch'); if (si) setTimeout(() => si.focus(), 30); }
+  }
 }
 function onMsToggle(kind, id, on) {
   const set = kind === 'Mfr' ? mfrSet : kind === 'Model' ? modelSet : statusSet;
