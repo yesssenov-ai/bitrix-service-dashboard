@@ -17,6 +17,27 @@ const BRANDS = {
   'elga': 'ELGA', 'струерс': 'Struers', 'struers': 'Struers', 'sciaps': 'Sciaps', 'waters': 'Waters',
   'olympus': 'OLYMPUS', 'олимпус': 'OLYMPUS', 'sartorius': 'Sartorius', 'powteq': 'PowTeq',
 };
+// Типы приборов → шаблоны ILIKE по названию прибора (instrument_name из зеркала).
+// Позволяет сузить «все Agilent» до «только атомники (ААС)» и т.п. Названия моделей —
+// из справочника моделей Bitrix. Порядок: более специфичные ГХ-МС/ВЭЖХ-МС раньше общих.
+const INSTR_TYPES = [
+  { re: /гх-?мс|gc-?ms|масс-?детектор|\bmsd\b|масс-?селективн/i, name: 'ГХ-МС', likes: ['%5977%', '%5975%', '%7000%', '%7010%', '%7250%'] },
+  { re: /вэжх-?мс|hplc-?ms|lc-?ms|жидкостн\w*.*масс/i, name: 'ВЭЖХ-МС', likes: ['%6470%', '%6495%', '%6546%', '%Ultivo%', '%6230%', '%6530%', '%6545%', '%6560%', '%Revident%'] },
+  { re: /атомн|\baas\b|аас|атомно-?абсорбц/i, name: 'ААС (атомно-абсорбционные)', likes: ['%AA%', '%240 Z%', '%280 Z%'] },
+  { re: /исп-?мс|icp-?ms|масс.*(индукт|плазм)/i, name: 'ИСП-МС (ICP-MS)', likes: ['%ICP-MS%'] },
+  { re: /исп-?оэс|исп-?аэс|icp-?oes|icp-?aes|оптико-?эмисс.*плазм/i, name: 'ИСП-ОЭС (ICP-OES)', likes: ['%ICP-OES%'] },
+  { re: /мп-?аэс|mp-?aes|микроволнов\w*.*плазм/i, name: 'МП-АЭС (MP-AES)', likes: ['%MP-AES%'] },
+  { re: /газов\w*.*хроматограф|\bгх\b|\bgc\b/i, name: 'Газовая хроматография', likes: ['%8890%', '%8860%', '%8850%', '%7890%', '%Intuvo%', '%990 Micro%', '%GC%'] },
+  { re: /вэжх|жидкостн\w*.*хроматограф|\bhplc\b|\blc\b|инфинити|infinity/i, name: 'Жидкостная хроматография (ВЭЖХ)', likes: ['%Infinity%', '%1220%', '%1260%', '%1290%'] },
+  { re: /ионн\w*.*хроматограф|\bic\b|ионн\w* хром/i, name: 'Ионная хроматография', likes: ['%IC %', '%930%', '%940%', '%Eco IC%'] },
+  { re: /титратор|титрован/i, name: 'Титраторы', likes: ['%Titrando%', '%Ti-Touch%', '%OMNIS%', '%Titrator%'] },
+  { re: /рфа|рентгенофлуор|xrf/i, name: 'РФА (рентгенофлуоресцентные)', likes: ['%Epsilon%', '%Zetium%', '%Axios%', '%X-5%', '%X-2%'] },
+];
+// Явные номера моделей — если пользователь называет «55», «240», «8890» и т.п.,
+// сужаем по вхождению номера в название прибора.
+const MODEL_NUMS = ['55', '240', '280', '4210', '5800', '5900', '7850', '7900', '8900', '8890', '8860', '8850', '7890',
+  '1220', '1260', '1290', '5977', '5975', '7000', '7010', '7250', '930', '940', '7700'];
+
 const DEPARTMENT_LABELS = {
   '4857': 'Элементный', '4858': 'Хроматография', '4859': 'Электрохимия', '4860': 'Клеточный анализ',
   '4862': 'ОРМ', '4863': 'Сервис', '4864': 'Тренинг-центр', '4865': 'General Lab', '4866': 'Комплекс', '8384': 'Материаловедение',
@@ -90,14 +111,19 @@ function parseQuery(qRaw) {
     f.mode = 'steps';
   }
   // ── Семантика режима (если явные стадии не заданы) ──
-  else if ((/выдан|выставл/.test(q) && /кп/.test(q)) || /кп\s*выставл/.test(q)) { f.mode = 'steps'; f.steps = ['P60', 'P80']; }
+  // «выдал / выдала / выставил КП», «КП выставлено», «есть КП» → P60 + P80.
+  else if ((/выда|выставл|отправ|подготов/.test(q) && /кп|коммерческ/.test(q)) || /кп\s*выставл/.test(q) || /есть\s+кп/.test(q)) { f.mode = 'steps'; f.steps = ['P60', 'P80']; }
   else if (/выигран|завершён|завершен|успешн|\bwon\b/.test(q)) f.mode = 'won';
   else if (/в\s+работе|pipeline|пайплайн|потенциаль|не\s+подписан|доконтракт|в\s+процессе/.test(q)) f.mode = 'pipe';
-  else if (/продал|проданн|законтракт|подписал|контракт|закрыт[а-яё]*\s+сделк/.test(q)) f.mode = 'sold';
+  else if (/продал|проданн|законтракт|подписал|заключ|контракт|закрыт[а-яё]*\s+сделк/.test(q)) f.mode = 'sold';
   // Бренд
   for (const [k, v] of Object.entries(BRANDS)) if (q.includes(k)) { f.brand = v; break; }
   // Отдел
   for (const [k, ids] of Object.entries(DEPT_ALIASES)) if (q.includes(k)) { f.depts = ids; f.deptLabel = DEPARTMENT_LABELS[ids[0]]; break; }
+  // Тип прибора / модель — сужение внутри бренда (напр. Agilent → только ААС → только 55)
+  f.instr = { likes: null, label: null, models: [] };
+  for (const t of INSTR_TYPES) if (t.re.test(q)) { f.instr.likes = t.likes; f.instr.label = t.name; break; }
+  for (const m of MODEL_NUMS) if (new RegExp('(^|[^0-9])' + m + '([^0-9]|$)').test(q)) f.instr.models.push(m);
   // Менеджер
   f.managers = managerMatch(q);
   // Произвольный текст: слова в кавычках («…» / "…"), либо имя после «клиент/компания/заказчик».
@@ -127,6 +153,13 @@ async function runQuery(f) {
   if (f.period.from) { where.push(`${dateField} >= ${P(f.period.from)}`); where.push(`${dateField} <= ${P(f.period.to)}`); }
   else if (dateField === 'contract_date') where.push('contract_date IS NOT NULL');
   if (f.brand) where.push(`manufacturer ILIKE ${P('%' + f.brand.split(' ')[0] + '%')}`);
+  // Тип прибора (OR по шаблонам) и явные модели (каждая — AND по вхождению номера).
+  if (f.instr && f.instr.likes && f.instr.likes.length) {
+    where.push('(' + f.instr.likes.map(l => `instrument_name ILIKE ${P(l)}`).join(' OR ') + ')');
+  }
+  if (f.instr && f.instr.models && f.instr.models.length) {
+    for (const m of f.instr.models) where.push(`instrument_name ILIKE ${P('%' + m + '%')}`);
+  }
   if (f.depts.length) where.push(`department_id = ANY(${P(f.depts)})`);
   if (f.managers.length) where.push(`assigned_by_id = ANY(${P(f.managers.map(m => m.id))})`);
   if (f.text) { const p = P('%' + f.text + '%'); where.push(`(instrument_name ILIKE ${p} OR deal_title ILIKE ${p} OR company_name ILIKE ${p})`); }
@@ -159,6 +192,8 @@ function interpret(f) {
   else if (f.mode === 'won') parts.push('Завершённые (успешные)');
   else parts.push('Продано (законтрактовано: Контракт→Завершена)');
   if (f.brand) parts.push('производитель: ' + f.brand);
+  if (f.instr && f.instr.label) parts.push('тип: ' + f.instr.label);
+  if (f.instr && f.instr.models && f.instr.models.length) parts.push('модель: ' + f.instr.models.join('/'));
   if (f.deptLabel) parts.push('отдел: ' + f.deptLabel);
   if (f.managers.length) parts.push('менеджер: ' + f.managers.map(m => m.name).join(', '));
   if (f.text) parts.push('текст: «' + f.text + '»');
