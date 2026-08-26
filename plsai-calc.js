@@ -187,16 +187,17 @@ async function runAggregate(f) {
   const rate = await getTodayRate();
   const { where, args, dateField } = buildDealWhere(f);
   const gb = ['manager', 'department', 'producer', 'month'].includes(f.groupBy) ? f.groupBy : 'manager';
-  const metric = f.metric === 'sum' ? 'sum' : 'count';
+  const metric = ['sum', 'avg', 'max'].includes(f.metric) ? f.metric : 'count';
   let groupExpr;
   if (gb === 'department') groupExpr = 'department_id';
   else if (gb === 'producer') groupExpr = "COALESCE(NULLIF(manufacturer,''),'—')";
   else if (gb === 'month') groupExpr = `TO_CHAR(${dateField},'YYYY-MM')`;
   else groupExpr = 'assigned_by_id';
-  const sumExpr = `SUM(CASE WHEN currency_id='USD' THEN opportunity*${rate} ELSE opportunity END)`;
-  const sql = `SELECT ${groupExpr} AS grp, COUNT(*)::int AS cnt, ${sumExpr} AS sumkzt
+  const kztExpr = `CASE WHEN currency_id='USD' THEN opportunity*${rate} ELSE opportunity END`;
+  const orderBy = metric === 'sum' ? 'sumkzt' : (metric === 'avg' ? 'avgkzt' : (metric === 'max' ? 'maxkzt' : 'cnt'));
+  const sql = `SELECT ${groupExpr} AS grp, COUNT(*)::int AS cnt, SUM(${kztExpr}) AS sumkzt, AVG(${kztExpr}) AS avgkzt, MAX(${kztExpr}) AS maxkzt
                FROM ticketsmodule_stat_deals WHERE ${where.join(' AND ')}
-               GROUP BY ${groupExpr} ORDER BY ${metric === 'sum' ? 'sumkzt' : 'cnt'} DESC NULLS LAST`;
+               GROUP BY ${groupExpr} ORDER BY ${orderBy} DESC NULLS LAST`;
   const { rows } = await pool.query(sql, args);
   const label = (g) => {
     if (g == null || g === '') return gb === 'manager' ? '(не указан)' : '—';
@@ -204,13 +205,17 @@ async function runAggregate(f) {
     if (gb === 'department') return DEPARTMENT_LABELS[g] || String(g);
     return String(g);
   };
-  const list = rows.map(r => ({ label: label(r.grp), count: r.cnt, sumKzt: Math.round(parseFloat(r.sumkzt) || 0) }))
+  const list = rows.map(r => ({ label: label(r.grp), count: r.cnt, sumKzt: Math.round(parseFloat(r.sumkzt) || 0), avgKzt: Math.round(parseFloat(r.avgkzt) || 0), maxKzt: Math.round(parseFloat(r.maxkzt) || 0) }))
     .filter(x => x.label !== '(не указан)' || x.count);   // оставляем «не указан», если там реально есть сделки
   const total = { count: list.reduce((s, x) => s + x.count, 0), sumKzt: list.reduce((s, x) => s + x.sumKzt, 0) };
+  total.avgKzt = total.count ? Math.round(total.sumKzt / total.count) : 0;
+  total.maxKzt = list.reduce((m, x) => Math.max(m, x.maxKzt), 0);
   return { rows: list, metric, groupBy: gb, total };
 }
 function interpretAggregate(f) {
-  const metric = f.metric === 'sum' ? 'по сумме' : 'по количеству';
+  const metric = f.metric === 'sum' ? 'по сумме'
+    : (f.metric === 'avg' ? 'по средней цене за сделку'
+    : (f.metric === 'max' ? 'по крупнейшей сделке' : 'по количеству'));
   const scope = f.mode === 'won' ? 'завершённых сделок' : (f.mode === 'sold' ? 'контрактов' : 'сделок');
   const parts = [`Рейтинг по ${GROUP_LABELS[f.groupBy] || 'менеджерам'} · ${scope} · ${metric}`];
   if (f.brand) parts.push(f.brand);
@@ -219,12 +224,12 @@ function interpretAggregate(f) {
   return parts.join(' · ');
 }
 function buildAggXlsx(agg, title) {
-  const header = ['#', 'Название', 'Количество', 'Сумма (₸)'];
-  const aoa = [header, ...agg.rows.map((x, i) => [i + 1, x.label, x.count, x.sumKzt])];
+  const header = ['#', 'Название', 'Количество', 'Сумма (₸)', 'Ср. за сделку (₸)', 'Крупнейшая сделка (₸)'];
+  const aoa = [header, ...agg.rows.map((x, i) => [i + 1, x.label, x.count, x.sumKzt, x.avgKzt, x.maxKzt])];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [5, 40, 14, 18].map(w => ({ wch: w }));
+  ws['!cols'] = [5, 40, 14, 18, 18, 20].map(w => ({ wch: w }));
   const range = XLSX.utils.decode_range(ws['!ref']);
-  for (let r = 1; r <= range.e.r; r++) { const ref = XLSX.utils.encode_cell({ r, c: 3 }); if (ws[ref] && typeof ws[ref].v === 'number') ws[ref].z = '#,##0'; }
+  for (let r = 1; r <= range.e.r; r++) for (const c of [3, 4, 5]) { const ref = XLSX.utils.encode_cell({ r, c }); if (ws[ref] && typeof ws[ref].v === 'number') ws[ref].z = '#,##0'; }
   ws['!freeze'] = { xSplit: 0, ySplit: 1 };
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, (title || 'Рейтинг').slice(0, 28));
@@ -299,7 +304,7 @@ async function llmIntent(qRaw) {
     'Поля JSON:',
     'kind: "deals" — запрос-ВЫБОРКА по сделкам (найти/выгрузить сделки по критериям). "aggregate" — вопрос-РЕЙТИНГ/ПОДСЧЁТ по группам: «кто больше всех», «топ менеджеров», «сколько у каждого», «разбивка по отделам/производителям/месяцам», «у кого больше контрактов». "assistant" — вопрос О СИСТЕМЕ ЦУП: что делает модуль, определения, статус/свежесть данных, «когда обновлялось». Если есть явные фильтры сделок и это не рейтинг — ставь "deals".',
     'group_by: "manager"|"department"|"producer"|"month"|null — по чему группировать (только для kind="aggregate"). «кто из менеджеров»→manager, «по отделам»→department, «по производителям»→producer, «по месяцам»→month.',
-    'metric: "count"|"sum"|null — считать по КОЛИЧЕСТВУ сделок или по СУММЕ. Ставь ТОЛЬКО если явно сказано (по количеству/по числу/сколько штук → count; по сумме/на сумму/по обороту/по деньгам → sum). Если не указано — оставь null (система переспросит).',
+    'metric: "count"|"sum"|"avg"|"max"|null — count = по КОЛИЧЕСТВУ сделок; sum = по общей СУММЕ; avg = по СРЕДНЕЙ цене за 1 сделку (средний чек); max = по КРУПНЕЙШЕЙ (самой дорогой) сделке. Ставь ТОЛЬКО если явно сказано (по количеству/сколько штук → count; по сумме/по обороту → sum; за 1 сделку/средний чек/в среднем → avg; самая дорогая/крупнейшая сделка → max). Если не указано — оставь null (система переспросит).',
     'producer: строка или null — производитель (напр. Agilent, Metrohm, Malvern, LECO, Sciaps, Peak, ELGA, LNI, Struers, Waters).',
     'instrument_type: строка или null — тип прибора (AAS/атомно-абсорбционный, ICP-MS, ICP-OES, MP-AES, GC/газовый хроматограф, HPLC/ВЭЖХ, GC-MS, IC/ионная хроматография, titrator/титратор, XRF/РФА). Пиши код латиницей.',
     'models: массив строк — конкретные номера моделей (напр. ["55","240","8890"]). Пусто если не назван.',
@@ -513,10 +518,12 @@ function intentToFilter(intent, qRaw) {
   } else f.period = detectPeriod('');   // не указан — текущий год (как в keyword)
   // Агрегация: по чему группировать и по какой метрике.
   if (['manager', 'department', 'producer', 'month'].includes(intent.group_by)) f.groupBy = intent.group_by;
-  f.metric = (intent.metric === 'count' || intent.metric === 'sum') ? intent.metric : null;
+  f.metric = ['count', 'sum', 'avg', 'max'].includes(intent.metric) ? intent.metric : null;
   // Детерминированное определение метрики из текста (перекрывает LLM при явных словах).
   const ql = String(qRaw || '').toLowerCase();
-  if (/по сумм|на сумм|по оборот|по деньг|в деньг|по выручк/.test(ql)) f.metric = 'sum';
+  if (/сам[а-яё]* дорог|сам[а-яё]* крупн|дорог[а-яё]* сделк|крупн[а-яё]* сделк|крупн[а-яё]* контракт|максимальн[а-яё]* сделк|наибол[а-яё]* сделк/.test(ql)) f.metric = 'max';
+  else if (/за 1 сделк|за одну сделк|средн[а-яё]* чек|средн[а-яё]* цен|цена за сделк|средн[а-яё]* сумм|в среднем|на сделку|на 1 сделк/.test(ql)) f.metric = 'avg';
+  else if (/по сумм|на сумм|по оборот|по деньг|в деньг|по выручк/.test(ql)) f.metric = 'sum';
   else if (/по количеств|по числ|по кол-?ву|сколько штук|штук\b|по штук/.test(ql)) f.metric = 'count';
   return f;
 }

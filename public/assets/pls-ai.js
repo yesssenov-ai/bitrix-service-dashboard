@@ -13,31 +13,32 @@
   #pai-fab.dragging{cursor:grabbing}
   #pai-fab:hover{filter:brightness(1.06)}
   #pai-fab svg{width:16px;height:16px}
-  #pai-panel{position:fixed;right:18px;bottom:70px;z-index:99999;width:min(440px,calc(100vw - 28px));height:min(74vh,640px);max-height:calc(100vh - 40px);
-    display:none;flex-direction:column;background:#0e1626;color:#e8edf7;border:1px solid rgba(255,255,255,.14);border-radius:16px;overflow:hidden;
-    box-shadow:0 18px 50px rgba(0,0,0,.45);font-family:"SF Pro Display","Segoe UI",Inter,system-ui,sans-serif}
+  #pai-panel{position:fixed;right:18px;bottom:70px;z-index:99999;width:min(460px,calc(100vw - 24px));height:min(76vh,660px);max-height:calc(100vh - 36px);
+    display:none;flex-direction:column;background:#0e1626;color:#e8edf7;border:1px solid rgba(255,255,255,.12);border-radius:18px;overflow:hidden;
+    box-shadow:0 24px 60px rgba(0,0,0,.5);font-family:"SF Pro Display","Segoe UI",Inter,system-ui,sans-serif}
   #pai-panel.on{display:flex}
-  .pai-h{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.1);flex-shrink:0}
-  .pai-h b{font-size:14px;font-weight:800}.pai-h .pai-tag{font-size:10px;font-weight:800;background:rgba(91,140,255,.22);color:#bcd2ff;border-radius:6px;padding:2px 6px}
-  .pai-clear{margin-left:auto;background:none;border:0;color:#8592ad;font-size:15px;cursor:pointer;line-height:1;padding:2px}
-  .pai-clear:hover{color:#ff9db0}
-  .pai-x{background:none;border:0;color:#8592ad;font-size:20px;cursor:pointer;line-height:1}
-  .pai-x:hover{color:#e8edf7}
+  .pai-h{display:flex;align-items:center;gap:8px;padding:13px 16px;border-bottom:1px solid rgba(255,255,255,.08);flex-shrink:0}
+  .pai-h b{font-size:14.5px;font-weight:800;letter-spacing:.2px}.pai-h .pai-tag{font-size:10px;font-weight:800;background:rgba(91,140,255,.22);color:#bcd2ff;border-radius:6px;padding:2px 7px}
+  .pai-clear{margin-left:auto;width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:none;border:0;border-radius:8px;color:#8592ad;font-size:14px;cursor:pointer}
+  .pai-clear:hover{color:#ff9db0;background:rgba(255,255,255,.06)}
+  .pai-x{width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:none;border:0;border-radius:8px;color:#8592ad;font-size:19px;cursor:pointer}
+  .pai-x:hover{color:#e8edf7;background:rgba(255,255,255,.06)}
   .pai-b{flex:1;display:flex;flex-direction:column;min-height:0;padding:0;overflow:hidden}
-  .pai-thread{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
-  .pai-msg{max-width:100%;border-radius:13px;padding:9px 12px;font-size:13px;line-height:1.5;word-wrap:break-word;overflow-wrap:anywhere}
-  .pai-msg.user{align-self:flex-end;max-width:88%;background:linear-gradient(135deg,#ff2d55,#5b8cff);color:#fff;border-bottom-right-radius:4px;font-weight:600}
-  .pai-msg.bot{align-self:flex-start;background:#161f33;border:1px solid rgba(255,255,255,.08);border-bottom-left-radius:4px}
+  .pai-thread{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+  .pai-msg{max-width:100%;border-radius:14px;padding:10px 13px;font-size:13px;line-height:1.5;word-wrap:break-word;overflow-wrap:anywhere}
+  .pai-msg.user{align-self:flex-end;max-width:86%;background:linear-gradient(135deg,#ff2d55,#5b8cff);color:#fff;border-bottom-right-radius:5px;font-weight:600;box-shadow:0 3px 12px rgba(91,140,255,.25)}
+  .pai-msg.bot{align-self:stretch;background:#141d2e;border:1px solid rgba(255,255,255,.07);border-bottom-left-radius:5px}
   .pai-empty{margin:auto;text-align:center;color:#8592ad;font-size:12.5px;line-height:1.6;padding:14px}
-  .pai-empty .pai-em-t{font-size:14px;font-weight:800;color:#c7d2e6;margin-bottom:6px}
-  .pai-composer{border-top:1px solid rgba(255,255,255,.1);padding:10px 12px;flex-shrink:0}
+  .pai-empty .pai-em-t{font-size:15px;font-weight:800;color:#c7d2e6;margin-bottom:6px}
+  .pai-composer{border-top:1px solid rgba(255,255,255,.08);padding:12px 14px;flex-shrink:0}
   .pai-ex{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
   .pai-ex button{background:#161f33;border:1px solid rgba(255,255,255,.12);color:#bcd2ff;border-radius:8px;padding:5px 9px;font:inherit;font-size:11px;cursor:pointer;text-align:left}
   .pai-ex button:hover{border-color:#5b8cff}
   .pai-q{display:flex;gap:8px}
-  .pai-q input{flex:1;min-width:0;background:#161f33;border:1px solid rgba(255,255,255,.14);border-radius:10px;color:#e8edf7;font:inherit;font-size:13.5px;padding:10px 12px;outline:none}
+  .pai-q input{flex:1;min-width:0;background:#161f33;border:1px solid rgba(255,255,255,.14);border-radius:11px;color:#e8edf7;font:inherit;font-size:13.5px;padding:11px 13px;outline:none;transition:border-color .12s}
   .pai-q input:focus{border-color:#5b8cff}
-  .pai-send{background:#5b8cff;border:0;color:#fff;border-radius:10px;padding:0 16px;font:inherit;font-weight:700;cursor:pointer}
+  .pai-send{background:#5b8cff;border:0;color:#fff;border-radius:11px;padding:0 18px;font:inherit;font-weight:700;cursor:pointer}
+  .pai-send:hover{filter:brightness(1.06)}
   .pai-send:disabled{opacity:.5;cursor:default}
   .pai-hint{color:#8592ad;font-size:11.5px;line-height:1.5}
   .pai-hint b{color:#c7d2e6}
@@ -124,17 +125,21 @@
       if (d.options && d.options.length) ch += '<div class="pai-opts">' + d.options.map(function (o) { return '<button class="pai-opt" data-q="' + esc(o.q) + '">' + esc(o.label) + '</button>'; }).join('') + '</div>';
       return ch;
     }
-    // Рейтинг/агрегация (кто больше всех, топ, разбивка).
+    // Рейтинг/агрегация (кто больше всех, топ, разбивка). Показываем выбранную метрику + сделки.
     if (d.aggregate) {
-      var mSum = d.metric === 'sum';
+      var mt = d.metric || 'count';
+      var mLbl = mt === 'sum' ? 'Сумма ₸' : mt === 'avg' ? 'Ср./сделку' : mt === 'max' ? 'Крупнейшая' : 'Кол-во';
+      var mVal = function (x) { return mt === 'sum' ? fmtMln(x.sumKzt) : mt === 'avg' ? fmtMln(x.avgKzt) : mt === 'max' ? fmtMln(x.maxKzt) : fmt(x.count); };
+      var secLbl = mt === 'count' ? 'Сумма' : 'Сделок';
+      var secVal = function (x) { return mt === 'count' ? fmtMln(x.sumKzt) : fmt(x.count); };
       var rr = (d.rows || []).map(function (x, i) {
         return '<tr><td class="num">' + (i + 1) + '</td><td>' + esc(x.label) + '</td>' +
-          '<td class="num"' + (!mSum ? ' style="font-weight:800;color:#22c9a3"' : '') + '>' + fmt(x.count) + '</td>' +
-          '<td class="num"' + (mSum ? ' style="font-weight:800;color:#22c9a3"' : '') + '>' + fmtMln(x.sumKzt) + '</td></tr>';
+          '<td class="num" style="font-weight:800;color:#22c9a3">' + mVal(x) + '</td>' +
+          '<td class="num" style="color:#8592ad">' + secVal(x) + '</td></tr>';
       }).join('');
       var ah = '<div class="pai-int">🏆 ' + esc(d.interpreted || '') + '</div>' +
-        '<div class="pai-wrap"><table class="pai-tbl"><thead><tr><th class="num">#</th><th>Название</th><th class="num">Кол-во</th><th class="num">Сумма ₸</th></tr></thead><tbody>' + rr + '</tbody></table></div>';
-      if (d.total) ah += '<div class="pai-hint" style="margin-top:7px">Всего: ' + fmt(d.total.count) + ' — ' + fmtMln(d.total.sumKzt) + '</div>';
+        '<div class="pai-wrap"><table class="pai-tbl"><thead><tr><th class="num">#</th><th>Название</th><th class="num">' + mLbl + '</th><th class="num">' + secLbl + '</th></tr></thead><tbody>' + rr + '</tbody></table></div>';
+      if (d.total) ah += '<div class="pai-hint" style="margin-top:7px">Всего сделок: ' + fmt(d.total.count) + ' · сумма ' + fmtMln(d.total.sumKzt) + '</div>';
       ah += '<button class="pai-dl" data-q="' + esc(q) + '" style="margin-top:8px">⬇ Excel</button>';
       return ah;
     }
