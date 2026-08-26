@@ -6,6 +6,7 @@ const XLSX = require('xlsx');
 const { pool } = require('./auth');
 const { getTodayRate } = require('./nbrk-exchange-rate');
 const { USERS } = require('./constants');
+const { getPipelineStages } = require('./operational'); // карта stage_id → читаемое название стадии
 
 const DEPARTMENT_LABELS = {
   '4857': 'Элементный', '4858': 'Хроматография', '4859': 'Электрохимия', '4860': 'Клеточный анализ',
@@ -102,20 +103,27 @@ async function runOps(f) {
   if (f.depts && f.depts.length) { params.push(f.depts); where.push(`department_id = ANY($${params.length})`); }
   if (f.managers && f.managers.length) { params.push(f.managers.map(m => m.id)); where.push(`assigned_by_id = ANY($${params.length})`); }
   if (f.redFlag) where.push('red_flag = true');
-  const sql = `SELECT deal_id, company_name, deal_title, contract_no, stage_id, opportunity, currency_id,
+  const sql = `SELECT deal_id, category_id, company_name, deal_title, contract_no, stage_id, opportunity, currency_id,
                       assigned_by_id, department_id, delivery_by_date, factory_ship_date, red_flag
                FROM ticketsmodule_operational_deals
                WHERE ${where.join(' AND ')}
                ORDER BY ${f.field.col} ASC`;
   const { rows } = await pool.query(sql, params);
+  // Карта «код стадии → название» по каждой встреченной воронке (кэш 1ч внутри).
+  const stageMaps = {};
+  for (const c of [...new Set(rows.map(r => r.category_id))]) {
+    try { const m = await getPipelineStages(c); stageMaps[c] = (m && m.byId) || {}; }
+    catch (_) { stageMaps[c] = {}; }
+  }
   const items = rows.map(r => {
     const raw = parseFloat(r.opportunity) || 0;
     const sumKzt = r.currency_id === 'USD' ? raw * rate : raw;
     const dBy = toYMD(r.delivery_by_date), fSh = toYMD(r.factory_ship_date);
     const diff = (dBy && fSh) ? Math.round((new Date(dBy) - new Date(fSh)) / 86400000) - 15 : null;
+    const sInfo = stageMaps[r.category_id] && stageMaps[r.category_id][r.stage_id];
     return {
       dealId: r.deal_id, company: r.company_name || '', title: r.deal_title || '', contractNo: r.contract_no || '',
-      stage: r.stage_id || '', deliveryDate: dBy || '', factoryShipDate: fSh || '', diffDays: diff,
+      stage: (sInfo && sInfo.name) || r.stage_id || '', deliveryDate: dBy || '', factoryShipDate: fSh || '', diffDays: diff,
       manager: USERS[r.assigned_by_id] || '', dept: DEPARTMENT_LABELS[r.department_id] || '',
       sumKzt: Math.round(sumKzt), currency: r.currency_id || 'KZT', rawSum: raw, redFlag: !!r.red_flag,
     };
@@ -135,13 +143,13 @@ function interpret(f) {
 
 function buildOpsXlsx(items, title, field) {
   const shipHdr = field && field.label ? field.label : 'Отгрузка от завода';
-  const header = ['Компания', '№ договора', 'Название', 'Поставка по договору', 'Отгрузка от завода', 'Разница, дн', 'Менеджер', 'Отдел', 'Сумма (₸)', 'Валюта', 'Сумма (ориг.)', 'Красный флаг', 'ID'];
-  const aoa = [header, ...items.map(x => [x.company, x.contractNo, x.title, x.deliveryDate, x.factoryShipDate,
+  const header = ['Компания', 'Стадия', '№ договора', 'Название', 'Поставка по договору', 'Отгрузка от завода', 'Разница, дн', 'Менеджер', 'Отдел', 'Сумма (₸)', 'Валюта', 'Сумма (ориг.)', 'Красный флаг', 'ID'];
+  const aoa = [header, ...items.map(x => [x.company, x.stage, x.contractNo, x.title, x.deliveryDate, x.factoryShipDate,
     x.diffDays == null ? '' : x.diffDays, x.manager, x.dept, x.sumKzt, x.currency, x.rawSum, x.redFlag ? 'да' : '', x.dealId])];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [40, 16, 44, 18, 18, 11, 22, 18, 16, 8, 14, 12, 10].map(w => ({ wch: w }));
+  ws['!cols'] = [40, 22, 16, 44, 18, 18, 11, 22, 18, 16, 8, 14, 12, 10].map(w => ({ wch: w }));
   const range = XLSX.utils.decode_range(ws['!ref']);
-  for (let r = 1; r <= range.e.r; r++) { const ref = XLSX.utils.encode_cell({ r, c: 8 }); if (ws[ref] && typeof ws[ref].v === 'number') ws[ref].z = '#,##0'; }
+  for (let r = 1; r <= range.e.r; r++) { const ref = XLSX.utils.encode_cell({ r, c: 9 }); if (ws[ref] && typeof ws[ref].v === 'number') ws[ref].z = '#,##0'; }
   ws['!freeze'] = { xSplit: 0, ySplit: 1 };
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, (title || 'Реализация').slice(0, 28));

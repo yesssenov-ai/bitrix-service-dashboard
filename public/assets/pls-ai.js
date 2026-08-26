@@ -105,9 +105,9 @@
       var thead, rows;
       if (d.ops) {
         var shipCol = esc(d.dateLabel || 'Отгрузка от завода');
-        thead = '<th>Компания</th><th>Поставка по дог.</th><th>' + shipCol + '</th><th>Менеджер</th>';
+        thead = '<th>Компания</th><th>Стадия</th><th>' + shipCol + '</th><th>Менеджер</th>';
         rows = (d.sample || []).map(function (x) {
-          return '<tr><td>' + esc(x.company) + '</td><td class="num">' + esc(x.deliveryDate || '—') + '</td><td class="num" style="color:#22c9a3;font-weight:700">' + esc(x.factoryShipDate || '—') + '</td><td>' + esc(x.manager || '') + '</td></tr>';
+          return '<tr><td>' + esc(x.company) + '</td><td>' + esc(x.stage || '—') + '</td><td class="num" style="color:#22c9a3;font-weight:700">' + esc(x.factoryShipDate || '—') + '</td><td>' + esc(x.manager || '') + '</td></tr>';
         }).join('');
       } else {
         thead = '<th>Компания</th><th>Прибор</th><th>Произв.</th><th class="num">Сумма ₸</th><th>Менеджер</th>';
