@@ -153,6 +153,7 @@ app.use('/api/stats', require('./routes/stats-routes').router);
 app.use('/api/contracts', require('./routes/contracts-routes').router);
 app.use('/api/plansales', require('./routes/plansales-routes').router);
 app.use('/api/projects', require('./routes/projects-routes').router);
+app.use('/api/plsai', require('./routes/plsai-routes').router);
 app.use('/api/logistics', require('./routes/logistics-routes').router);
 app.use('/api/operational', require('./routes/operational-routes').router);
 app.use('/api/procurement', require('./routes/procurement-routes').router);

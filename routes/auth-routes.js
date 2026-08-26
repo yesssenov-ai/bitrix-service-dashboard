@@ -15,7 +15,7 @@ const COOKIE_OPTS = (maxAge) => ({
 // «Запомнить на N дней»: если пользователь выбрал 5/15/30 — выдаём длинную сессию,
 // и в течение этого срока вход не спрашивает ни пароль, ни 2ФА, ни Face ID.
 // Иначе — обычная короткая сессия SESSION_HOURS.
-const REMEMBER_DAYS = new Set([5, 15, 30]);
+const REMEMBER_DAYS = new Set([1, 3, 5]);
 function sessionSpec(rememberDays) {
   const d = parseInt(rememberDays, 10);
   if (REMEMBER_DAYS.has(d)) return { expiresIn: `${d}d`, maxAge: d * 86400000 };
