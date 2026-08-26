@@ -215,6 +215,13 @@
     </div>
   </header>
 
+  <div class="pstabs" id="psTabs" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+    <button class="pstab on" data-tab="pipeline">📅 Пайплайн</button>
+    <button class="pstab" data-tab="forecast">🔮 Прогноз</button>
+    <button class="pstab" data-tab="conversion">🎯 Конверсия</button>
+  </div>
+
+  <div id="tab-pipeline">
   <div class="card controls" id="controls" style="display:none">
     <div class="ctl" style="gap:9px"><label>Годы</label><span class="chips" id="yearChips"></span></div>
     <div class="chips" id="stageChips">
@@ -263,6 +270,10 @@
     <div class="sub">Клик по строке — раскрыть. Красным подсвечены «наиболее вероятные» сделки.</div>
     <div id="tree"><div class="spin"></div></div>
   </div>
+  </div><!-- /tab-pipeline -->
+
+  <div id="tab-forecast" style="display:none"><div class="spin"></div></div>
+  <div id="tab-conversion" style="display:none"><div class="spin"></div></div>
 </div>
 
 <div class="ov" id="cmOv">
@@ -751,6 +762,87 @@ let meetIdx=0;
   };
 })();
 load();
+</script>
+  <script>
+(function(){
+  var st=document.createElement('style'); st.textContent =
+    '.pstab{background:var(--card,#141d2e);border:1px solid rgba(128,128,128,.28);color:var(--dim,#8592ad);border-radius:10px;padding:9px 16px;font:inherit;font-weight:700;font-size:13.5px;cursor:pointer}'+
+    '.pstab.on{background:linear-gradient(135deg,#ff2d55,#5b8cff);color:#fff;border-color:transparent}'+
+    '.fcgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px}'+
+    '.fcbox{background:var(--card,#141d2e);border:1px solid rgba(128,128,128,.22);border-radius:12px;padding:14px 16px}'+
+    '.fcbox .l{font-size:11px;color:var(--dim,#8592ad);text-transform:uppercase;letter-spacing:.4px;font-weight:700}'+
+    '.fcbox .v{font-size:22px;font-weight:800;margin-top:5px}'+
+    '.fcrow{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(128,128,128,.16);font-size:14px}'+
+    '.fcrow span{flex:1}.fcrow b{font-weight:800;color:#12a37e}.fcrow i{color:var(--dim,#8592ad);font-style:normal;font-size:12px}'+
+    '.fctbl{width:100%;border-collapse:collapse;font-size:13px}.fctbl th{text-align:left;color:var(--dim,#8592ad);font-weight:700;padding:7px 8px;border-bottom:1px solid rgba(128,128,128,.22)}.fctbl td{padding:7px 8px;border-bottom:1px solid rgba(128,128,128,.14)}.fctbl .num{text-align:right;font-variant-numeric:tabular-nums}'+
+    '@media(max-width:700px){.fcgrid{grid-template-columns:1fr}}';
+  document.head.appendChild(st);
+
+  var loaded={forecast:false,conversion:false};
+  var tabs=document.querySelectorAll('.pstab[data-tab]');
+  tabs.forEach(function(t){ t.onclick=function(){
+    tabs.forEach(function(x){x.classList.remove('on');}); t.classList.add('on');
+    var name=t.getAttribute('data-tab');
+    document.getElementById('tab-pipeline').style.display = name==='pipeline'?'':'none';
+    document.getElementById('tab-forecast').style.display = name==='forecast'?'':'none';
+    document.getElementById('tab-conversion').style.display = name==='conversion'?'':'none';
+    if(name==='forecast'&&!loaded.forecast){loaded.forecast=true;loadForecast();}
+    if(name==='conversion'&&!loaded.conversion){loaded.conversion=true;loadConversion('manager');}
+  };});
+
+  function mln(v){return (typeof fmtMln==='function')?fmtMln(v):(Math.round((v||0)/1e6)+' млн');}
+  function E(s){return (typeof esc==='function')?esc(s):String(s==null?'':s);}
+
+  async function loadForecast(){
+    var box=document.getElementById('tab-forecast');
+    try{ var r=await fetch('/api/plsai/dash/forecast'); var d=await r.json();
+      if(!r.ok||!d.forecast){box.innerHTML='<div class="card sect">Не удалось построить прогноз.</div>';return;}
+      box.innerHTML=renderForecast(d);
+    }catch(e){box.innerHTML='<div class="card sect">Ошибка: '+E(e.message)+'</div>';}
+  }
+  function renderForecast(d){
+    var e=d.estimate||{},rf=d.refs||{},cm=d.comments||{},dy=d.days||{};
+    var pace='';
+    if(d.pacing){var pv=d.pacing;var c=pv.verdict==='ahead'?'#12a37e':pv.verdict==='behind'?'#e0455e':'#c98a12';var w=pv.verdict==='ahead'?'🟢 опережаем':pv.verdict==='behind'?'🔴 отстаём':'🟡 в графике';pace='<div class="fcbox" style="border-color:'+c+'66"><div class="l">Темп</div><div class="v" style="font-size:16px;color:'+c+'">'+w+' '+(pv.pct>0?'+':'')+pv.pct+'%</div><div class="l" style="text-transform:none;margin-top:4px">обычно к сегодня ~'+mln(pv.expectedByNow)+'</div></div>';}
+    var h='<div class="card sect"><h3>🔮 Прогноз · '+E(d.period&&d.period.label)+(dy.remaining!=null?' · осталось '+dy.remaining+' раб. дн.':'')+'</h3>';
+    h+='<div class="fcgrid"><div class="fcbox"><div class="l">Реалистичный итог</div><div class="v">'+mln(e.point)+'</div></div>'+
+       '<div class="fcbox"><div class="l">Диапазон</div><div class="v" style="font-size:16px">'+mln(e.low)+' – '+mln(e.high)+'</div></div>'+(pace||'<div class="fcbox"><div class="l">Средний темп</div><div class="v" style="font-size:16px">'+mln(rf.runRate)+'/мес</div></div>')+'</div>';
+    h+='<div class="fcrow"><span>✅ Уже подписано</span><b>'+mln(d.actual.sum)+'</b><i>'+d.actual.count+' сд.</i></div>';
+    h+='<div class="fcrow"><span>➕ Реально до конца месяца</span><b>+'+mln(d.expectedRemaining)+'</b><i>'+E(d.basis||'')+'</i></div>';
+    h+='<div class="fcrow"><span>📦 Воронка целиком (потолок)</span><b style="color:#8592ad">'+mln(d.ceiling)+'</b><i>уедет ~'+mln(d.slip)+'</i></div></div>';
+    if(cm.signing&&cm.signing.length){h+='<div class="card sect"><h3>🖊 На подписании (из комментариев)</h3>'+cm.signing.map(function(s){return '<div class="fcrow"><span>'+E(s.company)+(s.snippet?'<div style="color:#8592ad;font-size:11.5px;font-style:italic">«'+E(s.snippet)+'»</div>':'')+'</span><b>'+mln(s.sum)+'</b></div>';}).join('')+'</div>';}
+    if(d.slipRisk&&d.slipRisk.count){h+='<div class="card sect"><h3>🐌 Риск переноса — '+d.slipRisk.count+' сд. на '+mln(d.slipRisk.sum)+'</h3>'+(d.slipRisk.items||[]).map(function(s){return '<div class="fcrow"><span>'+E(s.company)+'</span><b style="color:#e0455e">'+mln(s.sum)+'</b><i>возраст '+s.age+' дн.</i></div>';}).join('')+'</div>';}
+    if(d.deptBreak&&d.deptBreak.length){h+='<div class="card sect"><h3>🏢 По отделам</h3><table class="fctbl"><thead><tr><th>Отдел</th><th class="num">Подписано</th><th class="num">Воронка (взвеш.)</th></tr></thead><tbody>'+d.deptBreak.map(function(x){return '<tr><td>'+E(x.dept)+'</td><td class="num" style="color:#12a37e">'+mln(x.signed)+'</td><td class="num" style="color:#8592ad">'+mln(x.pipeline)+'</td></tr>';}).join('')+'</tbody></table></div>';}
+    h+='<div class="card sect" style="font-size:12.5px;color:var(--dim,#8592ad)">Прогноз ведётся от факта и темпа по дням, воронка ужата на оставшееся время. Ориентиры: темп ~'+mln(rf.runRate)+'/мес · год назад '+mln(rf.lastYear&&rf.lastYear.sum)+(rf.onTimeRate!=null?' · планов в срок '+rf.onTimeRate+'%':'')+'. Не гарантия.</div>';
+    return h;
+  }
+
+  async function loadConversion(group){
+    var box=document.getElementById('tab-conversion'); box.innerHTML='<div class="spin"></div>';
+    try{
+      var wr=await (await fetch('/api/plsai/dash/winrate?group='+group)).json();
+      var vel=await (await fetch('/api/plsai/dash/velocity')).json();
+      box.innerHTML=renderConversion(wr,vel,group);
+      box.querySelectorAll('[data-cg]').forEach(function(b){b.onclick=function(){loadConversion(b.getAttribute('data-cg'));};});
+    }catch(e){box.innerHTML='<div class="card sect">Ошибка: '+E(e.message)+'</div>';}
+  }
+  function renderConversion(wr,vel,group){
+    var seg='<div style="display:flex;gap:8px;margin-bottom:12px"><button class="pstab '+(group==='manager'?'on':'')+'" data-cg="manager">По менеджерам</button><button class="pstab '+(group==='department'?'on':'')+'" data-cg="department">По отделам</button></div>';
+    var wh='<div class="card sect"><h3>🎯 Win-rate '+(group==='department'?'по отделам':'по менеджерам')+' · '+E(wr.period&&wr.period.label)+'</h3>';
+    wh+='<table class="fctbl"><thead><tr><th>'+(group==='department'?'Отдел':'Менеджер')+'</th><th class="num">Win-rate</th><th class="num">Пайплайн</th><th class="num">Реально ×WR</th></tr></thead><tbody>';
+    wh+=(wr.rows||[]).map(function(x){var wrv=x.winRate==null?'—':x.winRate+'%';var c=x.winRate==null?'#8592ad':(x.winRate>=60?'#12a37e':x.winRate>=35?'#c98a12':'#e0455e');return '<tr><td>'+E(x.label)+'</td><td class="num" style="font-weight:800;color:'+c+'">'+wrv+'</td><td class="num" style="color:#8592ad">'+mln(x.openSum)+'</td><td class="num" style="color:#12a37e">'+mln(x.honest||0)+'</td></tr>';}).join('');
+    wh+='</tbody></table><div style="margin-top:8px;font-size:12.5px;color:var(--dim,#8592ad)">«Реально ×WR» — пайплайн, взвешенный на личную конверсию. Честно из '+mln(wr.totals&&wr.totals.open)+' пайплайна ожидается ~'+mln(wr.totals&&wr.totals.honest)+'.</div></div>';
+    var vh='<div class="card sect"><h3>⚡ Sales Velocity · '+E(vel.scopeLabel)+' · '+E(vel.period&&vel.period.label)+'</h3>'+
+      '<div class="fcgrid"><div class="fcbox"><div class="l">Скорость</div><div class="v" style="font-size:17px">'+mln(vel.perDay)+'/день</div></div>'+
+      '<div class="fcbox"><div class="l">≈ в месяц</div><div class="v" style="font-size:17px">'+mln(vel.perMonth)+'</div></div>'+
+      '<div class="fcbox"><div class="l">Длина цикла</div><div class="v" style="font-size:17px">'+vel.cycleDays+' дн.</div></div></div>'+
+      '<div class="fcrow"><span>Открытых сделок</span><b>'+(vel.openCount||0)+'</b><i>'+mln(vel.openSum)+'</i></div>'+
+      '<div class="fcrow"><span>Win-rate</span><b>'+vel.winRate+'%</b><i>'+vel.wonCount+'/'+(vel.wonCount+vel.lostCount)+'</i></div>'+
+      '<div class="fcrow"><span>Средний чек</span><b>'+mln(vel.avgDeal)+'</b><i></i></div>'+
+      '<div style="margin-top:8px;font-size:12.5px;color:var(--dim,#8592ad)">Формула: (сделок × win-rate × чек) ÷ цикл.</div></div>';
+    return seg+wh+vh;
+  }
+})();
 </script>
   <script src="/assets/pls-ai.js?v=8" defer></script>
 </body>

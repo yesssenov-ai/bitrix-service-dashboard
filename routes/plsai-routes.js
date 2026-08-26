@@ -128,6 +128,20 @@ router.get('/health', requireAuth(['admin']), async (req, res) => {
   }
 });
 
+// ── Дашборд-эндпоинты для витрины в модуле «План продаж» (явные параметры) ──
+router.get('/dash/forecast', requireAuth(VIEW_ROLES), async (req, res) => {
+  try { const forecast = require('../plsai-forecast'); res.set('Cache-Control', 'no-store'); res.json(await forecast.runForecast(String(req.query.q || ''))); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+router.get('/dash/winrate', requireAuth(VIEW_ROLES), async (req, res) => {
+  try { const analytics = require('../plsai-analytics'); const g = req.query.group === 'department' ? 'по отделам' : ''; res.set('Cache-Control', 'no-store'); res.json(await analytics.runWinrates(g)); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+router.get('/dash/velocity', requireAuth(VIEW_ROLES), async (req, res) => {
+  try { const analytics = require('../plsai-analytics'); res.set('Cache-Control', 'no-store'); res.json(await analytics.runVelocity(String(req.query.q || ''))); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 // GET /api/plsai/me — имя текущего сотрудника для персонального приветствия.
 router.get('/me', requireAuth(VIEW_ROLES), async (req, res) => {
   const u = req.user || {};
