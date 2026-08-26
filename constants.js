@@ -70,28 +70,32 @@ let _hydrated = false;
 async function hydrateUsers() {
   if (_hydrated) return 0;
   const { b24 } = require('./bitrix');
-  let start = 0, added = 0, guard = 0;
+  let added = 0;
+  const ingest = arr => {
+    for (const u of (arr || [])) {
+      const id = String(u.ID);
+      if (!USER_EMAILS[id] && u.EMAIL && /@/.test(u.EMAIL)) USER_EMAILS[id] = String(u.EMAIL).trim();
+      if (USERS[id]) continue; // курируемое имя не трогаем
+      USERS[id] = [u.LAST_NAME, u.NAME].filter(Boolean).join(' ').trim() || u.EMAIL || ('#' + id);
+      added++;
+    }
+  };
+  // Два прохода: активные + УВОЛЕННЫЕ/деактивированные (их сделки остаются в базе,
+  // иначе бывший менеджер показывается как «#72»).
+  const passes = [{ ADMIN_MODE: 'Y' }, { ADMIN_MODE: 'Y', ACTIVE: false, FILTER: { ACTIVE: false } }];
   try {
-    while (guard++ < 60) {
-      const res = await b24('user.get', { start, ADMIN_MODE: 'Y' });
-      const arr = (res && res.result) || [];
-      for (const u of arr) {
-        const id = String(u.ID);
-        // Почту дозагружаем ВСЕГДА, если её ещё нет в статической карте — иначе
-        // сотрудники, которых нет в USER_EMAILS (напр. Казиев), не получают писем.
-        if (!USER_EMAILS[id] && u.EMAIL && /@/.test(u.EMAIL)) USER_EMAILS[id] = String(u.EMAIL).trim();
-        if (USERS[id]) continue; // курируемое имя не трогаем
-        const name = [u.LAST_NAME, u.NAME].filter(Boolean).join(' ').trim()
-          || u.EMAIL || ('#' + id);
-        USERS[id] = name;
-        added++;
+    for (const extra of passes) {
+      let start = 0, guard = 0;
+      while (guard++ < 60) {
+        const res = await b24('user.get', Object.assign({ start }, extra));
+        ingest(res && res.result);
+        const next = res && res.next;
+        if (next === undefined || next === null) break;
+        start = next;
       }
-      const next = res && res.next;
-      if (next === undefined || next === null) break;
-      start = next;
     }
     _hydrated = true;
-    if (added) console.log(`USERS: дозагружено сотрудников из Bitrix — ${added} (всего ${Object.keys(USERS).length})`);
+    if (added) console.log(`USERS: дозагружено сотрудников из Bitrix (вкл. уволенных) — ${added} (всего ${Object.keys(USERS).length})`);
   } catch (e) {
     console.error('hydrateUsers error:', e.message);
   }

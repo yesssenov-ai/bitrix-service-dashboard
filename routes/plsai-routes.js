@@ -141,6 +141,10 @@ router.get('/dash/velocity', requireAuth(VIEW_ROLES), async (req, res) => {
   try { const analytics = require('../plsai-analytics'); res.set('Cache-Control', 'no-store'); res.json(await analytics.runVelocity(String(req.query.q || ''))); }
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
+router.get('/dash/cohort', requireAuth(VIEW_ROLES), async (req, res) => {
+  try { const w2 = require('../plsai-wave2'); res.set('Cache-Control', 'no-store'); res.json({ ok: true, cohort: await w2.cohortMaturation(), stages: await w2.empiricalStageProbs(), trend: await w2.salesTrend() }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 
 // GET /api/plsai/me — имя текущего сотрудника для персонального приветствия.
 router.get('/me', requireAuth(VIEW_ROLES), async (req, res) => {

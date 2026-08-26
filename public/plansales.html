@@ -216,9 +216,9 @@
   </header>
 
   <div class="pstabs" id="psTabs" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-    <button class="pstab on" data-tab="pipeline">📅 Пайплайн</button>
-    <button class="pstab" data-tab="forecast">🔮 Прогноз</button>
-    <button class="pstab" data-tab="conversion">🎯 Конверсия</button>
+    <button class="pstab on" data-tab="pipeline">Пайплайн</button>
+    <button class="pstab" data-tab="forecast">Прогноз</button>
+    <button class="pstab" data-tab="conversion">Конверсия</button>
   </div>
 
   <div id="tab-pipeline">
@@ -813,7 +813,10 @@ load();
     if(cm.signing&&cm.signing.length){h+='<div class="card sect"><h3>🖊 На подписании (из комментариев)</h3>'+cm.signing.map(function(s){return '<div class="fcrow"><span>'+E(s.company)+(s.snippet?'<div style="color:#8592ad;font-size:11.5px;font-style:italic">«'+E(s.snippet)+'»</div>':'')+'</span><b>'+mln(s.sum)+'</b></div>';}).join('')+'</div>';}
     if(d.slipRisk&&d.slipRisk.count){h+='<div class="card sect"><h3>🐌 Риск переноса — '+d.slipRisk.count+' сд. на '+mln(d.slipRisk.sum)+'</h3>'+(d.slipRisk.items||[]).map(function(s){return '<div class="fcrow"><span>'+E(s.company)+'</span><b style="color:#e0455e">'+mln(s.sum)+'</b><i>возраст '+s.age+' дн.</i></div>';}).join('')+'</div>';}
     if(d.deptBreak&&d.deptBreak.length){h+='<div class="card sect"><h3>🏢 По отделам</h3><table class="fctbl"><thead><tr><th>Отдел</th><th class="num">Подписано</th><th class="num">Воронка (взвеш.)</th></tr></thead><tbody>'+d.deptBreak.map(function(x){return '<tr><td>'+E(x.dept)+'</td><td class="num" style="color:#12a37e">'+mln(x.signed)+'</td><td class="num" style="color:#8592ad">'+mln(x.pipeline)+'</td></tr>';}).join('')+'</tbody></table></div>';}
-    h+='<div class="card sect" style="font-size:12.5px;color:var(--dim,#8592ad)">Прогноз ведётся от факта и темпа по дням, воронка ужата на оставшееся время. Ориентиры: темп ~'+mln(rf.runRate)+'/мес · год назад '+mln(rf.lastYear&&rf.lastYear.sum)+(rf.onTimeRate!=null?' · планов в срок '+rf.onTimeRate+'%':'')+'. Не гарантия.</div>';
+    var extra='';
+    if(rf.hwNext) extra+=' · Holt-Winters (тренд+сезон): след. месяц ~'+mln(rf.hwNext)+(rf.hwSeasonPct!=null?' (сезон '+(rf.hwSeasonPct>0?'+':'')+rf.hwSeasonPct+'%)':'');
+    if(rf.empiricalSource==='history') extra+=' · вероятности стадий эмпирические (по истории)';
+    h+='<div class="card sect" style="font-size:12.5px;color:var(--dim,#8592ad)">Прогноз ведётся от факта и темпа по дням, воронка ужата на оставшееся время. Ориентиры: темп ~'+mln(rf.runRate)+'/мес · год назад '+mln(rf.lastYear&&rf.lastYear.sum)+(rf.onTimeRate!=null?' · планов в срок '+rf.onTimeRate+'%':'')+extra+'. Не гарантия.</div>';
     return h;
   }
 
@@ -822,7 +825,8 @@ load();
     try{
       var wr=await (await fetch('/api/plsai/dash/winrate?group='+group)).json();
       var vel=await (await fetch('/api/plsai/dash/velocity')).json();
-      box.innerHTML=renderConversion(wr,vel,group);
+      var co=await (await fetch('/api/plsai/dash/cohort')).json();
+      box.innerHTML=renderConversion(wr,vel,group)+renderCohort(co);
       box.querySelectorAll('[data-cg]').forEach(function(b){b.onclick=function(){loadConversion(b.getAttribute('data-cg'));};});
     }catch(e){box.innerHTML='<div class="card sect">Ошибка: '+E(e.message)+'</div>';}
   }
@@ -841,6 +845,26 @@ load();
       '<div class="fcrow"><span>Средний чек</span><b>'+mln(vel.avgDeal)+'</b><i></i></div>'+
       '<div style="margin-top:8px;font-size:12.5px;color:var(--dim,#8592ad)">Формула: (сделок × win-rate × чек) ÷ цикл.</div></div>';
     return seg+wh+vh;
+  }
+  function renderCohort(co){
+    if(!co||!co.ok) return '';
+    var h='';
+    // Эмпирические вероятности стадий (по истории).
+    if(co.stages&&co.stages.source==='history'){
+      var p=co.stages.probs||{},sm=co.stages.samples||{};
+      h+='<div class="card sect"><h3>Эмпирические вероятности стадий</h3><div class="sub">Фактическая доля дошедших до подписания среди попавших на стадию (по истории). Заменяет «учебные» 60/80%.</div>'+
+        '<table class="fctbl"><thead><tr><th>Стадия</th><th class="num">Вероятность</th><th class="num">Выборка</th></tr></thead><tbody>'+
+        ['P10','P30','P60','P80'].map(function(s){return '<tr><td>'+s+'</td><td class="num" style="font-weight:800;color:#12a37e">'+Math.round((p[s]||0)*100)+'%</td><td class="num" style="color:#8592ad">'+(sm[s]||0)+' сд.</td></tr>';}).join('')+
+        '</tbody></table></div>';
+    }
+    // Когортное дозревание.
+    if(co.cohort&&co.cohort.rows&&co.cohort.rows.length){
+      h+='<div class="card sect"><h3>Когорты по месяцу создания</h3><div class="sub">Из сделок, созданных в месяце, какая доля уже подписана. Свежие когорты ещё дозревают.</div>'+
+        '<table class="fctbl"><thead><tr><th>Месяц создания</th><th class="num">Создано</th><th class="num">Подписано</th><th class="num">Конверсия</th><th class="num">Ср. дней</th></tr></thead><tbody>'+
+        co.cohort.rows.map(function(r){var c=r.wonRate>=40?'#12a37e':r.wonRate>=20?'#c98a12':'#8592ad';return '<tr><td>'+E(r.month)+'</td><td class="num">'+r.total+'</td><td class="num" style="color:#12a37e">'+mln(r.wonSum)+' · '+r.won+'</td><td class="num" style="font-weight:800;color:'+c+'">'+r.wonRate+'%</td><td class="num" style="color:#8592ad">'+(r.days!=null?r.days:'—')+'</td></tr>';}).join('')+
+        '</tbody></table></div>';
+    }
+    return h;
   }
 })();
 </script>

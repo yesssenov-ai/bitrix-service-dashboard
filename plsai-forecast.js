@@ -9,6 +9,7 @@
 const { pool } = require('./auth');
 const { getTodayRate } = require('./nbrk-exchange-rate');
 const { STEP_STAGES, PRECONTRACT, CONTRACT_SET } = require('./plsai-calc');
+const { empiricalStageProbs, salesTrend } = require('./plsai-wave2');
 
 const STEP_PROB = { P10: 0.10, P30: 0.30, P60: 0.60, P80: 0.80 };
 const P80_SET = STEP_STAGES.P80;
@@ -126,9 +127,11 @@ async function runForecast(qRaw) {
     `SELECT deal_id, company_name, stage_id, department_id, likely_deal, (${kzt}) AS v,
             (CURRENT_DATE - date_create) AS age FROM ticketsmodule_stat_deals
      WHERE stage_id = ANY($1) AND planned_purchase_date BETWEEN $2 AND $3`, [PRECONTRACT, per.from, per.to]);
+  let emp = { probs: {}, source: 'fallback' };
+  try { emp = await empiricalStageProbs(); } catch (_) {}
   const deals = pipe.rows.map(r => {
     const v = parseFloat(r.v) || 0; const step = stepOf(r.stage_id);
-    let p = STEP_PROB[step] || 0.2; if (r.likely_deal) p = Math.max(p, 0.75);
+    let p = (emp.probs && emp.probs[step]) || STEP_PROB[step] || 0.2; if (r.likely_deal) p = Math.max(p, 0.75);
     return { id: r.deal_id, company: r.company_name || '', dept: r.department_id, step, likely: !!r.likely_deal, v, p, age: r.age == null ? null : parseInt(r.age, 10), signal: null, snippet: '' };
   });
   // Типичная длина цикла (для риск-флагов проскальзывания).
@@ -199,7 +202,8 @@ async function runForecast(qRaw) {
     const ds = await pool.query(`SELECT department_id d, COALESCE(SUM(${kzt}),0) s FROM ticketsmodule_stat_deals WHERE stage_id = ANY($1) AND contract_date BETWEEN $2 AND $3 GROUP BY department_id`, [CONTRACT_SET, per.from, per.to]);
     const signedByDept = {}; ds.rows.forEach(r => { signedByDept[r.d] = Math.round(parseFloat(r.s) || 0); });
     const keys = new Set([...Object.keys(signedByDept), ...Object.keys(deptW)]);
-    deptBreak = [...keys].map(d => ({ dept: DEP_LBL[d] || String(d), signed: signedByDept[d] || 0, pipeline: Math.round(deptW[d] || 0) }))
+    const SKIP = new Set(['null', '', '4866']);   // без отдела + Комплекс (зонтичные) в разрезе не показываем
+    deptBreak = [...keys].filter(d => d != null && !SKIP.has(String(d))).map(d => ({ dept: DEP_LBL[d] || String(d), signed: signedByDept[d] || 0, pipeline: Math.round(deptW[d] || 0) }))
       .filter(x => x.signed > 0 || x.pipeline > 0).sort((a, b) => (b.signed + b.pipeline) - (a.signed + a.pipeline)).slice(0, 12);
   } catch (_) {}
 
@@ -234,6 +238,9 @@ async function runForecast(qRaw) {
       [`${per.year}-${String(per.month).padStart(2, '0')}`, actual.sum, weighted, buck.P60.s, buck.P80.s, buck.likely.s, Math.round(faceSum)]);
   } catch (_) {}
 
+  // Holt-Winters: тренд+сезонность (независимый top-down ориентир на след. месяц).
+  let hw = null; try { hw = await salesTrend(); } catch (_) {}
+
   // Pacing-вердикт: идём ли мы в графике (факт vs типичный уровень к этому дню).
   let pacing = null;
   if (!isPast && pace.frac && runRate > 0) {
@@ -248,7 +255,8 @@ async function runForecast(qRaw) {
     estimate: { point, low, high }, expectedRemaining, basis,
     actual, weighted, pipeline: buck, ceiling, slip, pacing, slipRisk, deptBreak, typCycle,
     comments: { scanned, signing, stalled },
-    refs: { runRate, lastYear, onTimeRate, pacePct: pace.frac ? Math.round(pace.frac * 100) : null, paceMonths: pace.months },
+    refs: { runRate, lastYear, onTimeRate, pacePct: pace.frac ? Math.round(pace.frac * 100) : null, paceMonths: pace.months,
+            empiricalSource: emp.source, empiricalProbs: emp.probs, hwNext: hw && hw.nextMonth, hwSeasonPct: hw && hw.seasonalPct, hwMonths: hw && hw.months },
     hasPlanned: deals.length > 0,
   };
 }

@@ -70,7 +70,9 @@ async function runWinrates(qRaw) {
     const op = openMap[r.g] || { sum: 0, count: 0 };
     const honest = wrVal != null ? Math.round(op.sum * wrVal / 100) : null;
     return { label: label(r.g), wonSum: wonS, wonCount: wonC, lostCount: lostC, winRate: wrVal, winRateCnt: wrCnt, openSum: op.sum, openCount: op.count, honest };
-  }).filter(x => x.wonCount + x.lostCount > 0 || x.openSum > 0);
+  }).filter(x => (x.wonCount + x.lostCount > 0 || x.openSum > 0)
+    && x.label !== 'null' && x.label !== '#null'
+    && !(group === 'department' && x.label === 'Комплекс'));
   rows.sort((a, b) => (b.winRate == null ? -1 : b.winRate) - (a.winRate == null ? -1 : a.winRate));
   const totWon = rows.reduce((s, x) => s + x.wonSum, 0);
   const totOpen = rows.reduce((s, x) => s + x.openSum, 0);
