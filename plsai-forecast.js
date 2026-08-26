@@ -123,13 +123,20 @@ async function runForecast(qRaw) {
 
   // 2) Воронка (открытые, план покупки в месяце) + комментарии.
   const pipe = await pool.query(
-    `SELECT deal_id, company_name, stage_id, likely_deal, (${kzt}) AS v FROM ticketsmodule_stat_deals
+    `SELECT deal_id, company_name, stage_id, department_id, likely_deal, (${kzt}) AS v,
+            (CURRENT_DATE - date_create) AS age FROM ticketsmodule_stat_deals
      WHERE stage_id = ANY($1) AND planned_purchase_date BETWEEN $2 AND $3`, [PRECONTRACT, per.from, per.to]);
   const deals = pipe.rows.map(r => {
     const v = parseFloat(r.v) || 0; const step = stepOf(r.stage_id);
     let p = STEP_PROB[step] || 0.2; if (r.likely_deal) p = Math.max(p, 0.75);
-    return { id: r.deal_id, company: r.company_name || '', step, likely: !!r.likely_deal, v, p, signal: null, snippet: '' };
+    return { id: r.deal_id, company: r.company_name || '', dept: r.department_id, step, likely: !!r.likely_deal, v, p, age: r.age == null ? null : parseInt(r.age, 10), signal: null, snippet: '' };
   });
+  // Типичная длина цикла (для риск-флагов проскальзывания).
+  let typCycle = 60;
+  try {
+    const cy = await pool.query(`SELECT AVG(EXTRACT(EPOCH FROM (contract_date - date_create))/86400) c FROM ticketsmodule_stat_deals WHERE stage_id = ANY($1) AND date_create IS NOT NULL AND contract_date IS NOT NULL AND contract_date >= $2`, [CONTRACT_SET, shiftYear(per.from, -1)]);
+    if (cy.rows[0].c) typCycle = Math.max(20, Math.round(parseFloat(cy.rows[0].c)));
+  } catch (_) {}
   const cand = deals.filter(d => d.p >= 0.5).sort((a, b) => b.v - a.v).slice(0, 30);
   let scanned = 0;
   try {
@@ -143,15 +150,21 @@ async function runForecast(qRaw) {
 
   let weighted = 0, faceSum = 0;
   const buck = { P80: { s: 0, c: 0 }, P60: { s: 0, c: 0 }, early: { s: 0, c: 0 }, likely: { s: 0, c: 0 } };
+  const deptW = {};            // взвешенная воронка по отделам
+  const slipRisk = { count: 0, sum: 0, items: [] };  // риск проскальзывания (висят дольше типичного цикла)
   for (const d of deals) {
     weighted += d.v * d.p; faceSum += d.v;
     if (d.likely) { buck.likely.s += d.v; buck.likely.c++; }
     if (d.step === 'P80') { buck.P80.s += d.v; buck.P80.c++; }
     else if (d.step === 'P60') { buck.P60.s += d.v; buck.P60.c++; }
     else { buck.early.s += d.v; buck.early.c++; }
+    deptW[d.dept] = (deptW[d.dept] || 0) + d.v * d.p;
+    if (d.age != null && d.age > typCycle * 1.3 && d.p >= 0.5) { slipRisk.count++; slipRisk.sum += d.v; slipRisk.items.push({ company: d.company, sum: Math.round(d.v), age: d.age }); }
   }
   for (const k of Object.keys(buck)) buck[k].s = Math.round(buck[k].s);
   weighted = Math.round(weighted);
+  slipRisk.sum = Math.round(slipRisk.sum);
+  slipRisk.items = slipRisk.items.sort((a, b) => b.sum - a.sum).slice(0, 5);
 
   // Известные «на подписании» — ожидаем реально закрыть скоро.
   const nearDeals = deals.filter(d => d.signal === 'near');
@@ -178,6 +191,17 @@ async function runForecast(qRaw) {
   }
   // Остаток физически не больше того, что есть в воронке.
   expectedRemaining = Math.min(expectedRemaining, weighted + nearExpected);
+
+  // Разрез по отделам: уже подписано + взвешенная воронка.
+  const DEP_LBL = { '4857': 'Элементный', '4858': 'Хроматография', '4859': 'Электрохимия', '4860': 'Клеточный анализ', '4862': 'ОРМ', '4863': 'Сервис', '4864': 'Тренинг-центр', '4865': 'General Lab', '4866': 'Комплекс', '8384': 'Материаловедение' };
+  let deptBreak = [];
+  try {
+    const ds = await pool.query(`SELECT department_id d, COALESCE(SUM(${kzt}),0) s FROM ticketsmodule_stat_deals WHERE stage_id = ANY($1) AND contract_date BETWEEN $2 AND $3 GROUP BY department_id`, [CONTRACT_SET, per.from, per.to]);
+    const signedByDept = {}; ds.rows.forEach(r => { signedByDept[r.d] = Math.round(parseFloat(r.s) || 0); });
+    const keys = new Set([...Object.keys(signedByDept), ...Object.keys(deptW)]);
+    deptBreak = [...keys].map(d => ({ dept: DEP_LBL[d] || String(d), signed: signedByDept[d] || 0, pipeline: Math.round(deptW[d] || 0) }))
+      .filter(x => x.signed > 0 || x.pipeline > 0).sort((a, b) => (b.signed + b.pipeline) - (a.signed + a.pipeline)).slice(0, 12);
+  } catch (_) {}
 
   const point = actual.sum + expectedRemaining;
   const low = actual.sum + Math.round(Math.min(nearExpected, expectedRemaining));
@@ -210,11 +234,19 @@ async function runForecast(qRaw) {
       [`${per.year}-${String(per.month).padStart(2, '0')}`, actual.sum, weighted, buck.P60.s, buck.P80.s, buck.likely.s, Math.round(faceSum)]);
   } catch (_) {}
 
+  // Pacing-вердикт: идём ли мы в графике (факт vs типичный уровень к этому дню).
+  let pacing = null;
+  if (!isPast && pace.frac && runRate > 0) {
+    const expectedByNow = Math.round(runRate * pace.frac);
+    const pct = expectedByNow > 0 ? Math.round((actual.sum / expectedByNow - 1) * 100) : 0;
+    pacing = { expectedByNow, pct, verdict: pct >= 8 ? 'ahead' : (pct <= -8 ? 'behind' : 'ontrack') };
+  }
+
   return {
     forecast: true, period: per,
     days: { total: totalWD, elapsed: elapsedWD, remaining: remainingWD },
     estimate: { point, low, high }, expectedRemaining, basis,
-    actual, weighted, pipeline: buck, ceiling, slip,
+    actual, weighted, pipeline: buck, ceiling, slip, pacing, slipRisk, deptBreak, typCycle,
     comments: { scanned, signing, stalled },
     refs: { runRate, lastYear, onTimeRate, pacePct: pace.frac ? Math.round(pace.frac * 100) : null, paceMonths: pace.months },
     hasPlanned: deals.length > 0,

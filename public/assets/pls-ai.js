@@ -63,6 +63,8 @@
   .pai-fc-r span{flex:1}.pai-fc-r b{font-weight:800;color:#22c9a3;font-variant-numeric:tabular-nums}.pai-fc-r i{color:#8592ad;font-style:normal;font-size:11px;min-width:52px;text-align:right}
   .pai-fc-sub{padding:6px 11px 6px 24px;font-size:11.5px;color:#8592ad;border-bottom:1px solid rgba(255,255,255,.04)}
   .pai-fc-sub:last-child{border-bottom:0}
+  .pai-pace{margin:2px 0 10px;padding:8px 11px;border:1px solid;border-radius:10px;display:flex;flex-direction:column;gap:2px}
+  .pai-pace b{font-size:12.5px;font-weight:800}.pai-pace span{font-size:11px;color:#8592ad}
   .pai-fc-h{margin-top:10px;font-size:12px;font-weight:700;color:#c7d2e6}
   .pai-sign{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12.5px;flex-wrap:wrap}
   .pai-sign span{flex:1;min-width:120px}.pai-sign b{color:#22c9a3;font-weight:800;font-variant-numeric:tabular-nums}
@@ -148,12 +150,45 @@
       if (d.options && d.options.length) ch += '<div class="pai-opts">' + d.options.map(function (o) { return '<button class="pai-opt" data-q="' + esc(o.q) + '">' + esc(o.label) + '</button>'; }).join('') + '</div>';
       return ch;
     }
+    // Win-rate / конверсия по менеджерам или отделам.
+    if (d.winrate) {
+      var wt = d.totals || {};
+      var wh = '<div class="pai-int">🎯 Win-rate по ' + (d.group === 'department' ? 'отделам' : 'менеджерам') + ' · ' + esc(d.period && d.period.label) + (d.deptLabel ? ' · ' + esc(d.deptLabel) : '') + '</div>';
+      wh += '<div class="pai-wrap"><table class="pai-tbl"><thead><tr><th>' + (d.group === 'department' ? 'Отдел' : 'Менеджер') + '</th><th class="num">Win-rate</th><th class="num">Пайплайн</th><th class="num">Реально ×WR</th></tr></thead><tbody>';
+      wh += (d.rows || []).map(function (x) {
+        var wr = x.winRate == null ? '—' : x.winRate + '%';
+        var wrCol = x.winRate == null ? '#8592ad' : (x.winRate >= 60 ? '#22c9a3' : x.winRate >= 35 ? '#e6a01e' : '#ff6b81');
+        return '<tr><td>' + esc(x.label) + '</td><td class="num" style="font-weight:800;color:' + wrCol + '">' + wr + '</td><td class="num" style="color:#8592ad">' + fmtMln(x.openSum) + '</td><td class="num" style="color:#22c9a3">' + fmtMln(x.honest || 0) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+      wh += '<div class="pai-hint" style="margin-top:7px">«Пайплайн» — открытые сделки сейчас. «Реально ×WR» — пайплайн, взвешенный на личную конверсию (честная оценка). Итого честно: ' + fmtMln(wt.honest) + ' из ' + fmtMln(wt.open) + ' пайплайна.</div>';
+      wh += '<div class="pai-hint" style="margin-top:6px">Win-rate = выигранные ÷ (выигранные + проигранные) по сумме. По деньгам за период.</div>';
+      return wh;
+    }
+    // Sales Velocity.
+    if (d.velocity) {
+      var vh = '<div class="pai-int">⚡ Sales Velocity · ' + esc(d.scopeLabel) + ' · ' + esc(d.period && d.period.label) + '</div>';
+      vh += '<div class="pai-kpi"><div class="c"><div class="l">Скорость</div><div class="v" style="font-size:14px">' + fmtMln(d.perDay) + '/день</div></div>' +
+        '<div class="c"><div class="l">≈ в месяц</div><div class="v" style="font-size:14px">' + fmtMln(d.perMonth) + '</div></div></div>';
+      vh += '<div class="pai-fc">';
+      vh += '<div class="pai-fc-r"><span>Открытых сделок</span><b>' + fmt(d.openCount) + '</b><i>' + fmtMln(d.openSum) + '</i></div>';
+      vh += '<div class="pai-fc-r"><span>Win-rate</span><b>' + d.winRate + '%</b><i>' + d.wonCount + '/' + (d.wonCount + d.lostCount) + '</i></div>';
+      vh += '<div class="pai-fc-r"><span>Средний чек</span><b>' + fmtMln(d.avgDeal) + '</b><i></i></div>';
+      vh += '<div class="pai-fc-r"><span>Длина цикла</span><b>' + d.cycleDays + ' дн.</b><i></i></div>';
+      vh += '</div>';
+      vh += '<div class="pai-hint" style="margin-top:7px">Формула: (сделок × win-rate × чек) ÷ цикл. Рычаги — что сильнее двигает выручку: количество, конверсия, чек или скорость цикла.</div>';
+      return vh;
+    }
     // Прогноз продаж на месяц (честный, от факта и темпа).
     if (d.forecast) {
       var e = d.estimate || {}, rf = d.refs || {}, cm = d.comments || {}, dy = d.days || {};
       var fh = '<div class="pai-int">🔮 Прогноз продаж · ' + esc(d.period && d.period.label) + (dy.remaining != null ? ' · осталось ' + dy.remaining + ' раб. дн.' : '') + '</div>';
       fh += '<div class="pai-kpi"><div class="c"><div class="l">Реалистичный итог</div><div class="v">' + fmtMln(e.point) + '</div></div>' +
         '<div class="c"><div class="l">Диапазон</div><div class="v" style="font-size:12.5px">' + fmtMln(e.low) + ' – ' + fmtMln(e.high) + '</div></div></div>';
+      if (d.pacing) {
+        var pv = d.pacing, col = pv.verdict === 'ahead' ? '#22c9a3' : pv.verdict === 'behind' ? '#ff6b81' : '#e6a01e';
+        var pw = pv.verdict === 'ahead' ? '🟢 идём с опережением' : pv.verdict === 'behind' ? '🔴 отстаём от графика' : '🟡 идём в графике';
+        fh += '<div class="pai-pace" style="border-color:' + col + '44;background:' + col + '14"><b style="color:' + col + '">' + pw + ' ' + (pv.pct > 0 ? '+' : '') + pv.pct + '%</b><span>обычно к этому дню ~' + fmtMln(pv.expectedByNow) + ', у нас ' + fmtMln(d.actual.sum) + '</span></div>';
+      }
       fh += '<div class="pai-fc">';
       fh += '<div class="pai-fc-r"><span>✅ Уже подписано</span><b>' + fmtMln(d.actual.sum) + '</b><i>' + d.actual.count + ' сд.</i></div>';
       fh += '<div class="pai-fc-r"><span>➕ Реально до конца месяца</span><b>+' + fmtMln(d.expectedRemaining) + '</b><i></i></div>';
@@ -168,6 +203,18 @@
       }
       fh += '<div class="pai-hint" style="margin-top:8px">📦 Воронка на месяц целиком: ' + fmtMln(d.weighted) + ' (взвеш.). Потолок, если бы всё закрылось: ' + fmtMln(d.ceiling) + '. Вероятно уедет на след. месяц: <b>' + fmtMln(d.slip) + '</b>.</div>';
       if (cm.stalled) fh += '<div class="pai-hint" style="margin-top:6px">⚠ Застряли по комментариям (согласование/ожидание): ' + cm.stalled + ' сд.</div>';
+      // Риск проскальзывания (висят дольше типичного цикла).
+      if (d.slipRisk && d.slipRisk.count) {
+        fh += '<div class="pai-fc-h">🐌 Риск переноса (висят > ' + Math.round((d.typCycle || 60) * 1.3) + ' дн., дольше цикла): ' + d.slipRisk.count + ' сд. на ' + fmtMln(d.slipRisk.sum) + '</div>';
+        fh += (d.slipRisk.items || []).map(function (s) { return '<div class="pai-sign"><span>' + esc(s.company || '—') + '</span><b style="color:#ff9db0">' + fmtMln(s.sum) + '</b><div class="pai-sn">возраст ' + s.age + ' дн.</div></div>'; }).join('');
+      }
+      // Разрез по отделам.
+      if (d.deptBreak && d.deptBreak.length) {
+        fh += '<div class="pai-fc-h">🏢 По отделам (подписано / воронка взвеш.):</div>';
+        fh += '<div class="pai-wrap"><table class="pai-tbl"><thead><tr><th>Отдел</th><th class="num">Подписано</th><th class="num">Воронка</th></tr></thead><tbody>' +
+          d.deptBreak.map(function (x) { return '<tr><td>' + esc(x.dept) + '</td><td class="num" style="color:#22c9a3">' + fmtMln(x.signed) + '</td><td class="num" style="color:#8592ad">' + fmtMln(x.pipeline) + '</td></tr>'; }).join('') +
+          '</tbody></table></div>';
+      }
       var refLine = 'Ориентиры: темп с начала года ~' + fmtMln(rf.runRate) + '/мес · этот месяц год назад ' + fmtMln(rf.lastYear && rf.lastYear.sum);
       if (rf.onTimeRate != null) refLine += ' · планов в срок ' + rf.onTimeRate + '%';
       fh += '<div class="pai-hint" style="margin-top:8px">' + refLine + '.</div>';

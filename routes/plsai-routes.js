@@ -12,6 +12,7 @@ router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) 
     const history = require('../plsai-history');
     const uid = req.user && req.user.id;
     const forecast = require('../plsai-forecast');
+    const analytics = require('../plsai-analytics');
     const q = String((req.body || {}).q || '').trim();
     if (!q) return res.status(400).json({ error: 'Пустой запрос' });
     // Прогноз продаж на месяц.
@@ -20,6 +21,20 @@ router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) 
       history.save(uid, q, Object.assign({ type: 'forecast' }, fc));
       res.set('Cache-Control', 'no-store');
       return res.json(Object.assign({ ok: true, ai: true }, fc));
+    }
+    // Win-rate / конверсия по менеджерам и отделам.
+    if (analytics.looksLikeWinrate(q)) {
+      const w = await analytics.runWinrates(q);
+      history.save(uid, q, Object.assign({ type: 'winrate' }, w));
+      res.set('Cache-Control', 'no-store');
+      return res.json(Object.assign({ ok: true, ai: true }, w));
+    }
+    // Sales Velocity (скорость продаж).
+    if (analytics.looksLikeVelocity(q)) {
+      const v = await analytics.runVelocity(q);
+      history.save(uid, q, Object.assign({ type: 'velocity' }, v));
+      res.set('Cache-Control', 'no-store');
+      return res.json(Object.assign({ ok: true, ai: true }, v));
     }
     // Ветка «Реализация»: запросы по отгрузке от завода / поставке по договору и т.п.
     if (ops.looksLikeOps(q)) {
