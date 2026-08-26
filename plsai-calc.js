@@ -307,7 +307,17 @@ async function llmSelfTest() {
     });
     clearTimeout(t);
     const txt = await r.text();
-    if (!r.ok) return { keyPresent: true, model: LLM_MODEL, ok: false, status: r.status, error: txt.slice(0, 400) };
+    if (!r.ok) {
+      // При ошибке — подтягиваем список доступных моделей, чтобы подставить правильную.
+      let available = null;
+      try {
+        const mr = await fetch('https://api.anthropic.com/v1/models?limit=100', {
+          headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+        });
+        if (mr.ok) { const mj = await mr.json(); available = (mj.data || []).map(m => m.id); }
+      } catch (_) {}
+      return { keyPresent: true, model: LLM_MODEL, ok: false, status: r.status, error: txt.slice(0, 400), availableModels: available };
+    }
     return { keyPresent: true, model: LLM_MODEL, ok: true, status: r.status };
   } catch (e) { return { keyPresent: true, model: LLM_MODEL, ok: false, error: e.message }; }
 }
