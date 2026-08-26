@@ -7,13 +7,14 @@ const VIEW_ROLES = ['admin', 'coordinator', 'manager', 'store', 'accountant'];
 // POST /api/plsai/query { q } — разобрать запрос и вернуть сводку + образец строк.
 router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) => {
   try {
-    const { parseSmart, runQuery, interpret } = require('../plsai-calc');
+    const { analyze, runQuery, interpret } = require('../plsai-calc');
     const q = String((req.body || {}).q || '').trim();
     if (!q) return res.status(400).json({ error: 'Пустой запрос' });
-    const f = await parseSmart(q);
-    const { items, count, sumKzt } = await runQuery(f);
+    const a = await analyze(q);
+    if (!a.f && a.clarify) { res.set('Cache-Control', 'no-store'); return res.json({ ok: true, clarify: a.clarify, ai: true }); }
+    const { items, count, sumKzt } = await runQuery(a.f);
     res.set('Cache-Control', 'no-store');
-    res.json({ ok: true, interpreted: interpret(f), ai: f.via === 'ai', count, sumKzt, sample: items.slice(0, 50) });
+    res.json({ ok: true, interpreted: interpret(a.f), ai: a.ai, note: a.clarify || null, count, sumKzt, sample: items.slice(0, 50) });
   } catch (e) {
     console.error('POST /api/plsai/query error:', e.message);
     res.status(500).json({ error: 'Не удалось выполнить запрос: ' + e.message });

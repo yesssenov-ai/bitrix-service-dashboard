@@ -94,11 +94,13 @@
       if (r.status === 401) { res.innerHTML = '<div class="pai-err">Нужно войти в ЦУП.</div>'; return; }
       var d = await r.json();
       if (!r.ok) { res.innerHTML = '<div class="pai-err">' + esc(d.error || 'Ошибка') + '</div>'; return; }
+      if (d.clarify) { res.innerHTML = '<div class="pai-int">🧠 Уточни, пожалуйста</div><div class="pai-hint" style="margin-top:0">' + esc(d.clarify) + '</div>'; input.focus(); return; }
       var rows = (d.sample || []).map(function (x) {
         return '<tr><td>' + esc(x.company) + '</td><td>' + esc(x.instrument || '—') + '</td><td>' + esc(x.manufacturer || '—') + '</td><td class="num">' + fmt(x.sumKzt) + '</td><td>' + esc(x.manager || '') + '</td></tr>';
       }).join('');
       res.innerHTML =
         '<div class="pai-int">' + (d.ai ? '🧠 ' : '') + esc(d.interpreted) + (d.ai ? ' <span style="opacity:.7">· понято ИИ</span>' : '') + '</div>' +
+        (d.note ? '<div class="pai-hint" style="margin:-4px 0 10px">💡 ' + esc(d.note) + '</div>' : '') +
         '<div class="pai-kpi"><div class="c"><div class="l">Найдено сделок</div><div class="v">' + fmt(d.count) + '</div></div>' +
         '<div class="c"><div class="l">Сумма</div><div class="v">' + fmtMln(d.sumKzt) + '</div></div></div>' +
         (d.count ? '<button class="pai-dl" id="pai-dl">⬇ Скачать Excel (' + fmt(d.count) + ')</button>' : '<div class="pai-hint">Ничего не нашлось по этому запросу. Попробуй переформулировать (бренд, период, отдел).</div>') +

@@ -220,10 +220,33 @@ function buildXlsx(items, title) {
 const LLM_MODEL = process.env.PLSAI_MODEL || 'claude-3-5-haiku-latest';
 function astanaToday() { return new Date(Date.now() + 5 * 3600000).toISOString().slice(0, 10); }
 
+// Реальный словарь из зеркала — чтобы ИИ сопоставлял слова с ФАКТИЧЕСКИМИ значениями
+// в данных (иначе фильтр промахнётся). Кэш 1 час.
+let _vocab = null, _vocabAt = 0;
+async function getVocab() {
+  if (_vocab && Date.now() - _vocabAt < 3600000) return _vocab;
+  const v = { manufacturers: [], departments: [], managers: [], instruments: [], years: '' };
+  try {
+    const { rows: mf } = await pool.query("SELECT DISTINCT manufacturer FROM ticketsmodule_stat_deals WHERE manufacturer IS NOT NULL AND manufacturer<>'' ORDER BY 1");
+    v.manufacturers = mf.map(r => r.manufacturer).slice(0, 80);
+    const { rows: dp } = await pool.query('SELECT DISTINCT department_id FROM ticketsmodule_stat_deals WHERE department_id IS NOT NULL');
+    v.departments = [...new Set(dp.map(r => DEPARTMENT_LABELS[r.department_id]).filter(Boolean))];
+    const { rows: mg } = await pool.query('SELECT DISTINCT assigned_by_id FROM ticketsmodule_stat_deals WHERE assigned_by_id IS NOT NULL');
+    v.managers = [...new Set(mg.map(r => USERS[r.assigned_by_id]).filter(Boolean))].sort();
+    const { rows: ins } = await pool.query("SELECT DISTINCT instrument_name FROM ticketsmodule_stat_deals WHERE instrument_name IS NOT NULL AND instrument_name<>'' ORDER BY 1");
+    v.instruments = ins.map(r => r.instrument_name).slice(0, 400);
+    const { rows: yr } = await pool.query('SELECT MIN(EXTRACT(YEAR FROM contract_date))::int a, MAX(EXTRACT(YEAR FROM COALESCE(contract_date,date_create)))::int b FROM ticketsmodule_stat_deals');
+    if (yr[0]) v.years = `${yr[0].a || ''}–${yr[0].b || ''}`;
+  } catch (e) { /* best-effort */ }
+  _vocab = v; _vocabAt = Date.now();
+  return v;
+}
+
 async function llmIntent(qRaw) {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return null;
   const today = astanaToday();
+  const vocab = await getVocab();
   const system = [
     'Ты разбираешь запрос менеджера ProLabSupport о сделках CRM в СТРОГИЙ JSON. Отвечай ТОЛЬКО одним JSON-объектом, без пояснений.',
     `Сегодня ${today} (Астана, UTC+5). Даты в ответе — строки YYYY-MM-DD.`,
@@ -239,6 +262,14 @@ async function llmIntent(qRaw) {
     'all_time: true если явно просят за всё время/все годы; иначе false.',
     'date_from, date_to: период по датам (YYYY-MM-DD) или null. "этот год"→01.01–31.12 текущего; "прошлый год"→прошлый; "за 2024"→весь 2024; месяц→границы месяца. Если период не указан и all_time=false — оставь null (движок подставит текущий год).',
     'period_label: короткая подпись периода на русском (напр. "за 2024 год") или null.',
+    'clarify: строка или null — ЕСЛИ запрос слишком размыт/неоднозначен и по нему нельзя уверенно построить выборку, задай ОДИН короткий уточняющий вопрос по-русски. Если всё понятно — null. Не переспрашивай без реальной нужды.',
+    '',
+    'ВАЖНО: producer, department, manager подбирай ТОЧНО из списков ниже (это реальные значения в данных). instrument_type определяй по названиям приборов из списка. Если менеджер/производитель не из списка — верни ближайшее по смыслу из списка или null.',
+    'Производители: ' + (vocab.manufacturers.join(', ') || '—'),
+    'Отделы: ' + (vocab.departments.join(', ') || '—'),
+    'Менеджеры: ' + (vocab.managers.join('; ') || '—'),
+    'Годы в данных: ' + (vocab.years || '—'),
+    'Названия приборов (примеры для определения типа/модели): ' + (vocab.instruments.slice(0, 400).join(', ') || '—'),
   ].join('\n');
   try {
     const controller = new AbortController();
@@ -285,8 +316,12 @@ function intentToFilter(intent, qRaw) {
     for (const [k, ids] of Object.entries(DEPT_ALIASES)) if (dl.includes(k)) { f.depts = ids; f.deptLabel = DEPARTMENT_LABELS[ids[0]]; break; }
     if (!f.depts.length) { for (const [id, lbl] of Object.entries(DEPARTMENT_LABELS)) if (lbl.toLowerCase().includes(dl) || dl.includes(lbl.toLowerCase())) { f.depts = [id]; f.deptLabel = lbl; break; } }
   }
-  // Менеджер
-  if (intent.manager) f.managers = managerMatch(String(intent.manager).toLowerCase());
+  // Менеджер — сначала точное совпадение имени, иначе по токенам
+  if (intent.manager) {
+    const nm = String(intent.manager).trim().toLowerCase();
+    const exact = Object.entries(USERS).find(([, n]) => n && n.toLowerCase() === nm);
+    f.managers = exact ? [{ id: Number(exact[0]), name: exact[1] }] : managerMatch(nm);
+  }
   // Клиент
   if (intent.client) f.text = String(intent.client).trim();
   // Режим/стадии
@@ -311,11 +346,24 @@ function intentToFilter(intent, qRaw) {
   return f;
 }
 
-// Главный вход: пробуем ИИ, иначе — keyword-движок. Всегда возвращает f.
-async function parseSmart(qRaw) {
-  const intent = await llmIntent(qRaw);
-  if (intent) { try { return intentToFilter(intent, qRaw); } catch (e) { /* упадём на keyword */ } }
-  return parseQuery(qRaw);
+function intentHasFilter(intent) {
+  return !!(intent && (intent.producer || intent.instrument_type || (intent.models && intent.models.length) ||
+    intent.manager || intent.department || intent.client || intent.stage ||
+    intent.date_from || intent.all_time));
 }
 
-module.exports = { parseQuery, parseSmart, runQuery, interpret, buildXlsx, intentToFilter };
+// Главный вход: {f, ai, clarify}. Если ИИ размыт и фильтров нет — просим уточнить.
+async function analyze(qRaw) {
+  const intent = await llmIntent(qRaw);
+  if (intent) {
+    if (intent.clarify && !intentHasFilter(intent)) return { f: null, ai: true, clarify: String(intent.clarify) };
+    try { return { f: intentToFilter(intent, qRaw), ai: true, clarify: intent.clarify ? String(intent.clarify) : null }; }
+    catch (e) { /* упадём на keyword */ }
+  }
+  return { f: parseQuery(qRaw), ai: false, clarify: null };
+}
+
+// Совместимость: только фильтр (без clarify).
+async function parseSmart(qRaw) { const a = await analyze(qRaw); return a.f || parseQuery(qRaw); }
+
+module.exports = { parseQuery, parseSmart, analyze, runQuery, interpret, buildXlsx, intentToFilter, getVocab };
