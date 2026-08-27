@@ -22,6 +22,21 @@ router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) 
       res.set('Cache-Control', 'no-store');
       return res.json(Object.assign({ ok: true, ai: true }, fc));
     }
+    // Сделки с неактуальными комментариями.
+    const deals = require('../plsai-deals');
+    if (deals.looksLikeStale(q)) {
+      const r = await deals.runStale(q);
+      history.save(uid, q, { type: 'stale', stale: true, period: r.period, thresholdDays: r.thresholdDays, count: r.count, sumKzt: r.sumKzt, rows: r.rows.slice(0, 10) });
+      res.set('Cache-Control', 'no-store');
+      return res.json({ ok: true, ai: true, stale: true, period: r.period, thresholdDays: r.thresholdDays, count: r.count, sumKzt: r.sumKzt, top: r.rows.slice(0, 10), actionable: { dealIds: r.rows.map(x => x.dealId) } });
+    }
+    // Оценка вероятности сделок.
+    if (deals.looksLikeProbability(q)) {
+      const r = await deals.runProbability(q);
+      history.save(uid, q, { type: 'probability', probability: true, period: r.period, expected: r.expected, rows: r.rows.slice(0, 12) });
+      res.set('Cache-Control', 'no-store');
+      return res.json({ ok: true, ai: true, probability: true, period: r.period, count: r.count, expected: r.expected, top: r.rows.slice(0, 12), actionable: { dealIds: r.rows.map(x => x.dealId) } });
+    }
     // Ансамбль методов / бэктест точности.
     if (/ансамбл|бэктест|бектест|точност[а-яё]* метод|какой метод точн|сравни методы/.test(q.toLowerCase())) {
       const en = await require('../plsai-wave3').ensembleBacktest();
@@ -105,6 +120,16 @@ router.post('/export', requireAuth(VIEW_ROLES), express.json(), async (req, res)
       res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(nm)}`);
       return res.send(buf);
     }
+    // Неактуальные комментарии — выгрузка всех.
+    const dealsMod = require('../plsai-deals');
+    if (dealsMod.looksLikeStale(q)) {
+      const r = await dealsMod.runStale(q);
+      const buf = dealsMod.buildStaleXlsx(r);
+      const nm = 'ProLabAI_Неактуальные_' + q.replace(/[^\wа-яА-Я0-9]+/g, '_').slice(0, 34) + '.xlsx';
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(nm)}`);
+      return res.send(buf);
+    }
     // Один разбор запроса (без повторного вызова ИИ).
     const a = await analyze(q);
     // Рейтинг/агрегация — выгрузка сгруппированной таблицы.
@@ -160,6 +185,26 @@ router.get('/dash/cohort', requireAuth(VIEW_ROLES), async (req, res) => {
 router.get('/dash/ml', requireAuth(VIEW_ROLES), async (req, res) => {
   try { const w3 = require('../plsai-wave3'); res.set('Cache-Control', 'no-store'); res.json({ ok: true, ml: await w3.mlPropensity() }); }
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── Действия (с подтверждением): подготовка превью и отправка ──
+const ACT_ROLES = ['admin', 'coordinator', 'manager'];
+router.post('/action/prepare', requireAuth(ACT_ROLES), express.json(), async (req, res) => {
+  try {
+    const actions = require('../plsai-actions');
+    const b = req.body || {};
+    res.set('Cache-Control', 'no-store');
+    res.json({ ok: true, preview: await actions.prepare({ dealIds: b.dealIds || [], channel: b.channel, target: b.target, text: b.text }) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+router.post('/action/execute', requireAuth(ACT_ROLES), express.json(), async (req, res) => {
+  try {
+    const actions = require('../plsai-actions');
+    const b = req.body || {};
+    const out = await actions.execute({ dealIds: b.dealIds || [], channel: b.channel, target: b.target, text: b.text, userName: (req.user && req.user.display_name) || '' });
+    try { require('../auth').auditLog && require('../auth').auditLog(req.user.id, req.user.username, 'plsai_action', null, { channel: out.channel, target: out.target, sent: out.sent, total: out.total }, req.ip, ''); } catch (_) {}
+    res.set('Cache-Control', 'no-store'); res.json(Object.assign({ ok: true }, out));
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
 // GET /api/plsai/me — имя текущего сотрудника для персонального приветствия.

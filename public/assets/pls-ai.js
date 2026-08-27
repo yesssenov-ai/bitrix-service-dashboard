@@ -48,6 +48,16 @@
   .pai-kpi .c{flex:1;background:#0e1626;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:8px 10px}
   .pai-kpi .l{font-size:10px;color:#8592ad;text-transform:uppercase;letter-spacing:.4px;font-weight:700}
   .pai-kpi .v{font-size:16px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums}
+  .pai-actbar{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.1)}
+  .pai-actrow{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+  .pai-actbtn{background:#161f33;border:1px solid rgba(255,255,255,.14);color:#e8edf7;border-radius:9px;padding:8px 12px;font:inherit;font-weight:700;font-size:12.5px;cursor:pointer}
+  .pai-actbtn:hover{border-color:#5b8cff}
+  .pai-tgt{background:none;border:1px solid rgba(255,255,255,.14);color:#8592ad;border-radius:8px;padding:5px 11px;font:inherit;font-weight:600;font-size:12px;cursor:pointer}
+  .pai-tgt.on{background:#5b8cff;border-color:#5b8cff;color:#fff}
+  .pai-acttext{width:100%;box-sizing:border-box;min-height:64px;background:#161f33;border:1px solid rgba(255,255,255,.14);border-radius:10px;color:#e8edf7;font:inherit;font-size:12.5px;padding:9px 11px;margin:6px 0;outline:none;resize:vertical}
+  .pai-acttext:focus{border-color:#5b8cff}
+  html[data-theme="light"] .pai-actbtn,html[data-theme="light"] .pai-acttext{background:#f4f6fb;border-color:#e4e7ef;color:#111827}
+  @media (prefers-color-scheme: light){ .pai-actbtn,.pai-acttext{background:#f4f6fb;border-color:#e4e7ef;color:#111827} }
   .pai-opts{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}
   .pai-opt{background:#5b8cff;border:0;color:#fff;border-radius:9px;padding:8px 13px;font:inherit;font-weight:700;font-size:12.5px;cursor:pointer}
   .pai-opt:hover{filter:brightness(1.08)}
@@ -142,9 +152,34 @@
   function addBot(html) { var d = document.createElement('div'); d.className = 'pai-msg bot'; d.innerHTML = html; updateEmpty(); thread.appendChild(d); scrollBottom(); return d; }
 
   // Единая отрисовка ответа (и для живого запроса, и для истории). q — сам вопрос.
+  function actionBar() {
+    return '<div class="pai-actbar"><div class="pai-hint" style="margin-bottom:5px">⚡ Действие по этим сделкам:</div>' +
+      '<div class="pai-actrow"><button class="pai-actbtn pai-act" data-ch="task">📋 Задача в Bitrix</button><button class="pai-actbtn pai-act" data-ch="telegram">✈️ Telegram</button><button class="pai-actbtn pai-act" data-ch="email">✉️ Почта</button></div>' +
+      '<div class="pai-actrow" style="margin-top:6px"><span class="pai-hint">Кому:</span><button class="pai-tgt on" data-tg="managers">менеджерам</button><button class="pai-tgt" data-tg="heads">руководителям</button></div></div>';
+  }
   function botHTML(d, q) {
     if (d.error) return '<div class="pai-err">' + esc(d.error) + '</div>';
     if (d.answer) return '<div class="pai-int">🧠 Ассистент ЦУП</div><div class="pai-answer">' + esc(d.answer).replace(/\n/g, '<br>') + '</div>';
+    // Сделки с неактуальными комментариями.
+    if (d.stale) {
+      var sh = '<div class="pai-int">🕒 Неактуальные комментарии · ' + esc(d.period && d.period.label) + ' · порог ' + d.thresholdDays + ' дн.</div>';
+      if (!d.count) return sh + '<div class="pai-hint">Все комментарии свежие — устаревших нет. 👍</div>';
+      sh += '<div class="pai-hint" style="margin-bottom:8px">' + d.count + ' сд. на ' + fmtMln(d.sumKzt) + '. Топ по сумме (все — в Excel):</div>';
+      sh += '<div class="pai-wrap"><table class="pai-tbl"><thead><tr><th>Компания</th><th>Менеджер</th><th class="num">Сумма</th><th class="num">Без обн.</th></tr></thead><tbody>' +
+        (d.top || []).map(function (x) { return '<tr><td>' + esc(x.company) + '</td><td>' + esc(x.manager) + '</td><td class="num">' + fmtMln(x.sumKzt) + '</td><td class="num" style="color:#ff9db0">' + (x.days == null ? 'нет' : x.days + ' дн.') + '</td></tr>'; }).join('') + '</tbody></table></div>';
+      sh += '<button class="pai-dl" data-q="' + esc(q) + '" style="margin-top:8px">⬇ Excel (' + d.count + ')</button>';
+      sh += actionBar();
+      return sh;
+    }
+    // Оценка вероятности сделок.
+    if (d.probability) {
+      var ph = '<div class="pai-int">📈 Вероятность сделок · ' + esc(d.period && d.period.label) + '</div>';
+      ph += '<div class="pai-hint" style="margin-bottom:8px">Ожидание по воронке ~' + fmtMln(d.expected) + '. 🔥 — наиболее вероятные (флаг/коммент + P60/P80 + свежий коммент):</div>';
+      ph += '<div class="pai-wrap"><table class="pai-tbl"><thead><tr><th>Компания</th><th class="num">Вероятн.</th><th>Стадия</th><th class="num">Сумма</th></tr></thead><tbody>' +
+        (d.top || []).map(function (x) { var c = x.prob >= 75 ? '#22c9a3' : x.prob >= 45 ? '#e6a01e' : '#ff9db0'; return '<tr><td>' + (x.hot ? '🔥 ' : '') + esc(x.company) + '</td><td class="num" style="font-weight:800;color:' + c + '">' + x.prob + '%</td><td>' + esc(x.stage) + '</td><td class="num">' + fmtMln(x.sumKzt) + '</td></tr>'; }).join('') + '</tbody></table></div>';
+      ph += actionBar();
+      return ph;
+    }
     if (d.clarify) {
       var ch = '<div class="pai-int">🧠 Уточните, пожалуйста</div><div class="pai-hint">' + esc(d.clarify) + '</div>';
       if (d.options && d.options.length) ch += '<div class="pai-opts">' + d.options.map(function (o) { return '<button class="pai-opt" data-q="' + esc(o.q) + '">' + esc(o.label) + '</button>'; }).join('') + '</div>';
@@ -370,11 +405,55 @@
 
   input.addEventListener('keydown', function (e) { if (e.key === 'Enter') run(); });
   send.onclick = run;
-  // Клики внутри ленты: скачать Excel / выбрать вариант уточнения.
+  var curAction = null;   // { dealIds:[...], target:'managers'|'heads' } — для действий
+  function noteActionable(d) {
+    var ids = null;
+    if (d.actionable && d.actionable.dealIds) ids = d.actionable.dealIds;
+    else if ((d.stale || d.probability) && d.top) ids = d.top.map(function (x) { return x.dealId; }).filter(Boolean);
+    else if ((d.stale || d.probability) && d.rows) ids = d.rows.map(function (x) { return x.dealId; }).filter(Boolean);
+    if (ids && ids.length) curAction = { dealIds: ids, target: 'managers' };
+  }
+  // Клики внутри ленты: экспорт / уточнение / действия.
   thread.addEventListener('click', function (e) {
-    var dl = e.target.closest('.pai-dl'); if (dl) { doExport(dl.getAttribute('data-q'), dl); return; }
+    var dl = e.target.closest('.pai-send-act'); if (dl) { doExecute(dl); return; }
+    var ca = e.target.closest('.pai-cancel-act'); if (ca) { var m = ca.closest('.pai-msg'); if (m) m.remove(); return; }
+    var act = e.target.closest('.pai-act'); if (act) { e.preventDefault(); doPrepare(act.getAttribute('data-ch')); return; }
+    var tgt = e.target.closest('.pai-tgt'); if (tgt && tgt.getAttribute('data-tg')) { if (curAction) curAction.target = tgt.getAttribute('data-tg'); var bar = tgt.closest('.pai-actbar'); if (bar) bar.querySelectorAll('.pai-tgt').forEach(function (b) { b.classList.toggle('on', b === tgt); }); return; }
+    var d2 = e.target.closest('.pai-dl'); if (d2) { doExport(d2.getAttribute('data-q'), d2); return; }
     var op = e.target.closest('.pai-opt'); if (op) { input.value = op.getAttribute('data-q'); run(); }
   });
+  async function doPrepare(channel) {
+    if (!curAction || !curAction.dealIds.length) { addBot('<div class="pai-hint">Сначала выполните запрос со списком сделок (напр. «неактуальные комментарии этого месяца»).</div>'); return; }
+    var bot = addBot('<div class="pai-hint">Готовлю получателей…</div>');
+    try {
+      var r = await fetch('/api/plsai/action/prepare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dealIds: curAction.dealIds, channel: channel, target: curAction.target }) });
+      var d = await r.json();
+      if (!r.ok || !d.ok) { bot.innerHTML = '<div class="pai-err">' + esc((d && d.error) || 'Нет прав на действия или ошибка') + '</div>'; return; }
+      bot.innerHTML = previewHTML(d.preview); scrollBottom();
+    } catch (e) { bot.innerHTML = '<div class="pai-err">Ошибка сети</div>'; }
+  }
+  function previewHTML(p) {
+    var chLbl = p.channel === 'task' ? 'Bitrix-задача' : p.channel === 'telegram' ? 'Telegram' : 'Почта';
+    var tgLbl = p.target === 'heads' ? 'руководителям' : 'менеджерам';
+    var recips = (p.recipients || []).map(function (rc) { return '<tr><td>' + esc(rc.name) + '</td><td class="num">' + rc.dealCount + ' сд.</td><td class="num">' + fmtMln(rc.sum) + '</td><td>' + (rc.deliverable ? '✅' : '⚠️ нет канала') + '</td></tr>'; }).join('');
+    return '<div class="pai-int">✉️ Проверьте и отправьте · ' + chLbl + ' · ' + tgLbl + '</div>' +
+      '<div class="pai-hint">Получателей: ' + p.recipientCount + '. Текст (можно поправить):</div>' +
+      '<textarea class="pai-acttext" data-ch="' + p.channel + '" data-tg="' + p.target + '">' + esc(p.text) + '</textarea>' +
+      '<div class="pai-wrap"><table class="pai-tbl"><thead><tr><th>Получатель</th><th class="num">Сделок</th><th class="num">Сумма</th><th>Канал</th></tr></thead><tbody>' + recips + '</tbody></table></div>' +
+      '<div class="pai-actrow" style="margin-top:8px"><button class="pai-dl pai-send-act">✅ Отправить</button><button class="pai-tgt pai-cancel-act">Отмена</button></div>';
+  }
+  async function doExecute(btn) {
+    var msg = btn.closest('.pai-msg'); if (!msg) return; var ta = msg.querySelector('.pai-acttext'); if (!ta || !curAction) return;
+    var channel = ta.getAttribute('data-ch'), target = ta.getAttribute('data-tg'), text = ta.value;
+    btn.disabled = true; btn.textContent = 'Отправляю…';
+    try {
+      var r = await fetch('/api/plsai/action/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dealIds: curAction.dealIds, channel: channel, target: target, text: text }) });
+      var d = await r.json();
+      if (!r.ok || !d.ok) { msg.innerHTML = '<div class="pai-err">' + esc((d && d.error) || 'Ошибка') + '</div>'; return; }
+      var rows = (d.results || []).map(function (x) { return '<tr><td>' + esc(x.name) + '</td><td>' + (x.ok ? '✅ ' + esc(x.via) : '⚠️ ' + esc(x.error || 'не отправлено')) + '</td></tr>'; }).join('');
+      msg.innerHTML = '<div class="pai-int">✅ Отправлено ' + d.sent + ' из ' + d.total + '</div><div class="pai-wrap"><table class="pai-tbl"><tbody>' + rows + '</tbody></table></div>';
+    } catch (e) { msg.innerHTML = '<div class="pai-err">Ошибка сети</div>'; }
+  }
 
   async function run() {
     var q = input.value.trim(); if (!q) return;
@@ -387,6 +466,7 @@
       if (r.status === 401) { bot.innerHTML = '<div class="pai-err">Нужно войти в ЦУП.</div>'; return; }
       var d = await r.json();
       if (!r.ok) { bot.innerHTML = '<div class="pai-err">' + esc(d.error || 'Ошибка') + '</div>'; return; }
+      noteActionable(d);
       bot.innerHTML = botHTML(d, q); scrollBottom();
     } catch (e) { bot.innerHTML = '<div class="pai-err">Ошибка сети</div>'; }
     finally { send.disabled = false; }
