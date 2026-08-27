@@ -6,6 +6,15 @@ const { requireAuth } = require('../auth');
 // Массовые действия (рассылки, задачи) остаются за ACT_ROLES — engineer туда не входит.
 const VIEW_ROLES = ['admin', 'coordinator', 'manager', 'engineer', 'store', 'accountant'];
 
+// Bitrix-ID текущего пользователя (для «мои задачи» и авторства действий).
+function meBidOf(user) {
+  if (!user) return null;
+  if (user.bitrix_user_id) return parseInt(user.bitrix_user_id, 10);
+  const nm = user.engineer_name || user.display_name;
+  if (nm) { try { const { USERS } = require('../constants'); const f = Object.entries(USERS).find(([, n]) => n === nm); if (f) return parseInt(f[0], 10); } catch (_) {} }
+  return null;
+}
+
 // POST /api/plsai/query { q } — разобрать запрос и вернуть сводку + образец строк.
 router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) => {
   try {
@@ -67,12 +76,14 @@ router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) 
       res.set('Cache-Control', 'no-store');
       return res.json(Object.assign({ ok: true, ai: true }, v));
     }
-    // Сделки с актуальными/просроченными задачами Bitrix (Реализация или План продаж).
+    // Трекер задач Bitrix по сделкам: кто и как выполняет (Реализация / План продаж / оба).
     const tasksMod = require('../plsai-tasks');
     if (tasksMod.looksLikeTasks(q)) {
-      const t = await tasksMod.runTasks(q);
-      const top = t.rows.slice(0, 10);
-      const payload = { ok: true, ai: true, tasks: true, module: t.module, moduleLabel: t.moduleLabel, overdueOnly: t.overdueOnly, dealCount: t.dealCount, taskCount: t.taskCount, overdueCount: t.overdueCount, sumKzt: t.sumKzt, top, actionable: { dealIds: t.rows.map(x => x.dealId), mode: 'tasks' } };
+      const t = await tasksMod.runTasks(q, { meBid: meBidOf(req.user) });
+      // Людей — топ 15; у каждого 6 задач для раскрытия. Детали — в Excel.
+      const people = t.people.slice(0, 15).map(p => ({ responsible: p.responsible, responsibleId: p.responsibleId, assigned: p.assigned, done: p.done, open: p.open, overdue: p.overdue, pct: p.pct,
+        tasks: p.tasks.slice(0, 6).map(x => ({ title: x.title, statusLabel: x.statusLabel, done: x.done, overdue: x.overdue, deadline: x.deadline, company: x.company, dealId: x.dealId })) }));
+      const payload = { ok: true, ai: true, tasks: true, module: t.module, moduleLabel: t.moduleLabel, overdueOnly: t.overdueOnly, openOnly: t.openOnly, mineOnly: t.mineOnly, totals: t.totals, people, actionable: t.actionable };
       history.save(uid, q, Object.assign({ type: 'tasks' }, payload));
       res.set('Cache-Control', 'no-store');
       return res.json(payload);
@@ -128,7 +139,7 @@ router.post('/export', requireAuth(VIEW_ROLES), express.json(), async (req, res)
     // иначе looksLikeOps перехватит запрос со словом «Реализация» и вернёт отгрузку.
     const tasksMod = require('../plsai-tasks');
     if (tasksMod.looksLikeTasks(q)) {
-      const t = await tasksMod.runTasks(q);
+      const t = await tasksMod.runTasks(q, { meBid: meBidOf(req.user) });
       const buf = tasksMod.buildTasksXlsx(t);
       const nm = 'ProLabAI_Задачи_' + q.replace(/[^\wа-яА-Я0-9]+/g, '_').slice(0, 34) + '.xlsx';
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

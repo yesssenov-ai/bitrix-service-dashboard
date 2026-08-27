@@ -48,6 +48,7 @@
   .pai-kpi .c{flex:1;background:#0e1626;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:8px 10px}
   .pai-kpi .l{font-size:10px;color:#8592ad;text-transform:uppercase;letter-spacing:.4px;font-weight:700}
   .pai-kpi .v{font-size:16px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums}
+  .pai-subrow{padding:3px 2px;border-bottom:1px solid rgba(128,128,128,.12);line-height:1.35}
   .pai-actbar{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.1)}
   .pai-actrow{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
   .pai-actbtn{background:#161f33;border:1px solid rgba(255,255,255,.14);color:#e8edf7;border-radius:9px;padding:8px 12px;font:inherit;font-weight:700;font-size:12.5px;cursor:pointer}
@@ -184,19 +185,23 @@
       ph += actionBar();
       return ph;
     }
-    // Сделки с актуальными/просроченными задачами Bitrix.
+    // Трекер задач: кто и как выполняет.
     if (d.tasks) {
-      var tTop = d.top || d.rows || [];
-      var tTitle = d.overdueOnly ? '📋⚠️ Сделки с просроченными задачами' : '📋 Сделки с актуальными задачами';
-      var kh = '<div class="pai-int">' + tTitle + ' · ' + esc(d.moduleLabel) + '</div>';
-      if (!d.dealCount) return kh + '<div class="pai-hint">Сделок с ' + (d.overdueOnly ? 'просроченными' : 'незакрытыми') + ' задачами не найдено. 👍</div>';
-      kh += '<div class="pai-hint" style="margin-bottom:8px">' + d.dealCount + ' сд. · ' + d.taskCount + ' задач' + (d.overdueCount ? ' · <span style="color:#ff9db0">⚠️ ' + d.overdueCount + ' просрочено</span>' : '') + '. Топ (все — в Excel):</div>';
-      kh += '<div class="pai-wrap"><table class="pai-tbl"><thead><tr><th>Компания</th><th>Менеджер</th><th class="num">Задач</th><th class="num">Просроч.</th></tr></thead><tbody>' +
-        tTop.map(function (x) {
-          var od = (x.overdueCount || 0) > 0;
-          return '<tr' + (od ? ' style="background:rgba(255,80,110,.08)"' : '') + '><td>' + esc(x.company) + '</td><td>' + esc(x.manager) + '</td><td class="num">' + (x.openCount || 0) + '</td><td class="num" style="color:#ff9db0;font-weight:' + (od ? '800' : '400') + '">' + (x.overdueCount || 0) + '</td></tr>';
-        }).join('') + '</tbody></table></div>';
-      kh += '<button class="pai-dl" data-q="' + esc(q) + '" style="margin-top:8px">⬇ Excel (' + d.taskCount + ' задач)</button>';
+      var tt = d.totals || {}; var ppl = d.people || [];
+      var tTitle = d.overdueOnly ? '📋⚠️ Просроченные задачи' : d.openOnly ? '📋 Открытые задачи' : '📋 Задачи — кто как выполняет';
+      var kh = '<div class="pai-int">' + tTitle + ' · ' + esc(d.moduleLabel) + (d.mineOnly ? ' · мои' : '') + '</div>';
+      if (!tt.tasks) return kh + '<div class="pai-hint">Задач по этим сделкам не найдено.</div>';
+      kh += '<div class="pai-hint" style="margin-bottom:8px">' + (tt.people || 0) + ' исполн. · ' + tt.tasks + ' задач · ✅ ' + (tt.done || 0) + ' · ⏳ ' + (tt.open || 0) + (tt.overdue ? ' · <span style="color:#ff9db0">⚠️ ' + tt.overdue + ' просрочено</span>' : '') + '. Клик по строке — задачи. Всё — в Excel.</div>';
+      kh += '<div class="pai-wrap"><table class="pai-tbl"><thead><tr><th>Исполнитель</th><th class="num">Всего</th><th class="num">✅</th><th class="num">⏳</th><th class="num">⚠️</th><th class="num">%</th></tr></thead><tbody>';
+      kh += ppl.map(function (p, i) {
+        var od = (p.overdue || 0) > 0;
+        var head = '<tr class="pai-person" data-i="' + i + '"' + (od ? ' style="background:rgba(255,80,110,.08);cursor:pointer"' : ' style="cursor:pointer"') + '><td>▸ ' + esc(p.responsible) + '</td><td class="num">' + p.assigned + '</td><td class="num" style="color:#22c9a3">' + p.done + '</td><td class="num">' + p.open + '</td><td class="num" style="color:#ff9db0;font-weight:' + (od ? '800' : '400') + '">' + (p.overdue || 0) + '</td><td class="num" style="font-weight:700">' + p.pct + '%</td></tr>';
+        var det = (p.tasks || []).map(function (t) { var st = t.done ? '✅' : t.overdue ? '⚠️' : '⏳'; return '<div class="pai-subrow">' + st + ' ' + esc(t.title) + ' <span style="color:#8592ad;font-size:11px">' + esc(t.company) + (t.deadline ? ' · до ' + esc(t.deadline) : '') + ' · ' + esc(t.statusLabel) + '</span></div>'; }).join('');
+        var detRow = '<tr class="pai-person-det" data-i="' + i + '" style="display:none"><td colspan="6"><div style="padding:4px 2px">' + (det || '<span class="pai-hint">нет задач</span>') + ((p.assigned > (p.tasks || []).length) ? '<div class="pai-hint" style="margin-top:4px">…ещё ' + (p.assigned - (p.tasks || []).length) + ' — в Excel</div>' : '') + '</div></td></tr>';
+        return head + detRow;
+      }).join('');
+      kh += '</tbody></table></div>';
+      kh += '<button class="pai-dl" data-q="' + esc(q) + '" style="margin-top:8px">⬇ Excel (' + tt.tasks + ' задач)</button>';
       kh += actionBar(true);
       return kh;
     }
@@ -435,6 +440,8 @@
   }
   // Клики внутри ленты: экспорт / уточнение / действия.
   thread.addEventListener('click', function (e) {
+    var pr = e.target.closest('.pai-person');
+    if (pr) { var i = pr.getAttribute('data-i'); var det = pr.parentNode.querySelector('.pai-person-det[data-i="' + i + '"]'); if (det) { var on = det.style.display === 'none'; det.style.display = on ? 'table-row' : 'none'; var c = pr.querySelector('td'); if (c) c.innerHTML = c.innerHTML.replace(on ? '▸' : '▾', on ? '▾' : '▸'); } return; }
     var dl = e.target.closest('.pai-send-act'); if (dl) { doExecute(dl); return; }
     var ca = e.target.closest('.pai-cancel-act'); if (ca) { var m = ca.closest('.pai-msg'); if (m) m.remove(); return; }
     var act = e.target.closest('.pai-act'); if (act) { e.preventDefault(); doPrepare(act.getAttribute('data-ch')); return; }
