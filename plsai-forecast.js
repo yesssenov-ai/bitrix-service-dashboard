@@ -67,12 +67,12 @@ function detectRange(qRaw) {
   // Полугодие
   if (/полугод/.test(ql)) { const first = /(перв|1)/.test(ql); return { year, fromM: first ? 1 : 7, toM: first ? 6 : 12, label: `${first ? '1-е' : '2-е'} полугодие ${year}` }; }
   // До конца года / остаток года
-  if (/до конца года|остат[ок][а-яё]* года|оставш[а-яё]* месяц|конца года|до нового года/.test(ql)) { const fromM = (year === curY) ? curM : 1; return { year, fromM, toM: 12, label: `остаток ${year} (${MON_NAME[fromM]}–декабрь)` }; }
+  if (/до конца года|до конца 20\d\d|остат[ок][а-яё]* год|оставш[а-яё]* месяц|конца года|до нового года/.test(ql)) { const fromM = (year === curY) ? curM : 1; return { year, fromM, toM: 12, label: `остаток ${year} (${MON_NAME[fromM]}–декабрь)` }; }
   // «с сентября по декабрь» / «от … до …»
   const mm = monthsInQuery(ql);
   if (mm.length >= 2 && /(^|\s)(с|со|от)\s/.test(ql) && /(по|до)\s/.test(ql)) { const a = mm[0].m, b = mm[1].m; return { year, fromM: Math.min(a, b), toM: Math.max(a, b), label: `${MON_NAME[Math.min(a, b)]}–${MON_NAME[Math.max(a, b)]} ${year}` }; }
   // Весь год / за год / за 20XX год (без конкретного месяца)
-  if (mm.length === 0 && (/в этом году|за весь год|весь год|целый год|годов[а-яё]* прогноз|прогноз на год|за год/.test(ql) || (ym && /год/.test(ql) && /(прод|прогноз|план|подпиш|выручк)/.test(ql)))) return { year, fromM: 1, toM: 12, label: `${year} год · прогноз` };
+  if (mm.length === 0 && (/в этом году|за весь год|весь год|целый год|годов[а-яё]* прогноз|прогноз на год|за год/.test(ql) || (ym && /год/.test(ql)))) return { year, fromM: 1, toM: 12, label: `${year} год · прогноз` };
   return null;
 }
 async function runRangeForecast(year, fromM, toM, label) {

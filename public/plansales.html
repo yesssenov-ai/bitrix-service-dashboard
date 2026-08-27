@@ -839,7 +839,7 @@ load();
   async function reloadForecast(){
     var c=document.getElementById('fcContent'); if(!c)return; c.innerHTML='<div class="spin"></div>';
     try{
-      var q=fcRange==='year'?('весь '+fcSel.y+' год'):fcRange==='rest'?('до конца '+fcSel.y):(MONTHS_RU[fcSel.m-1]+' '+fcSel.y);
+      var q=fcRange==='year'?('весь год '+fcSel.y):fcRange==='rest'?('остаток года '+fcSel.y):(MONTHS_RU[fcSel.m-1]+' '+fcSel.y);
       var r=await fetch('/api/plsai/dash/forecast?q='+encodeURIComponent(q)); var d=await r.json();
       if(!r.ok||!d.forecast){c.innerHTML='<div class="card sect">Не удалось построить прогноз.</div>';return;}
       c.innerHTML=renderForecast(d);
