@@ -797,6 +797,9 @@ load();
   var MONTHS_RU=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
   var fcSel={m:new Date().getMonth()+1,y:new Date().getFullYear()};
   var fcRange=null;   // null | 'year' | 'rest'
+  var fcLastQ='';     // последний запрос прогноза — для детализации по отделу
+  var CRM_BASE='https://crm.prolabsupport.kz';
+  function dealLink(id,inner){return id?'<a href="'+CRM_BASE+'/crm/deal/details/'+id+'/" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;border-bottom:1px dotted currentColor">'+inner+'</a>':inner;}
   function cap(s){return s.charAt(0).toUpperCase()+s.slice(1);}
   function fcControls(){
     var mo='';for(var i=1;i<=12;i++)mo+='<option value="'+i+'"'+(i===fcSel.m?' selected':'')+'>'+cap(MONTHS_RU[i-1])+'</option>';
@@ -825,7 +828,7 @@ load();
   }
   function renderML(m){
     if(!m.trained) return '<div class="card sect"><h3>ML-скоринг сделок</h3><div class="sub">'+E(m.reason||'Недостаточно данных для обучения.')+'</div></div>';
-    var row=function(x){return '<div class="fcrow"><span>'+E(x.company)+(x.manager?' · '+E(x.manager):'')+'</span><b>'+x.prob+'%</b><i>'+mln(x.sum)+'</i></div>';};
+    var row=function(x){return '<div class="fcrow"><span>'+dealLink(x.dealId,E(x.company))+(x.manager?' · '+E(x.manager):'')+'</span><b>'+x.prob+'%</b><i>'+mln(x.sum)+'</i></div>';};
     return '<div class="card sect"><h3>ML-скоринг сделок (эксперим.)</h3><div class="sub">Логистическая регрессия на '+m.trainN+' закрытых сделках (точность на обучении ~'+m.accuracy+'%). Вероятность подписания по признакам: сумма, отдел, производитель, возраст, флаг «вероятная». Ожидание по открытой воронке ~'+mln(m.expectedByML)+'.</div>'+
       '<div style="font-weight:700;margin:8px 0 4px">Самые перспективные:</div>'+(m.top||[]).map(row).join('')+
       '<div style="font-weight:700;margin:10px 0 4px">Самые слабые:</div>'+(m.bottom||[]).map(row).join('')+'</div>';
@@ -840,6 +843,7 @@ load();
     var c=document.getElementById('fcContent'); if(!c)return; c.innerHTML='<div class="spin"></div>';
     try{
       var q=fcRange==='year'?('весь год '+fcSel.y):fcRange==='rest'?('остаток года '+fcSel.y):(MONTHS_RU[fcSel.m-1]+' '+fcSel.y);
+      fcLastQ=q;
       var r=await fetch('/api/plsai/dash/forecast?q='+encodeURIComponent(q)); var d=await r.json();
       if(!r.ok||!d.forecast){c.innerHTML='<div class="card sect">Не удалось построить прогноз.</div>';return;}
       c.innerHTML=renderForecast(d);
@@ -866,7 +870,7 @@ load();
     h+='<div class="fcrow"><span>📦 Воронка целиком (потолок)</span><b style="color:#8592ad">'+mln(d.ceiling)+'</b><i>уедет ~'+mln(d.slip)+'</i></div></div>';
     if(cm.signing&&cm.signing.length){h+='<div class="card sect"><h3>🖊 На подписании (из комментариев)</h3>'+cm.signing.map(function(s){return '<div class="fcrow"><span>'+E(s.company)+(s.snippet?'<div style="color:#8592ad;font-size:11.5px;font-style:italic">«'+E(s.snippet)+'»</div>':'')+'</span><b>'+mln(s.sum)+'</b></div>';}).join('')+'</div>';}
     if(d.slipRisk&&d.slipRisk.count){h+='<div class="card sect"><h3>🐌 Риск переноса — '+d.slipRisk.count+' сд. на '+mln(d.slipRisk.sum)+'</h3>'+(d.slipRisk.items||[]).map(function(s){return '<div class="fcrow"><span>'+E(s.company)+'</span><b style="color:#e0455e">'+mln(s.sum)+'</b><i>возраст '+s.age+' дн.</i></div>';}).join('')+'</div>';}
-    if(d.deptBreak&&d.deptBreak.length){h+='<div class="card sect"><h3>🏢 По отделам</h3><table class="fctbl"><thead><tr><th>Отдел</th><th class="num">Подписано</th><th class="num">Воронка (взвеш.)</th></tr></thead><tbody>'+d.deptBreak.map(function(x){return '<tr><td>'+E(x.dept)+'</td><td class="num" style="color:#12a37e">'+mln(x.signed)+'</td><td class="num" style="color:#8592ad">'+mln(x.pipeline)+'</td></tr>';}).join('')+'</tbody></table></div>';}
+    if(d.deptBreak&&d.deptBreak.length){h+='<div class="card sect"><h3>🏢 По отделам</h3><div class="sub">Клик по отделу — список сделок, из которых складывается сумма.</div><table class="fctbl"><thead><tr><th>Отдел</th><th class="num">Подписано</th><th class="num">Воронка (взвеш.)</th></tr></thead><tbody>'+d.deptBreak.map(function(x){return '<tr class="fc-dept" data-dept="'+E(x.deptId)+'" style="cursor:pointer"><td>▸ '+E(x.dept)+'</td><td class="num" style="color:#12a37e">'+mln(x.signed)+'</td><td class="num" style="color:#8592ad">'+mln(x.pipeline)+'</td></tr>';}).join('')+'</tbody></table></div>';}
     if(d.ensemble&&d.ensemble.methods&&d.ensemble.methods.length){
       var en=d.ensemble;
       h+='<div class="card sect"><h3>Ансамбль методов (бэктест '+en.backtestMonths+' мес.)</h3><div class="sub">Каждый метод проверен на прошлых месяцах; вес больше у того, кто ошибается меньше. Прогноз — на следующий полный месяц.</div>'+
@@ -880,6 +884,38 @@ load();
     h+='<div class="card sect" style="font-size:12.5px;color:var(--dim,#8592ad)">Прогноз ведётся от факта и темпа по дням, воронка ужата на оставшееся время. Ориентиры: темп ~'+mln(rf.runRate)+'/мес · год назад '+mln(rf.lastYear&&rf.lastYear.sum)+(rf.onTimeRate!=null?' · планов в срок '+rf.onTimeRate+'%':'')+extra+'. Не гарантия.</div>';
     return h;
   }
+
+  // Детализация прогноза по отделу (клик по строке «По отделам»).
+  function deptDealsHTML(d){
+    var sg=d.signed||{},pp=d.pipeline||{};
+    var s='<div style="padding:8px 4px 4px">';
+    s+='<div style="font-weight:700;margin:2px 0 4px;color:#12a37e">✅ Подписано ('+(sg.count||0)+') — '+mln(sg.sum||0)+'</div>';
+    s+=((sg.deals||[]).map(function(x){return '<div class="fcrow"><span>'+dealLink(x.dealId,E(x.company))+'</span><b>'+mln(x.sum)+'</b><i>'+E(x.date)+'</i></div>';}).join('')||'<div class="sub">нет подписанных в периоде</div>');
+    s+='<div style="font-weight:700;margin:10px 0 4px;color:#8592ad">📦 Воронка ('+(pp.count||0)+') — взвеш. '+mln(pp.weighted||0)+' из '+mln(pp.face||0)+'</div>';
+    s+=((pp.deals||[]).map(function(x){var c=x.prob>=75?'#12a37e':x.prob>=45?'#c98a12':'#8592ad';var sig=x.signal==='near'?' 🟢':x.signal==='stall'?' 🔴':'';return '<div class="fcrow"><span>'+dealLink(x.dealId,E(x.company))+' <small style="color:#8592ad">'+E(x.step||'')+sig+(x.likely?' ⭐':'')+'</small></span><b style="color:'+c+'">'+x.prob+'%</b><i>'+mln(x.weighted)+' / '+mln(x.face)+'</i></div>';}).join('')||'<div class="sub">нет открытых сделок с планом покупки в периоде</div>');
+    s+='</div>';
+    return s;
+  }
+  async function toggleDeptDeals(tr){
+    var dept=tr.getAttribute('data-dept');
+    var next=tr.nextElementSibling;
+    if(next&&next.classList.contains('fc-dept-exp')){next.parentNode.removeChild(next);tr.querySelector('td').innerHTML=tr.querySelector('td').innerHTML.replace('▾','▸');return;}
+    var exp=document.createElement('tr'); exp.className='fc-dept-exp';
+    var td=document.createElement('td'); td.colSpan=3; td.style.background='rgba(130,146,173,.06)'; td.innerHTML='<div class="spin"></div>'; exp.appendChild(td);
+    tr.parentNode.insertBefore(exp,tr.nextSibling);
+    var cell=tr.querySelector('td'); cell.innerHTML=cell.innerHTML.replace('▸','▾');
+    try{
+      var r=await fetch('/api/plsai/dash/forecast-deals?dept='+encodeURIComponent(dept)+'&q='+encodeURIComponent(fcLastQ));
+      var d=await r.json();
+      if(!r.ok||!d.ok){td.innerHTML='<div class="sub">'+E((d&&(d.reason||d.error))||'Не удалось загрузить сделки.')+'</div>';return;}
+      td.innerHTML=deptDealsHTML(d);
+    }catch(e){td.innerHTML='<div class="sub">Ошибка сети.</div>';}
+  }
+  document.addEventListener('click',function(e){
+    var tr=e.target.closest&&e.target.closest('tr.fc-dept');
+    if(!tr||(e.target.closest&&e.target.closest('a')))return;
+    toggleDeptDeals(tr);
+  });
 
   var convPeriod='';   // '' = последние 12 мес; иначе год
   function convPeriodControl(){
@@ -938,6 +974,6 @@ load();
   }
 })();
 </script>
-  <script src="/assets/pls-ai.js?v=11" defer></script>
+  <script src="/assets/pls-ai.js?v=12" defer></script>
 </body>
 </html>

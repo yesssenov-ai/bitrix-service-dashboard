@@ -58,65 +58,114 @@ async function groupRecipients(dealIds, target) {
   return byHead;
 }
 
+// Получатели для режима «задачи»: группируем ОТКРЫТЫЕ задачи по ответственному
+// (или по его руководителю). Это те, кто должен закрыть задачи.
+async function groupTaskRecipients(dealIds, target) {
+  const { openTasksForDeals } = require('./plsai-tasks');
+  const rate = await getTodayRate();
+  const kzt = `CASE WHEN currency_id='USD' THEN opportunity*${rate} ELSE opportunity END`;
+  const ids = (dealIds || []).map(x => parseInt(x, 10)).filter(Boolean).slice(0, 1000);
+  if (!ids.length) return {};
+  const { rows } = await pool.query(`SELECT deal_id, company_name FROM ticketsmodule_stat_deals WHERE deal_id = ANY($1)
+    UNION SELECT deal_id, company_name FROM ticketsmodule_operational_deals WHERE deal_id = ANY($1)`, [ids]);
+  const companyOf = {}; rows.forEach(r => { companyOf[r.deal_id] = r.company_name || ''; });
+  const byDeal = await openTasksForDeals(ids);
+  const now = Date.now();
+  const byResp = {};
+  for (const did of Object.keys(byDeal)) {
+    for (const t of (byDeal[did] || [])) {
+      const rid = parseInt(t.responsibleId ?? t.RESPONSIBLE_ID, 10); if (!rid) continue;
+      const dl = t.deadline ?? t.DEADLINE ?? null; const overdue = dl && new Date(dl).getTime() < now;
+      (byResp[rid] = byResp[rid] || []).push({ dealId: did, company: companyOf[did] || '', title: (t.title ?? t.TITLE ?? '').toString(), deadline: dl ? String(dl).slice(0, 10) : null, overdue: !!overdue, taskId: t.id ?? t.ID });
+    }
+  }
+  if (target !== 'heads') return byResp;
+  const byHead = {};
+  for (const rid of Object.keys(byResp)) { const head = await getSalesHead(parseInt(rid, 10)); const key = head || rid; (byHead[key] = byHead[key] || []).push(...byResp[rid]); }
+  return byHead;
+}
+
 function deliverable(id, channel) {
   if (channel === 'task') return true;
   if (channel === 'email') return !!USER_EMAILS[id];
   return null; // telegram проверяем асинхронно
 }
-function defaultText(target) {
+function defaultText(target, mode) {
+  if (mode === 'tasks') {
+    return target === 'heads'
+      ? 'Добрый день! У сотрудников вашей команды есть незакрытые задачи в CRM (ниже) — прошу проконтролировать выполнение, особенно просроченные.'
+      : 'Добрый день! За вами числятся незакрытые задачи в CRM (ниже) — просьба выполнить их, в первую очередь просроченные.';
+  }
   return target === 'heads'
     ? 'Добрый день! По сделкам вашей команды ниже давно не обновлялись комментарии в CRM — прошу поручить менеджерам обновить статус.'
     : 'Добрый день! По вашим сделкам ниже давно не обновлялись комментарии в CRM — просьба обновить статус по каждой.';
 }
 
-async function prepare({ dealIds, channel, target, text }) {
+async function prepare({ dealIds, channel, target, text, mode }) {
   channel = ['task', 'telegram', 'email'].includes(channel) ? channel : 'task';
   target = target === 'heads' ? 'heads' : 'managers';
-  const groups = await groupRecipients(dealIds, target);
+  const isTasks = mode === 'tasks';
+  const groups = isTasks ? await groupTaskRecipients(dealIds, target) : await groupRecipients(dealIds, target);
   const recipients = [];
   for (const rid of Object.keys(groups)) {
-    const id = parseInt(rid, 10); const deals = groups[rid];
+    const id = parseInt(rid, 10); const items = groups[rid];
     let deliver = deliverable(id, channel);
     if (channel === 'telegram') { try { deliver = !!(await mn.getManagerTelegramChatId(id)); } catch (_) { deliver = false; } }
-    recipients.push({ id, name: USERS[id] || ('#' + id), email: USER_EMAILS[id] || null, deliverable: deliver, dealCount: deals.length, sum: deals.reduce((s, d) => s + d.sum, 0), deals: deals.slice(0, 20) });
+    const rec = { id, name: USERS[id] || ('#' + id), email: USER_EMAILS[id] || null, deliverable: deliver };
+    if (isTasks) { rec.taskCount = items.length; rec.overdueCount = items.filter(t => t.overdue).length; rec.sum = 0; rec.deals = items.slice(0, 20); }
+    else { rec.dealCount = items.length; rec.sum = items.reduce((s, d) => s + d.sum, 0); rec.deals = items.slice(0, 20); }
+    recipients.push(rec);
   }
-  recipients.sort((a, b) => b.sum - a.sum);
-  return { channel, target, text: text || defaultText(target), recipients, recipientCount: recipients.length, dealCount: (dealIds || []).length };
+  recipients.sort((a, b) => isTasks ? ((b.overdueCount - a.overdueCount) || (b.taskCount - a.taskCount)) : (b.sum - a.sum));
+  return { channel, target, mode: isTasks ? 'tasks' : 'deals', text: text || defaultText(target, mode), recipients, recipientCount: recipients.length, dealCount: (dealIds || []).length };
 }
 
-function listText(deals, html) {
-  return deals.map(d => (html ? `• <b>${escapeHtml(d.company)}</b> — ${fmtMln(d.sum)}` : `• ${d.company} — ${fmtMln(d.sum)}`)).join(html ? '<br>' : '\n');
+function listText(items, html) {
+  return items.map(d => {
+    if (d.title != null) { // задача
+      const dl = d.deadline ? ` (до ${d.deadline})` : ''; const od = d.overdue ? (html ? ' ⚠️' : ' [просрочена]') : '';
+      return html ? `• <b>${escapeHtml(d.company)}</b>: ${escapeHtml(d.title)}${escapeHtml(dl)}${od}` : `• ${d.company}: ${d.title}${dl}${od}`;
+    }
+    return html ? `• <b>${escapeHtml(d.company)}</b> — ${fmtMln(d.sum)}` : `• ${d.company} — ${fmtMln(d.sum)}`;
+  }).join(html ? '<br>' : '\n');
 }
 function escapeHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
-async function execute({ dealIds, channel, target, text, userName }) {
+async function execute({ dealIds, channel, target, text, userName, mode }) {
   channel = ['task', 'telegram', 'email'].includes(channel) ? channel : 'task';
   target = target === 'heads' ? 'heads' : 'managers';
-  text = String(text || defaultText(target)).slice(0, 2000);
-  const groups = await groupRecipients(dealIds, target);
+  const isTasks = mode === 'tasks';
+  text = String(text || defaultText(target, mode)).slice(0, 2000);
+  const groups = isTasks ? await groupTaskRecipients(dealIds, target) : await groupRecipients(dealIds, target);
+  const listLabel = isTasks ? 'Задачи:' : 'Сделки:';
+  const emailSubj = isTasks ? 'ЦУП: незакрытые задачи, требующие выполнения' : 'ЦУП: сделки, требующие обновления комментариев';
   const results = [];
   for (const rid of Object.keys(groups)) {
-    const id = parseInt(rid, 10); const deals = groups[rid]; const name = USERS[id] || ('#' + id);
+    const id = parseInt(rid, 10); const items = groups[rid]; const name = USERS[id] || ('#' + id);
     try {
       if (channel === 'task') {
-        const desc = text + '\n\nСделки:\n' + listText(deals, false) + `\n\n— поставлено через ЦУП (${userName || 'ProLab AI'})`;
-        const fields = { TITLE: `ЦУП: обновить комментарии по сделкам (${deals.length})`, DESCRIPTION: desc, RESPONSIBLE_ID: id };
-        if (deals[0]) fields.UF_CRM_TASK = [`D_${deals[0].dealId}`];
+        const desc = text + '\n\n' + listLabel + '\n' + listText(items, false) + `\n\n— поставлено через ЦУП (${userName || 'ProLab AI'})`;
+        const title = isTasks ? `ЦУП: выполнить незакрытые задачи (${items.length})` : `ЦУП: обновить комментарии по сделкам (${items.length})`;
+        const fields = { TITLE: title, DESCRIPTION: desc, RESPONSIBLE_ID: id };
+        if (items[0] && items[0].dealId) fields.UF_CRM_TASK = [`D_${items[0].dealId}`];
         const data = await b24('tasks.task.add', { fields });
         results.push({ id, name, ok: !!(data && data.result), via: 'Bitrix-задача' });
       } else if (channel === 'telegram') {
-        const html = `<b>${escapeHtml(text)}</b><br><br>${listText(deals, true)}`;
+        const html = `<b>${escapeHtml(text)}</b><br><br>${listText(items, true)}`;
         const ok = await mn.sendPersonalTg(id, html);
         results.push({ id, name, ok: !!ok, via: 'Telegram', error: ok ? null : 'нет привязки Telegram' });
       } else {
-        const html = `<p>${escapeHtml(text)}</p><ul>${deals.map(d => `<li><b>${escapeHtml(d.company)}</b> — ${fmtMln(d.sum)}</li>`).join('')}</ul><p style="color:#888">— отправлено через ЦУП (${escapeHtml(userName || 'ProLab AI')})</p>`;
-        const ok = await mn.sendPersonalEmail(id, 'ЦУП: сделки, требующие обновления комментариев', html);
+        const li = items.map(d => d.title != null
+          ? `<li><b>${escapeHtml(d.company)}</b>: ${escapeHtml(d.title)}${d.deadline ? ' (до ' + escapeHtml(d.deadline) + ')' : ''}${d.overdue ? ' ⚠️' : ''}</li>`
+          : `<li><b>${escapeHtml(d.company)}</b> — ${fmtMln(d.sum)}</li>`).join('');
+        const html = `<p>${escapeHtml(text)}</p><ul>${li}</ul><p style="color:#888">— отправлено через ЦУП (${escapeHtml(userName || 'ProLab AI')})</p>`;
+        const ok = await mn.sendPersonalEmail(id, emailSubj, html);
         results.push({ id, name, ok: !!ok, via: 'Почта', error: ok ? null : 'нет e-mail' });
       }
     } catch (e) { results.push({ id, name, ok: false, via: channel, error: e.message }); }
   }
   const sent = results.filter(r => r.ok).length;
-  return { channel, target, sent, total: results.length, results };
+  return { channel, target, mode: isTasks ? 'tasks' : 'deals', sent, total: results.length, results };
 }
 
 module.exports = { prepare, execute };

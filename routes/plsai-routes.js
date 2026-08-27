@@ -67,6 +67,16 @@ router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) 
       res.set('Cache-Control', 'no-store');
       return res.json(Object.assign({ ok: true, ai: true }, v));
     }
+    // Сделки с актуальными/просроченными задачами Bitrix (Реализация или План продаж).
+    const tasksMod = require('../plsai-tasks');
+    if (tasksMod.looksLikeTasks(q)) {
+      const t = await tasksMod.runTasks(q);
+      const top = t.rows.slice(0, 10);
+      const payload = { ok: true, ai: true, tasks: true, module: t.module, moduleLabel: t.moduleLabel, overdueOnly: t.overdueOnly, dealCount: t.dealCount, taskCount: t.taskCount, overdueCount: t.overdueCount, sumKzt: t.sumKzt, top, actionable: { dealIds: t.rows.map(x => x.dealId), mode: 'tasks' } };
+      history.save(uid, q, Object.assign({ type: 'tasks' }, payload));
+      res.set('Cache-Control', 'no-store');
+      return res.json(payload);
+    }
     // Ветка «Реализация»: запросы по отгрузке от завода / поставке по договору и т.п.
     if (ops.looksLikeOps(q)) {
       const f = ops.parseOps(q);
@@ -120,6 +130,16 @@ router.post('/export', requireAuth(VIEW_ROLES), express.json(), async (req, res)
       const { items } = await ops.runOps(of);
       const buf = ops.buildOpsXlsx(items, ops.interpret(of), of.field);
       const nm = 'ProLabAI_Реализация_' + q.replace(/[^\wа-яА-Я0-9]+/g, '_').slice(0, 34) + '.xlsx';
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(nm)}`);
+      return res.send(buf);
+    }
+    // Актуальные/просроченные задачи — выгрузка (строка на задачу).
+    const tasksMod = require('../plsai-tasks');
+    if (tasksMod.looksLikeTasks(q)) {
+      const t = await tasksMod.runTasks(q);
+      const buf = tasksMod.buildTasksXlsx(t);
+      const nm = 'ProLabAI_Задачи_' + q.replace(/[^\wа-яА-Я0-9]+/g, '_').slice(0, 34) + '.xlsx';
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(nm)}`);
       return res.send(buf);
@@ -186,6 +206,16 @@ router.get('/dash/cohort', requireAuth(VIEW_ROLES), async (req, res) => {
   try { const w2 = require('../plsai-wave2'); res.set('Cache-Control', 'no-store'); res.json({ ok: true, cohort: await w2.cohortMaturation(), stages: await w2.empiricalStageProbs(), trend: await w2.salesTrend() }); }
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
+// Детализация прогноза по отделу: сделки, из которых складывается подписано/воронка.
+router.get('/dash/forecast-deals', requireAuth(VIEW_ROLES), async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    const dept = String(req.query.dept || '').trim();
+    if (!dept) return res.status(400).json({ ok: false, error: 'Не указан отдел' });
+    const out = await require('../plsai-forecast').forecastDealsByDept(q, dept);
+    res.set('Cache-Control', 'no-store'); res.json(Object.assign({ ok: true }, out));
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 router.get('/dash/ml', requireAuth(VIEW_ROLES), async (req, res) => {
   try { const w3 = require('../plsai-wave3'); res.set('Cache-Control', 'no-store'); res.json({ ok: true, ml: await w3.mlPropensity() }); }
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
@@ -198,14 +228,14 @@ router.post('/action/prepare', requireAuth(ACT_ROLES), express.json(), async (re
     const actions = require('../plsai-actions');
     const b = req.body || {};
     res.set('Cache-Control', 'no-store');
-    res.json({ ok: true, preview: await actions.prepare({ dealIds: b.dealIds || [], channel: b.channel, target: b.target, text: b.text }) });
+    res.json({ ok: true, preview: await actions.prepare({ dealIds: b.dealIds || [], channel: b.channel, target: b.target, text: b.text, mode: b.mode }) });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 router.post('/action/execute', requireAuth(ACT_ROLES), express.json(), async (req, res) => {
   try {
     const actions = require('../plsai-actions');
     const b = req.body || {};
-    const out = await actions.execute({ dealIds: b.dealIds || [], channel: b.channel, target: b.target, text: b.text, userName: (req.user && req.user.display_name) || '' });
+    const out = await actions.execute({ dealIds: b.dealIds || [], channel: b.channel, target: b.target, text: b.text, mode: b.mode, userName: (req.user && req.user.display_name) || '' });
     try { require('../auth').auditLog && require('../auth').auditLog(req.user.id, req.user.username, 'plsai_action', null, { channel: out.channel, target: out.target, sent: out.sent, total: out.total }, req.ip, ''); } catch (_) {}
     res.set('Cache-Control', 'no-store'); res.json(Object.assign({ ok: true }, out));
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }

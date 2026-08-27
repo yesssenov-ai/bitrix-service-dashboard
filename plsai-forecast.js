@@ -270,7 +270,7 @@ async function runForecast(qRaw) {
     const signedByDept = {}; ds.rows.forEach(r => { signedByDept[r.d] = Math.round(parseFloat(r.s) || 0); });
     const keys = new Set([...Object.keys(signedByDept), ...Object.keys(deptW)]);
     const SKIP = new Set(['null', '', '4866']);   // без отдела + Комплекс (зонтичные) в разрезе не показываем
-    deptBreak = [...keys].filter(d => d != null && !SKIP.has(String(d))).map(d => ({ dept: DEP_LBL[d] || String(d), signed: signedByDept[d] || 0, pipeline: Math.round(deptW[d] || 0) }))
+    deptBreak = [...keys].filter(d => d != null && !SKIP.has(String(d))).map(d => ({ deptId: String(d), dept: DEP_LBL[d] || String(d), signed: signedByDept[d] || 0, pipeline: Math.round(deptW[d] || 0) }))
       .filter(x => x.signed > 0 || x.pipeline > 0).sort((a, b) => (b.signed + b.pipeline) - (a.signed + a.pipeline)).slice(0, 12);
   } catch (_) {}
 
@@ -330,4 +330,51 @@ async function runForecast(qRaw) {
   };
 }
 
-module.exports = { looksLikeForecast, runForecast };
+// Детализация прогноза по отделу: какие сделки формируют «Подписано» и «Воронку».
+// deptId — department_id как строка (из deptBreak). Только для одиночного периода.
+async function forecastDealsByDept(qRaw, deptId) {
+  const range = detectRange(qRaw);
+  if (range) return { unsupported: true, reason: 'Детализация доступна только для одного месяца/периода.' };
+  const rate = await getTodayRate();
+  const per = detectForecastMonth(qRaw);
+  const kzt = `CASE WHEN currency_id='USD' THEN opportunity*${rate} ELSE opportunity END`;
+  const dep = String(deptId);
+  const DEP_LBL = { '4857': 'Элементный', '4858': 'Хроматография', '4859': 'Электрохимия', '4860': 'Клеточный анализ', '4862': 'ОРМ', '4863': 'Сервис', '4864': 'Тренинг-центр', '4865': 'General Lab', '4866': 'Комплекс', '8384': 'Материаловедение' };
+
+  // Подписано в периоде.
+  const sg = await pool.query(
+    `SELECT deal_id, company_name, contract_date, (${kzt}) v FROM ticketsmodule_stat_deals
+     WHERE stage_id = ANY($1) AND department_id::text = $2 AND contract_date BETWEEN $3 AND $4 ORDER BY (${kzt}) DESC`,
+    [CONTRACT_SET, dep, per.from, per.to]);
+  const signedDeals = sg.rows.map(r => ({ dealId: r.deal_id, company: r.company_name || '', sum: Math.round(parseFloat(r.v) || 0), date: r.contract_date ? String(r.contract_date).slice(0, 10) : '' }));
+  const signedSum = signedDeals.reduce((s, x) => s + x.sum, 0);
+
+  // Воронка (открытые, план покупки в периоде) со взвешиванием.
+  const pp = await pool.query(
+    `SELECT deal_id, company_name, stage_id, likely_deal, (${kzt}) v, (CURRENT_DATE - date_create) age
+     FROM ticketsmodule_stat_deals WHERE stage_id = ANY($1) AND department_id::text = $2 AND planned_purchase_date BETWEEN $3 AND $4`,
+    [PRECONTRACT, dep, per.from, per.to]);
+  let emp = { probs: {} }; try { emp = await empiricalStageProbs(); } catch (_) {}
+  const pipe = pp.rows.map(r => {
+    const v = parseFloat(r.v) || 0; const step = stepOf(r.stage_id);
+    let p = (emp.probs && emp.probs[step]) || STEP_PROB[step] || 0.2; if (r.likely_deal) p = Math.max(p, 0.75);
+    return { dealId: r.deal_id, company: r.company_name || '', step, likely: !!r.likely_deal, face: Math.round(v), _v: v, prob: p, age: r.age == null ? null : parseInt(r.age, 10), signal: null, snippet: '' };
+  });
+  // Уточняем вероятность по комментариям для крупных кандидатов (как в основном прогнозе).
+  try {
+    const cand = pipe.filter(d => d.prob >= 0.5).sort((a, b) => b._v - a._v).slice(0, 20);
+    await mapLimit(cand, 6, async (d) => { const sig = await commentSignal(d.dealId); d.signal = sig.signal; d.snippet = sig.snippet || ''; if (sig.signal === 'near') d.prob = Math.max(d.prob, 0.9); else if (sig.signal === 'stall') d.prob = Math.min(d.prob, 0.1); });
+  } catch (_) {}
+  pipe.forEach(d => { d.weighted = Math.round(d._v * d.prob); d.prob = Math.round(d.prob * 100); delete d._v; });
+  pipe.sort((a, b) => b.weighted - a.weighted);
+  const pipeWeighted = pipe.reduce((s, x) => s + x.weighted, 0);
+  const pipeFace = pipe.reduce((s, x) => s + x.face, 0);
+
+  return {
+    ok: true, deptId: dep, dept: DEP_LBL[dep] || dep, period: per,
+    signed: { count: signedDeals.length, sum: signedSum, deals: signedDeals },
+    pipeline: { count: pipe.length, weighted: pipeWeighted, face: pipeFace, deals: pipe },
+  };
+}
+
+module.exports = { looksLikeForecast, runForecast, forecastDealsByDept };

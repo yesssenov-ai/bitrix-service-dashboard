@@ -152,10 +152,12 @@
   function addBot(html) { var d = document.createElement('div'); d.className = 'pai-msg bot'; d.innerHTML = html; updateEmpty(); thread.appendChild(d); scrollBottom(); return d; }
 
   // Единая отрисовка ответа (и для живого запроса, и для истории). q — сам вопрос.
-  function actionBar() {
-    return '<div class="pai-actbar"><div class="pai-hint" style="margin-bottom:5px">⚡ Действие по этим сделкам:</div>' +
+  function actionBar(isTasks) {
+    var firstLbl = isTasks ? 'исполнителям' : 'менеджерам';
+    var head = isTasks ? '⚡ Написать исполнителям, чтобы закрыли задачи:' : '⚡ Действие по этим сделкам:';
+    return '<div class="pai-actbar"><div class="pai-hint" style="margin-bottom:5px">' + head + '</div>' +
       '<div class="pai-actrow"><button class="pai-actbtn pai-act" data-ch="task">📋 Задача в Bitrix</button><button class="pai-actbtn pai-act" data-ch="telegram">✈️ Telegram</button><button class="pai-actbtn pai-act" data-ch="email">✉️ Почта</button></div>' +
-      '<div class="pai-actrow" style="margin-top:6px"><span class="pai-hint">Кому:</span><button class="pai-tgt on" data-tg="managers">менеджерам</button><button class="pai-tgt" data-tg="heads">руководителям</button></div></div>';
+      '<div class="pai-actrow" style="margin-top:6px"><span class="pai-hint">Кому:</span><button class="pai-tgt on" data-tg="managers">' + firstLbl + '</button><button class="pai-tgt" data-tg="heads">руководителям</button></div></div>';
   }
   function botHTML(d, q) {
     if (d.error) return '<div class="pai-err">' + esc(d.error) + '</div>';
@@ -181,6 +183,22 @@
         (d.top || d.rows || []).map(function (x) { var c = x.prob >= 75 ? '#22c9a3' : x.prob >= 45 ? '#e6a01e' : '#ff9db0'; return '<tr><td>' + (x.hot ? '🔥 ' : '') + esc(x.company) + '</td><td class="num" style="font-weight:800;color:' + c + '">' + x.prob + '%</td><td>' + esc(x.stage) + '</td><td class="num">' + fmtMln(x.sumKzt) + '</td></tr>'; }).join('') + '</tbody></table></div>';
       ph += actionBar();
       return ph;
+    }
+    // Сделки с актуальными/просроченными задачами Bitrix.
+    if (d.tasks) {
+      var tTop = d.top || d.rows || [];
+      var tTitle = d.overdueOnly ? '📋⚠️ Сделки с просроченными задачами' : '📋 Сделки с актуальными задачами';
+      var kh = '<div class="pai-int">' + tTitle + ' · ' + esc(d.moduleLabel) + '</div>';
+      if (!d.dealCount) return kh + '<div class="pai-hint">Сделок с ' + (d.overdueOnly ? 'просроченными' : 'незакрытыми') + ' задачами не найдено. 👍</div>';
+      kh += '<div class="pai-hint" style="margin-bottom:8px">' + d.dealCount + ' сд. · ' + d.taskCount + ' задач' + (d.overdueCount ? ' · <span style="color:#ff9db0">⚠️ ' + d.overdueCount + ' просрочено</span>' : '') + '. Топ (все — в Excel):</div>';
+      kh += '<div class="pai-wrap"><table class="pai-tbl"><thead><tr><th>Компания</th><th>Менеджер</th><th class="num">Задач</th><th class="num">Просроч.</th></tr></thead><tbody>' +
+        tTop.map(function (x) {
+          var od = (x.overdueCount || 0) > 0;
+          return '<tr' + (od ? ' style="background:rgba(255,80,110,.08)"' : '') + '><td>' + esc(x.company) + '</td><td>' + esc(x.manager) + '</td><td class="num">' + (x.openCount || 0) + '</td><td class="num" style="color:#ff9db0;font-weight:' + (od ? '800' : '400') + '">' + (x.overdueCount || 0) + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+      kh += '<button class="pai-dl" data-q="' + esc(q) + '" style="margin-top:8px">⬇ Excel (' + d.taskCount + ' задач)</button>';
+      kh += actionBar(true);
+      return kh;
     }
     if (d.clarify) {
       var ch = '<div class="pai-int">🧠 Уточните, пожалуйста</div><div class="pai-hint">' + esc(d.clarify) + '</div>';
@@ -409,11 +427,11 @@
   send.onclick = run;
   var curAction = null;   // { dealIds:[...], target:'managers'|'heads' } — для действий
   function noteActionable(d) {
-    var ids = null;
+    var ids = null, mode = (d.actionable && d.actionable.mode) || (d.tasks ? 'tasks' : 'deals');
     if (d.actionable && d.actionable.dealIds) ids = d.actionable.dealIds;
-    else if ((d.stale || d.probability) && d.top) ids = d.top.map(function (x) { return x.dealId; }).filter(Boolean);
-    else if ((d.stale || d.probability) && d.rows) ids = d.rows.map(function (x) { return x.dealId; }).filter(Boolean);
-    if (ids && ids.length) curAction = { dealIds: ids, target: 'managers' };
+    else if ((d.stale || d.probability || d.tasks) && d.top) ids = d.top.map(function (x) { return x.dealId; }).filter(Boolean);
+    else if ((d.stale || d.probability || d.tasks) && d.rows) ids = d.rows.map(function (x) { return x.dealId; }).filter(Boolean);
+    if (ids && ids.length) curAction = { dealIds: ids, target: 'managers', mode: mode };
   }
   // Клики внутри ленты: экспорт / уточнение / действия.
   thread.addEventListener('click', function (e) {
@@ -428,7 +446,7 @@
     if (!curAction || !curAction.dealIds.length) { addBot('<div class="pai-hint">Сначала выполните запрос со списком сделок (напр. «неактуальные комментарии этого месяца»).</div>'); return; }
     var bot = addBot('<div class="pai-hint">Готовлю получателей…</div>');
     try {
-      var r = await fetch('/api/plsai/action/prepare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dealIds: curAction.dealIds, channel: channel, target: curAction.target }) });
+      var r = await fetch('/api/plsai/action/prepare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dealIds: curAction.dealIds, channel: channel, target: curAction.target, mode: curAction.mode }) });
       var d = await r.json();
       if (!r.ok || !d.ok) { bot.innerHTML = '<div class="pai-err">' + esc((d && d.error) || 'Нет прав на действия или ошибка') + '</div>'; return; }
       bot.innerHTML = previewHTML(d.preview); scrollBottom();
@@ -436,12 +454,21 @@
   }
   function previewHTML(p) {
     var chLbl = p.channel === 'task' ? 'Bitrix-задача' : p.channel === 'telegram' ? 'Telegram' : 'Почта';
-    var tgLbl = p.target === 'heads' ? 'руководителям' : 'менеджерам';
-    var recips = (p.recipients || []).map(function (rc) { return '<tr><td>' + esc(rc.name) + '</td><td class="num">' + rc.dealCount + ' сд.</td><td class="num">' + fmtMln(rc.sum) + '</td><td>' + (rc.deliverable ? '✅' : '⚠️ нет канала') + '</td></tr>'; }).join('');
+    var isTasks = p.mode === 'tasks';
+    var tgLbl = p.target === 'heads' ? 'руководителям' : (isTasks ? 'исполнителям' : 'менеджерам');
+    var head = isTasks
+      ? '<tr><th>Получатель</th><th class="num">Задач</th><th class="num">Просрочено</th><th>Канал</th></tr>'
+      : '<tr><th>Получатель</th><th class="num">Сделок</th><th class="num">Сумма</th><th>Канал</th></tr>';
+    var recips = (p.recipients || []).map(function (rc) {
+      var mid = isTasks
+        ? '<td class="num">' + (rc.taskCount || 0) + '</td><td class="num" style="color:#ff9db0">' + (rc.overdueCount || 0) + '</td>'
+        : '<td class="num">' + (rc.dealCount || 0) + ' сд.</td><td class="num">' + fmtMln(rc.sum) + '</td>';
+      return '<tr><td>' + esc(rc.name) + '</td>' + mid + '<td>' + (rc.deliverable ? '✅' : '⚠️ нет канала') + '</td></tr>';
+    }).join('');
     return '<div class="pai-int">✉️ Проверьте и отправьте · ' + chLbl + ' · ' + tgLbl + '</div>' +
       '<div class="pai-hint">Получателей: ' + p.recipientCount + '. Текст (можно поправить):</div>' +
       '<textarea class="pai-acttext" data-ch="' + p.channel + '" data-tg="' + p.target + '">' + esc(p.text) + '</textarea>' +
-      '<div class="pai-wrap"><table class="pai-tbl"><thead><tr><th>Получатель</th><th class="num">Сделок</th><th class="num">Сумма</th><th>Канал</th></tr></thead><tbody>' + recips + '</tbody></table></div>' +
+      '<div class="pai-wrap"><table class="pai-tbl"><thead>' + head + '</thead><tbody>' + recips + '</tbody></table></div>' +
       '<div class="pai-actrow" style="margin-top:8px"><button class="pai-dl pai-send-act">✅ Отправить</button><button class="pai-tgt pai-cancel-act">Отмена</button></div>';
   }
   async function doExecute(btn) {
@@ -449,7 +476,7 @@
     var channel = ta.getAttribute('data-ch'), target = ta.getAttribute('data-tg'), text = ta.value;
     btn.disabled = true; btn.textContent = 'Отправляю…';
     try {
-      var r = await fetch('/api/plsai/action/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dealIds: curAction.dealIds, channel: channel, target: target, text: text }) });
+      var r = await fetch('/api/plsai/action/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dealIds: curAction.dealIds, channel: channel, target: target, text: text, mode: curAction.mode }) });
       var d = await r.json();
       if (!r.ok || !d.ok) { msg.innerHTML = '<div class="pai-err">' + esc((d && d.error) || 'Ошибка') + '</div>'; return; }
       var rows = (d.results || []).map(function (x) { return '<tr><td>' + esc(x.name) + '</td><td>' + (x.ok ? '✅ ' + esc(x.via) : '⚠️ ' + esc(x.error || 'не отправлено')) + '</td></tr>'; }).join('');

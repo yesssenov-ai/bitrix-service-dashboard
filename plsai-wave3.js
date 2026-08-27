@@ -134,7 +134,7 @@ async function mlPropensity() {
     let correct = 0; for (const t of train) { const z = norm(t.x); let s = 0; for (let j = 0; j < dim; j++) s += w[j] * z[j]; if ((sigmoid(s) >= 0.5 ? 1 : 0) === t.y) correct++; }
     const open = rows.filter(r => PRECONTRACT.includes(r.stage_id)).map(r => {
       const z = norm(feat(r)); let s = 0; for (let j = 0; j < dim; j++) s += w[j] * z[j];
-      return { company: r.company_name || '', manager: USERS[r.assigned_by_id] || '', prob: Math.round(sigmoid(s) * 100), sum: Math.round(parseFloat(r.v) || 0) };
+      return { dealId: r.deal_id, company: r.company_name || '', manager: USERS[r.assigned_by_id] || '', prob: Math.round(sigmoid(s) * 100), sum: Math.round(parseFloat(r.v) || 0) };
     });
     const expectedByML = Math.round(open.reduce((s, d) => s + d.sum * d.prob / 100, 0));
     open.sort((a, b) => b.prob - a.prob);
