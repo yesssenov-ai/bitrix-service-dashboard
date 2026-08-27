@@ -17,6 +17,28 @@ const DECLINED_STATUS = 7;                // отклонена
 const STATUS_LABELS = { 1: 'Новая', 2: 'Ждёт выполнения', 3: 'Выполняется', 4: 'Ждёт контроля', 5: 'Завершена', 6: 'Отложена', 7: 'Отклонена' };
 const DEAL_CAP = 1500;
 
+// Отделы (department_id) и их алиасы для фильтра «по сделкам <отдела>».
+const DEPT_ALIASES = {
+  'элементн': ['4857'], 'хроматограф': ['4858'], 'электрохим': ['4859'], 'клеточн': ['4860'],
+  'орм': ['4862'], 'расходник': ['4862'], 'сервис': ['4863'], 'тренинг': ['4864'], 'обучен': ['4864'],
+  'general lab': ['4865'], 'общелаб': ['4865'], 'материаловед': ['8384'], 'комплекс': ['4866'],
+};
+function detectDepts(qRaw) {
+  const q = String(qRaw || '').toLowerCase();
+  for (const [k, ids] of Object.entries(DEPT_ALIASES)) if (q.includes(k)) return { ids, label: DEPARTMENT_LABELS[ids[0]] || ids[0] };
+  return { ids: null, label: null };
+}
+function detectManagers(qRaw) {
+  const q = String(qRaw || '').toLowerCase();
+  const out = [];
+  for (const [id, name] of Object.entries(USERS)) {
+    if (!name) continue;
+    const parts = String(name).toLowerCase().split(/\s+/).filter(w => w.length >= 4);
+    if (parts.some(p => q.includes(p))) out.push({ id: Number(id), name });
+  }
+  return out;
+}
+
 function looksLikeTasks(qRaw) {
   const q = String(qRaw || '').toLowerCase();
   return /задач/.test(q) && (
@@ -94,19 +116,30 @@ async function runTasks(qRaw, opts = {}) {
   const openOnly = !overdueOnly && wantsOpenOnly(qRaw);
   const mineOnly = /мои задач|которые я поставил|мной поставл|я ставил|от меня\b/.test(String(qRaw || '').toLowerCase());
   const meBid = opts.meBid || null;
+  const dep = detectDepts(qRaw);
+  const managers = detectManagers(qRaw);
   const rate = await getTodayRate();
   const kzt = `CASE WHEN currency_id='USD' THEN opportunity*${rate} ELSE opportunity END`;
+  // Доп. фильтры по отделу / менеджеру сделки. Возвращает SQL-условия, дописывая params.
+  function conds(params) {
+    const w = [];
+    if (dep.ids) { params.push(dep.ids); w.push(`department_id::text = ANY($${params.length})`); }
+    if (managers.length) { params.push(managers.map(m => m.id)); w.push(`assigned_by_id = ANY($${params.length})`); }
+    return w;
+  }
+  const saleParams = [PRECONTRACT]; const saleW = conds(saleParams);
   const saleSql = `SELECT deal_id, company_name, assigned_by_id, department_id, stage_id, (${kzt}) v
-       FROM ticketsmodule_stat_deals WHERE stage_id = ANY($1) ORDER BY (${kzt}) DESC LIMIT ${DEAL_CAP}`;
+       FROM ticketsmodule_stat_deals WHERE stage_id = ANY($1)${saleW.length ? ' AND ' + saleW.join(' AND ') : ''} ORDER BY (${kzt}) DESC LIMIT ${DEAL_CAP}`;
+  const opsParams = []; const opsW = conds(opsParams);
   const opsSql = `SELECT deal_id, company_name, assigned_by_id, department_id, stage_id, (${kzt}) v
-       FROM ticketsmodule_operational_deals ORDER BY (${kzt}) DESC LIMIT ${DEAL_CAP}`;
+       FROM ticketsmodule_operational_deals${opsW.length ? ' WHERE ' + opsW.join(' AND ') : ''} ORDER BY (${kzt}) DESC LIMIT ${DEAL_CAP}`;
   let dealRows;
-  if (module === 'sale') { dealRows = (await pool.query(saleSql, [PRECONTRACT])).rows; }
+  if (module === 'sale') { dealRows = (await pool.query(saleSql, saleParams)).rows; }
   else if (module === 'both') {
-    const [a, b] = await Promise.all([pool.query(saleSql, [PRECONTRACT]), pool.query(opsSql)]);
+    const [a, b] = await Promise.all([pool.query(saleSql, saleParams), pool.query(opsSql, opsParams)]);
     const seen = new Set(); dealRows = [];
     for (const r of [...a.rows, ...b.rows]) { if (seen.has(r.deal_id)) continue; seen.add(r.deal_id); dealRows.push(r); }
-  } else { dealRows = (await pool.query(opsSql)).rows; }
+  } else { dealRows = (await pool.query(opsSql, opsParams)).rows; }
 
   const dealById = {}; dealRows.forEach(r => { dealById[r.deal_id] = r; });
   const byDeal = await tasksForDeals(dealRows.map(r => r.deal_id), null);
@@ -142,8 +175,13 @@ async function runTasks(qRaw, opts = {}) {
     deals: new Set(all.map(t => t.dealId)).size,
     tasks: all.length, done: all.filter(t => t.done).length, open: all.filter(t => !t.done).length, overdue: all.filter(t => t.overdue).length,
   };
+  const baseLabel = module === 'sale' ? 'План продаж' : module === 'both' ? 'Все модули' : 'Реализация';
+  const scopeParts = [];
+  if (dep.label) scopeParts.push('отдел ' + dep.label);
+  if (managers.length) scopeParts.push(managers.map(m => m.name).join(', '));
   return {
-    tasks: true, module, moduleLabel: module === 'sale' ? 'План продаж' : module === 'both' ? 'Все модули' : 'Реализация',
+    tasks: true, module, moduleLabel: baseLabel + (scopeParts.length ? ' · ' + scopeParts.join(' · ') : ''),
+    deptLabel: dep.label || null, managers: managers.map(m => m.name),
     overdueOnly, openOnly, mineOnly: mineOnly && !!meBid,
     totals, people, taskRows,
     actionable: { dealIds: [...new Set(taskRows.map(t => t.dealId))], mode: 'tasks' },
