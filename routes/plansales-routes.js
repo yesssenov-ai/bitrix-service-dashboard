@@ -21,7 +21,9 @@ function resolveBitrixId(user) {
 
 // Модуль «План продаж» доступен по гранту модуля (страница закрыта requireModule),
 // а API — любому авторизованному с доступом; ограничим ролями просмотра аналитики.
-const VIEW_ROLES = ['admin', 'coordinator', 'manager', 'store', 'accountant'];
+// engineer (менеджеры продаж) тоже видят план и могут редактировать СВОИ сделки —
+// редактирование ограничено canCommentDeal (свои + свой отдел), просмотр общий.
+const VIEW_ROLES = ['admin', 'coordinator', 'manager', 'engineer', 'store', 'accountant'];
 
 // GET /api/plansales — обогащённый список доконтрактных сделок с планируемой датой.
 router.get('/', requireAuth(VIEW_ROLES), async (req, res) => {

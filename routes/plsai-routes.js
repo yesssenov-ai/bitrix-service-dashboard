@@ -2,7 +2,9 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../auth');
 
-const VIEW_ROLES = ['admin', 'coordinator', 'manager', 'store', 'accountant'];
+// engineer (менеджеры продаж) читают план/прогноз/аналитику и пользуются ProLab AI.
+// Массовые действия (рассылки, задачи) остаются за ACT_ROLES — engineer туда не входит.
+const VIEW_ROLES = ['admin', 'coordinator', 'manager', 'engineer', 'store', 'accountant'];
 
 // POST /api/plsai/query { q } — разобрать запрос и вернуть сводку + образец строк.
 router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) => {
