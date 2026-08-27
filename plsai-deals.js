@@ -32,6 +32,11 @@ function looksLikeStale(qRaw) {
   const q = String(qRaw || '').toLowerCase();
   return /неактуальн[а-яё]* коммент|устаревш[а-яё]* коммент|устарел[а-яё]* коммент|давно не (обновл|коммент)|не обновля[а-яё]*.{0,20}коммент|коммент[а-яё]*.{0,20}не обновля|без свеж[а-яё]* коммент|заброшенн[а-яё]* сделк/.test(q);
 }
+// Запрос дополнительно ограничен признаком «наиболее вероятная сделка» (likely_deal).
+function wantsLikelyOnly(qRaw) {
+  const q = String(qRaw || '').toLowerCase();
+  return /наиболее вероятн|вероятн[а-яё]* сделк|призна[а-яё]* вероятн|флаг[а-яё]*.{0,15}вероятн/.test(q);
+}
 function looksLikeProbability(qRaw) {
   const q = String(qRaw || '').toLowerCase();
   return /вероятност[ья] сделк|шанс[ы]? сделк|оцен[иь][а-яё]* сделк|насколько вероятн|наиболее вероятн[а-яё]* сделк|вероятность что|вероятност[ья].{0,20}(сдел|подпиш|закро)|какие сделки (точно|скорее)/.test(q);
@@ -44,9 +49,11 @@ async function runStale(qRaw) {
   const now = astanaNow();
   const dist = (per.year - now.getFullYear()) * 12 + (per.month - (now.getMonth() + 1));
   const thr = thresholdDays(dist);
+  const likelyOnly = wantsLikelyOnly(qRaw);
+  const likelyClause = likelyOnly ? ' AND likely_deal = true' : '';
   const { rows } = await pool.query(
-    `SELECT deal_id, company_name, assigned_by_id, stage_id, (${kzt}) v FROM ticketsmodule_stat_deals
-     WHERE stage_id = ANY($1) AND planned_purchase_date BETWEEN $2 AND $3 ORDER BY (${kzt}) DESC LIMIT 80`,
+    `SELECT deal_id, company_name, assigned_by_id, stage_id, likely_deal, (${kzt}) v FROM ticketsmodule_stat_deals
+     WHERE stage_id = ANY($1) AND planned_purchase_date BETWEEN $2 AND $3${likelyClause} ORDER BY (${kzt}) DESC LIMIT 80`,
     [PRECONTRACT, per.from, per.to]);
   const nowMs = Date.now();
   await mapLimit(rows, 6, async (r) => { const m = await commentMeta(r.deal_id); r._last = m.lastAt; r._sig = m.signal; });
@@ -55,9 +62,9 @@ async function runStale(qRaw) {
     const days = lastMs ? Math.floor((nowMs - lastMs) / 86400000) : null;
     const stale = (lastMs == null) || (days > thr);
     return { dealId: r.deal_id, company: r.company_name || '', manager: USERS[r.assigned_by_id] || '', managerId: r.assigned_by_id,
-      sumKzt: Math.round(parseFloat(r.v) || 0), stage: stepOf(r.stage_id) || r.stage_id, lastAt: r._last ? new Date(r._last).toISOString().slice(0, 10) : null, days, stale };
+      sumKzt: Math.round(parseFloat(r.v) || 0), stage: stepOf(r.stage_id) || r.stage_id, likely: !!r.likely_deal, lastAt: r._last ? new Date(r._last).toISOString().slice(0, 10) : null, days, stale };
   }).filter(x => x.stale).sort((a, b) => b.sumKzt - a.sumKzt);
-  return { stale: true, period: per, thresholdDays: thr, dist, count: items.length, sumKzt: items.reduce((s, x) => s + x.sumKzt, 0), rows: items };
+  return { stale: true, likelyOnly, period: per, thresholdDays: thr, dist, count: items.length, sumKzt: items.reduce((s, x) => s + x.sumKzt, 0), rows: items };
 }
 function buildStaleXlsx(res) {
   const header = ['Компания', 'Менеджер', 'Стадия', 'Сумма (₸)', 'Последний коммент', 'Дней без обновления', 'ID'];

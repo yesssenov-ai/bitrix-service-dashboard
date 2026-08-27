@@ -162,11 +162,13 @@
     if (d.answer) return '<div class="pai-int">🧠 Ассистент ЦУП</div><div class="pai-answer">' + esc(d.answer).replace(/\n/g, '<br>') + '</div>';
     // Сделки с неактуальными комментариями.
     if (d.stale) {
-      var sh = '<div class="pai-int">🕒 Неактуальные комментарии · ' + esc(d.period && d.period.label) + ' · порог ' + d.thresholdDays + ' дн.</div>';
-      if (!d.count) return sh + '<div class="pai-hint">Все комментарии свежие — устаревших нет. 👍</div>';
+      var stTop = d.top || d.rows || [];
+      var stTitle = d.likelyOnly ? '🕒🔥 Наиболее вероятные с неактуальными комментариями' : '🕒 Неактуальные комментарии';
+      var sh = '<div class="pai-int">' + stTitle + ' · ' + esc(d.period && d.period.label) + ' · порог ' + d.thresholdDays + ' дн.</div>';
+      if (!d.count) return sh + '<div class="pai-hint">' + (d.likelyOnly ? 'Среди «наиболее вероятных» устаревших комментариев нет. 👍' : 'Все комментарии свежие — устаревших нет. 👍') + '</div>';
       sh += '<div class="pai-hint" style="margin-bottom:8px">' + d.count + ' сд. на ' + fmtMln(d.sumKzt) + '. Топ по сумме (все — в Excel):</div>';
       sh += '<div class="pai-wrap"><table class="pai-tbl"><thead><tr><th>Компания</th><th>Менеджер</th><th class="num">Сумма</th><th class="num">Без обн.</th></tr></thead><tbody>' +
-        (d.top || []).map(function (x) { return '<tr><td>' + esc(x.company) + '</td><td>' + esc(x.manager) + '</td><td class="num">' + fmtMln(x.sumKzt) + '</td><td class="num" style="color:#ff9db0">' + (x.days == null ? 'нет' : x.days + ' дн.') + '</td></tr>'; }).join('') + '</tbody></table></div>';
+        stTop.map(function (x) { return '<tr><td>' + esc(x.company) + '</td><td>' + esc(x.manager) + '</td><td class="num">' + fmtMln(x.sumKzt) + '</td><td class="num" style="color:#ff9db0">' + (x.days == null ? 'нет' : x.days + ' дн.') + '</td></tr>'; }).join('') + '</tbody></table></div>';
       sh += '<button class="pai-dl" data-q="' + esc(q) + '" style="margin-top:8px">⬇ Excel (' + d.count + ')</button>';
       sh += actionBar();
       return sh;
@@ -176,7 +178,7 @@
       var ph = '<div class="pai-int">📈 Вероятность сделок · ' + esc(d.period && d.period.label) + '</div>';
       ph += '<div class="pai-hint" style="margin-bottom:8px">Ожидание по воронке ~' + fmtMln(d.expected) + '. 🔥 — наиболее вероятные (флаг/коммент + P60/P80 + свежий коммент):</div>';
       ph += '<div class="pai-wrap"><table class="pai-tbl"><thead><tr><th>Компания</th><th class="num">Вероятн.</th><th>Стадия</th><th class="num">Сумма</th></tr></thead><tbody>' +
-        (d.top || []).map(function (x) { var c = x.prob >= 75 ? '#22c9a3' : x.prob >= 45 ? '#e6a01e' : '#ff9db0'; return '<tr><td>' + (x.hot ? '🔥 ' : '') + esc(x.company) + '</td><td class="num" style="font-weight:800;color:' + c + '">' + x.prob + '%</td><td>' + esc(x.stage) + '</td><td class="num">' + fmtMln(x.sumKzt) + '</td></tr>'; }).join('') + '</tbody></table></div>';
+        (d.top || d.rows || []).map(function (x) { var c = x.prob >= 75 ? '#22c9a3' : x.prob >= 45 ? '#e6a01e' : '#ff9db0'; return '<tr><td>' + (x.hot ? '🔥 ' : '') + esc(x.company) + '</td><td class="num" style="font-weight:800;color:' + c + '">' + x.prob + '%</td><td>' + esc(x.stage) + '</td><td class="num">' + fmtMln(x.sumKzt) + '</td></tr>'; }).join('') + '</tbody></table></div>';
       ph += actionBar();
       return ph;
     }

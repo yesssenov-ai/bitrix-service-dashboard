@@ -28,16 +28,18 @@ router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) 
     const deals = require('../plsai-deals');
     if (deals.looksLikeStale(q)) {
       const r = await deals.runStale(q);
-      history.save(uid, q, { type: 'stale', stale: true, period: r.period, thresholdDays: r.thresholdDays, count: r.count, sumKzt: r.sumKzt, rows: r.rows.slice(0, 10) });
+      const staleTop = r.rows.slice(0, 10);
+      history.save(uid, q, { type: 'stale', stale: true, likelyOnly: r.likelyOnly, period: r.period, thresholdDays: r.thresholdDays, count: r.count, sumKzt: r.sumKzt, top: staleTop, actionable: { dealIds: r.rows.map(x => x.dealId) } });
       res.set('Cache-Control', 'no-store');
-      return res.json({ ok: true, ai: true, stale: true, period: r.period, thresholdDays: r.thresholdDays, count: r.count, sumKzt: r.sumKzt, top: r.rows.slice(0, 10), actionable: { dealIds: r.rows.map(x => x.dealId) } });
+      return res.json({ ok: true, ai: true, stale: true, likelyOnly: r.likelyOnly, period: r.period, thresholdDays: r.thresholdDays, count: r.count, sumKzt: r.sumKzt, top: staleTop, actionable: { dealIds: r.rows.map(x => x.dealId) } });
     }
     // Оценка вероятности сделок.
     if (deals.looksLikeProbability(q)) {
       const r = await deals.runProbability(q);
-      history.save(uid, q, { type: 'probability', probability: true, period: r.period, expected: r.expected, rows: r.rows.slice(0, 12) });
+      const probTop = r.rows.slice(0, 12);
+      history.save(uid, q, { type: 'probability', probability: true, period: r.period, count: r.count, expected: r.expected, top: probTop, actionable: { dealIds: r.rows.map(x => x.dealId) } });
       res.set('Cache-Control', 'no-store');
-      return res.json({ ok: true, ai: true, probability: true, period: r.period, count: r.count, expected: r.expected, top: r.rows.slice(0, 12), actionable: { dealIds: r.rows.map(x => x.dealId) } });
+      return res.json({ ok: true, ai: true, probability: true, period: r.period, count: r.count, expected: r.expected, top: probTop, actionable: { dealIds: r.rows.map(x => x.dealId) } });
     }
     // Ансамбль методов / бэктест точности.
     if (/ансамбл|бэктест|бектест|точност[а-яё]* метод|какой метод точн|сравни методы/.test(q.toLowerCase())) {

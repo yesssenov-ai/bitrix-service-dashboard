@@ -4,9 +4,21 @@
 const { pool } = require('./auth');
 const { getTodayRate } = require('./nbrk-exchange-rate');
 const { USERS, USER_EMAILS } = require('./constants');
+const { EMPLOYEE_DEPT } = require('./dept-map');
 const { b24 } = require('./bitrix');
 const mn = require('./manager-notifications');
 try { mn.setPool && mn.setPool(pool); } catch (_) {}
+
+// Явная карта РОП по отделу (Bitrix-ID руководителя). Приоритетнее оргструктуры Bitrix,
+// т.к. в CRM закреплены не всегда. Ключи — названия отделов из EMPLOYEE_DEPT.
+const DEPT_HEAD = {
+  'Элементный': 12,     // Айжан Байжигитова
+  'Хроматография': 14,  // Канат Жунусов — Хроматография и клеточный анализ
+  'Электрохимия': 13,   // Назерке Марат
+  'ОРМ': 13,            // Назерке Марат
+  'Materials': 13,      // Назерке Марат — Материаловедение / General Lab
+  'Тренинг-центр': 39,  // Мансур Сейтжан
+};
 
 function fmtMln(v) { const m = (v || 0) / 1e6; return (Math.abs(m) >= 100 ? Math.round(m) : Math.round(m * 10) / 10).toLocaleString('ru-RU') + ' млн ₸'; }
 
@@ -15,6 +27,10 @@ const _headCache = {};
 async function getSalesHead(userId) {
   if (userId == null) return null;
   if (_headCache[userId] !== undefined) return _headCache[userId];
+  // 1) Явная карта РОП по отделу сотрудника — приоритетна.
+  const dept = EMPLOYEE_DEPT[userId];
+  if (dept && DEPT_HEAD[dept] && DEPT_HEAD[dept] !== userId) { _headCache[userId] = DEPT_HEAD[dept]; return DEPT_HEAD[dept]; }
+  // 2) Иначе — оргструктура Bitrix (UF_HEAD отдела).
   let head = null;
   try {
     const { result } = await b24('user.get', { ID: userId });
