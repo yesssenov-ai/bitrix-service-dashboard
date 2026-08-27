@@ -262,6 +262,15 @@ async function runForecast(qRaw) {
   // Остаток физически не больше того, что есть в воронке.
   expectedRemaining = Math.min(expectedRemaining, weighted + nearExpected);
 
+  // Список сделок, реально способных закрыться в этом месяце (за раскрытие «+ Реально
+  // до конца месяца»). Сумма — оценка по темпу; здесь показываем наиболее вероятных
+  // «контрибьюторов» (открытая воронка периода по убыванию взвешенной суммы).
+  const remainingDeals = deals
+    .filter(d => d.p >= 0.2)
+    .map(d => ({ dealId: d.id, company: d.company, step: d.step, prob: Math.round(d.p * 100), face: Math.round(d.v), weighted: Math.round(d.v * d.p), likely: d.likely, signal: d.signal, snippet: d.snippet || '' }))
+    .sort((a, b) => b.weighted - a.weighted)
+    .slice(0, 25);
+
   // Разрез по отделам: уже подписано + взвешенная воронка.
   const DEP_LBL = { '4857': 'Элементный', '4858': 'Хроматография', '4859': 'Электрохимия', '4860': 'Клеточный анализ', '4862': 'ОРМ', '4863': 'Сервис', '4864': 'Тренинг-центр', '4865': 'General Lab', '4866': 'Комплекс', '8384': 'Материаловедение' };
   let deptBreak = [];
@@ -323,6 +332,7 @@ async function runForecast(qRaw) {
     days: { total: totalWD, elapsed: elapsedWD, remaining: remainingWD },
     estimate: { point, low, high }, expectedRemaining, basis,
     actual, weighted, pipeline: buck, ceiling, slip, pacing, slipRisk, deptBreak, typCycle, ensemble,
+    remaining: { deals: remainingDeals, note: basis },
     comments: { scanned, signing, stalled },
     refs: { runRate, lastYear, onTimeRate, pacePct: pace.frac ? Math.round(pace.frac * 100) : null, paceMonths: pace.months,
             empiricalSource: emp.source, empiricalProbs: emp.probs, hwNext: hw && hw.nextMonth, hwSeasonPct: hw && hw.seasonalPct, hwMonths: hw && hw.months },

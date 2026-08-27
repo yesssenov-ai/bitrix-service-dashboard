@@ -798,6 +798,7 @@ load();
   var fcSel={m:new Date().getMonth()+1,y:new Date().getFullYear()};
   var fcRange=null;   // null | 'year' | 'rest'
   var fcLastQ='';     // последний запрос прогноза — для детализации по отделу
+  var fcRemain=[];    // сделки-контрибьюторы «Реально до конца месяца»
   var CRM_BASE='https://crm.prolabsupport.kz';
   function dealLink(id,inner){return id?'<a href="'+CRM_BASE+'/crm/deal/details/'+id+'/" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;border-bottom:1px dotted currentColor">'+inner+'</a>':inner;}
   function cap(s){return s.charAt(0).toUpperCase()+s.slice(1);}
@@ -866,7 +867,10 @@ load();
     h+='<div class="fcgrid"><div class="fcbox"><div class="l">Реалистичный итог</div><div class="v">'+mln(e.point)+'</div></div>'+
        '<div class="fcbox"><div class="l">Диапазон</div><div class="v" style="font-size:16px">'+mln(e.low)+' – '+mln(e.high)+'</div></div>'+(pace||'<div class="fcbox"><div class="l">Средний темп</div><div class="v" style="font-size:16px">'+mln(rf.runRate)+'/мес</div></div>')+'</div>';
     h+='<div class="fcrow"><span>✅ Уже подписано</span><b>'+mln(d.actual.sum)+'</b><i>'+d.actual.count+' сд.</i></div>';
-    h+='<div class="fcrow"><span>➕ Реально до конца месяца</span><b>+'+mln(d.expectedRemaining)+'</b><i>'+E(d.basis||'')+'</i></div>';
+    fcRemain=(d.remaining&&d.remaining.deals)||[];
+    var remClk=fcRemain.length?' fc-remain" style="cursor:pointer':'"';
+    h+='<div class="fcrow'+remClk+'"><span>'+(fcRemain.length?'▸ ':'')+'Реально до конца месяца</span><b>+'+mln(d.expectedRemaining)+'</b><i>'+E(d.basis||'')+'</i></div>';
+    h+='<div id="fcRemainExp"></div>';
     h+='<div class="fcrow"><span>📦 Воронка целиком (потолок)</span><b style="color:#8592ad">'+mln(d.ceiling)+'</b><i>уедет ~'+mln(d.slip)+'</i></div></div>';
     if(cm.signing&&cm.signing.length){h+='<div class="card sect"><h3>🖊 На подписании (из комментариев)</h3>'+cm.signing.map(function(s){return '<div class="fcrow"><span>'+E(s.company)+(s.snippet?'<div style="color:#8592ad;font-size:11.5px;font-style:italic">«'+E(s.snippet)+'»</div>':'')+'</span><b>'+mln(s.sum)+'</b></div>';}).join('')+'</div>';}
     if(d.slipRisk&&d.slipRisk.count){h+='<div class="card sect"><h3>🐌 Риск переноса — '+d.slipRisk.count+' сд. на '+mln(d.slipRisk.sum)+'</h3>'+(d.slipRisk.items||[]).map(function(s){return '<div class="fcrow"><span>'+E(s.company)+'</span><b style="color:#e0455e">'+mln(s.sum)+'</b><i>возраст '+s.age+' дн.</i></div>';}).join('')+'</div>';}
@@ -912,10 +916,27 @@ load();
     }catch(e){td.innerHTML='<div class="sub">Ошибка сети.</div>';}
   }
   document.addEventListener('click',function(e){
+    if(e.target.closest&&e.target.closest('a'))return;
     var tr=e.target.closest&&e.target.closest('tr.fc-dept');
-    if(!tr||(e.target.closest&&e.target.closest('a')))return;
-    toggleDeptDeals(tr);
+    if(tr){toggleDeptDeals(tr);return;}
+    var rm=e.target.closest&&e.target.closest('.fc-remain');
+    if(rm){toggleRemain(rm);return;}
   });
+  // Раскрытие «Реально до конца месяца» — список наиболее вероятных сделок-контрибьюторов.
+  function remainDealsHTML(list){
+    if(!list||!list.length)return '<div class="sub" style="padding:6px 4px">Нет открытых сделок с планом покупки в этом месяце.</div>';
+    var s='<div style="padding:4px 4px 8px"><div class="sub" style="margin-bottom:4px">Сумма — оценка по темпу; ниже сделки, которые реально могут закрыться в этом месяце (по убыванию вероятной суммы):</div>';
+    s+=list.map(function(x){var c=x.prob>=75?'#12a37e':x.prob>=45?'#c98a12':'#8592ad';var sig=x.signal==='near'?' 🟢':x.signal==='stall'?' 🔴':'';return '<div class="fcrow"><span>'+dealLink(x.dealId,E(x.company))+' <small style="color:#8592ad">'+E(x.step||'')+sig+(x.likely?' ⭐':'')+'</small>'+(x.snippet?'<div style="color:#8592ad;font-size:11.5px;font-style:italic">«'+E(x.snippet)+'»</div>':'')+'</span><b style="color:'+c+'">'+x.prob+'%</b><i>'+mln(x.weighted)+' / '+mln(x.face)+'</i></div>';}).join('');
+    s+='</div>';
+    return s;
+  }
+  function toggleRemain(row){
+    var exp=document.getElementById('fcRemainExp'); if(!exp)return;
+    var cell=row.querySelector('span');
+    if(exp.innerHTML){exp.innerHTML='';if(cell)cell.innerHTML=cell.innerHTML.replace('▾','▸');return;}
+    exp.innerHTML=remainDealsHTML(fcRemain);
+    if(cell)cell.innerHTML=cell.innerHTML.replace('▸','▾');
+  }
 
   var convPeriod='';   // '' = последние 12 мес; иначе год
   function convPeriodControl(){
