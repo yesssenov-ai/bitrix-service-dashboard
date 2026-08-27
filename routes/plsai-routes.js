@@ -124,22 +124,23 @@ router.post('/export', requireAuth(VIEW_ROLES), express.json(), async (req, res)
     const ops = require('../plsai-ops');
     const q = String((req.body || {}).q || '').trim();
     if (!q) return res.status(400).json({ error: 'Пустой запрос' });
+    // Актуальные/просроченные задачи — выгрузка (строка на задачу). ВАЖНО: раньше «Реализации»,
+    // иначе looksLikeOps перехватит запрос со словом «Реализация» и вернёт отгрузку.
+    const tasksMod = require('../plsai-tasks');
+    if (tasksMod.looksLikeTasks(q)) {
+      const t = await tasksMod.runTasks(q);
+      const buf = tasksMod.buildTasksXlsx(t);
+      const nm = 'ProLabAI_Задачи_' + q.replace(/[^\wа-яА-Я0-9]+/g, '_').slice(0, 34) + '.xlsx';
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(nm)}`);
+      return res.send(buf);
+    }
     // Ветка «Реализация» — выгрузка с датами отгрузки/поставки.
     if (ops.looksLikeOps(q)) {
       const of = ops.parseOps(q);
       const { items } = await ops.runOps(of);
       const buf = ops.buildOpsXlsx(items, ops.interpret(of), of.field);
       const nm = 'ProLabAI_Реализация_' + q.replace(/[^\wа-яА-Я0-9]+/g, '_').slice(0, 34) + '.xlsx';
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(nm)}`);
-      return res.send(buf);
-    }
-    // Актуальные/просроченные задачи — выгрузка (строка на задачу).
-    const tasksMod = require('../plsai-tasks');
-    if (tasksMod.looksLikeTasks(q)) {
-      const t = await tasksMod.runTasks(q);
-      const buf = tasksMod.buildTasksXlsx(t);
-      const nm = 'ProLabAI_Задачи_' + q.replace(/[^\wа-яА-Я0-9]+/g, '_').slice(0, 34) + '.xlsx';
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(nm)}`);
       return res.send(buf);
