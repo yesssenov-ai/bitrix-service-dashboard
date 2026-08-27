@@ -346,7 +346,7 @@ const showTip=(h,x,y)=>{tip.innerHTML=h;tip.style.left=(x+14)+'px';tip.style.top
 const hideTip=()=>tip.style.opacity=0;
 
 let ROLE='viewer',YEAR=2026,ALL=[],PLAN={},PIPES={},DEPT_ORDER=[],UPDATED=null;
-const FILT={manuf:[],dept:[],month:[]}; let WASWIN=false; const openGrp=new Set([0]), openStage=new Set();
+const FILT={manuf:[],dept:[],month:[]}; let WASWIN=false; let openGrp=new Set([0]), openStage=new Set(); let EXPAND_ALL=false;
 let MSOPTS={manuf:[],dept:[],month:[]};
 // проверки/выборки по активным фильтрам (excl — измерение, которое НЕ применяем: сам селектор)
 const passManuf=d=>!FILT.manuf.length||FILT.manuf.includes(d.manufacturer);
@@ -651,6 +651,7 @@ function renderTree(deals){
   const groups={P:[],S:[],F:[]};
   Object.entries(st).forEach(([id,s])=>(groups[s.sem]||groups.P).push({id,...s}));
   const order=['P','S','F'].filter(k=>groups[k].length);
+  if(EXPAND_ALL){ openGrp=new Set(order.map((_,gi)=>gi)); openStage=new Set(Object.keys(st)); EXPAND_ALL=false; }
   const maxStage=Math.max(1,...Object.values(st).map(s=>s.sum));
   document.getElementById('tree').innerHTML=order.map((k,gi)=>{
     const g=groups[k].sort((a,b)=>a.sort-b.sort||b.sum-a.sum);const gsum=g.reduce((a,s)=>a+s.sum,0);const open=openGrp.has(gi);
@@ -660,7 +661,7 @@ function renderTree(deals){
         const so=openStage.has(s.id);
         return `<div class="stage">
           <div class="stage-row${so?' open':''}" onclick="tStage('${s.id.replace(/'/g,"\\'")}')"><span class="schev">▶</span><span class="sn" title="${esc(s.name)}">${esc(s.name)}</span><span class="sbar"><i style="background:${GROUPS[k].color};width:${(s.sum/maxStage*100).toFixed(1)}%"></i></span><span class="scount">${s.deals.length}</span><span class="sv tabular">${fmt(s.sum)}</span></div>
-          ${so?`<div class="deals">${s.deals.sort((a,b)=>b.sumKzt-a.sumKzt).map(d=>`<div class="deal"><span class="dn" title="${esc(d.title||('Сделка #'+d.id))}">${esc(d.title||('Сделка #'+d.id))}</span><span class="dv tabular">${fmt(d.sumKzt/1e6)} млн</span>${d.url?`<a class="dl" href="${d.url}" target="_blank" title="Открыть в Bitrix"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M17 7H8M17 7v9"/></svg></a>`:''}</div>`).join('')}</div>`:''}
+          ${so?`<div class="deals">${s.deals.sort((a,b)=>b.sumKzt-a.sumKzt).map(d=>{const tip=[d.company?('Компания: '+d.company):'',d.instrument?('Прибор: '+d.instrument):'',d.title||('Сделка #'+d.id)].filter(Boolean).join('\n');return `<div class="deal"><span class="dn" title="${esc(tip)}">${esc(d.company||d.title||('Сделка #'+d.id))}${d.instrument?` · <span style="color:var(--dim,#8592ad)">${esc(d.instrument)}</span>`:''}</span><span class="dv tabular">${fmt(d.sumKzt/1e6)} млн</span>${d.url?`<a class="dl" href="${d.url}" target="_blank" title="Открыть в Bitrix"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M17 7H8M17 7v9"/></svg></a>`:''}</div>`;}).join('')}</div>`:''}
         </div>`;
       }).join('')}</div></div>`;
   }).join('')||'<div class="news-empty">Нет сделок по фильтру</div>';
@@ -691,6 +692,8 @@ function renderBars(deals){
   }).join('')+planLineHtml;
   setTimeout(()=>layoutBars(true),200);
   document.querySelectorAll('#bars .bcol').forEach(c=>{const i=+c.dataset.i,o=byMonth[i];
+    c.style.cursor='pointer';
+    c.addEventListener('click',()=>{ const on=FILT.month.length===1&&FILT.month[0]===i; FILT.month=on?[]:[i]; EXPAND_ALL=!on; if(typeof renderMS==='function')renderMS('month'); renderAll(); });
     c.addEventListener('mousemove',e=>{const rows=Object.keys(o).sort((a,b)=>o[b]-o[a]).map(dp=>`<span style="color:${stColor(dp,DEPT_ORDER.indexOf(dp))}">■</span> ${esc(dp)}: ${fmt(o[dp])} млн`).join('<br>');
       let planRow='';
       if(planMonthMln>0){const diff=totals[i]-planMonthMln;const dpct=planMonthMln?Math.round(totals[i]/planMonthMln*100):0;const col=diff>=0?'#3ddc84':'#ff5b6e';planRow=`<br><span style="color:#ffb020">▬</span> план/мес: ${fmt(planMonthMln)} млн<br><span style="color:${col}">${diff>=0?'▲ +':'▼ '}${fmt(diff)} млн (${dpct}% плана)</span>`;}

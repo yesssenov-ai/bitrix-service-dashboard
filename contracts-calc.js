@@ -87,7 +87,7 @@ async function loadDeals(year) {
   const [rate, stageMeta] = await Promise.all([getTodayRate(), getAllStageMeta()]);
   const { rows } = await pool.query(
     `SELECT deal_id, category_id, stage_id, deal_title, opportunity, currency_id,
-            department_id, company_id, contract_date, manufacturer
+            department_id, company_id, company_name, instrument_name, contract_date, manufacturer
        FROM ticketsmodule_stat_deals
       WHERE contract_date BETWEEN $1 AND $2 AND stage_id = ANY($3)`,
     [`${year}-01-01`, `${year}-12-31`, CONTRACT_SET]
@@ -100,6 +100,8 @@ async function loadDeals(year) {
     return {
       id: d.deal_id,
       title: d.deal_title || null,
+      company: d.company_name || null,
+      instrument: d.instrument_name || null,
       category: d.category_id,
       pipeName: pipe.name,
       saleType: saleType(d.category_id, d.department_id),

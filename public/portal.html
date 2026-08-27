@@ -101,6 +101,8 @@ h1{font-family:var(--font-display);font-size:30px;font-weight:600;letter-spacing
   min-height:168px;transition:transform .16s ease,border-color .16s ease,background .16s ease;
   cursor:pointer;
 }
+.card[draggable="true"]{cursor:grab;}
+.card.dragging{opacity:.5;transform:scale(.98);cursor:grabbing;}
 .card:hover:not(.locked){
   transform:translateY(-3px);border-color:var(--line-2);background:var(--panel-h);
 }
@@ -244,13 +246,43 @@ function moduleCard(m){
 
 // Показываем ТОЛЬКО разрешённые модули (не пойманные — не рендерим вовсе).
 // allowed = список кодов (админу передаём все). Личный кабинет добавляем всегда.
+let USERKEY = '';   // ключ персонального порядка карточек (по сотруднику)
+function orderKey(){ return 'pls-portal-order:' + (USERKEY || 'u'); }
+function loadOrder(){ try{ return JSON.parse(localStorage.getItem(orderKey()) || 'null'); }catch(e){ return null; } }
+function saveOrder(codes){ try{ localStorage.setItem(orderKey(), JSON.stringify(codes)); }catch(e){} }
+function applySavedOrder(list){
+  const saved = loadOrder(); if (!saved || !saved.length) return list;
+  const byCode = {}; list.forEach(m => byCode[m.code] = m);
+  const out = []; saved.forEach(c => { if (byCode[c]) { out.push(byCode[c]); delete byCode[c]; } });
+  list.forEach(m => { if (byCode[m.code]) out.push(m); });   // новые (не в сохранённом) — в конец
+  return out;
+}
+function persistOrder(){ const codes = [...document.querySelectorAll('#grid .card[data-mod]')].map(c => c.getAttribute('data-mod')).filter(c => c !== 'КАБ'); saveOrder(codes); }
+function enableDrag(){
+  const grid = document.getElementById('grid'); let dragEl = null;
+  grid.querySelectorAll('.card[data-mod]').forEach(card => {
+    if (card.getAttribute('data-mod') === 'КАБ') return;   // «Мой кабинет» всегда последним
+    card.setAttribute('draggable', 'true');
+    card.addEventListener('dragstart', e => { dragEl = card; card.classList.add('dragging'); try{ e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', ''); }catch(_){} });
+    card.addEventListener('dragend', () => { card.classList.remove('dragging'); if (card.__moved) { persistOrder(); card.__moved = false; } dragEl = null; });
+    card.addEventListener('click', e => { if (card.__suppressClick) { e.preventDefault(); card.__suppressClick = false; } });
+    card.addEventListener('dragover', e => {
+      e.preventDefault(); if (!dragEl || dragEl === card || card.getAttribute('data-mod') === 'КАБ') return;
+      const b = card.getBoundingClientRect(); const before = e.clientX < b.left + b.width / 2;
+      grid.insertBefore(dragEl, before ? card : card.nextElementSibling);
+      dragEl.__moved = true; dragEl.__suppressClick = true;
+    });
+  });
+}
 function renderGrid(allowedCodes){
   const grid = document.getElementById('grid');
-  const visible = MODULES.filter(m => allowedCodes.includes(m.code));
+  let visible = MODULES.filter(m => allowedCodes.includes(m.code));
+  visible = applySavedOrder(visible);
   const cards = visible.map(moduleCard).join('') + moduleCard(ACCOUNT_CARD);
   grid.innerHTML = cards;
   const note = document.getElementById('emptyNote');
   if (note) note.style.display = visible.length ? 'none' : '';
+  enableDrag();
   // Карточки только что перерисованы: мгновенно ставим уже известные счётчики
   // (без мигания), затем освежаем с сервера.
   applyModuleBadges(lastModuleCounts);
@@ -301,6 +333,7 @@ async function init(){
     const r = await fetch('/auth/me');
     if (!r.ok) { window.location.href='/login.html'; return; }
     const { user } = await r.json();
+    USERKEY = user.username || user.displayName || 'u';
     document.getElementById('userName').innerHTML = `<b>${esc(user.displayName)}</b>`;
     const hour = new Date().getHours();
     const greeting = hour<6?'Доброй ночи':hour<12?'Доброе утро':hour<18?'Добрый день':'Добрый вечер';
