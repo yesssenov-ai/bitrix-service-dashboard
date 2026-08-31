@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { requireAuth } = require('../auth');
+const { requireAuth, requireModuleApi } = require('../auth');
 
 // Доступ к модулю «Закупки»: admin, coordinator и store правят закупки.
 const ROLES = ['admin', 'coordinator', 'store'];
@@ -102,8 +102,9 @@ router.get('/deletions', requireAuth(['admin']), async (req, res) => {
   }
 });
 
-// POST /api/procurement/create — создать заявку: локально + элемент в 1066
-router.post('/create', requireAuth(ROLES), express.json(), async (req, res) => {
+// POST /api/procurement/create — создать заявку: локально + элемент в 1066.
+// Доступно ВСЕМ, у кого есть доступ к модулю «Закупки» (по гранту модуля, не по роли).
+router.post('/create', requireModuleApi('PROC'), express.json(), async (req, res) => {
   try {
     const { createRequest } = require('../procurement-calc');
     const payload = req.body || {};

@@ -250,7 +250,9 @@ function readOnlyCreateCard(){
 }
 function render(){
   const canEdit=canEditProc();
-  const left=(MODE==='edit'&&EDIT!=null)?editCardHtml():(canEdit?createCardHtml():readOnlyCreateCard());
+  // Создавать заявку может каждый, у кого есть доступ к модулю (форма — всем).
+  // Редактирование существующих заявок остаётся только у admin/coordinator/store.
+  const left=(MODE==='edit'&&EDIT!=null&&canEdit)?editCardHtml():createCardHtml();
   const nA=activeList().length, nD=doneList().length;
   const isAdmin = ME && ME.role==='admin';
   const body = rightBodyHtml();

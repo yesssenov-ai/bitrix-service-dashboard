@@ -24,9 +24,8 @@ function mailSubject(ctx) {
 }
 // Ключ ветки для заголовков References/In-Reply-To (стабилен на всю закупку).
 const mailThreadId = itemId => `<proc-${itemId}@prolabsupport.kz>`;
-// ВРЕМЕННО (на время настройки модуля): по умолчанию бухгалтер — Куаныш Есенов
-// вместо Натальи Зенченко. Чтобы вернуть Зенченко — замени регэксп на /зенченко/i.
-const chiefAccountantId = () => findUserId(/есенов|yessenov/i) || findUserId(/зенченко/i);
+// Главбух по умолчанию — Наталья Зенченко (на этап оплаты уходит ей).
+const chiefAccountantId = () => findUserId(/зенченко|zenchenko/i);
 const warehouseManagerId = () => findUserId(/нурмаганбетов/i);
 const findBidByEmail = re => { const e = Object.entries(USER_EMAILS || {}).find(([, em]) => re.test(String(em || ''))); return e ? Number(e[0]) : null; };
 // Два бухгалтера для доверенности: Бактыгул Акмурзина и Елнура Капар. Резолвим по
