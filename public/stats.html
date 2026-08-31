@@ -143,11 +143,13 @@ tbody tr:hover td.l{background:var(--panel-h)}
       <div class="msel-menu" id="yearMenu" style="display:none"></div>
     </div>
     <button class="btn btn-p" id="refreshBtn" onclick="refreshNow()" title="Подтянуть из Битрикса сделки, изменённые после последнего обновления (и убрать удалённые)">↻ Обновить</button>
+    <button class="btn" id="exportBtn" onclick="exportAllStats()" title="Выгрузить все вкладки статистики в один Excel (по выбранным годам)">⤓ Выгрузка в Excel</button>
     <button class="btn" id="resyncBtn" style="display:none" onclick="resync()" title="Полная ночная пересинхронизация всех сделок (долго)">⟳ Пересинк из Битрикс</button>
     <span class="hint" style="margin:0">Продано = Контракт…Завершена · КП = стадии P60/P80</span>
   </div>
   <div id="content"><div class="spin"></div></div>
 </div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 const F=n=>Math.round(n||0).toLocaleString('ru-RU').replace(/,/g,' ');
 const M=n=>{n=n||0;if(Math.abs(n)>=1e9)return (n/1e9).toFixed(2)+' млрд';if(Math.abs(n)>=1e6)return (n/1e6).toFixed(1)+' млн';if(Math.abs(n)>=1e3)return (n/1e3).toFixed(0)+' тыс';return String(Math.round(n));};
@@ -462,6 +464,67 @@ function exportSpheres(){
   const years=((BOARD.yearsSel&&BOARD.yearsSel.length)?BOARD.yearsSel:[BOARD.year]).join(',');
   window.open('/api/stats/sphere-export?years='+encodeURIComponent(years),'_blank');
 }
+// Выгрузка всех вкладок в один Excel — из уже загруженного BOARD (по выбранным годам).
+function exportAllStats(){
+  if(typeof XLSX==='undefined'){alert('Библиотека Excel ещё не загрузилась — обновите страницу и повторите.');return;}
+  if(!BOARD){alert('Данные ещё не загружены.');return;}
+  const R=n=>Math.round(n||0);
+  const wb=XLSX.utils.book_new();
+  const add=(name,aoa)=>{try{const ws=XLSX.utils.aoa_to_sheet(aoa);XLSX.utils.book_append_sheet(wb,ws,name.slice(0,31));}catch(e){}};
+  const k=BOARD.kpi||{};
+  add('KPI',[['Показатель','Значение'],
+    ['Годы',yearsLabel()],
+    ['Продано — сумма ₸',R(k.soldSum)],['Продано — сделок',k.soldCount||0],['Средний чек ₸',R(k.soldAvg)],
+    ['КП — сумма ₸',R(k.kpSum)],['КП — сделок',k.kpCount||0],['Средний чек КП ₸',R(k.kpAvg)],
+    ['Пайплайн — сумма ₸',R(k.pipeSum)],['Пайплайн — сделок',k.pipeCount||0],
+    ['Компаний',k.companies||0],['Менеджеров',k.managers||0]]);
+  // Производители (матрица отдел × производитель)
+  const p=BOARD.producers;
+  if(p&&p.types){add('Производители',[['Отдел / направление','Всего ₸',...p.manufacturers],
+    ...p.types.map(t=>[t,R(p.table[t]&&p.table[t].Common),...p.manufacturers.map(m=>R(p.table[t]&&p.table[t][m]))])]);}
+  // Менеджеры
+  add('Менеджеры',[['Менеджер','Отделы','Сделок','Сумма ₸','Средний чек ₸'],
+    ...(BOARD.managers||[]).map(m=>[m.name,(m.depts||[]).join(', '),m.count,R(m.sum),R(m.avg)])]);
+  // Приборы
+  const instRows=arr=>(arr||[]).map(i=>[i.name,i.manufacturer||'',i.count,R(i.sum),R(i.avg)]);
+  add('Приборы — продано',[['Прибор','Производитель','Сделок','Сумма ₸','Средний чек ₸'],...instRows(BOARD.instrumentsSold)]);
+  add('Приборы — КП',[['Прибор','Производитель','Сделок','Сумма ₸','Средний чек ₸'],...instRows(BOARD.instrumentsKp)]);
+  // Компании — пивот: Тотал + годы, каждый блок разбит по категориям (Приборы/ОРМ/Сервис/ТЦ)
+  {
+    const CATS=[['Приборы','Приборы'],['Расходники','ОРМ'],['Услуги','Сервис'],['Тренинг-центр','ТЦ']];
+    const cd=BOARD.companyDeals||[];
+    const years=[...new Set(cd.map(d=>d.y).filter(Boolean))].sort((a,b)=>a-b);
+    const by={};
+    for(const d of cd){const key=d.cId||d.co;const c=by[key]||(by[key]={name:d.co,ind:d.ind,tot:{},yr:{}});if(d.ind&&d.ind!=='Не указана')c.ind=d.ind;c.tot[d.cat]=(c.tot[d.cat]||0)+d.sum;if(d.y){(c.yr[d.y]=c.yr[d.y]||{});c.yr[d.y][d.cat]=(c.yr[d.y][d.cat]||0)+d.sum;}}
+    const blocks=[{label:'Тотал',get:c=>c.tot},...years.map(y=>({label:String(y),get:c=>c.yr[y]||{}}))];
+    const rows=Object.values(by).map(c=>({c,total:CATS.reduce((s,[k])=>s+(c.tot[k]||0),0)})).sort((a,b)=>b.total-a.total);
+    const h1=['Компания','Сфера',...blocks.flatMap(b=>[b.label,'','',''])];
+    const h2=['','',...blocks.flatMap(()=>CATS.map(x=>x[1]))];
+    const body=rows.map(({c})=>[c.name,c.ind||'',...blocks.flatMap(b=>{const g=b.get(c)||{};return CATS.map(([k])=>R(g[k]||0));})]);
+    const ws=XLSX.utils.aoa_to_sheet([h1,h2,...body]);
+    const merges=[{s:{r:0,c:0},e:{r:1,c:0}},{s:{r:0,c:1},e:{r:1,c:1}}];
+    blocks.forEach((b,i)=>{const c0=2+i*4;merges.push({s:{r:0,c:c0},e:{r:0,c:c0+3}});});
+    ws['!merges']=merges;
+    ws['!cols']=[{wch:38},{wch:20},...blocks.flatMap(()=>CATS.map(()=>({wch:12})))];
+    ws['!freeze']={xSplit:2,ySplit:2};
+    XLSX.utils.book_append_sheet(wb,ws,'Компании');
+  }
+  // Сферы
+  const sphRows=arr=>(arr||[]).map(s=>[s.industry,s.companies,s.count,R(s.sum),R(s.avg)]);
+  add('Сферы — продано',[['Сфера','Компаний','Сделок','Сумма ₸','Средний чек ₸'],...sphRows(BOARD.spheres)]);
+  add('Сферы — пайплайн',[['Сфера','Компаний','Сделок','Сумма ₸','Средний чек ₸'],...sphRows(BOARD.spheresPipe)]);
+  // Сделки (детально)
+  const cd=BOARD.companyDeals||[];
+  if(cd.length)add('Сделки',[['Компания','Сфера','Год','Отдел','Менеджер','Производитель','Прибор','Категория','Сумма ₸'],
+    ...cd.map(d=>[d.co,d.ind||'',d.y||'',d.dept,d.mgr,d.manuf,d.instr||'',d.cat||'',R(d.sum)])]);
+  // Конверсии (если открывали вкладку)
+  if(CONV&&CONV.byManager){
+    const cr=arr=>(arr||[]).map(x=>[x.key,x.cohort,x.kp,x.contract,x.convRate!=null?x.convRate+'%':'',x.avgCycle!=null?Math.round(x.avgCycle)+' дн':'']);
+    add('Конверсии — менеджеры',[['Менеджер','Когорта','Дошли до КП','До контракта','Конверсия','Ср. цикл'],...cr(CONV.byManager)]);
+    add('Конверсии — отделы',[['Отдел','Когорта','Дошли до КП','До контракта','Конверсия','Ср. цикл'],...cr(CONV.byDept)]);
+  }
+  XLSX.writeFile(wb,'Статистика_'+yearsLabel().replace(/[^0-9A-Za-zА-Яа-я]+/g,'_')+'.xlsx');
+}
 
 // ── Фаза 2: Конверсии и тайминги ──────────────────────────────────────────
 const DN=v=>v==null?'—':(Math.round(v*10)/10)+' дн';
@@ -569,6 +632,6 @@ async function refreshNow(silent){
 async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
 load().then(()=>refreshNow(true)); // при открытии сразу тихо подтягиваем изменения
 </script>
-  <script src="/assets/pls-ai.js?v=13" defer></script>
+  <script src="/assets/pls-ai.js?v=14" defer></script>
 </body>
 </html>

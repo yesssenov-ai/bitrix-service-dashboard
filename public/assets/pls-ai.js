@@ -163,6 +163,7 @@
   function botHTML(d, q) {
     if (d.error) return '<div class="pai-err">' + esc(d.error) + '</div>';
     if (d.answer) return '<div class="pai-int">🧠 Ассистент ЦУП</div><div class="pai-answer">' + esc(d.answer).replace(/\n/g, '<br>') + '</div>';
+    if (d.statExport) return '<div class="pai-int">📊 Выгрузка статистики</div><div class="pai-hint" style="margin-bottom:8px">' + esc(d.label || '') + '</div><button class="pai-dl" data-q="' + esc(d.q || q) + '">⬇ Скачать Excel</button>';
     // Сделки с неактуальными комментариями.
     if (d.stale) {
       var stTop = d.top || d.rows || [];

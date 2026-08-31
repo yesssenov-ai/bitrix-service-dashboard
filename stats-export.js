@@ -135,4 +135,40 @@ async function buildSphereWorkbook(years, sphereFilter) {
   return { buffer: XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }), years: sel };
 }
 
-module.exports = { buildSphereWorkbook };
+// ── Пивот по компаниям: Тотал + годы, каждый блок разбит по категориям
+//    (Приборы / ОРМ=Расходники / Сервис=Услуги / ТЦ=Тренинг-центр). ─────────────
+const CAT_MAP = [['Приборы', 'Приборы'], ['Расходники', 'ОРМ'], ['Услуги', 'Сервис'], ['Тренинг-центр', 'ТЦ']];
+async function buildCompaniesPivotWorkbook() {
+  const { all } = await loadEnriched();
+  const sold = all.filter(d => isSold(d.stage));
+  const years = [...new Set(sold.map(d => yr(d.contractDate)).filter(Boolean))].sort((a, b) => a - b);
+  const by = {};
+  for (const d of sold) {
+    const key = d.companyId || d.company;
+    const c = by[key] || (by[key] = { name: d.company, ind: d.industry, tot: {}, yr: {} });
+    if (d.industry && d.industry !== 'Не указана') c.ind = d.industry;
+    const y = yr(d.contractDate);
+    c.tot[d.catGroup] = (c.tot[d.catGroup] || 0) + d.sum;
+    if (y) { (c.yr[y] = c.yr[y] || {}); c.yr[y][d.catGroup] = (c.yr[y][d.catGroup] || 0) + d.sum; }
+  }
+  const blocks = [{ label: 'Тотал', get: c => c.tot }, ...years.map(y => ({ label: String(y), get: c => c.yr[y] || {} }))];
+  const rows = Object.values(by)
+    .map(c => ({ c, total: CAT_MAP.reduce((s, [k]) => s + (c.tot[k] || 0), 0) }))
+    .sort((a, b) => b.total - a.total);
+  const h1 = ['Компания', 'Сфера', ...blocks.flatMap(b => [b.label, '', '', ''])];
+  const h2 = ['', '', ...blocks.flatMap(() => CAT_MAP.map(x => x[1]))];
+  const body = rows.map(({ c }) => [c.name, c.ind || '', ...blocks.flatMap(b => { const g = b.get(c) || {}; return CAT_MAP.map(([k]) => money(g[k] || 0)); })]);
+  const ws = XLSX.utils.aoa_to_sheet([h1, h2, ...body]);
+  const merges = [{ s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }, { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } }];
+  blocks.forEach((b, i) => { const c0 = 2 + i * 4; merges.push({ s: { r: 0, c: c0 }, e: { r: 0, c: c0 + 3 } }); });
+  ws['!merges'] = merges;
+  ws['!cols'] = [{ wch: 38 }, { wch: 20 }, ...blocks.flatMap(() => CAT_MAP.map(() => ({ wch: 12 })))];
+  ws['!freeze'] = { xSplit: 2, ySplit: 2 };
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Компании');
+  const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  const fname = `Статистика_компании_${years.length ? years[0] + '-' + years[years.length - 1] : 'все'}.xlsx`;
+  return { buffer, fname, years };
+}
+
+module.exports = { buildSphereWorkbook, buildCompaniesPivotWorkbook };

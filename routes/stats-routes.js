@@ -54,6 +54,20 @@ router.get('/sphere-export', requireAuth(PM_ROLES), async (req, res) => {
   }
 });
 
+// GET /api/stats/companies-export — пивот по компаниям (Тотал + годы × категории).
+router.get('/companies-export', requireAuth(PM_ROLES), async (req, res) => {
+  try {
+    const { buildCompaniesPivotWorkbook } = require('../stats-export');
+    const { buffer, fname } = await buildCompaniesPivotWorkbook();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fname)}`);
+    res.end(buffer);
+  } catch (e) {
+    console.error('GET /api/stats/companies-export error:', e.message);
+    res.status(500).json({ error: 'Не удалось сформировать выгрузку: ' + e.message });
+  }
+});
+
 // POST /api/stats/refresh — инкрементально подтянуть из Битрикса сделки,
 // изменённые ПОСЛЕ последнего обновления зеркала (по DATE_MODIFY), а при ручном
 // нажатии (reconcile:true) ещё и убрать удалённые. То же зеркало, что у Контрактов.

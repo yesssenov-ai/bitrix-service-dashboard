@@ -15,6 +15,13 @@ function meBidOf(user) {
   return null;
 }
 
+// Выгрузка статистики по компаниям (Тотал + годы × категории) через ProLab AI.
+function looksLikeStatExport(q) {
+  const s = String(q || '').toLowerCase();
+  const exp = /выгруз|экспорт|скач|в\s*excel|в\s*эксель|в\s*ексель|таблиц[уеа]/;
+  return exp.test(s) && (/статистик/.test(s) || (/компани/.test(s) && /(год|катего|разбив|сфер)/.test(s)));
+}
+
 // POST /api/plsai/query { q } — разобрать запрос и вернуть сводку + образец строк.
 router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) => {
   try {
@@ -76,6 +83,13 @@ router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) 
       res.set('Cache-Control', 'no-store');
       return res.json(Object.assign({ ok: true, ai: true }, v));
     }
+    // Выгрузка статистики по компаниям в Excel.
+    if (looksLikeStatExport(q)) {
+      const payload = { ok: true, ai: false, statExport: true, kind: 'companies', q, label: 'Статистика по компаниям — Тотал и годы, разбивка по категориям (Приборы / ОРМ / Сервис / ТЦ)' };
+      history.save(uid, q, Object.assign({ type: 'statExport' }, payload));
+      res.set('Cache-Control', 'no-store');
+      return res.json(payload);
+    }
     // Трекер задач Bitrix по сделкам: кто и как выполняет (Реализация / План продаж / оба).
     const tasksMod = require('../plsai-tasks');
     if (tasksMod.looksLikeTasks(q)) {
@@ -135,6 +149,14 @@ router.post('/export', requireAuth(VIEW_ROLES), express.json(), async (req, res)
     const ops = require('../plsai-ops');
     const q = String((req.body || {}).q || '').trim();
     if (!q) return res.status(400).json({ error: 'Пустой запрос' });
+    // Выгрузка статистики по компаниям (Тотал + годы × категории).
+    if (looksLikeStatExport(q)) {
+      const { buildCompaniesPivotWorkbook } = require('../stats-export');
+      const { buffer, fname } = await buildCompaniesPivotWorkbook();
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fname)}`);
+      return res.end(buffer);
+    }
     // Актуальные/просроченные задачи — выгрузка (строка на задачу). ВАЖНО: раньше «Реализации»,
     // иначе looksLikeOps перехватит запрос со словом «Реализация» и вернёт отгрузку.
     const tasksMod = require('../plsai-tasks');

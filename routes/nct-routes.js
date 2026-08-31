@@ -10,9 +10,22 @@ const ai = require('../nct-ai');
 const ROLES = ['admin', 'coordinator', 'manager', 'engineer'];
 
 // ── Таблица реестра/черновиков ──────────────────────────────────────────────────
-let _ready = false;
+let _ready = false, _ensuring = null;
 async function ensureTable() {
   if (_ready) return;
+  if (_ensuring) return _ensuring;           // сериализуем параллельные вызовы (гонка CREATE)
+  _ensuring = (async () => {
+    try { await _doEnsure(); _ready = true; }
+    catch (e) {
+      // «уже существует» / гонка pg_class — не ошибка, считаем готовым
+      if (/already exists|duplicate key|pg_class_relname/i.test(e.message)) { _ready = true; }
+      else { _ensuring = null; throw e; }
+    }
+    _ensuring = null;
+  })();
+  return _ensuring;
+}
+async function _doEnsure() {
   await pool.query(`CREATE TABLE IF NOT EXISTS ticketsmodule_nct_drafts (
     id SERIAL PRIMARY KEY,
     full_name_ru TEXT NOT NULL,
