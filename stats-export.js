@@ -137,7 +137,16 @@ async function buildSphereWorkbook(years, sphereFilter) {
 
 // ── Пивот по компаниям: Тотал + годы, каждый блок разбит по категориям
 //    (Приборы / ОРМ=Расходники / Сервис=Услуги / ТЦ=Тренинг-центр). ─────────────
-const CAT_MAP = [['Приборы', 'Приборы'], ['Расходники', 'ОРМ'], ['Услуги', 'Сервис'], ['Тренинг-центр', 'ТЦ']];
+const KNOWN_CATS = ['Приборы', 'Расходники', 'Услуги', 'Тренинг-центр']; // catGroup
+const CAT_LABELS = ['Приборы', 'ОРМ', 'Сервис', 'ТЦ', 'Прочее'];
+const NCOL = CAT_LABELS.length;
+const catVals = (g) => {
+  g = g || {};
+  const kn = KNOWN_CATS.map(k => g[k] || 0);
+  const all = Object.values(g).reduce((s, v) => s + v, 0);
+  const other = all - kn.reduce((s, v) => s + v, 0);
+  return [...kn, other].map(money);
+};
 async function buildCompaniesPivotWorkbook() {
   const { all } = await loadEnriched();
   const sold = all.filter(d => isSold(d.stage));
@@ -153,16 +162,16 @@ async function buildCompaniesPivotWorkbook() {
   }
   const blocks = [{ label: 'Тотал', get: c => c.tot }, ...years.map(y => ({ label: String(y), get: c => c.yr[y] || {} }))];
   const rows = Object.values(by)
-    .map(c => ({ c, total: CAT_MAP.reduce((s, [k]) => s + (c.tot[k] || 0), 0) }))
+    .map(c => ({ c, total: Object.values(c.tot).reduce((s, v) => s + v, 0) }))
     .sort((a, b) => b.total - a.total);
-  const h1 = ['Компания', 'Сфера', ...blocks.flatMap(b => [b.label, '', '', ''])];
-  const h2 = ['', '', ...blocks.flatMap(() => CAT_MAP.map(x => x[1]))];
-  const body = rows.map(({ c }) => [c.name, c.ind || '', ...blocks.flatMap(b => { const g = b.get(c) || {}; return CAT_MAP.map(([k]) => money(g[k] || 0)); })]);
+  const h1 = ['Компания', 'Сфера', ...blocks.flatMap(b => [b.label, ...Array(NCOL - 1).fill('')])];
+  const h2 = ['', '', ...blocks.flatMap(() => CAT_LABELS.slice())];
+  const body = rows.map(({ c }) => [c.name, c.ind || '', ...blocks.flatMap(b => catVals(b.get(c)))]);
   const ws = XLSX.utils.aoa_to_sheet([h1, h2, ...body]);
   const merges = [{ s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }, { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } }];
-  blocks.forEach((b, i) => { const c0 = 2 + i * 4; merges.push({ s: { r: 0, c: c0 }, e: { r: 0, c: c0 + 3 } }); });
+  blocks.forEach((b, i) => { const c0 = 2 + i * NCOL; merges.push({ s: { r: 0, c: c0 }, e: { r: 0, c: c0 + NCOL - 1 } }); });
   ws['!merges'] = merges;
-  ws['!cols'] = [{ wch: 38 }, { wch: 20 }, ...blocks.flatMap(() => CAT_MAP.map(() => ({ wch: 12 })))];
+  ws['!cols'] = [{ wch: 38 }, { wch: 20 }, ...blocks.flatMap(() => CAT_LABELS.map(() => ({ wch: 12 })))];
   ws['!freeze'] = { xSplit: 2, ySplit: 2 };
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Компании');

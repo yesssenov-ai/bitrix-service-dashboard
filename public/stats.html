@@ -491,21 +491,24 @@ function exportAllStats(){
   add('Приборы — КП',[['Прибор','Производитель','Сделок','Сумма ₸','Средний чек ₸'],...instRows(BOARD.instrumentsKp)]);
   // Компании — пивот: Тотал + годы, каждый блок разбит по категориям (Приборы/ОРМ/Сервис/ТЦ)
   {
-    const CATS=[['Приборы','Приборы'],['Расходники','ОРМ'],['Услуги','Сервис'],['Тренинг-центр','ТЦ']];
+    const KNOWN=['Приборы','Расходники','Услуги','Тренинг-центр']; // catGroup → колонки
+    const LABELS=['Приборы','ОРМ','Сервис','ТЦ','Прочее'];
+    const NC=LABELS.length;
+    const vals=g=>{g=g||{};const kn=KNOWN.map(k=>g[k]||0);const all=Object.values(g).reduce((s,v)=>s+v,0);const other=all-kn.reduce((s,v)=>s+v,0);return [...kn,other].map(R);};
     const cd=BOARD.companyDeals||[];
     const years=[...new Set(cd.map(d=>d.y).filter(Boolean))].sort((a,b)=>a-b);
     const by={};
     for(const d of cd){const key=d.cId||d.co;const c=by[key]||(by[key]={name:d.co,ind:d.ind,tot:{},yr:{}});if(d.ind&&d.ind!=='Не указана')c.ind=d.ind;c.tot[d.cat]=(c.tot[d.cat]||0)+d.sum;if(d.y){(c.yr[d.y]=c.yr[d.y]||{});c.yr[d.y][d.cat]=(c.yr[d.y][d.cat]||0)+d.sum;}}
     const blocks=[{label:'Тотал',get:c=>c.tot},...years.map(y=>({label:String(y),get:c=>c.yr[y]||{}}))];
-    const rows=Object.values(by).map(c=>({c,total:CATS.reduce((s,[k])=>s+(c.tot[k]||0),0)})).sort((a,b)=>b.total-a.total);
-    const h1=['Компания','Сфера',...blocks.flatMap(b=>[b.label,'','',''])];
-    const h2=['','',...blocks.flatMap(()=>CATS.map(x=>x[1]))];
-    const body=rows.map(({c})=>[c.name,c.ind||'',...blocks.flatMap(b=>{const g=b.get(c)||{};return CATS.map(([k])=>R(g[k]||0));})]);
+    const rows=Object.values(by).map(c=>({c,total:Object.values(c.tot).reduce((s,v)=>s+v,0)})).sort((a,b)=>b.total-a.total);
+    const h1=['Компания','Сфера',...blocks.flatMap(b=>[b.label,...Array(NC-1).fill('')])];
+    const h2=['','',...blocks.flatMap(()=>LABELS.slice())];
+    const body=rows.map(({c})=>[c.name,c.ind||'',...blocks.flatMap(b=>vals(b.get(c)))]);
     const ws=XLSX.utils.aoa_to_sheet([h1,h2,...body]);
     const merges=[{s:{r:0,c:0},e:{r:1,c:0}},{s:{r:0,c:1},e:{r:1,c:1}}];
-    blocks.forEach((b,i)=>{const c0=2+i*4;merges.push({s:{r:0,c:c0},e:{r:0,c:c0+3}});});
+    blocks.forEach((b,i)=>{const c0=2+i*NC;merges.push({s:{r:0,c:c0},e:{r:0,c:c0+NC-1}});});
     ws['!merges']=merges;
-    ws['!cols']=[{wch:38},{wch:20},...blocks.flatMap(()=>CATS.map(()=>({wch:12})))];
+    ws['!cols']=[{wch:38},{wch:20},...blocks.flatMap(()=>LABELS.map(()=>({wch:12})))];
     ws['!freeze']={xSplit:2,ySplit:2};
     XLSX.utils.book_append_sheet(wb,ws,'Компании');
   }
