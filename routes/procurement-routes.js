@@ -14,6 +14,15 @@ const OWN_ONLY = ['engineer', 'accountant'];
 const DEL_ROLES = ['admin', 'coordinator'];
 
 // GET /api/procurement/meta — стадии + справочники для формы (кэш 30 мин, ?force=1)
+// GET /api/procurement/doc-fields — коды файловых полей Битрикса (для проверки, что
+// «Файл закупки» подхватился). Админ. ?force=1 — сбросить кэш резолва.
+router.get('/doc-fields', requireAuth(['admin']), async (req, res) => {
+  try {
+    const { resolveDocFields } = require('../procurement-calc');
+    res.json({ ok: true, fields: await resolveDocFields(req.query.force === '1') });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 router.get('/meta', requireAuth(VIEW_ROLES), async (req, res) => {
   try {
     const { getMeta } = require('../procurement-calc');
