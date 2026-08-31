@@ -11,6 +11,27 @@ const SHEET_MAP = {
   'ПРЕКУРСОРНАЯ':     { slug: 'prekursornaya',     name: 'Прекурсорная' },
 };
 
+// Приведение имени листа к устойчивому виду: верхний регистр, Ё→Е, только буквы/цифры.
+function sheetKey(s) {
+  return String(s || '').toUpperCase().replace(/Ё/g, 'Е').replace(/[^А-ЯA-Z0-9]/g, '');
+}
+const SHEET_MAP_NORM = {};
+for (const [k, v] of Object.entries(SHEET_MAP)) SHEET_MAP_NORM[sheetKey(k)] = v;
+
+// Сопоставляет лист категории, даже если вкладку переименовали (напр.
+// «ПОМ.ДЛЯ РЕАКТИВ» → Прекурсорная): сначала точное совпадение по
+// нормализованному имени, затем по ключевым словам.
+function resolveSheet(sheetName) {
+  const k = sheetKey(sheetName);
+  if (SHEET_MAP_NORM[k]) return SHEET_MAP_NORM[k];
+  if (/ПРИЕМ/.test(k)) return SHEET_MAP['ПРИЕМКА'];
+  if (/ПРОБОПОДГ|ПОДГОТОВ/.test(k)) return SHEET_MAP['ПРОБОПОДГОТОВКА'];
+  if (/ПРОБИРН/.test(k)) return SHEET_MAP['ПРОБИРНЫЙ АНАЛИЗ'];
+  if (/АНАЛИТИК/.test(k)) return SHEET_MAP['АНАЛИТИКА'];
+  if (/ПРЕКУРСОР|РЕАКТИВ/.test(k)) return SHEET_MAP['ПРЕКУРСОРНАЯ']; // прекурсорная = помещение для реактивов
+  return null;
+}
+
 function normalizeForKey(s) {
   return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
@@ -50,8 +71,9 @@ function parseCatalogWorkbook(buffer) {
   const warnings = [];
 
   for (const sheetName of wb.SheetNames) {
-    const mapping = SHEET_MAP[sheetName];
+    const mapping = resolveSheet(sheetName);
     if (!mapping) { warnings.push(`Лист "${sheetName}" не распознан и пропущен (нет в списке известных категорий)`); continue; }
+    if (categories.some(c => c.slug === mapping.slug)) { warnings.push(`Лист "${sheetName}" пропущен: категория «${mapping.name}» уже заполнена другим листом`); continue; }
     categories.push(mapping);
 
     const ws = wb.Sheets[sheetName];
@@ -73,6 +95,13 @@ function parseCatalogWorkbook(buffer) {
     for (let r = 1; r < rows.length; r++) {
       const row = rows[r] || [];
       const colA = row[0], colB = row[1], colC = row[2], colD = row[3];
+      // Футер-примечание в конце листа («Примечание.», инструкции) — не позиции.
+      // Как только встретили маркер «Примечание…» в любой из первых колонок — весь
+      // остаток листа игнорируем.
+      const aTxt = colA != null ? String(colA).trim() : '';
+      const bTxt = colB != null ? String(colB).trim() : '';
+      if (/^примечани[ея]/i.test(aTxt) || /^примечани[ея]/i.test(bTxt)) break;
+
       const nameVal = colB !== null && colB !== undefined ? String(colB).trim() : '';
 
       if (!nameVal) {

@@ -348,8 +348,11 @@ router.post('/catalog/upload', requireAuth(PM_ROLES), upload.single('file'), asy
   if (!req.file) return res.status(400).json({ error: 'Файл не получен' });
   try {
     const { importCatalogVersion } = require('../kp-catalog-import');
+    // multer/busboy отдаёт originalname в latin1 → кириллица «ломается». Перекодируем в UTF-8.
+    let fname = req.file.originalname || 'catalog.xlsx';
+    try { const u = Buffer.from(fname, 'latin1').toString('utf8'); if (!/�/.test(u)) fname = u; } catch (_) {}
     const result = await importCatalogVersion({
-      buffer: req.file.buffer, filename: req.file.originalname,
+      buffer: req.file.buffer, filename: fname,
       note: req.body.note || null, uploadedBy: req.user.id,
     });
     res.json({ ok: true, ...result });
