@@ -207,7 +207,6 @@ const DOC_WARRANTY = process.env.PROC_WARRANTY_FIELD || 'ufCrm10_1786717682346';
 const APPROVE_YES = '1827';                    // «Согласовано» (поле Согласование предоплаты)
 // Слоты загрузки: ключ + подпись (код подтягивается динамически по названию).
 const UPLOAD_SLOT_DEFS = [
-  { key: 'purchase', label: 'Файл закупки',             re: /файл.*закуп|закуп.*файл/i, fallback: process.env.PROC_PURCHASE_FIELD || null },
   { key: 'invoice',  label: 'Счет на оплату',           re: /сч[её]т.*оплат/i,       fallback: DOC_INVOICE },
   { key: 'pay',      label: 'Подтверждение оплаты',      re: /подтвержд.*оплат/i,     fallback: DOC_PAY },
   { key: 'poa',      label: 'Доверенность',              re: /доверенн/i,             fallback: process.env.PROC_POA_FIELD || 'ufCrm10_1787059241414' },
@@ -1282,9 +1281,9 @@ async function scanServiceForAutoCreate() {
 // ── Файлы документов (множественные, локальный источник правды) ──────────────
 const SLOT_KEYS = ['purchase', 'invoice', 'pay', 'poa', 'contract', 'warranty'];
 const SLOT_LABELS = { purchase: 'Файл закупки', invoice: 'Счет на оплату', pay: 'Подтверждение оплаты', poa: 'Доверенность', contract: 'Накладная', warranty: 'Гарантийный сертификат' };
-// «Мягкие» слоты: пишем в Bitrix, ЕСЛИ поле найдено по названию (resolveDocFields);
-// если поля нет — не блокируем, файл остаётся в ЦУП. «Файл закупки» — такой слот.
-const BEST_EFFORT_SLOTS = new Set(['purchase']);
+// Локальные слоты хранятся только в ЦУП (без поля в Битриксе): «Файл закупки» —
+// вложения инициатора, которые видит ответственный при запросе счёта.
+const LOCAL_SLOTS = new Set(['purchase']);
 function userFacing(msg) { const e = new Error(msg); e.userFacing = true; return e; }
 
 // Выгрузка байтов файла из Битрикса. Через node-fetch (как в discovery, где
@@ -1378,8 +1377,11 @@ async function addFile(localId, slot, { filename, mime, base64, warehouse, accep
   await ensureSchema();
   if (!SLOT_KEYS.includes(slot)) throw new Error('Недопустимый слот файла');
   if (!base64) throw userFacing('Не приложен файл');
-  const code = (await resolveDocFields())[slot];
-  if (!code && !BEST_EFFORT_SLOTS.has(slot)) throw userFacing('В Битриксе не найдено поле для «' + (SLOT_LABELS[slot] || slot) + '»');
+  const localOnly = LOCAL_SLOTS.has(slot);
+  if (!localOnly) {
+    const docFields = await resolveDocFields();
+    if (!docFields[slot]) throw userFacing('В Битриксе не найдено поле для «' + (SLOT_LABELS[slot] || slot) + '»');
+  }
   const before = await pool.query('SELECT COUNT(*)::int AS n FROM ticketsmodule_procurement_files WHERE request_id=$1 AND slot=$2', [localId, slot]);
   const first = (before.rows[0].n || 0) === 0;
   // Байты кладём во ВРЕМЕННОЕ поле content_b64 — чтобы письма прикладывали файл
@@ -1388,8 +1390,8 @@ async function addFile(localId, slot, { filename, mime, base64, warehouse, accep
     `INSERT INTO ticketsmodule_procurement_files (request_id, slot, filename, mime, content_b64, warehouse, accept_date, comment, uploaded_by)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
     [localId, slot, filename || 'file', mime || null, base64 || null, warehouse || null, acceptDate || null, comment || null, uploadedBy || null]);
-  // Пересобираем поле Битрикса всем набором (формат B), если поле найдено.
-  if (code) await pushSlotFull(localId, slot);
+  // Пересобираем поле Битрикса всем набором (формат B). Локальные слоты — не шлём.
+  if (!localOnly) await pushSlotFull(localId, slot);
   // Уведомление об оплате шлём НЕ при загрузке платёжки, а при переходе на
   // «Ожидание товара» — чтобы в одном письме были и платёжка, и доверенность
   // (см. moveStage → stageKey==='waiting').
@@ -1406,8 +1408,11 @@ async function addFilesBatch(localId, slot, files, uploadedBy) {
   if (!SLOT_KEYS.includes(slot)) throw new Error('Недопустимый слот файла');
   files = (files || []).filter(f => f && f.base64);
   if (!files.length) throw userFacing('Файлы не приложены');
-  const code = (await resolveDocFields())[slot];
-  if (!code && !BEST_EFFORT_SLOTS.has(slot)) throw userFacing('В Битриксе не найдено поле для «' + (SLOT_LABELS[slot] || slot) + '»');
+  const localOnly = LOCAL_SLOTS.has(slot);
+  if (!localOnly) {
+    const code = (await resolveDocFields())[slot];
+    if (!code) throw userFacing('В Битриксе не найдено поле для «' + (SLOT_LABELS[slot] || slot) + '»');
+  }
   const before = (await pool.query('SELECT COUNT(*)::int AS n FROM ticketsmodule_procurement_files WHERE request_id=$1 AND slot=$2', [localId, slot])).rows[0].n || 0;
   for (const f of files) {
     await pool.query(
@@ -1415,7 +1420,7 @@ async function addFilesBatch(localId, slot, files, uploadedBy) {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [localId, slot, f.filename || 'file', f.mime || null, f.base64, f.warehouse || null, f.acceptDate || null, f.comment || null, uploadedBy || null]);
   }
-  if (code) await pushSlotFull(localId, slot); // синхронизируем набор в Битрикс, если поле есть
+  if (!localOnly) await pushSlotFull(localId, slot); // один раз (локальные слоты в Битрикс не шлём)
   // Досылаем уведомление, если добавили сверх первого файла слота.
   if (before > 0 || files.length > 1) {
     const atts = files.slice(before > 0 ? 0 : 1).map(f => ({ filename: f.filename || 'file', content: f.base64 }));
@@ -1734,4 +1739,4 @@ async function pendingActionsFor(bid) {
   return { count: items.length, items };
 }
 
-module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, listDeletions, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, resolveDocFields, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, setAmount, setPoaSetup, autoCreateFromService, scanServiceForAutoCreate, pendingActionsFor, itemUrl, dealUrl };
+module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, listDeletions, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, setAmount, setPoaSetup, autoCreateFromService, scanServiceForAutoCreate, pendingActionsFor, itemUrl, dealUrl };

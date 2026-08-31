@@ -341,6 +341,9 @@ function createCardHtml(){
       <select id="vidZakupki">${opt(META.options.vidZakupki,'— выберите —')}</select>
       ${vidWarn}
       <div class="hint" style="margin-top:4px">Сумму закупки укажешь на этапе «Запрос счёта на оплату» — когда приложишь счёт.</div>
+      <label class="fl" style="margin-top:12px">Файл закупки</label>
+      <input type="file" id="createFiles" multiple>
+      <div class="hint" style="margin-top:4px">Можно приложить один или несколько файлов — их увидит ответственный на этапе «Запрос счёта на оплату», чтобы запросить счёт.</div>
       <div class="msg" id="msg"></div>
       <button class="btn btn-p" id="createBtn" style="margin-top:14px;width:100%;justify-content:center" onclick="submitReq()">Создать заявку</button>
     </div>`;
@@ -598,7 +601,7 @@ async function loadDetail(id){
   try{ const d=await (await fetch('/api/procurement/'+id+'/detail')).json(); renderDetail(id,d); }
   catch(e){ const ds=document.getElementById('docSlots'); if(ds)ds.innerHTML='<div class="hint">Ошибка: '+esc(e.message)+'</div>'; }
 }
-const DOC_LABELS={invoice:'Счет на оплату',pay:'Подтверждение оплаты',poa:'Доверенность',contract:'Накладная',warranty:'Гарантийный сертификат'};
+const DOC_LABELS={purchase:'Файл закупки',invoice:'Счет на оплату',pay:'Подтверждение оплаты',poa:'Доверенность',contract:'Накладная',warranty:'Гарантийный сертификат'};
 // Файлы слота: полученные из d.files[slot] (массив). Показываем список + «добавить».
 function fileRow(id,slot,f){
   const meta=[f.warehouse?('🏢 '+esc(f.warehouse)):'',f.acceptDate?('📅 '+fmtDate(f.acceptDate)):'',f.comment?esc(f.comment):''].filter(Boolean).join(' · ');
@@ -756,7 +759,7 @@ function renderDetail(id,d){
   const sd=d.stageDates||{};
   flow.forEach((s,i)=>{ const el=document.getElementById('stdate-'+i); if(!el)return; let iso=sd[s.bitrix]; if(!iso&&i===0)iso=r.createdAt; el.textContent=iso?fmtDate(iso):''; });
   // Компактная сводка приложенных документов (все слоты, со счётчиками) + история откатов.
-  const summ=['invoice','pay','poa','contract','warranty'].map(k=>{
+  const summ=['purchase','invoice','pay','poa','contract','warranty'].map(k=>{
     const list=(d.files&&d.files[k])||[]; if(!list.length) return '';
     const links=list.map(f=>`<a class="lnk" href="${esc(f.url||'#')}" target="_blank" title="${esc(f.name||'')}">${esc(f.name||'файл')}</a>`).join(', ');
     return `<div class="slot"><div class="slabel">${esc(DOC_LABELS[k])} ${list.length>1?`(${list.length})`:''}</div><div class="sval">${links}</div></div>`;
@@ -798,7 +801,12 @@ function renderDetail(id,d){
       <span class="msg" id="poa-msg-${id}"></span>
       <div class="hint" style="margin-top:6px">Если доверенность нужна — отметь и выбери бухгалтера. На этапе оплаты закупка уйдёт и главбуху, и выбранному бухгалтеру; дальше — только после обоих документов (платёжка + доверенность).</div>
     </div>`;
-    html=amountBlock+poaBlock+filesSlotHtml(id,d,'invoice');
+    // «Файл закупки» — вложения инициатора, по которым ответственный запрашивает счёт.
+    const purchaseBlock=`<div style="margin-bottom:12px;padding:12px;border:1px solid var(--border2);border-radius:12px;background:var(--bg)">
+      ${filesSlotHtml(id,d,'purchase',true)}
+      <div class="hint" style="margin-top:4px">Файлы от инициатора закупки — по ним запрашивается счёт на оплату.</div>
+    </div>`;
+    html=purchaseBlock+amountBlock+poaBlock+filesSlotHtml(id,d,'invoice');
   }
   else if(curKey==='contract'){ hdr='Договор'; html='<div class="hint">Договор — по необходимости. Двигай на «Согласование закупки».</div>'; }
   else if(curKey==='approve'){ hdr='Согласование закупки'; html=approvalHtml(id,d); }
@@ -1093,6 +1101,14 @@ async function submitReq(){
     const r=await fetch('/api/procurement/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const d=await r.json();
     if(r.ok){
+      // Приложить «Файл закупки» (множественно) к только что созданной заявке.
+      const fi=document.getElementById('createFiles');
+      if(fi&&fi.files&&fi.files.length&&d.localId){
+        btn.textContent='Загружаю файлы…';
+        const files=[];
+        for(const f of fi.files){ if(f.size>25*1024*1024){alert('Файл «'+f.name+'» больше 25 МБ — пропущен.');continue;} files.push({filename:f.name,mime:f.type||'',base64:await fileToB64(f)}); }
+        if(files.length){ try{ await fetch('/api/procurement/'+d.localId+'/files-batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slot:'purchase',files})}); }catch(_){} }
+      }
       msg.className='msg ok'; msg.innerHTML='Заявка создана в «Закупках» — <a class="lnk" href="'+esc(d.itemUrl)+'" target="_blank">#'+d.bitrixItemId+' ↗</a>';
       const l=await fetch('/api/procurement/list'); LIST=(await l.json()).items||[];
       // сбросить выбор и перерисовать список, сохранив сообщение
