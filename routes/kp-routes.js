@@ -14,6 +14,20 @@ function isPm(user) { return PM_ROLES.includes(user.role); }
 // PM-действия: назначение экспертов, согласование, каталог — только admin/coordinator).
 const CREATE_ROLES = ['admin', 'coordinator', 'manager'];
 
+// Нормализация списка экспертов из тела запроса: принимаем expertIds:[...] (новое,
+// множественный выбор) либо expertId (старое, один). Возвращаем массив чисел без
+// повторов и пустых. Первый элемент кладём в expert_id (совместимость).
+function normExpertIds(src) {
+  let ids = Array.isArray(src && src.expertIds) ? src.expertIds
+          : ((src && src.expertId != null) ? [src.expertId] : []);
+  return [...new Set(ids.map(x => parseInt(x, 10)).filter(Boolean))];
+}
+// Эффективный список экспертов строки (expert_ids, иначе одиночный expert_id).
+function effExperts(rc) {
+  if (rc && Array.isArray(rc.expert_ids) && rc.expert_ids.length) return rc.expert_ids.filter(Boolean);
+  return (rc && rc.expert_id) ? [rc.expert_id] : [];
+}
+
 // ── Catalog (active version) ────────────────────────────────────────────────
 router.get('/catalog', requireAuth(), async (req, res) => {
   try {
@@ -42,7 +56,7 @@ router.get('/my-categories', requireAuth(), async (req, res) => {
   const { rows } = await pool.query(
     `SELECT DISTINCT c.slug FROM ticketsmodule_kp_request_categories rc
      JOIN ticketsmodule_kp_categories c ON c.id=rc.category_id
-     WHERE rc.expert_id=$1`, [req.user.id]
+     WHERE rc.expert_id=$1 OR $1 = ANY(rc.expert_ids)`, [req.user.id]
   );
   const assignedSlugs = rows.map(r => r.slug);
   const accountSlugs = req.user.kp_categories || [];
@@ -65,7 +79,7 @@ router.get('/requests', requireAuth(), async (req, res) => {
              FROM ticketsmodule_kp_requests r
              JOIN ticketsmodule_kp_request_categories rc ON rc.kp_request_id=r.id
              LEFT JOIN ticketsmodule_users u ON u.id=r.created_by
-             WHERE rc.expert_id=$1
+             WHERE rc.expert_id=$1 OR $1 = ANY(rc.expert_ids)
              ORDER BY r.created_at DESC`;
       params = [req.user.id];
     }
@@ -75,7 +89,7 @@ router.get('/requests', requireAuth(), async (req, res) => {
 });
 
 router.post('/requests', requireAuth(CREATE_ROLES), async (req, res) => {
-  const { clientName, categories } = req.body; // categories: [{categoryId, expertId}]
+  const { clientName, categories } = req.body; // categories: [{categoryId, expertIds:[...]}]
   if (!clientName || !Array.isArray(categories) || !categories.length) {
     return res.status(400).json({ error: 'Укажите клиента и хотя бы одну категорию' });
   }
@@ -90,21 +104,22 @@ router.post('/requests', requireAuth(CREATE_ROLES), async (req, res) => {
       [clientName.trim(), req.user.id, req.user.id, verRows[0].id]
     );
     const kpId = reqRows[0].id;
+    const notifyIds = new Set();
     for (const c of categories) {
+      const ids = normExpertIds(c);
       await client.query(
-        `INSERT INTO ticketsmodule_kp_request_categories (kp_request_id, category_id, expert_id, status)
-         VALUES ($1,$2,$3,'pending')`,
-        [kpId, c.categoryId, c.expertId || null]
+        `INSERT INTO ticketsmodule_kp_request_categories (kp_request_id, category_id, expert_id, expert_ids, status)
+         VALUES ($1,$2,$3,$4,'pending')`,
+        [kpId, c.categoryId, ids[0] || null, ids.length ? ids : null]
       );
+      ids.forEach(id => notifyIds.add(id));
     }
     await client.query('COMMIT');
 
-    for (const c of categories) {
-      if (c.expertId) {
-        notifyPersonal(c.expertId, `📋 Новая заявка на КП`,
-          `Вам назначена категория в заявке на КП для клиента «${clientName}».`,
-          `/kp.html?request=${kpId}`).catch(()=>{});
-      }
+    for (const id of notifyIds) {
+      notifyPersonal(id, `📋 Новая заявка на КП`,
+        `Вам назначена категория в заявке на КП для клиента «${clientName}».`,
+        `/kp.html?request=${kpId}`).catch(()=>{});
     }
     res.json({ request: reqRows[0] });
   } catch (e) {
@@ -163,7 +178,8 @@ router.put('/requests/:id/categories/:categoryId', requireAuth(), async (req, re
       [kpId, categoryId]
     );
     if (!rcRows.length) throw new Error('Категория не найдена в заявке');
-    if (rcRows[0].expert_id && rcRows[0].expert_id !== req.user.id && !isPm(req.user)) {
+    const rcExperts = effExperts(rcRows[0]);
+    if (rcExperts.length && !rcExperts.includes(req.user.id) && !isPm(req.user)) {
       throw new Error('Эта категория назначена другому эксперту');
     }
 
@@ -228,14 +244,16 @@ router.post('/requests/:id/revise', requireAuth(PM_ROLES), async (req, res) => {
     }
     await client.query(`UPDATE ticketsmodule_kp_requests SET status='needs_revision', updated_at=NOW() WHERE id=$1`, [kpId]);
     const { rows: catRows } = await client.query(
-      `SELECT expert_id FROM ticketsmodule_kp_request_categories WHERE kp_request_id=$1 AND expert_id IS NOT NULL` + (categoryId ? ' AND category_id=$2' : ''),
+      `SELECT expert_id, expert_ids FROM ticketsmodule_kp_request_categories WHERE kp_request_id=$1` + (categoryId ? ' AND category_id=$2' : ''),
       categoryId ? [kpId, categoryId] : [kpId]
     );
     const { rows: reqInfo } = await client.query(`SELECT client_name FROM ticketsmodule_kp_requests WHERE id=$1`, [kpId]);
     await client.query('COMMIT');
 
-    for (const c of catRows) {
-      notifyPersonal(c.expert_id, `✏️ Заявка на доработку`,
+    const notifyIds = new Set();
+    for (const c of catRows) effExperts(c).forEach(id => notifyIds.add(id));
+    for (const id of notifyIds) {
+      notifyPersonal(id, `✏️ Заявка на доработку`,
         `По заявке «${reqInfo[0]?.client_name}» есть комментарий: ${comment.trim()}`,
         `/kp.html?request=${kpId}`).catch(()=>{});
     }
@@ -267,17 +285,18 @@ router.get('/experts', requireAuth(CREATE_ROLES), async (req, res) => {
 // PM adds a category to an already-created request
 router.post('/requests/:id/categories', requireAuth(PM_ROLES), async (req, res) => {
   const kpId = parseInt(req.params.id, 10);
-  const { categoryId, expertId } = req.body;
+  const { categoryId } = req.body;
+  const ids = normExpertIds(req.body);
   if (!categoryId) return res.status(400).json({ error: 'Не указана категория' });
   try {
     await pool.query(
-      `INSERT INTO ticketsmodule_kp_request_categories (kp_request_id, category_id, expert_id, status)
-       VALUES ($1,$2,$3,'pending') ON CONFLICT (kp_request_id, category_id) DO NOTHING`,
-      [kpId, categoryId, expertId || null]
+      `INSERT INTO ticketsmodule_kp_request_categories (kp_request_id, category_id, expert_id, expert_ids, status)
+       VALUES ($1,$2,$3,$4,'pending') ON CONFLICT (kp_request_id, category_id) DO NOTHING`,
+      [kpId, categoryId, ids[0] || null, ids.length ? ids : null]
     );
-    if (expertId) {
+    if (ids.length) {
       const { rows: reqInfo } = await pool.query(`SELECT client_name FROM ticketsmodule_kp_requests WHERE id=$1`, [kpId]);
-      notifyPersonal(expertId, `📋 Вам назначена категория КП`,
+      for (const id of ids) notifyPersonal(id, `📋 Вам назначена категория КП`,
         `Вам назначена категория в заявке на КП для клиента «${reqInfo[0]?.client_name}».`,
         `/kp.html?request=${kpId}`).catch(()=>{});
     }
@@ -285,21 +304,21 @@ router.post('/requests/:id/categories', requireAuth(PM_ROLES), async (req, res) 
   } catch (e) { console.error('POST /requests/:id/categories error:', e.message); res.status(500).json({ error: 'Server error' }); }
 });
 
-// PM reassigns the expert for one category in an existing request
+// PM reassigns the expert(s) for one category in an existing request (несколько сотрудников)
 router.put('/requests/:id/categories/:categoryId/assign', requireAuth(PM_ROLES), async (req, res) => {
   const kpId = parseInt(req.params.id, 10);
   const categoryId = parseInt(req.params.categoryId, 10);
-  const expertId = req.body.expertId ? parseInt(req.body.expertId, 10) : null;
+  const ids = normExpertIds(req.body);
   try {
     const { rows } = await pool.query(
-      `UPDATE ticketsmodule_kp_request_categories SET expert_id=$1, status='pending', saved_at=NULL
-       WHERE kp_request_id=$2 AND category_id=$3 RETURNING *`,
-      [expertId, kpId, categoryId]
+      `UPDATE ticketsmodule_kp_request_categories SET expert_id=$1, expert_ids=$2, status='pending', saved_at=NULL
+       WHERE kp_request_id=$3 AND category_id=$4 RETURNING *`,
+      [ids[0] || null, ids.length ? ids : null, kpId, categoryId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Категория не найдена' });
-    if (expertId) {
+    if (ids.length) {
       const { rows: reqInfo } = await pool.query(`SELECT client_name FROM ticketsmodule_kp_requests WHERE id=$1`, [kpId]);
-      notifyPersonal(expertId, `📋 Вам назначена категория КП`,
+      for (const id of ids) notifyPersonal(id, `📋 Вам назначена категория КП`,
         `Вам назначена категория в заявке на КП для клиента «${reqInfo[0]?.client_name}».`,
         `/kp.html?request=${kpId}`).catch(()=>{});
     }

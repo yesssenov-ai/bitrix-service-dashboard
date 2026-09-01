@@ -211,6 +211,10 @@ async function initDB() {
       saved_at TIMESTAMPTZ,
       UNIQUE(kp_request_id, category_id)
     );
+    -- Несколько экспертов на категорию (менеджер может назначить сразу нескольких).
+    -- expert_id остаётся «первым/основным» для обратной совместимости (генерация КП),
+    -- expert_ids — полный список назначенных сотрудников.
+    ALTER TABLE ticketsmodule_kp_request_categories ADD COLUMN IF NOT EXISTS expert_ids INTEGER[];
 
     CREATE TABLE IF NOT EXISTS ticketsmodule_kp_line_items (
       id SERIAL PRIMARY KEY,

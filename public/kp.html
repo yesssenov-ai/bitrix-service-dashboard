@@ -88,6 +88,13 @@ h1{font-family:var(--font-display);font-size:24px;font-weight:600;margin-bottom:
 .ftextarea{resize:vertical;min-height:70px;}
 .cat-assign-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;}
 .cat-assign-row label{flex:0 0 150px;color:var(--text-dim);}
+/* Множественный выбор экспертов */
+.exp-list{max-height:132px;overflow:auto;border:1px solid var(--border,rgba(255,255,255,.16));border-radius:10px;padding:6px 8px;background:var(--panel,rgba(20,27,45,.55));}
+.exp-opt{display:flex;align-items:center;gap:8px;flex:none !important;color:var(--text) !important;padding:3px 2px;font-size:13px;cursor:pointer;}
+.exp-opt input{flex:0 0 auto;margin:0;}
+.exp-opt span{flex:1;}
+.exp-sug{flex:0 0 auto !important;font-size:11px;color:var(--signal);opacity:.9;}
+.exp-wrap{max-width:520px;}
 .comment-item{padding:10px 0;border-bottom:1px solid var(--line);font-size:12.5px;}
 .comment-item:last-child{border-bottom:none;}
 .comment-author{font-weight:600;color:var(--text);}
@@ -314,17 +321,17 @@ async function loadRequestList(pmMode){
 }
 
 async function openNewRequestModal(){
-  const ex = await (await fetch('/api/kp/experts')).json();
-  const experts = ex.experts || [];
+  await ensureExperts();
   document.getElementById('nrClient').value = '';
-  document.getElementById('nrCategories').innerHTML = catalog.categories.map(c => `
-    <div class="cat-assign-row">
-      <label><input type="checkbox" class="nr-cat-check" value="${c.id}" checked> ${esc(c.name)}</label>
-      <select class="fselect nr-cat-expert" data-cat="${c.id}" style="flex:1">
-        <option value="">— без эксперта —</option>
-        ${experts.map(e => `<option value="${e.id}" ${(e.kp_categories||[]).includes(c.slug)?'selected':''}>${esc(e.display_name)}</option>`).join('')}
-      </select>
-    </div>`).join('');
+  document.getElementById('nrCategories').innerHTML = catalog.categories.map(c => {
+    // По умолчанию отмечаем рекомендованных экспертов категории (можно несколько).
+    const defIds = ALL_EXPERTS.filter(e => (e.kp_categories||[]).includes(c.slug)).map(e => e.id);
+    return `
+    <div class="cat-assign-row" style="align-items:flex-start">
+      <label style="margin-top:6px"><input type="checkbox" class="nr-cat-check" value="${c.id}" checked> ${esc(c.name)}</label>
+      <div style="flex:1">${expertPicker(c.id, defIds, c.slug)}</div>
+    </div>`;
+  }).join('');
   openModal('newReqModal');
 }
 
@@ -334,8 +341,7 @@ async function createRequest(){
   const categories = [];
   document.querySelectorAll('.nr-cat-check:checked').forEach(chk => {
     const catId = parseInt(chk.value);
-    const sel = document.querySelector(`.nr-cat-expert[data-cat="${catId}"]`);
-    categories.push({ categoryId: catId, expertId: sel.value ? parseInt(sel.value) : null });
+    categories.push({ categoryId: catId, expertIds: checkedExpertIds(catId) });
   });
   if (!categories.length) return toast('Отметьте хотя бы одну категорию', 'error');
   const r = await fetch('/api/kp/requests', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ clientName, categories }) });
@@ -347,10 +353,38 @@ async function createRequest(){
 
 async function openRequest(id, pmMode){
   currentRequestId = id;
+  await ensureExperts();               // список экспертов нужен для чекбоксов/имён
   const r = await fetch('/api/kp/requests/'+id);
   const d = await r.json();
   currentRequestDetail = d;
   if (pmMode) renderPmDetail(d); else renderExpertDetail(d);
+}
+// Список всех возможных экспертов (кэш на страницу).
+let ALL_EXPERTS = [];
+async function ensureExperts(){
+  if (ALL_EXPERTS.length) return ALL_EXPERTS;
+  try { const ex = await (await fetch('/api/kp/experts')).json(); ALL_EXPERTS = ex.experts || []; } catch(e){}
+  return ALL_EXPERTS;
+}
+function rcExpertIds(rc){
+  if (Array.isArray(rc.expert_ids) && rc.expert_ids.length) return rc.expert_ids.filter(Boolean).map(Number);
+  return rc.expert_id ? [Number(rc.expert_id)] : [];
+}
+function expertNames(ids){
+  return (ids||[]).map(id => { const e = ALL_EXPERTS.find(x => x.id === Number(id)); return e ? e.display_name : ('#'+id); }).join(', ') || '—';
+}
+// Множественный выбор экспертов: прокручиваемый список чекбоксов.
+function expertPicker(catId, selectedIds, slug){
+  const sel = new Set((selectedIds||[]).map(Number));
+  const rows = ALL_EXPERTS.map(e => {
+    const checked = sel.has(e.id) ? 'checked' : '';
+    const sug = (e.kp_categories||[]).includes(slug) ? '<span class="exp-sug">рекоменд.</span>' : '';
+    return `<label class="exp-opt"><input type="checkbox" class="exp-check" data-cat="${catId}" value="${e.id}" ${checked}> <span>${esc(e.display_name)}</span>${sug}</label>`;
+  }).join('');
+  return `<div class="exp-list" data-cat="${catId}">${rows||'<div class="req-meta" style="padding:6px">Нет сотрудников</div>'}</div>`;
+}
+function checkedExpertIds(catId){
+  return [...document.querySelectorAll(`.exp-check[data-cat="${catId}"]:checked`)].map(c => parseInt(c.value,10)).filter(Boolean);
 }
 
 function renderExpertDetail(d){
@@ -466,20 +500,26 @@ function renderPmDetail(d){
         <div class="item-total">${li.is_included_snapshot?'—':money(li.quantity*li.unit_price_snapshot)+' $'}</div>
       </div>`).join('') : '<div style="color:var(--text-faint);font-size:12.5px;padding:8px 0">Пока ничего не выбрано</div>';
 
+    const ids = rcExpertIds(rc);
+    const expertBlock = isPm
+      ? `<div class="exp-wrap">
+           <div class="req-meta" style="margin-bottom:4px">Сотрудники (можно несколько):</div>
+           ${expertPicker(rc.category_id, ids, rc.slug)}
+           <button class="btn btn-ghost" style="margin-top:6px" onclick="reassignExperts(${rc.category_id})">Применить сотрудников</button>
+         </div>`
+      : `<span class="req-meta">${esc(expertNames(ids))}</span>`;
     return `
       <div class="card">
         <div class="row">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <div style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap">
             <strong>${esc(rc.category_name)}</strong>
-            ${isPm ? `<select class="fselect" style="width:auto;padding:5px 8px;font-size:12px" onchange="reassignExpert(${rc.category_id}, this.value)" id="expertSel-${rc.category_id}">
-              <option value="">— без эксперта —</option>
-            </select>` : `<span class="req-meta">${esc(rc.expert_name||'—')}</span>`}
           </div>
           <div style="display:flex;align-items:center;gap:10px">
             <span class="status-pill status-${rc.status==='saved'?'approved':rc.status==='needs_revision'?'needs_revision':'draft'}">${STATUS_LABELS[rc.status]||rc.status}</span>
             ${isPm ? `<button class="btn btn-ghost" onclick="openReviseModal(${rc.category_id}, '${esc(rc.category_name)}')">Комментарий / на доработку</button>` : ''}
           </div>
         </div>
+        <div style="margin-top:8px">${expertBlock}</div>
         <div style="margin-top:10px">${itemsHtml}</div>
       </div>`;
   }).join('');
@@ -523,26 +563,17 @@ function renderPmDetail(d){
     <div class="grand-total"><span class="label">Общая сумма</span><span class="value">${money(grandTotal)} $</span></div>
   `;
 
-  loadExpertsIntoSelects(d.categories);
 }
 
-async function loadExpertsIntoSelects(categories){
-  const ex = await (await fetch('/api/kp/experts')).json();
-  const experts = ex.experts || [];
-  categories.forEach(rc => {
-    const sel = document.getElementById('expertSel-'+rc.category_id);
-    if (!sel) return;
-    sel.innerHTML = '<option value="">— без эксперта —</option>' +
-      experts.map(e => `<option value="${e.id}" ${rc.expert_id===e.id?'selected':''}>${esc(e.display_name)}</option>`).join('');
-  });
-}
-
-async function reassignExpert(categoryId, expertId){
+// Применить выбранных сотрудников (несколько) к категории.
+async function reassignExperts(categoryId){
+  const expertIds = checkedExpertIds(categoryId);
   const r = await fetch(`/api/kp/requests/${currentRequestId}/categories/${categoryId}/assign`, {
-    method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ expertId: expertId || null })
+    method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ expertIds })
   });
   const d = await r.json();
   if (!r.ok) return toast(d.error || 'Ошибка', 'error');
+  toast('Сотрудники обновлены', 'success');
   openRequest(currentRequestId, true);
 }
 
