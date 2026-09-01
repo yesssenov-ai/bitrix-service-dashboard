@@ -948,11 +948,30 @@ function renderDetail(id,d){
   // engineer/sales: согласование (если на «Согласовании») + документы (просмотр,
   // скачивание и загрузка файлов). Стадии он не двигает, но файлы фиксируются.
   if(!canEditProc()){
+    const role=ME&&ME.role;
+    const meBid=String((META.me&&META.me.bitrixUserId)||'');
     let body='';
     if(curKey==='approve'){ body+=approvalHtml(id,d)+'<div style="margin-top:16px"></div>'; hdr='Согласование закупки'; }
     else hdr='Документы закупки';
-    body+='<div class="deth">Документы (просмотр и загрузка)</div>';
-    ['invoice','pay','poa','contract','warranty'].forEach(sl=>{ body+=`<div class="fl" style="margin-top:10px">${DOC_LABELS[sl]}</div>`+filesSlotHtml(id,d,sl); });
+    if(role==='accountant'){
+      // Бухгалтер грузит ТОЛЬКО то, что относится к нему: подтверждение оплаты
+      // (на этапе «Оплата»), и доверенность — если она требуется и назначена
+      // именно ему. Накладные / гарантийный / чужая доверенность — не его слоты
+      // (их видно выше в «Приложенных документах», без кнопки загрузки).
+      const up=[];
+      if(curKey==='payment'){ up.push('pay'); hdr='Оплата закупки'; }
+      if(d.poaRequired && String(d.poaAccountantBid||'')===meBid) up.push('poa');
+      if(up.length){
+        body+='<div class="deth">Загрузка документов</div>';
+        up.forEach(sl=>{ body+=`<div class="fl" style="margin-top:10px">${DOC_LABELS[sl]}</div>`+filesSlotHtml(id,d,sl); });
+      } else {
+        body+='<div class="hint" style="margin-top:6px">Документы закупки показаны выше. Загрузка от вас на этом этапе не требуется.</div>';
+      }
+    } else {
+      // engineer/sales: полный набор документов (просмотр + загрузка).
+      body+='<div class="deth">Документы (просмотр и загрузка)</div>';
+      ['invoice','pay','poa','contract','warranty'].forEach(sl=>{ body+=`<div class="fl" style="margin-top:10px">${DOC_LABELS[sl]}</div>`+filesSlotHtml(id,d,sl); });
+    }
     html=body;
   }
   const hEl=document.getElementById('actionHdr'); if(hEl)hEl.textContent=hdr;
