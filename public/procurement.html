@@ -994,8 +994,19 @@ function renderDetail(id,d){
       } else {
         body+='<div class="hint" style="margin-top:6px">Документы закупки показаны выше. Загрузка от вас на этом этапе не требуется.</div>';
       }
-      // Комментарий бухгалтера — на этапе оплаты.
-      if(curKey==='payment') body+=payCommentBlock(id);
+      // Комментарий бухгалтера + ручной переход на «Ожидание товара» — на этапе оплаты.
+      if(curKey==='payment'){
+        body+=payCommentBlock(id);
+        const hasPay=((d.files&&d.files.pay)||[]).length>0;
+        const hasPoa=((d.files&&d.files.poa)||[]).length>0;
+        const needPoa=!!d.poaRequired;
+        const ready=hasPay&&(!needPoa||hasPoa);
+        if(ready){
+          body+=`<button class="btn btn-p" style="margin-top:12px;width:100%;justify-content:center" onclick="moveStep(${id},'waiting')">Далее → Ожидание товара</button>`;
+        } else {
+          body+=`<div class="hint" style="margin-top:8px">Чтобы перейти на «Ожидание товара», приложите подтверждение оплаты${needPoa?' и доверенность':''}.</div>`;
+        }
+      }
     } else {
       // engineer/sales: полный набор документов (просмотр + загрузка).
       body+='<div class="deth">Документы (просмотр и загрузка)</div>';

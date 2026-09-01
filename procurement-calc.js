@@ -519,6 +519,13 @@ async function listRequests(ownerBid) {
   });
 }
 
+// Текущий шаг заявки (ключ FLOW) — для проверок прав на смену стадии.
+async function currentStepKey(localId) {
+  const { rows } = await pool.query('SELECT stage_id FROM ticketsmodule_procurement WHERE id=$1', [localId]);
+  const idx = stepIndexForStage(rows[0] && rows[0].stage_id);
+  return idx >= 0 ? FLOW[idx].key : null;
+}
+
 async function itemIdOf(localId) {
   const { rows } = await pool.query('SELECT bitrix_item_id FROM ticketsmodule_procurement WHERE id=$1', [localId]);
   const itemId = rows[0] && rows[0].bitrix_item_id;
@@ -1852,4 +1859,4 @@ async function statusBoard() {
   });
 }
 
-module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, listDeletions, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, resolveDocFields, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, setAmount, setPayComment, setPoaSetup, autoCreateFromService, scanServiceForAutoCreate, pendingActionsFor, statusBoard, itemUrl, dealUrl };
+module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, listDeletions, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, resolveDocFields, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, setAmount, setPayComment, setPoaSetup, currentStepKey, autoCreateFromService, scanServiceForAutoCreate, pendingActionsFor, statusBoard, itemUrl, dealUrl };

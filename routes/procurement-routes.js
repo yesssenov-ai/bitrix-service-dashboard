@@ -130,13 +130,26 @@ router.post('/create', requireModuleApi('PROC'), express.json(), async (req, res
 });
 
 // POST /api/procurement/:id/stage { stageKey } — двигать заявку по 7-шаговому процессу
-router.post('/:id/stage', requireAuth(ROLES), express.json(), async (req, res) => {
+router.post('/:id/stage', requireAuth(VIEW_ROLES), express.json(), async (req, res) => {
   try {
-    const { moveStage } = require('../procurement-calc');
+    const { moveStage, currentStepKey } = require('../procurement-calc');
     const id = parseInt(req.params.id, 10);
     const body = req.body || {};
+    const role = req.user.role;
+    // Смену стадий ведут admin/coordinator/store. Исключение: бухгалтер может
+    // сам двинуть заявку ТОЛЬКО с «Оплаты закупки» на «Ожидание товара» (после
+    // того как приложил подтверждение оплаты — это проверит moveStage).
+    if (!ROLES.includes(role)) {
+      if (!(role === 'accountant' && body.stageKey === 'waiting')) {
+        return res.status(403).json({ error: 'Недостаточно прав для смены стадии' });
+      }
+      const cur = await currentStepKey(id);
+      if (cur !== 'payment') {
+        return res.status(403).json({ error: 'Двигать заявку можно только с этапа «Оплата закупки».' });
+      }
+    }
     // Админ может пропускать стадии (force) — шлюзы требований не проверяются.
-    const out = await moveStage(id, body.stageKey, { reason: body.reason, byBid: req.user.bitrix_user_id || null, force: req.user.role === 'admin' });
+    const out = await moveStage(id, body.stageKey, { reason: body.reason, byBid: req.user.bitrix_user_id || null, force: role === 'admin' });
     res.json({ ok: true, ...out });
   } catch (e) {
     // needReason → фронт покажет запрос причины отката (не как обычную ошибку).
