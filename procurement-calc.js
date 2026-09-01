@@ -616,6 +616,16 @@ async function setAmount(localId, opportunity, currency) {
   return { ok: true };
 }
 
+// Комментарий бухгалтера на этапе оплаты (хранится в payload, показывается в
+// списке заявок и доступен для сквозного поиска).
+async function setPayComment(localId, comment) {
+  const { rows } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
+  const pl = (rows[0] && rows[0].payload) || {};
+  pl.payComment = String(comment == null ? '' : comment).slice(0, 2000);
+  await pool.query('UPDATE ticketsmodule_procurement SET payload=$1, updated_at=NOW() WHERE id=$2', [pl, localId]);
+  return { ok: true, payComment: pl.payComment };
+}
+
 // Настройка доверенности (на 2 этапе): нужна ли доверенность и какой бухгалтер
 // её ведёт (один из двух). Если нужна — на этапе оплаты закупка падает и главбуху,
 // и выбранному бухгалтеру, и двигается дальше только после ОБОИХ документов.
@@ -1842,4 +1852,4 @@ async function statusBoard() {
   });
 }
 
-module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, listDeletions, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, resolveDocFields, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, setAmount, setPoaSetup, autoCreateFromService, scanServiceForAutoCreate, pendingActionsFor, statusBoard, itemUrl, dealUrl };
+module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, listDeletions, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, resolveDocFields, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, setAmount, setPayComment, setPoaSetup, autoCreateFromService, scanServiceForAutoCreate, pendingActionsFor, statusBoard, itemUrl, dealUrl };

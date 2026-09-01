@@ -330,6 +330,18 @@ router.post('/:id/amount', requireAuth(ROLES), express.json(), async (req, res) 
   }
 });
 
+// POST /api/procurement/:id/pay-comment { comment } — комментарий бухгалтера на
+// этапе оплаты (доступно всем ролям модуля, включая бухгалтера).
+router.post('/:id/pay-comment', requireAuth(VIEW_ROLES), express.json(), async (req, res) => {
+  try {
+    const { setPayComment } = require('../procurement-calc');
+    res.json(await setPayComment(parseInt(req.params.id, 10), (req.body || {}).comment));
+  } catch (e) {
+    console.error('POST /api/procurement/:id/pay-comment error:', e.message);
+    res.status(500).json({ error: 'Не удалось сохранить комментарий: ' + e.message });
+  }
+});
+
 // POST /api/procurement/:id/poa-setup { required, accountantBid } — доверенность (2 этап)
 router.post('/:id/poa-setup', requireAuth(ROLES), express.json(), async (req, res) => {
   try {
