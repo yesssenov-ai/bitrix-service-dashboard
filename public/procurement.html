@@ -299,7 +299,10 @@ function render(){
   const canEdit=canEditProc();
   // Создавать заявку может каждый, у кого есть доступ к модулю (форма — всем).
   // Редактирование существующих заявок остаётся только у admin/coordinator/store.
-  const left=(MODE==='edit'&&EDIT!=null&&canEdit)?editCardHtml():createCardHtml();
+  // Открывать (проваливаться в) закупку могут все, у кого есть доступ к модулю —
+  // в т.ч. бухгалтер/инженер (для них карточка read-only: этапы не двигаются,
+  // но видны документы и доступна их роль-действие — согласование / оплата).
+  const left=(MODE==='edit'&&EDIT!=null)?editCardHtml():createCardHtml();
   const nA=activeList().length, nD=doneList().length;
   const isAdmin = ME && ME.role==='admin';
   const body = rightBodyHtml();
@@ -410,7 +413,8 @@ function editCardHtml(){
     const done = i<r.stepIndex || (isLastCur && fully);
     const cur  = i===r.stepIndex && i!==lastIdx;
     const partial = isLastCur && !fully; // на «Товар принят», но не полностью
-    return `<div class="st ${done?'done':''} ${cur?'cur':''} ${partial?'partial':''}" title="Перейти: ${esc(s.label)}" onclick="moveStep(${r.id},'${s.key}')"><span class="dot">${i+1}</span><span class="stlbl">${esc(s.label)}</span><span class="stdate" id="stdate-${i}"></span></div>`;
+    const canStep=canEditProc();
+    return `<div class="st ${done?'done':''} ${cur?'cur':''} ${partial?'partial':''}"${canStep?` title="Перейти: ${esc(s.label)}" style="cursor:pointer" onclick="moveStep(${r.id},'${s.key}')"`:' style="cursor:default"'}><span class="dot">${i+1}</span><span class="stlbl">${esc(s.label)}</span><span class="stdate" id="stdate-${i}"></span></div>`;
   }).join('')+`</div>`;
   const stepSel=`<select onchange="moveStep(${r.id},this.value)">`+flow.map((s,i)=>`<option value="${esc(s.key)}" ${s.key===r.stepKey?'selected':''}>${i+1}. ${esc(s.label)}</option>`).join('')+`</select>`;
   const srcOptsE=(META.sources||[]).map(s=>`<option value="${esc(s.id)}" ${String(s.id)===String(pl.source||META.internalSourceId)?'selected':''}>${esc(s.name)}</option>`).join('');
@@ -442,7 +446,7 @@ function editCardHtml(){
       </div>
 
       ${stepper}
-      <label class="fl">Сменить шаг</label>${stepSel}
+      ${canEditProc()?`<label class="fl">Сменить шаг</label>${stepSel}`:''}
       <div id="docsSummary" style="margin-top:14px"></div>
       <div class="deth" style="margin-top:16px" id="actionHdr">Дальнейшее действие</div>
       <div id="stepAction"><div class="spin" style="margin:14px auto"></div></div>

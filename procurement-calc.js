@@ -490,11 +490,21 @@ async function listRequests(ownerBid) {
   let { rows } = await pool.query('SELECT * FROM ticketsmodule_procurement ORDER BY created_at DESC');
   if (ownerBid) {
     const b = String(ownerBid);
+    const chief = String(chiefAccountantId() || '');
+    const paymentStage = (FLOW.find(s => s.key === 'payment') || {}).bitrix;
     rows = rows.filter(r => {
       const pl = r.payload || {};
       const apprs = Array.isArray(pl.apApprovers) ? pl.apApprovers.map(String) : (pl.apApprover ? [String(pl.apApprover)] : []);
-      return apprs.includes(b) || String(pl.initiatorBid || '') === b || String(pl.assigned || '') === b
-        || String(r.accountant_bid || '') === b || String(pl.poaAccountantBid || '') === b;
+      if (apprs.includes(b) || String(pl.initiatorBid || '') === b || String(pl.assigned || '') === b
+        || String(r.accountant_bid || '') === b || String(pl.poaAccountantBid || '') === b) return true;
+      // Бухгалтер видит закупки на этапе «Оплата закупки», которые уходят на оплату
+      // именно ему. Если бухгалтер явно не назначен — оплата по умолчанию идёт на
+      // главбуха, поэтому он тоже должен видеть такие закупки в «Моих заявках».
+      if (paymentStage && r.stage_id === paymentStage) {
+        const acc = r.accountant_bid ? String(r.accountant_bid) : chief;
+        if (acc && acc === b) return true;
+      }
+      return false;
     });
   }
   return rows.map(r => {
