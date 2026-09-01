@@ -491,16 +491,21 @@ async function listRequests(ownerBid) {
   if (ownerBid) {
     const b = String(ownerBid);
     const chief = String(chiefAccountantId() || '');
-    const paymentStage = (FLOW.find(s => s.key === 'payment') || {}).bitrix;
+    const paymentIdx = FLOW.findIndex(s => s.key === 'payment');
+    // Причастность «липкая»: кто участвовал в заявке (инициатор, согласующий,
+    // ответственный/склад, бухгалтер оплаты, бухгалтер доверенности), продолжает
+    // видеть её и в активных, и в «Завершённых» — заявка не исчезает после
+    // завершения. Для бухгалтера причастность возникает, когда заявка дошла до
+    // этапа «Оплата закупки» и остаётся на всех последующих этапах (оплата →
+    // ожидание товара → товар принят), в т.ч. когда бухгалтер не был назначен
+    // явно (оплата по умолчанию идёт на главбуха).
     rows = rows.filter(r => {
       const pl = r.payload || {};
       const apprs = Array.isArray(pl.apApprovers) ? pl.apApprovers.map(String) : (pl.apApprover ? [String(pl.apApprover)] : []);
       if (apprs.includes(b) || String(pl.initiatorBid || '') === b || String(pl.assigned || '') === b
         || String(r.accountant_bid || '') === b || String(pl.poaAccountantBid || '') === b) return true;
-      // Бухгалтер видит закупки на этапе «Оплата закупки», которые уходят на оплату
-      // именно ему. Если бухгалтер явно не назначен — оплата по умолчанию идёт на
-      // главбуха, поэтому он тоже должен видеть такие закупки в «Моих заявках».
-      if (paymentStage && r.stage_id === paymentStage) {
+      const stepIndex = stepIndexForStage(r.stage_id);
+      if (paymentIdx >= 0 && stepIndex >= paymentIdx) {
         const acc = r.accountant_bid ? String(r.accountant_bid) : chief;
         if (acc && acc === b) return true;
       }
