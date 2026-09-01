@@ -122,7 +122,11 @@ app.get('/admin.html', requirePageAuth(['admin']), (_, res) => res.sendFile(path
 app.get('/mail.html', requireModule('MAIL'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'mail.html')));
 app.get('/kp.html', requireModule('KP'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'kp.html')));
 app.get('/kp-hub.html', requireModule('KP'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'kp-hub.html')));
-app.get('/kp-service.html', requireModule('KP'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'kp-service.html')));
+app.get('/kp-service.html', requireModule('KP'), (req, res) => {
+  // Подмодуль «Сервис» — только координатор/админ (доступ к самому КП — по гранту).
+  if (!['admin', 'coordinator'].includes(req.user && req.user.role)) return res.redirect('/kp-hub.html');
+  res.sendFile(path.join(__dirname, 'public', 'kp-service.html'));
+});
 app.get('/bonus.html', requireModule('BONUS'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'bonus.html')));
 app.get('/stats.html', requireModule('STATS'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'stats.html')));
 app.get('/contracts.html', requireModule('CONTR'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'contracts.html')));

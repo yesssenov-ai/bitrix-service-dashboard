@@ -10,6 +10,9 @@ const { notifyPersonal } = require('../kp-notify');
 // inventing a new "PM" role.
 const PM_ROLES = ['admin', 'coordinator'];
 function isPm(user) { return PM_ROLES.includes(user.role); }
+// Создавать заявки в подмодуле МЛК может ещё и менеджер (но не остальные
+// PM-действия: назначение экспертов, согласование, каталог — только admin/coordinator).
+const CREATE_ROLES = ['admin', 'coordinator', 'manager'];
 
 // ── Catalog (active version) ────────────────────────────────────────────────
 router.get('/catalog', requireAuth(), async (req, res) => {
@@ -44,7 +47,7 @@ router.get('/my-categories', requireAuth(), async (req, res) => {
   const assignedSlugs = rows.map(r => r.slug);
   const accountSlugs = req.user.kp_categories || [];
   const categories = [...new Set([...assignedSlugs, ...accountSlugs])];
-  res.json({ categories, isPm: isPm(req.user) });
+  res.json({ categories, isPm: isPm(req.user), canCreate: CREATE_ROLES.includes(req.user.role) });
 });
 
 // ── Requests ─────────────────────────────────────────────────────────────────
@@ -71,7 +74,7 @@ router.get('/requests', requireAuth(), async (req, res) => {
   } catch (e) { console.error('GET /api/kp/requests error:', e.message); res.status(500).json({ error: 'Server error' }); }
 });
 
-router.post('/requests', requireAuth(PM_ROLES), async (req, res) => {
+router.post('/requests', requireAuth(CREATE_ROLES), async (req, res) => {
   const { clientName, categories } = req.body; // categories: [{categoryId, expertId}]
   if (!clientName || !Array.isArray(categories) || !categories.length) {
     return res.status(400).json({ error: 'Укажите клиента и хотя бы одну категорию' });
@@ -254,7 +257,7 @@ router.post('/requests/:id/approve', requireAuth(PM_ROLES), async (req, res) => 
 });
 
 // List of possible experts (any active user, for the PM's assignment picker)
-router.get('/experts', requireAuth(PM_ROLES), async (req, res) => {
+router.get('/experts', requireAuth(CREATE_ROLES), async (req, res) => {
   try {
     const { rows } = await pool.query(`SELECT id, display_name, kp_categories FROM ticketsmodule_users WHERE active=true ORDER BY display_name`);
     res.json({ experts: rows });

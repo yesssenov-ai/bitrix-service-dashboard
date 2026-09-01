@@ -2,7 +2,11 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../auth');
 
-const PM_ROLES = ['admin', 'coordinator'];
+// Доступ к данным статистики: admin/coordinator/manager. Кому реально видно
+// модуль — решает «Доступ к модулям» (гейт страницы requireModule('STATS'));
+// здесь лишь ролевой предел на сами данные/действия. Тяжёлые операции
+// (resync/backfill истории) остаются только у admin.
+const PM_ROLES = ['admin', 'coordinator', 'manager'];
 
 function yearRange(year) {
   return { start: `${year}-01-01`, end: `${year}-12-31` };

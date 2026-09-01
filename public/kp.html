@@ -150,7 +150,7 @@ h1{font-family:var(--font-display);font-size:24px;font-weight:600;margin-bottom:
 </div>
 
 <script>
-let me = null, myCategories = [], isPm = false, catalog = null;
+let me = null, myCategories = [], isPm = false, canCreate = false, catalog = null;
 let currentRequestId = null, currentRequestDetail = null, currentCatSlug = null;
 let reviseCategoryId = null;
 
@@ -191,6 +191,7 @@ async function init(){
     const mc = await (await fetch('/api/kp/my-categories')).json();
     myCategories = mc.categories || [];
     isPm = mc.isPm;
+    canCreate = !!mc.canCreate;   // менеджер: может создавать заявки (без PM-действий)
 
     const cat = await (await fetch('/api/kp/catalog')).json();
     catalog = cat;
@@ -202,7 +203,7 @@ async function init(){
 function renderViewTabs(){
   const tabs = [];
   if (myCategories.length) tabs.push({ key:'expert', label:'Мои категории' });
-  if (isPm) tabs.push({ key:'pm', label:'Заявки (менеджер)' });
+  if (isPm || canCreate) tabs.push({ key:'pm', label:'Заявки' });
   if (isPm) tabs.push({ key:'catalog', label:'Каталог' });
   if (!tabs.length) { document.getElementById('content').innerHTML = '<div class="card">У вас пока нет доступа ни к одной категории. Обратитесь к администратору.</div>'; return; }
   document.getElementById('viewTabs').innerHTML = tabs.map((t,i) =>
@@ -470,13 +471,13 @@ function renderPmDetail(d){
         <div class="row">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <strong>${esc(rc.category_name)}</strong>
-            <select class="fselect" style="width:auto;padding:5px 8px;font-size:12px" onchange="reassignExpert(${rc.category_id}, this.value)" id="expertSel-${rc.category_id}">
+            ${isPm ? `<select class="fselect" style="width:auto;padding:5px 8px;font-size:12px" onchange="reassignExpert(${rc.category_id}, this.value)" id="expertSel-${rc.category_id}">
               <option value="">— без эксперта —</option>
-            </select>
+            </select>` : `<span class="req-meta">${esc(rc.expert_name||'—')}</span>`}
           </div>
           <div style="display:flex;align-items:center;gap:10px">
             <span class="status-pill status-${rc.status==='saved'?'approved':rc.status==='needs_revision'?'needs_revision':'draft'}">${STATUS_LABELS[rc.status]||rc.status}</span>
-            <button class="btn btn-ghost" onclick="openReviseModal(${rc.category_id}, '${esc(rc.category_name)}')">Комментарий / на доработку</button>
+            ${isPm ? `<button class="btn btn-ghost" onclick="openReviseModal(${rc.category_id}, '${esc(rc.category_name)}')">Комментарий / на доработку</button>` : ''}
           </div>
         </div>
         <div style="margin-top:10px">${itemsHtml}</div>
@@ -500,7 +501,7 @@ function renderPmDetail(d){
   const isApproved = d.request.status === 'approved';
   const downloadBtns = isApproved ? `
     <a class="btn btn-brand" href="/api/kp/requests/${d.request.id}/document?format=docx" style="text-decoration:none;display:inline-block">⬇ Word</a>
-  ` : `<button class="btn btn-brand" onclick="approveRequest()">Одобрить и сформировать КП</button>`;
+  ` : (isPm ? `<button class="btn btn-brand" onclick="approveRequest()">Одобрить и сформировать КП</button>` : '');
   const generalComments = d.comments.filter(c => !c.category_id);
   const commentsHtml = generalComments.length ? `<div class="card">${generalComments.map(c=>`<div class="comment-item"><span class="comment-author">${esc(c.author_name)}</span><span class="comment-time">${new Date(c.created_at).toLocaleString('ru-RU')}</span><div style="margin-top:4px">${esc(c.body)}</div></div>`).join('')}</div>` : '';
 
@@ -511,14 +512,14 @@ function renderPmDetail(d){
         <div><strong>${esc(d.request.client_name)}</strong><div class="req-meta">#${d.request.id}</div></div>
         <div style="display:flex;gap:10px;align-items:center">
           <span class="status-pill status-${d.request.status}">${d.request.status}</span>
-          <button class="btn btn-ghost" onclick="openReviseModal(null, 'всей заявке')">Вернуть всё на доработку</button>
+          ${isPm ? `<button class="btn btn-ghost" onclick="openReviseModal(null, 'всей заявке')">Вернуть всё на доработку</button>` : ''}
           ${downloadBtns}
         </div>
       </div>
     </div>
     ${commentsHtml}
     ${catRows}
-    ${addCatHtml}
+    ${isPm ? addCatHtml : ''}
     <div class="grand-total"><span class="label">Общая сумма</span><span class="value">${money(grandTotal)} $</span></div>
   `;
 

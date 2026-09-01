@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../auth');
 
-const VIEW_ROLES = ['admin', 'coordinator', 'manager', 'engineer', 'store'];
+// Подмодуль «Сервис» КП доступен только координатору (и админу).
+const VIEW_ROLES = ['admin', 'coordinator'];
 const RESEND_KEY = process.env.RESEND_API_KEY;
 
 function fmtDate(d) { const x = d || new Date(); const p = n => String(n).padStart(2, '0'); return `${p(x.getDate())}.${p(x.getMonth() + 1)}.${x.getFullYear()}г.`; }
