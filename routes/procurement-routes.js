@@ -91,6 +91,18 @@ router.get('/list', requireAuth(VIEW_ROLES), async (req, res) => {
   }
 });
 
+// GET /api/procurement/status-board — статус-доска/журнал: на ком закупка, что
+// ждётся, статус уведомлений по каналам (админ).
+router.get('/status-board', requireAuth(['admin']), async (req, res) => {
+  try {
+    const { statusBoard } = require('../procurement-calc');
+    res.json({ items: await statusBoard() });
+  } catch (e) {
+    console.error('GET /api/procurement/status-board error:', e.message);
+    res.status(500).json({ error: e.message, items: [] });
+  }
+});
+
 // GET /api/procurement/deletions — журнал удалённых закупок (админ)
 router.get('/deletions', requireAuth(['admin']), async (req, res) => {
   try {

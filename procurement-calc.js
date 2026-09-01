@@ -1743,4 +1743,103 @@ async function pendingActionsFor(bid) {
   return { count: items.length, items };
 }
 
-module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, listDeletions, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, resolveDocFields, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, setAmount, setPoaSetup, autoCreateFromService, scanServiceForAutoCreate, pendingActionsFor, itemUrl, dealUrl };
+// ── Статус-доска (журнал) закупок — админ ───────────────────────────────────
+// По каждой закупке: текущая стадия, на ком она сейчас (кто должен действовать),
+// что от него ждётся, и статус уведомлений (по каналам TG/Email/Bitrix + дошло ли),
+// плюс полная лента уведомлений по закупке. Отвечает на «на ком где какие
+// уведомления ушли и т.д.».
+async function statusBoard() {
+  await ensureSchema();
+  const chief = chiefAccountantId();
+  const nameOf = bid => (bid ? (USERS[bid] || ('#' + bid)) : null);
+  const { rows } = await pool.query(
+    `SELECT id, bitrix_item_id, deal_id, title, stage_id, accountant_bid, payload, created_at, updated_at
+       FROM ticketsmodule_procurement ORDER BY updated_at DESC NULLS LAST, created_at DESC`
+  );
+  const itemIds = rows.map(r => r.bitrix_item_id).filter(Boolean);
+  let notifs = [];
+  if (itemIds.length) {
+    try {
+      const q = await pool.query(
+        `SELECT bitrix_item_id, reason, channel, recipient_bitrix_id, success, sent_at
+           FROM ticketsmodule_notification_log
+          WHERE bitrix_item_id = ANY($1::int[]) ORDER BY sent_at DESC`, [itemIds]);
+      notifs = q.rows;
+    } catch (e) { /* лог не критичен */ }
+  }
+  // Индексы: последнее уведомление по (закупка+получатель), и вся лента по закупке.
+  const byRcpt = {}, byItem = {};
+  for (const n of notifs) {
+    const it = String(n.bitrix_item_id);
+    (byItem[it] = byItem[it] || []).push(n);
+    const key = it + '|' + String(n.recipient_bitrix_id || '');
+    const rec = byRcpt[key] = byRcpt[key] || { channels: {}, lastAt: null };
+    if (!rec.channels[n.channel]) rec.channels[n.channel] = { success: n.success, at: n.sent_at }; // notifs уже DESC → первый = свежайший
+    if (!rec.lastAt || new Date(n.sent_at) > new Date(rec.lastAt)) rec.lastAt = n.sent_at;
+  }
+  return rows.map(r => {
+    const pl = r.payload || {};
+    const stepIndex = stepIndexForStage(r.stage_id);
+    const stepKey = stepIndex >= 0 ? FLOW[stepIndex].key : null;
+    const stepLabel = stepIndex >= 0 ? FLOW[stepIndex].label : (r.stage_id || '—');
+    const done = stepKey === 'received' && !!pl.fullyReceived;
+    const assigned = Number(pl.assigned || pl.initiatorBid || 0) || null;
+    let owners = [], expected = '';
+    if (stepKey === 'approve') {
+      const apprs = Array.isArray(pl.apApprovers) ? pl.apApprovers.map(Number) : (pl.apApprover ? [Number(pl.apApprover)] : []);
+      const decided = pl.apDecisions || {};
+      const pending = apprs.filter(b => !decided[b] && !decided[String(b)]);
+      owners = (pending.length ? pending : apprs).map(b => ({ bid: b, name: nameOf(b), role: 'Согласующий' }));
+      expected = pl.apRequested ? 'Ждёт согласования' : 'Отправить на согласование';
+    } else if (stepKey === 'payment') {
+      const acc = r.accountant_bid ? Number(r.accountant_bid) : chief;
+      if (acc) owners.push({ bid: acc, name: nameOf(acc), role: 'Бухгалтер (оплата)' });
+      if (pl.poaRequired && pl.poaAccountantBid) owners.push({ bid: Number(pl.poaAccountantBid), name: nameOf(Number(pl.poaAccountantBid)), role: 'Доверенность' });
+      expected = 'Оплатить и приложить подтверждение';
+    } else if (stepKey === 'waiting') {
+      if (assigned) owners.push({ bid: assigned, name: nameOf(assigned), role: 'Склад' });
+      expected = 'Принять товар';
+    } else if (stepKey === 'invoice') {
+      if (assigned) owners.push({ bid: assigned, name: nameOf(assigned), role: 'Ответственный' });
+      expected = 'Приложить счёт и указать сумму';
+    } else if (stepKey === 'contract') {
+      if (assigned) owners.push({ bid: assigned, name: nameOf(assigned), role: 'Ответственный' });
+      expected = 'Отправить на согласование';
+    } else if (stepKey === 'new') {
+      if (assigned) owners.push({ bid: assigned, name: nameOf(assigned), role: 'Ответственный' });
+      expected = 'Запросить счёт';
+    } else if (stepKey === 'received') {
+      expected = done ? 'Завершено' : 'Частично принято';
+    }
+    const it = String(r.bitrix_item_id || '');
+    owners = owners.map(o => {
+      const rec = byRcpt[it + '|' + String(o.bid)] || null;
+      let notif = null;
+      if (rec) {
+        const ch = rec.channels;
+        notif = {
+          at: rec.lastAt,
+          telegram: ch.telegram ? !!ch.telegram.success : null,
+          email: ch.email ? !!ch.email.success : null,
+          bitrix: ch.bitrix ? !!ch.bitrix.success : null,
+          anyOk: ['telegram', 'email', 'bitrix'].some(c => ch[c] && ch[c].success),
+        };
+      }
+      return Object.assign(o, { notif });
+    });
+    const log = (byItem[it] || []).slice(0, 40).map(n => ({
+      at: n.sent_at, reason: n.reason, channel: n.channel,
+      to: nameOf(Number(n.recipient_bitrix_id)) || String(n.recipient_bitrix_id || '—'),
+      success: !!n.success,
+    }));
+    return {
+      id: r.id, bitrixItemId: r.bitrix_item_id, dealId: r.deal_id, title: r.title,
+      stepIndex, stepKey, stepLabel, done, owners, expected,
+      createdAt: r.created_at, updatedAt: r.updated_at,
+      itemUrl: itemUrl(r.bitrix_item_id), dealUrl: dealUrl(r.deal_id),
+      notifCount: (byItem[it] || []).length, log,
+    };
+  });
+}
+
+module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, listDeletions, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, resolveDocFields, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, setAmount, setPoaSetup, autoCreateFromService, scanServiceForAutoCreate, pendingActionsFor, statusBoard, itemUrl, dealUrl };
