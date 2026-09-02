@@ -149,6 +149,33 @@ router.post('/:id/task', requireAuth(VIEW_ROLES), express.json(), async (req, re
   }
 });
 
+// POST /api/plansales/:id/likely { value } — отметить/снять «Наиболее вероятная»
+// прямо из модуля. Пишем в поле сделки Bitrix и сразу обновляем локальное зеркало
+// (чтобы флаг отразился мгновенно, не дожидаясь синхронизации). Права — как у
+// комментариев: свои сделки и сделки своего отдела (админ — любые).
+const LIKELY_DEAL_FIELD = process.env.PLAN_LIKELY_FIELD || 'UF_CRM_1752737840347';
+router.post('/:id/likely', requireAuth(VIEW_ROLES), express.json(), async (req, res) => {
+  try {
+    const { b24 } = require('../bitrix');
+    const { pool } = require('../auth');
+    const { canCommentDeal } = require('../dept-map');
+    const id = parseInt(req.params.id, 10);
+    const value = !!(req.body || {}).value;
+    const bid = resolveBitrixId(req.user);
+    let dealMgr = null;
+    try { const { rows } = await pool.query('SELECT assigned_by_id FROM ticketsmodule_stat_deals WHERE deal_id=$1', [id]); dealMgr = rows[0] ? rows[0].assigned_by_id : null; } catch (e) { /* ignore */ }
+    if (!canCommentDeal(req.user, dealMgr, bid)) {
+      return res.status(403).json({ error: 'Отмечать «наиболее вероятной» можно только свои сделки и сделки своего отдела.' });
+    }
+    await b24('crm.deal.update', { id, fields: { [LIKELY_DEAL_FIELD]: value ? 1 : 0 } });
+    try { await pool.query('UPDATE ticketsmodule_stat_deals SET likely_deal=$1 WHERE deal_id=$2', [value, id]); } catch (e) { /* зеркало обновит и синк */ }
+    res.json({ ok: true, value });
+  } catch (e) {
+    console.error('POST /api/plansales/:id/likely error:', e.message);
+    res.status(500).json({ error: 'Не удалось изменить признак: ' + e.message });
+  }
+});
+
 // POST /api/plansales/resync — полная пересинхронизация зеркала сделок (админ).
 // Нужна разово после релиза, чтобы у существующих сделок заполнились новые поля
 // (планируемый срок покупки, «наиболее вероятная»). Запускается в фоне.

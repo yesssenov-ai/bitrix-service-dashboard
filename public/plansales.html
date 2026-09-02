@@ -171,6 +171,11 @@
   .deal .cm:hover,.deal .tk:hover{color:#fff;border-color:var(--border2)}
   html[data-theme="light"] .deal .cm:hover,html[data-theme="light"] .deal .tk:hover{color:#111827}
   .deal .cm .b{color:var(--brand2);margin-left:3px}
+  .deal .lkbtn{background:var(--panel2);border:1px solid var(--border);border-radius:7px;color:var(--dim);font-size:11px;font-weight:700;padding:3px 8px;cursor:pointer;flex-shrink:0;white-space:nowrap}
+  .deal .lkbtn:hover{color:#fff;border-color:var(--border2)}
+  html[data-theme="light"] .deal .lkbtn:hover{color:#111827}
+  .deal .lkbtn.on{color:var(--brand);border-color:var(--brand)}
+  .deal .lkbtn:disabled{opacity:.5;cursor:default}
   /* Инлайн-комментарий под сделкой (последний, сразу виден) */
   .dcm{padding:1px 14px 9px 60px;font-size:11.5px;color:var(--dim);line-height:1.45}
   .dcm b{color:var(--text)}
@@ -578,6 +583,7 @@ function dealHtml(d){
       ${d.likely?'<span class="lk">⚡</span>':''}
       <span class="stg ${d.step}">${d.step}</span>
       <span class="dsum tabular">${fmt(d.sum)} ₸</span>
+      ${d.canComment?`<button class="lkbtn${d.likely?' on':''}" data-lid="${d.id}" data-lon="${d.likely?1:0}" title="${d.likely?'Снять признак «Наиболее вероятная»':'Отметить как «Наиболее вероятную»'}">⚡ ${d.likely?'Вероятная':'Отметить'}</button>`:''}
       <button class="tk" data-tid="${d.id}" data-ttitle="${esc(d.title)}" data-tmgr="${d.managerId||''}" title="Поставить задачу менеджеру">＋ Задача</button>
       <button class="cm" data-cid="${d.id}" data-ctitle="${esc(d.title)}" title="Комментарии сделки">💬</button>
       ${d.url?`<a class="ext" href="${esc(d.url)}" target="_blank" title="Открыть в Bitrix">↗</a>`:''}
@@ -630,7 +636,20 @@ function renderTree(){
   });
   box.querySelectorAll('.deal .cm').forEach(b=>{ b.onclick=(e)=>{ e.stopPropagation(); openComments(b.dataset.cid,b.dataset.ctitle); }; });
   box.querySelectorAll('.deal .tk').forEach(b=>{ b.onclick=(e)=>{ e.stopPropagation(); openTask(b.dataset.tid,b.dataset.ttitle,b.dataset.tmgr); }; });
+  box.querySelectorAll('.deal .lkbtn').forEach(b=>{ b.onclick=(e)=>{ e.stopPropagation(); toggleLikely(b); }; });
   loadInlineComments();
+}
+// Отметить/снять «Наиболее вероятная» прямо из списка.
+async function toggleLikely(btn){
+  const id=btn.dataset.lid; const next=btn.dataset.lon!=='1';
+  btn.disabled=true; const prevHtml=btn.innerHTML; btn.innerHTML='⚡ …';
+  try{
+    const r=await fetch('/api/plansales/'+id+'/likely',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({value:next})});
+    const d=await r.json();
+    if(!r.ok){ alert(d.error||'Не удалось изменить'); btn.disabled=false; btn.innerHTML=prevHtml; return; }
+    const deal=(DATA.deals||[]).find(x=>String(x.id)===String(id)); if(deal) deal.likely=next;
+    renderAll();   // пересчитать сводки/воронку и перерисовать список
+  }catch(e){ alert('Ошибка: '+e.message); btn.disabled=false; btn.innerHTML=prevHtml; }
 }
 
 // ── Инлайн-комментарии (последний комментарий сразу под сделкой) ───────────────
