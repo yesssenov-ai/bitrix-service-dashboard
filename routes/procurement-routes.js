@@ -121,6 +121,7 @@ router.post('/create', requireModuleApi('PROC'), express.json(), async (req, res
     const { createRequest } = require('../procurement-calc');
     const payload = req.body || {};
     payload._createdBy = req.user.id;
+    payload._createdByName = req.user.display_name || req.user.engineer_name || null;
     const out = await createRequest(payload, req.user.bitrix_user_id || null);
     res.json({ ok: true, ...out });
   } catch (e) {

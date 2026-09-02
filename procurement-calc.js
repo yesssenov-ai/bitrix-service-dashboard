@@ -1199,6 +1199,32 @@ async function createRequest(payload, bitrixUserId) {
     'UPDATE ticketsmodule_procurement SET bitrix_item_id=$1, stage_id=$2, updated_at=NOW() WHERE id=$3',
     [item.id, item.stageId || null, localId]
   );
+
+  // Уведомление ответственному: если создатель назначил ОТВЕТСТВЕННЫМ другого
+  // сотрудника (в форме), тому уходит уведомление (TG + почта + Bitrix) о том,
+  // что он назначен ответственным за новую закупку.
+  try {
+    const responsible = payload.assigned ? Number(payload.assigned) : null;
+    const creator = bitrixUserId ? Number(bitrixUserId) : (payload.initiatorBid ? Number(payload.initiatorBid) : null);
+    if (responsible && responsible !== creator) {
+      const { notifyPerson, emailHtml } = require('./procurement-notify');
+      const who = payload._createdByName || (creator && USERS[creator]) || 'сотрудник';
+      const tg = `📦 <b>Вы назначены ответственным за закупку</b>\n«${title}» (#${item.id})\nСоздал(а): ${who}`;
+      const html = emailHtml({
+        title: 'Вы ответственный за новую закупку',
+        color: '#0f6cbd',
+        lines: [['Заявка', title], ['Создал(а)', who], ['Статус', 'Новая заявка']],
+        itemUrl: itemUrl(item.id), dashUrl: '/procurement.html',
+      });
+      await notifyPerson(responsible, {
+        reason: 'Назначен ответственным',
+        tgText: tg,
+        subject: `Новая закупка — вы ответственный: ${title}`,
+        html, itemId: item.id,
+      }).catch(() => {});
+    }
+  } catch (e) { /* уведомление best-effort */ }
+
   return { localId, bitrixItemId: item.id, stageId: item.stageId || null, itemUrl: itemUrl(item.id) };
 }
 
