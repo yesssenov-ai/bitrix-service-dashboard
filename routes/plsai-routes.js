@@ -15,6 +15,32 @@ function meBidOf(user) {
   return null;
 }
 
+// Вопрос относится к «другим» доменам (не воронка продаж), которыми жёсткие
+// продажные дорожки не владеют → отдаём агенту с доступом ко всем данным ЦУПа.
+// Продажные вопросы (сделки, воронка, производители, приборы) сюда НЕ попадают.
+function looksLikeOtherDomain(q) {
+  const s = String(q || '').toLowerCase();
+  // Границы слова через классы (в JS \b НЕ работает с кириллицей!).
+  const b = '(?:^|[^а-яёa-z0-9])', e = '(?:$|[^а-яёa-z0-9])';
+  const tests = [
+    new RegExp(b + 'кп' + e),                                     // КП / МЛК
+    new RegExp(b + 'нкт' + e),                                    // НКТ
+    new RegExp(b + 'бдм' + e),                                    // проекты (БДМ)
+    /коммерческ[а-яё]*\s*предлож/,
+    /закуп/,                                                      // закупки
+    /накладн|доверенн|гарантийн/,                                 // документы закупок
+    /реализац|отгрузк/,                                           // реализация
+    /(?<!за)контракт/,                                            // контракты (не «законтрактовано»)
+    /национальн[а-яё]*\s*каталог|ntin|kztin/,                     // НКТ
+    /планировщик|выезд|командировк/,                              // планировщик
+    /рассылк|кампани/,                                            // рассылки
+    /лиценз|недропользоват/,                                      // лицензии ГМК
+    /бонус/,                                                      // бонусы
+    /почт[аеуыой]|письм/,                                         // почта
+  ];
+  return tests.some(re => re.test(s));
+}
+
 // Выгрузка статистики по компаниям (Тотал + годы × категории) через ProLab AI.
 function looksLikeStatExport(q) {
   const s = String(q || '').toLowerCase();
@@ -109,6 +135,21 @@ router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) 
       history.save(uid, q, { type: 'ops', interpreted: ops.interpret(f), ops: true, dateLabel: f.field.label, count, sumKzt });
       res.set('Cache-Control', 'no-store');
       return res.json({ ok: true, interpreted: ops.interpret(f), ai: false, ops: true, dateLabel: f.field.label, count, sumKzt, sample: items.slice(0, 50) });
+    }
+    // «Непродажные» домены (КП, закупки, реализация, контракты, НКТ, планировщик,
+    // рассылки, лицензии, бонусы, проекты, почта) — сразу агенту с доступом к данным
+    // (роль-скоуп внутри), не давая продажному разборщику перехватить их как сделки.
+    if (looksLikeOtherDomain(q)) {
+      try {
+        const agent = require('../plsai-agent');
+        const r = await agent.runAgent(q, req.user);
+        if (r && r.ok && r.answer) {
+          history.save(uid, q, { type: 'agent', answer: r.answer, ai: true });
+          res.set('Cache-Control', 'no-store');
+          return res.json({ ok: true, answer: r.answer, ai: true, kind: 'assistant', agent: true, steps: (r.steps || []).map(s => ({ purpose: s.purpose, rowCount: s.rowCount, error: s.error })) });
+        }
+      } catch (e) { console.error('agent domain-route error:', e.message); }
+      // если агент недоступен — падаем дальше на обычный разбор
     }
     const a = await analyze(q);
     // Агрегация/рейтинг: «кто больше всех», «топ», «разбивка по…».
