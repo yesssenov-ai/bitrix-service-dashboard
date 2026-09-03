@@ -64,6 +64,12 @@
   .pai-opt:hover{filter:brightness(1.08)}
   .pai-dl{display:inline-flex;align-items:center;gap:7px;background:linear-gradient(135deg,#22c9a3,#1aa17f);border:0;color:#04140f;border-radius:10px;padding:8px 13px;font:inherit;font-weight:800;font-size:12px;cursor:pointer}
   .pai-dl:disabled{opacity:.5;cursor:default}
+  .pai-fb{display:flex;align-items:center;gap:6px;margin-top:10px}
+  .pai-fb-q{font-size:11.5px;color:#8592ad}
+  .pai-fb-btn{background:transparent;border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:2px 8px;font-size:13px;cursor:pointer;line-height:1.4}
+  .pai-fb-btn:hover{border-color:rgba(255,255,255,.4);background:rgba(255,255,255,.06)}
+  html[data-theme="light"] .pai-fb-btn{border-color:#dfe3ec}
+  html[data-theme="light"] .pai-fb-btn:hover{background:#f0f2f7}
   .pai-tbl{width:100%;border-collapse:collapse;font-size:11px;margin-top:9px}
   .pai-tbl th{text-align:left;color:#8592ad;font-weight:700;padding:5px 6px;border-bottom:1px solid rgba(255,255,255,.1);position:sticky;top:0;background:#161f33}
   .pai-tbl td{padding:5px 6px;border-bottom:1px solid rgba(255,255,255,.06);vertical-align:top}
@@ -160,9 +166,36 @@
       '<div class="pai-actrow"><button class="pai-actbtn pai-act" data-ch="task">📋 Задача в Bitrix</button><button class="pai-actbtn pai-act" data-ch="telegram">✈️ Telegram</button><button class="pai-actbtn pai-act" data-ch="email">✉️ Почта</button></div>' +
       '<div class="pai-actrow" style="margin-top:6px"><span class="pai-hint">Кому:</span><button class="pai-tgt on" data-tg="managers">' + firstLbl + '</button><button class="pai-tgt" data-tg="heads">руководителям</button></div></div>';
   }
+  // 👍/👎 по ответу агента (кормит банк примеров — самообучение).
+  function feedbackHTML(id) {
+    return '<div class="pai-fb" data-ex="' + esc(String(id)) + '"><span class="pai-fb-q">Ответ полезен?</span>' +
+      '<button class="pai-fb-btn" data-vote="1" title="Полезно — запомнить подход">👍</button>' +
+      '<button class="pai-fb-btn" data-vote="-1" title="Неудачно — реже использовать">👎</button></div>';
+  }
+  // Таблица ответа агента + кнопка «Скачать Excel».
+  function agentTableHTML(t) {
+    var cols = t.columns || [];
+    var rows = t.rows || [];
+    var thead = '<thead><tr>' + cols.map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('') + '</tr></thead>';
+    var tbody = '<tbody>' + rows.map(function (r) {
+      return '<tr>' + cols.map(function (c) { var v = r[c]; return '<td>' + esc(v == null ? '' : String(v)) + '</td>'; }).join('') + '</tr>';
+    }).join('') + '</tbody>';
+    var h = '';
+    if (t.title) h += '<div class="pai-hint" style="margin:8px 0 2px;font-weight:700">' + esc(t.title) + '</div>';
+    h += '<div class="pai-wrap"><table class="pai-tbl">' + thead + tbody + '</table></div>';
+    if (t.rowCount > rows.length) h += '<div class="pai-hint" style="margin-top:4px">Показаны первые ' + rows.length + ' из ' + t.rowCount + '. В Excel — все.</div>';
+    if (t.token) h += '<button class="pai-dl pai-dl-agent" data-token="' + esc(t.token) + '" style="margin-top:8px">⬇ Excel (' + t.rowCount + ')</button>';
+    return h;
+  }
+
   function botHTML(d, q) {
     if (d.error) return '<div class="pai-err">' + esc(d.error) + '</div>';
-    if (d.answer) return '<div class="pai-int">🧠 Ассистент ЦУП</div><div class="pai-answer">' + esc(d.answer).replace(/\n/g, '<br>') + '</div>';
+    if (d.answer) {
+      var ans = '<div class="pai-int">🧠 Ассистент ЦУП</div><div class="pai-answer">' + esc(d.answer).replace(/\n/g, '<br>') + '</div>';
+      if (d.agent && d.table && d.table.rowCount) ans += agentTableHTML(d.table);
+      if (d.agent && d.exampleId) ans += feedbackHTML(d.exampleId);
+      return ans;
+    }
     if (d.statExport) return '<div class="pai-int">📊 Выгрузка статистики</div><div class="pai-hint" style="margin-bottom:8px">' + esc(d.label || '') + '</div><button class="pai-dl" data-q="' + esc(d.q || q) + '">⬇ Скачать Excel</button>';
     // Сделки с неактуальными комментариями.
     if (d.stale) {
@@ -447,6 +480,8 @@
     var ca = e.target.closest('.pai-cancel-act'); if (ca) { var m = ca.closest('.pai-msg'); if (m) m.remove(); return; }
     var act = e.target.closest('.pai-act'); if (act) { e.preventDefault(); doPrepare(act.getAttribute('data-ch')); return; }
     var tgt = e.target.closest('.pai-tgt'); if (tgt && tgt.getAttribute('data-tg')) { if (curAction) curAction.target = tgt.getAttribute('data-tg'); var bar = tgt.closest('.pai-actbar'); if (bar) bar.querySelectorAll('.pai-tgt').forEach(function (b) { b.classList.toggle('on', b === tgt); }); return; }
+    var fb = e.target.closest('.pai-fb-btn'); if (fb) { doFeedback(fb, fb.parentNode.getAttribute('data-ex'), fb.getAttribute('data-vote')); return; }
+    var da = e.target.closest('.pai-dl-agent'); if (da) { doExportAgent(da.getAttribute('data-token'), da); return; }
     var d2 = e.target.closest('.pai-dl'); if (d2) { doExport(d2.getAttribute('data-q'), d2); return; }
     var op = e.target.closest('.pai-opt'); if (op) { input.value = op.getAttribute('data-q'); run(); }
   });
@@ -507,6 +542,25 @@
       bot.innerHTML = botHTML(d, q); scrollBottom();
     } catch (e) { bot.innerHTML = '<div class="pai-err">Ошибка сети</div>'; }
     finally { send.disabled = false; }
+  }
+
+  async function doFeedback(btn, id, vote) {
+    var box = btn.parentNode; if (!id) return;
+    try {
+      await fetch('/api/plsai/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ exampleId: id, vote: Number(vote) }) });
+      box.innerHTML = '<span class="pai-fb-q">' + (Number(vote) >= 0 ? 'Спасибо! Запомнил подход 👍' : 'Понял, учту 👎') + '</span>';
+    } catch (e) { box.innerHTML = '<span class="pai-fb-q">Не удалось сохранить оценку</span>'; }
+  }
+
+  async function doExportAgent(token, btn) {
+    if (!token) return; var o = btn ? btn.textContent : ''; if (btn) { btn.disabled = true; btn.textContent = 'Готовлю…'; }
+    try {
+      var r = await fetch('/api/plsai/agent-export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token }) });
+      if (!r.ok) { var e = await r.json().catch(function () { return {}; }); throw new Error(e.error || 'Ошибка'); }
+      var blob = await r.blob(); var u = URL.createObjectURL(blob); var a = document.createElement('a');
+      a.href = u; a.download = 'ProLabAI.xlsx'; a.click(); URL.revokeObjectURL(u);
+      if (btn) { btn.textContent = '✓ Скачано'; setTimeout(function () { btn.textContent = o; btn.disabled = false; }, 1500); }
+    } catch (e) { alert('Не удалось выгрузить: ' + e.message); if (btn) { btn.textContent = o; btn.disabled = false; } }
   }
 
   async function doExport(q, btn) {

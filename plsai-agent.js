@@ -232,14 +232,71 @@ async function guardedSelect(rawSql, ctx) {
   }
 }
 
-// ── Системный промпт (карта + правила + роль) ───────────────────────────────
-function buildSystem(user, allowed) {
+// ── Самообучение: банк примеров (Q → удачный SQL), рейтинг через 👍/👎 ────────
+const STOPWORDS = new Set(['и', 'в', 'во', 'на', 'по', 'за', 'от', 'до', 'из', 'у', 'о', 'об', 'с', 'со', 'к', 'ко', 'что', 'как', 'это', 'для', 'все', 'нам', 'мне', 'мы', 'ты', 'вы', 'он', 'она', 'они', 'а', 'но', 'или', 'же', 'ли', 'бы', 'не', 'да', 'нет', 'сколько', 'какие', 'какой', 'какая', 'где', 'когда', 'кто', 'чем', 'покажи', 'дай', 'мой', 'мои', 'сейчас', 'есть', 'быть', 'их', 'его', 'её']);
+function keywordsOf(text) {
+  const toks = String(text || '').toLowerCase().replace(/ё/g, 'е').split(/[^a-zа-я0-9]+/).filter(w => w.length >= 3 && !STOPWORDS.has(w));
+  // грубая нормализация окончаний, чтобы «закупок»/«закупки» совпадали
+  const stem = w => w.length > 5 ? w.slice(0, Math.max(5, w.length - 2)) : w;
+  return [...new Set(toks.map(stem))];
+}
+function qnorm(text) { return String(text || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]+/g, ' ').trim(); }
+
+// Достать похожие удачные примеры (с учётом доступных пользователю таблиц).
+async function retrieveExamples(q, allowed, limit) {
+  try {
+    const kw = keywordsOf(q);
+    if (!kw.length) return [];
+    const { rows } = await pool.query(
+      `SELECT id, question, final_sql, keywords, tables, votes FROM ticketsmodule_plsai_examples
+        WHERE votes > -1 ORDER BY votes DESC, updated_at DESC LIMIT 300`);
+    const kset = new Set(kw);
+    const scored = rows.map(r => {
+      const rk = (r.keywords || []);
+      let overlap = 0; for (const k of rk) if (kset.has(k)) overlap++;
+      return { r, score: overlap + (r.votes || 0) * 2 };
+    }).filter(x => x.score > 0);
+    // только те, чьи таблицы доступны текущей роли
+    const ok = scored.filter(x => (x.r.tables || []).every(t => allowed.has(t)));
+    ok.sort((a, b) => b.score - a.score);
+    return ok.slice(0, limit || 3).map(x => x.r);
+  } catch (e) { return []; }
+}
+
+// Сохранить удачный пример (или подтянуть рейтинг существующего похожего).
+async function saveExample(user, question, finalSql, answer) {
+  try {
+    if (!finalSql) return null;
+    const kw = keywordsOf(question);
+    const tables = [...extractTables(finalSql)].filter(t => t.startsWith('ticketsmodule_'));
+    const nq = qnorm(question);
+    const ex = await pool.query('SELECT id FROM ticketsmodule_plsai_examples WHERE qnorm=$1 LIMIT 1', [nq]);
+    if (ex.rows.length) {
+      await pool.query('UPDATE ticketsmodule_plsai_examples SET final_sql=$1, answer=$2, updated_at=NOW() WHERE id=$3', [finalSql, String(answer || '').slice(0, 500), ex.rows[0].id]);
+      return ex.rows[0].id;
+    }
+    const ins = await pool.query(
+      `INSERT INTO ticketsmodule_plsai_examples (user_id, question, qnorm, keywords, tables, final_sql, answer)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [user && user.id, String(question).slice(0, 500), nq, kw, tables, finalSql, String(answer || '').slice(0, 500)]);
+    return ins.rows[0].id;
+  } catch (e) { return null; }
+}
+
+async function voteExample(id, delta) {
+  const d = delta > 0 ? 1 : -1;
+  const { rows } = await pool.query('UPDATE ticketsmodule_plsai_examples SET votes = votes + $1, updated_at=NOW() WHERE id=$2 RETURNING votes', [d, parseInt(id, 10)]);
+  return rows.length ? rows[0].votes : null;
+}
+
+// ── Системный промпт (карта + правила + роль + похожие примеры) ──────────────
+function buildSystem(user, allowed, examples) {
   const lines = [];
   for (const t of [...allowed].sort()) {
     const m = TABLE_META[t] || {};
     lines.push(`- ${t}${m.desc ? ' — ' + m.desc : ''}`);
   }
-  return [
+  const base = [
     'Ты — ProLab AI, аналитический помощник по системе ЦУП (ProLabSupport). Отвечай по-русски, кратко и по делу.',
     `Пользователь: ${user.display_name || user.engineer_name || 'сотрудник'} · роль: ${user.role}.`,
     '',
@@ -253,29 +310,54 @@ function buildSystem(user, allowed) {
     '2) Только SELECT/WITH, один запрос, без «;». Всегда ставь разумный LIMIT.',
     '3) Работай ЭКОНОМНО: обычно хватает 1–2 запросов. Колонки таблицы не знаешь — сделай ОДИН «SELECT * FROM <таблица> LIMIT 3», дальше сразу строй нужный агрегат. Не делай лишних запросов.',
     '4) Доступ уже ограничен по роли на уровне БД. Если запрос отклонён по правам («нет доступа к таблице») — НЕ повторяй его, а честно скажи пользователю, что по его роли этих данных нет.',
-    '5) Формат ответа: сначала короткий вывод словами. Если уместно — компактная таблица в Markdown (до ~15 строк). Большие выборки — предложи сузить.',
+    '5) Если ответ — это СПИСОК/ТАБЛИЦА (например «покажи последние заявки», «список сделок»), НЕ вставляй её текстом. Вместо этого вызови инструмент present_table(title, sql) — красивую таблицу и кнопку «Скачать Excel» соберёт система. В тексте дай только короткий вывод (сколько строк, суть). Для скалярных ответов (одно число/сумма) present_table не нужен.',
     '6) Не раскрывай пароли, токены, телефоны, e-mail — таких таблиц у тебя и нет.',
     '',
     'Подсказки по данным (чтобы не тратить шаги):',
     '• ЗАКУПКИ (ticketsmodule_procurement): текущая стадия — колонка stage_id. Значения: DT1066_13:NEW=Новая заявка, DT1066_13:PREPARATION=Запрос счёта, DT1066_13:CLIENT=Договор, DT1066_13:1=Согласование, DT1066_13:2=Оплата закупки, DT1066_13:UC_QO83IP=Ожидание товара, DT1066_13:SUCCESS=Товар принят. Сумма и детали лежат в JSON-поле payload: сумма = (payload->>\'opportunity\')::numeric, валюта = payload->>\'currency\', ответственный (Bitrix-id) = payload->>\'assigned\', комментарий бухгалтера = payload->>\'payComment\'. Пример «сколько закупок на этапе оплаты и на какую сумму»: SELECT count(*) AS n, sum((payload->>\'opportunity\')::numeric) AS summa FROM ticketsmodule_procurement WHERE stage_id=\'DT1066_13:2\'.',
     '• СДЕЛКИ (ticketsmodule_stat_deals): сумма = opportunity (валюта currency), стадия = stage_id, менеджер = assigned_by_id, отдел = department_id, дата покупки = planned_purchase_date, «наиболее вероятная» = likely_deal (boolean).',
     '• КП/МЛК (ticketsmodule_kp_requests): статус заявки — колонка status (draft/in_review/needs_revision/approved), клиент = client_name, создана = created_at.',
-  ].join('\n');
+  ];
+  if (examples && examples.length) {
+    lines2Push(base, examples);
+  }
+  return base.join('\n');
+}
+// Добавить блок «похожие прошлые решения» (few-shot из банка примеров).
+function lines2Push(base, examples) {
+  base.push('', 'Похожие прошлые запросы и рабочий SQL (переиспользуй подход, адаптируя под текущий вопрос):');
+  for (const e of examples) {
+    base.push(`— Вопрос: «${e.question}»\n  SQL: ${String(e.final_sql || '').replace(/\s+/g, ' ').slice(0, 400)}`);
+  }
 }
 
 // ── Инструмент для Claude ───────────────────────────────────────────────────
-const TOOLS = [{
-  name: 'run_sql',
-  description: 'Выполнить один SELECT (только чтение) к базе-зеркалу ЦУПа и получить строки результата. Возвращает до 40 строк.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      sql: { type: 'string', description: 'Одиночный SELECT/WITH запрос PostgreSQL, без «;».' },
-      purpose: { type: 'string', description: 'Кратко: что достаём (для лога).' },
+const TOOLS = [
+  {
+    name: 'run_sql',
+    description: 'Выполнить один SELECT (только чтение) к базе-зеркалу ЦУПа и получить строки результата (до 40 строк). Для промежуточных расчётов, агрегатов, разведки колонок.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        sql: { type: 'string', description: 'Одиночный SELECT/WITH запрос PostgreSQL, без «;».' },
+        purpose: { type: 'string', description: 'Кратко: что достаём (для лога).' },
+      },
+      required: ['sql'],
     },
-    required: ['sql'],
   },
-}];
+  {
+    name: 'present_table',
+    description: 'Показать пользователю итоговую ТАБЛИЦУ (список) с кнопкой «Скачать Excel». Вызывай, когда ответ — это перечень строк. Пиши осмысленные псевдонимы колонок через AS (по-русски). Систему это отрисует сама; в финальном тексте таблицу не дублируй.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Заголовок таблицы (например «Последние 5 заявок КП»).' },
+        sql: { type: 'string', description: 'SELECT, который вернёт строки таблицы. Колонки называй через AS по-русски.' },
+      },
+      required: ['title', 'sql'],
+    },
+  },
+];
 
 async function callClaude(system, messages, key) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -301,6 +383,47 @@ function trimRows(rows) {
   return shown;
 }
 
+// Bitrix-id пользователя (по связке аккаунта или по имени).
+function meBidOf(user) {
+  if (user && user.bitrix_user_id) return parseInt(user.bitrix_user_id, 10);
+  const nm = user && (user.engineer_name || user.display_name);
+  if (nm) { try { const { USERS } = require('./constants'); const f = Object.entries(USERS).find(([, n]) => n === nm); if (f) return parseInt(f[0], 10); } catch (_) {} }
+  return null;
+}
+
+// Контекст доступа (какие таблицы можно и по каким отделам ограничивать сделки).
+async function buildCtx(user) {
+  const { userModuleCodes } = require('./auth');
+  const codes = await userModuleCodes(user);         // null = все (админ)
+  const allowed = allowedTablesFor(user, codes);
+  const ownerBids = ownerScopeBids(user, meBidOf(user));
+  return { allowed, ownerBids };
+}
+
+// Кэш выгрузок таблиц агента: token → { sql, userId, at }. TTL 30 мин.
+const _exportCache = new Map();
+const EXPORT_TTL_MS = 30 * 60 * 1000;
+function cacheExport(sql, userId) {
+  const token = require('crypto').randomBytes(12).toString('hex');
+  _exportCache.set(token, { sql, userId, at: Date.now() });
+  // подчистка старого
+  const cutoff = Date.now() - EXPORT_TTL_MS;
+  for (const [k, v] of _exportCache) if (v.at < cutoff) _exportCache.delete(k);
+  return token;
+}
+
+// Повторно выполнить сохранённый SQL таблицы под ТЕМ ЖЕ пользователем (роль-скоуп
+// применяется заново) и вернуть колонки+строки для Excel.
+async function exportAgentTable(token, user) {
+  const rec = _exportCache.get(token);
+  if (!rec) throw new Error('Ссылка на выгрузку устарела — повтори запрос');
+  if (String(rec.userId) !== String(user && user.id)) throw new Error('Нет доступа к этой выгрузке');
+  const ctx = await buildCtx(user);
+  const res = await guardedSelect(rec.sql, ctx);
+  const columns = res.rows.length ? Object.keys(res.rows[0]) : [];
+  return { columns, rows: res.rows, rowCount: res.rowCount };
+}
+
 // ── Главная функция: прогнать вопрос через агента ───────────────────────────
 async function runAgent(qRaw, user) {
   const key = process.env.ANTHROPIC_API_KEY;
@@ -308,19 +431,12 @@ async function runAgent(qRaw, user) {
   const q = String(qRaw || '').trim().slice(0, 1000);
   if (!q) return { ok: false, error: 'Пустой запрос' };
 
-  const { userModuleCodes } = require('./auth');
-  const codes = await userModuleCodes(user);         // null = все (админ)
-  const allowed = allowedTablesFor(user, codes);
-  const meBid = (function () {
-    if (user && user.bitrix_user_id) return parseInt(user.bitrix_user_id, 10);
-    const nm = user && (user.engineer_name || user.display_name);
-    if (nm) { try { const { USERS } = require('./constants'); const f = Object.entries(USERS).find(([, n]) => n === nm); if (f) return parseInt(f[0], 10); } catch (_) {} }
-    return null;
-  })();
-  const ownerBids = ownerScopeBids(user, meBid);
-  const ctx = { allowed, ownerBids };
+  const ctx = await buildCtx(user);
+  const allowed = ctx.allowed;
+  let presentable = null;   // последняя «таблица к показу» (present_table)
 
-  const system = buildSystem(user, allowed);
+  const examples = await retrieveExamples(q, allowed);   // самообучение: похожие удачные решения
+  const system = buildSystem(user, allowed, examples);
   const messages = [{ role: 'user', content: q }];
   const steps = [];
 
@@ -333,15 +449,28 @@ async function runAgent(qRaw, user) {
     const textParts = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
 
     if (!toolUses.length) {
-      return { ok: true, answer: textParts || 'Готово.', steps, model: AGENT_MODEL };
+      return finalize(textParts || 'Готово.', presentable, steps, user, q, false);
     }
 
     // Есть вызовы инструмента — выполняем и возвращаем результаты модели.
     messages.push({ role: 'assistant', content: data.content });
     const toolResults = [];
     for (const tu of toolUses) {
-      if (tu.name !== 'run_sql') { toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: 'Неизвестный инструмент', is_error: true }); continue; }
       const sql = tu.input && tu.input.sql;
+      if (tu.name === 'present_table') {
+        try {
+          const res = await guardedSelect(sql, ctx);
+          const columns = res.rows.length ? Object.keys(res.rows[0]) : [];
+          presentable = { title: (tu.input && tu.input.title) || 'Таблица', sql: res.sql, rawSql: String(sql || ''), columns, rows: res.rows, rowCount: res.rowCount };
+          steps.push({ purpose: 'present_table', sql: res.sql, rowCount: res.rowCount });
+          toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: `Таблица готова: ${res.rowCount} строк, колонки: ${columns.join(', ')}. Отрисую сам — в тексте её не повторяй.` });
+        } catch (e) {
+          steps.push({ purpose: 'present_table', sql: String(sql || ''), error: e.message });
+          toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: 'Ошибка выполнения: ' + e.message, is_error: true });
+        }
+        continue;
+      }
+      if (tu.name !== 'run_sql') { toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: 'Неизвестный инструмент', is_error: true }); continue; }
       try {
         const res = await guardedSelect(sql, ctx);
         steps.push({ purpose: (tu.input && tu.input.purpose) || '', sql: res.sql, rowCount: res.rowCount });
@@ -368,13 +497,45 @@ async function runAgent(qRaw, user) {
     const data = await r.json();
     if (r.ok) {
       const txt = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
-      if (txt) return { ok: true, answer: txt, steps, model: AGENT_MODEL, truncated: true };
+      if (txt) return finalize(txt, presentable, steps, user, q, true);
     }
   } catch (e) { /* ниже общий ответ */ }
   // Совсем не получилось — покажем, что мешало (ошибки запросов), чтобы было понятно.
   const errs = steps.filter(s => s.error).slice(-2).map(s => s.error);
   const tail = errs.length ? ' Причина: ' + errs.join('; ') + '.' : '';
-  return { ok: true, answer: 'Пока не получилось собрать ответ по этому вопросу.' + tail + ' Попробуй сформулировать точнее.', steps, model: AGENT_MODEL, truncated: true };
+  return finalize('Пока не получилось собрать ответ по этому вопросу.' + tail + ' Попробуй сформулировать точнее.', presentable, steps, user, q, true);
 }
 
-module.exports = { runAgent, allowedTablesFor, ownerScopeBids, guardedSelect, TABLE_META };
+// Собрать финальный ответ: текст + (если была present_table) таблица для показа
+// (до 50 строк) и токен для выгрузки всех строк в Excel + сохранить удачный
+// пример в банк (самообучение) и вернуть его id для 👍/👎.
+async function finalize(answer, presentable, steps, user, q, truncated) {
+  const out = { ok: true, answer, steps, model: AGENT_MODEL };
+  if (truncated) out.truncated = true;
+  if (presentable && presentable.rowCount > 0) {
+    const rows = presentable.rows.slice(0, 50).map(r => {
+      const o = {};
+      for (const [k, v] of Object.entries(r)) {
+        if (v == null) o[k] = '';
+        else if (typeof v === 'object') o[k] = JSON.stringify(v);
+        else o[k] = v;
+      }
+      return o;
+    });
+    const token = cacheExport(presentable.rawSql, user && user.id);
+    out.table = { title: presentable.title, columns: presentable.columns, rows, rowCount: presentable.rowCount, token };
+  }
+  // Самообучение: сохраняем удачный SQL. Для present_table берём «сырой» SQL
+  // (без роль-скоупа) — он универсальный; для скалярных ответов сохраняем только
+  // у привилегированных ролей (там SQL не переписан под отдел).
+  if (!truncated) {
+    let primarySql = presentable && presentable.rawSql;
+    if (!primarySql && PRIVILEGED.has(user && user.role)) {
+      for (let i = steps.length - 1; i >= 0; i--) { if (steps[i].sql && !steps[i].error) { primarySql = steps[i].sql; break; } }
+    }
+    if (primarySql) { const id = await saveExample(user, q, primarySql, answer); if (id) out.exampleId = id; }
+  }
+  return out;
+}
+
+module.exports = { runAgent, allowedTablesFor, ownerScopeBids, guardedSelect, buildCtx, exportAgentTable, voteExample, TABLE_META };

@@ -146,7 +146,7 @@ router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) 
         if (r && r.ok && r.answer) {
           history.save(uid, q, { type: 'agent', answer: r.answer, ai: true });
           res.set('Cache-Control', 'no-store');
-          return res.json({ ok: true, answer: r.answer, ai: true, kind: 'assistant', agent: true, steps: (r.steps || []).map(s => ({ purpose: s.purpose, rowCount: s.rowCount, error: s.error })) });
+          return res.json({ ok: true, answer: r.answer, ai: true, kind: 'assistant', agent: true, table: r.table || undefined, exampleId: r.exampleId || undefined, steps: (r.steps || []).map(s => ({ purpose: s.purpose, rowCount: s.rowCount, error: s.error })) });
         }
       } catch (e) { console.error('agent domain-route error:', e.message); }
       // если агент недоступен — падаем дальше на обычный разбор
@@ -174,7 +174,7 @@ router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) 
         if (r && r.ok && r.answer) {
           history.save(uid, q, { type: 'agent', answer: r.answer, ai: true });
           res.set('Cache-Control', 'no-store');
-          return res.json({ ok: true, answer: r.answer, ai: true, kind: 'assistant', agent: true, steps: (r.steps || []).map(s => ({ purpose: s.purpose, rowCount: s.rowCount, error: s.error })) });
+          return res.json({ ok: true, answer: r.answer, ai: true, kind: 'assistant', agent: true, table: r.table || undefined, exampleId: r.exampleId || undefined, steps: (r.steps || []).map(s => ({ purpose: s.purpose, rowCount: s.rowCount, error: s.error })) });
         }
       } catch (e) { console.error('agent fallback error:', e.message); }
       if (a.answer) {
@@ -207,11 +207,56 @@ router.post('/agent', requireAuth(VIEW_ROLES), express.json(), async (req, res) 
     res.set('Cache-Control', 'no-store');
     if (!r.ok) return res.status(200).json({ ok: false, error: r.error, steps: r.steps || [] });
     try { require('../plsai-history').save(req.user && req.user.id, q, { type: 'agent', answer: r.answer, ai: true }); } catch (_) {}
-    return res.json({ ok: true, ai: true, kind: 'assistant', agent: true, answer: r.answer, model: r.model,
+    return res.json({ ok: true, ai: true, kind: 'assistant', agent: true, answer: r.answer, model: r.model, table: r.table || undefined, exampleId: r.exampleId || undefined,
       steps: (r.steps || []).map(s => ({ purpose: s.purpose, sql: s.sql, rowCount: s.rowCount, error: s.error })) });
   } catch (e) {
     console.error('POST /api/plsai/agent error:', e.message);
     res.status(500).json({ error: 'Агент недоступен: ' + e.message });
+  }
+});
+
+// POST /api/plsai/feedback { exampleId, vote } — 👍/👎 по ответу агента.
+// Двигает рейтинг примера: 👍 → чаще переиспользуется, 👎 → реже.
+router.post('/feedback', requireAuth(VIEW_ROLES), express.json(), async (req, res) => {
+  try {
+    const agent = require('../plsai-agent');
+    const { exampleId, vote } = req.body || {};
+    if (!exampleId) return res.status(400).json({ error: 'Нет exampleId' });
+    const votes = await agent.voteExample(exampleId, Number(vote) >= 0 ? 1 : -1);
+    res.json({ ok: true, votes });
+  } catch (e) {
+    console.error('POST /api/plsai/feedback error:', e.message);
+    res.status(500).json({ error: 'Не удалось сохранить оценку' });
+  }
+});
+
+// POST /api/plsai/agent-export { token } — выгрузить таблицу агента в Excel.
+// Повторно выполняет сохранённый SELECT под ТЕМ ЖЕ пользователем (роль-скоуп).
+router.post('/agent-export', requireAuth(VIEW_ROLES), express.json(), async (req, res) => {
+  try {
+    const agent = require('../plsai-agent');
+    const token = String((req.body || {}).token || '');
+    if (!token) return res.status(400).json({ error: 'Нет токена выгрузки' });
+    const { columns, rows } = await agent.exportAgentTable(token, req.user);
+    const XLSX = require('xlsx');
+    const header = columns.length ? columns : ['—'];
+    const aoa = [header].concat(rows.map(r => header.map(c => {
+      const v = r[c];
+      if (v == null) return '';
+      if (typeof v === 'object') return JSON.stringify(v);
+      return v;
+    })));
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = header.map(h => ({ wch: Math.min(48, Math.max(10, String(h).length + 2)) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'ProLab AI');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="ProLabAI.xlsx"');
+    res.send(buf);
+  } catch (e) {
+    console.error('POST /api/plsai/agent-export error:', e.message);
+    res.status(400).json({ error: e.message || 'Не удалось выгрузить' });
   }
 });
 

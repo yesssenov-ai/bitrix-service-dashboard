@@ -156,6 +156,22 @@ async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_tm_notiflog_sent ON ticketsmodule_notification_log(sent_at DESC);
     CREATE INDEX IF NOT EXISTS idx_tm_notiflog_item ON ticketsmodule_notification_log(bitrix_item_id);
 
+    -- ── ProLab AI: банк примеров (самообучение агента на удачных запросах) ──────
+    CREATE TABLE IF NOT EXISTS ticketsmodule_plsai_examples (
+      id SERIAL PRIMARY KEY,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      user_id INTEGER,
+      question TEXT,
+      qnorm TEXT,
+      keywords TEXT[],
+      tables TEXT[],
+      final_sql TEXT,
+      answer TEXT,
+      votes INTEGER DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_plsai_ex_votes ON ticketsmodule_plsai_examples(votes DESC, updated_at DESC);
+
     -- ── КП (Коммерческие предложения) module ──────────────────────────────
     CREATE TABLE IF NOT EXISTS ticketsmodule_kp_catalog_versions (
       id SERIAL PRIMARY KEY,
