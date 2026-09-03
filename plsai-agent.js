@@ -36,7 +36,7 @@ function agentPool() {
 }
 
 const AGENT_MODEL = process.env.PLSAI_AGENT_MODEL || process.env.PLSAI_MODEL || 'claude-3-5-haiku-latest';
-const MAX_STEPS = parseInt(process.env.PLSAI_AGENT_MAX_STEPS || '6', 10);
+const MAX_STEPS = parseInt(process.env.PLSAI_AGENT_MAX_STEPS || '8', 10);
 const ROW_CAP = 2000;          // жёсткий потолок строк в SQL
 const ROWS_TO_MODEL = 40;      // сколько строк отдаём модели обратно
 const STMT_TIMEOUT_MS = 9000;
@@ -251,10 +251,15 @@ function buildSystem(user, allowed) {
     'Правила:',
     '1) Чтобы ответить на вопрос о данных — вызывай run_sql. Не выдумывай числа; бери их только из результата запроса.',
     '2) Только SELECT/WITH, один запрос, без «;». Всегда ставь разумный LIMIT.',
-    '3) Если не знаешь колонки таблицы — сделай пробный запрос information_schema.columns недоступен; вместо этого выбери "SELECT * FROM <таблица> LIMIT 3", посмотри колонки, затем строй нужный запрос.',
-    '4) Доступ к данным уже ограничен по роли на уровне БД. Если запрос отклонён по правам — не обходи, а объясни пользователю, что нет доступа.',
+    '3) Работай ЭКОНОМНО: обычно хватает 1–2 запросов. Колонки таблицы не знаешь — сделай ОДИН «SELECT * FROM <таблица> LIMIT 3», дальше сразу строй нужный агрегат. Не делай лишних запросов.',
+    '4) Доступ уже ограничен по роли на уровне БД. Если запрос отклонён по правам («нет доступа к таблице») — НЕ повторяй его, а честно скажи пользователю, что по его роли этих данных нет.',
     '5) Формат ответа: сначала короткий вывод словами. Если уместно — компактная таблица в Markdown (до ~15 строк). Большие выборки — предложи сузить.',
-    '6) Не раскрывай пароли, токены, телефоны, e-mail-адреса конкретных людей — таких таблиц у тебя и нет.',
+    '6) Не раскрывай пароли, токены, телефоны, e-mail — таких таблиц у тебя и нет.',
+    '',
+    'Подсказки по данным (чтобы не тратить шаги):',
+    '• ЗАКУПКИ (ticketsmodule_procurement): текущая стадия — колонка stage_id. Значения: DT1066_13:NEW=Новая заявка, DT1066_13:PREPARATION=Запрос счёта, DT1066_13:CLIENT=Договор, DT1066_13:1=Согласование, DT1066_13:2=Оплата закупки, DT1066_13:UC_QO83IP=Ожидание товара, DT1066_13:SUCCESS=Товар принят. Сумма и детали лежат в JSON-поле payload: сумма = (payload->>\'opportunity\')::numeric, валюта = payload->>\'currency\', ответственный (Bitrix-id) = payload->>\'assigned\', комментарий бухгалтера = payload->>\'payComment\'. Пример «сколько закупок на этапе оплаты и на какую сумму»: SELECT count(*) AS n, sum((payload->>\'opportunity\')::numeric) AS summa FROM ticketsmodule_procurement WHERE stage_id=\'DT1066_13:2\'.',
+    '• СДЕЛКИ (ticketsmodule_stat_deals): сумма = opportunity (валюта currency), стадия = stage_id, менеджер = assigned_by_id, отдел = department_id, дата покупки = planned_purchase_date, «наиболее вероятная» = likely_deal (boolean).',
+    '• КП/МЛК (ticketsmodule_kp_requests): статус заявки — колонка status (draft/in_review/needs_revision/approved), клиент = client_name, создана = created_at.',
   ].join('\n');
 }
 
@@ -350,7 +355,26 @@ async function runAgent(qRaw, user) {
     }
     messages.push({ role: 'user', content: toolResults });
   }
-  return { ok: true, answer: 'Не удалось завершить за отведённое число шагов. Уточни вопрос, пожалуйста.', steps, model: AGENT_MODEL, truncated: true };
+
+  // Шаги исчерпаны — принуждаем модель дать ЛУЧШИЙ ответ по уже полученным данным
+  // (без инструментов), а не отдавать сухое «не удалось завершить».
+  messages.push({ role: 'user', content: 'Заверши: дай лучший возможный ответ по уже полученным данным. Если данных не хватило или нет доступа — коротко объясни почему. Не вызывай инструменты.' });
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: AGENT_MODEL, max_tokens: 1200, system, messages }),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      const txt = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
+      if (txt) return { ok: true, answer: txt, steps, model: AGENT_MODEL, truncated: true };
+    }
+  } catch (e) { /* ниже общий ответ */ }
+  // Совсем не получилось — покажем, что мешало (ошибки запросов), чтобы было понятно.
+  const errs = steps.filter(s => s.error).slice(-2).map(s => s.error);
+  const tail = errs.length ? ' Причина: ' + errs.join('; ') + '.' : '';
+  return { ok: true, answer: 'Пока не получилось собрать ответ по этому вопросу.' + tail + ' Попробуй сформулировать точнее.', steps, model: AGENT_MODEL, truncated: true };
 }
 
 module.exports = { runAgent, allowedTablesFor, ownerScopeBids, guardedSelect, TABLE_META };
