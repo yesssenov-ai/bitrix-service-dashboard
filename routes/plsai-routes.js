@@ -123,10 +123,23 @@ router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) 
       res.set('Cache-Control', 'no-store');
       return res.json({ ok: true, ai: true, aggregate: true, interpreted, metric: agg.metric, groupBy: agg.groupBy, rows: agg.rows.slice(0, 20), total: agg.total });
     }
-    // Ассистент ответил текстом (вопрос про систему/модули/статус, не выборка сделок).
-    if (a.kind === 'assistant' && a.answer) {
-      history.save(uid, q, { type: 'assistant', answer: a.answer, ai: true });
-      res.set('Cache-Control', 'no-store'); return res.json({ ok: true, answer: a.answer, ai: true, kind: 'assistant' });
+    // Открытый вопрос (про систему/данные/статус, не типовая выборка сделок) —
+    // отдаём агенту с доступом к данным ЦУПа (роль-скоуп внутри). Если агент
+    // недоступен (нет ключа/ошибка) — откатываемся на короткий текст-ответ.
+    if (a.kind === 'assistant') {
+      try {
+        const agent = require('../plsai-agent');
+        const r = await agent.runAgent(q, req.user);
+        if (r && r.ok && r.answer) {
+          history.save(uid, q, { type: 'agent', answer: r.answer, ai: true });
+          res.set('Cache-Control', 'no-store');
+          return res.json({ ok: true, answer: r.answer, ai: true, kind: 'assistant', agent: true, steps: (r.steps || []).map(s => ({ purpose: s.purpose, rowCount: s.rowCount, error: s.error })) });
+        }
+      } catch (e) { console.error('agent fallback error:', e.message); }
+      if (a.answer) {
+        history.save(uid, q, { type: 'assistant', answer: a.answer, ai: true });
+        res.set('Cache-Control', 'no-store'); return res.json({ ok: true, answer: a.answer, ai: true, kind: 'assistant' });
+      }
     }
     if (!a.f && a.clarify) {
       history.save(uid, q, { type: 'clarify', clarify: a.clarify, ai: true });
@@ -139,6 +152,25 @@ router.post('/query', requireAuth(VIEW_ROLES), express.json(), async (req, res) 
   } catch (e) {
     console.error('POST /api/plsai/query error:', e.message);
     res.status(500).json({ error: 'Не удалось выполнить запрос: ' + e.message });
+  }
+});
+
+// POST /api/plsai/agent { q } — прямой вызов агента с доступом к данным ЦУПа
+// (read-only, роль-скоуп внутри). Ответ текстом (+ шаги для прозрачности).
+router.post('/agent', requireAuth(VIEW_ROLES), express.json(), async (req, res) => {
+  try {
+    const agent = require('../plsai-agent');
+    const q = String((req.body || {}).q || '').trim();
+    if (!q) return res.status(400).json({ error: 'Пустой запрос' });
+    const r = await agent.runAgent(q, req.user);
+    res.set('Cache-Control', 'no-store');
+    if (!r.ok) return res.status(200).json({ ok: false, error: r.error, steps: r.steps || [] });
+    try { require('../plsai-history').save(req.user && req.user.id, q, { type: 'agent', answer: r.answer, ai: true }); } catch (_) {}
+    return res.json({ ok: true, ai: true, kind: 'assistant', agent: true, answer: r.answer, model: r.model,
+      steps: (r.steps || []).map(s => ({ purpose: s.purpose, sql: s.sql, rowCount: s.rowCount, error: s.error })) });
+  } catch (e) {
+    console.error('POST /api/plsai/agent error:', e.message);
+    res.status(500).json({ error: 'Агент недоступен: ' + e.message });
   }
 });
 
