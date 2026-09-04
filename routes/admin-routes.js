@@ -140,6 +140,20 @@ router.put('/users/:id', requireAuth(['admin']), async (req, res) => {
   } catch(e) { sanitizeError(e, res); }
 });
 
+// POST /admin/users/:id/reset-2fa — сбросить 2FA сотруднику (потерял аутентификатор).
+// После сброса при следующем входе он пройдёт обязательную настройку 2FA заново
+// (новый QR). Только админ.
+router.post('/users/:id/reset-2fa', requireAuth(['admin']), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (!id) return res.status(400).json({ ok: false, error: 'Неверный ID' });
+    const r = await pool.query('UPDATE ticketsmodule_users SET totp_secret=NULL, totp_enabled=false, updated_at=NOW() WHERE id=$1 RETURNING username', [id]);
+    if (!r.rows.length) return res.status(404).json({ ok: false, error: 'Пользователь не найден' });
+    await auditLog(req.user.id, req.user.username, 'USER_2FA_RESET', null, { targetId: id }, req.ip, req.headers['user-agent']);
+    res.json({ ok: true, username: r.rows[0].username });
+  } catch (e) { sanitizeError(e, res); }
+});
+
 // DELETE /admin/users/:id (soft delete)
 router.delete('/users/:id', requireAuth(['admin']), async (req, res) => {
   try {
