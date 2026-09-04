@@ -16,6 +16,19 @@ const CAMPAIGN_FROM = process.env.CAMPAIGN_FROM || 'ProLabSupport <news@prolabsu
 const SEND_BATCH = 20;          // писем за «пачку»
 const SEND_PAUSE_MS = 1500;     // пауза между пачками (троттлинг)
 
+// ── Провайдер отправки: 'selzy' или 'resend' (по умолчанию resend) ──────────
+// Для Selzy: CAMPAIGN_PROVIDER=selzy, SELZY_API_KEY=..., SELZY_LIST_ID=<id списка
+// в Selzy, нужен для ссылки отписки>, а отправитель берётся из CAMPAIGN_FROM
+// (или переопредели SELZY_SENDER_EMAIL — это ДОЛЖЕН быть подтверждённый в Selzy
+// адрес на поддомене, напр. news@client.prolabsupport.kz).
+const PROVIDER = (process.env.CAMPAIGN_PROVIDER || 'resend').toLowerCase();
+const SELZY_KEY = process.env.SELZY_API_KEY;
+const SELZY_LIST_ID = process.env.SELZY_LIST_ID;
+const SELZY_INTERVAL_MS = parseInt(process.env.SELZY_INTERVAL_MS || '1100', 10); // лимит Selzy — 60/мин
+const FROM_NAME = (CAMPAIGN_FROM.match(/^([^<]+)</) || [null, 'ProLabSupport'])[1].trim();
+const FROM_EMAIL = (CAMPAIGN_FROM.match(/<([^>]+)>/) || [null, CAMPAIGN_FROM])[1].trim();
+const SELZY_SENDER_EMAIL = process.env.SELZY_SENDER_EMAIL || FROM_EMAIL;
+
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -262,7 +275,12 @@ function wrapEmail(bodyHtml, unsubUrl) {
 async function sendOne(rec, campaign) {
   const unsubUrl = `${APP_BASE}/api/campaigns/unsub?t=${unsubToken(rec.email)}`;
   const html = wrapEmail(personalize(campaign.body_html, rec), unsubUrl);
-  const from = campaign.from_name ? campaign.from_name.replace(/<[^>]*>/g, '').trim() + ' <' + (CAMPAIGN_FROM.match(/<([^>]+)>/) || [null, CAMPAIGN_FROM])[1] + '>' : CAMPAIGN_FROM;
+  if (PROVIDER === 'selzy') return sendOneSelzy(rec, campaign, html);
+  return sendOneResend(rec, campaign, html, unsubUrl);
+}
+
+async function sendOneResend(rec, campaign, html, unsubUrl) {
+  const from = campaign.from_name ? campaign.from_name.replace(/<[^>]*>/g, '').trim() + ' <' + FROM_EMAIL + '>' : CAMPAIGN_FROM;
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST', headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ from, to: [rec.email], subject: campaign.subject || '', html, headers: { 'List-Unsubscribe': `<${unsubUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } }),
@@ -272,10 +290,42 @@ async function sendOne(rec, campaign) {
   return d.id || null;
 }
 
+// Отправка через Selzy (ex-Unisender) методом sendEmail. Отправитель — подтверждённый
+// в Selzy адрес на поддомене. list_id нужен Selzy для ссылки отписки.
+async function sendOneSelzy(rec, campaign, html) {
+  if (!SELZY_KEY) throw new Error('SELZY_API_KEY не задан');
+  if (!SELZY_LIST_ID) throw new Error('SELZY_LIST_ID не задан');
+  const senderName = (campaign.from_name ? campaign.from_name.replace(/<[^>]*>/g, '').trim() : '') || FROM_NAME;
+  const params = new URLSearchParams();
+  params.set('format', 'json');
+  params.set('api_key', SELZY_KEY);
+  params.set('email', rec.email);
+  params.set('sender_name', senderName);
+  params.set('sender_email', SELZY_SENDER_EMAIL);
+  params.set('subject', campaign.subject || '');
+  params.set('body', html);
+  params.set('list_id', String(SELZY_LIST_ID));
+  params.set('track_read', '0');
+  params.set('track_links', '0');
+  const res = await fetch('https://api.selzy.com/en/api/sendEmail', {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params.toString(),
+  });
+  const d = await res.json().catch(() => ({}));
+  if (d && d.error) throw new Error(String(d.error) + (d.code ? ' [' + d.code + ']' : ''));
+  const r = d && d.result;
+  const id = Array.isArray(r) ? (r[0] && (r[0].id || r[0].email_id)) : (r && (r.email_id || r.id));
+  return id ? String(id) : null;
+}
+
 // Запуск рассылки (в фоне). Троттлинг + стоп-лист + запись статусов.
 async function sendCampaign(campaignId) {
   await ensureSchema();
-  if (!RESEND_KEY) return { ok: false, error: 'RESEND_API_KEY не задан' };
+  if (PROVIDER === 'selzy') {
+    if (!SELZY_KEY) return { ok: false, error: 'SELZY_API_KEY не задан' };
+    if (!SELZY_LIST_ID) return { ok: false, error: 'SELZY_LIST_ID не задан' };
+  } else if (!RESEND_KEY) {
+    return { ok: false, error: 'RESEND_API_KEY не задан' };
+  }
   const c = (await pool.query('SELECT * FROM ticketsmodule_campaigns WHERE id=$1', [campaignId])).rows[0];
   if (!c) return { ok: false, error: 'Кампания не найдена' };
   if (c.status === 'sending') return { ok: false, error: 'Рассылка уже идёт' };
@@ -298,6 +348,8 @@ async function sendCampaign(campaignId) {
             await pool.query('UPDATE ticketsmodule_campaign_recipients SET status=\'failed\', error=$1, at=NOW() WHERE id=$2', [String(e.message).slice(0, 300), rec.id]);
             failed++;
           }
+          // Selzy: не чаще 60 писем/мин — держим паузу между письмами.
+          if (PROVIDER === 'selzy') await sleep(SELZY_INTERVAL_MS);
         }
         await pool.query('UPDATE ticketsmodule_campaigns SET sent=$1, failed=$2 WHERE id=$3', [sent, failed, campaignId]);
         if (i + SEND_BATCH < recs.length) await sleep(SEND_PAUSE_MS);
