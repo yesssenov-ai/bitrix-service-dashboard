@@ -29,8 +29,32 @@ const FROM_NAME = (CAMPAIGN_FROM.match(/^([^<]+)</) || [null, 'ProLabSupport'])[
 const FROM_EMAIL = (CAMPAIGN_FROM.match(/<([^>]+)>/) || [null, CAMPAIGN_FROM])[1].trim();
 const SELZY_SENDER_EMAIL = process.env.SELZY_SENDER_EMAIL || FROM_EMAIL;
 
+// ── Фирменное оформление письма ─────────────────────────────────────────────
+// Логотип берётся по абсолютному URL (в письме нельзя относительные пути).
+const BRAND = {
+  accent: '#C53B2F',                                   // фирменный красный
+  logo:   process.env.CAMPAIGN_LOGO_URL || `${APP_BASE}/assets/logo-wordmark.png`,
+};
+// Единая подпись компании. Телефон/адрес — через env (не выдумываем): если не
+// задано, строка просто не выводится. Настрой CAMPAIGN_SIG_* в окружении.
+const SIG = {
+  company: process.env.CAMPAIGN_SIG_COMPANY || 'ProLabSupport',
+  tagline: process.env.CAMPAIGN_SIG_TAGLINE || 'Комплексное оснащение лабораторий и сервис аналитического оборудования',
+  site:    process.env.CAMPAIGN_SIG_SITE    || 'prolabsupport.kz',
+  email:   process.env.CAMPAIGN_SIG_EMAIL   || 'info@prolabsupport.kz',
+  phone:   process.env.CAMPAIGN_SIG_PHONE   || '',
+  address: process.env.CAMPAIGN_SIG_ADDR    || 'Казахстан',
+};
+const MAX_FILE_BYTES = parseInt(process.env.CAMPAIGN_MAX_FILE_MB || '7', 10) * 1024 * 1024;
+
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function fmtSize(b) {
+  b = Number(b) || 0;
+  if (b < 1024) return b + ' Б';
+  if (b < 1024 * 1024) return (b / 1024).toFixed(0) + ' КБ';
+  return (b / 1024 / 1024).toFixed(1) + ' МБ';
+}
 
 let _schema = null;
 function ensureSchema() {
@@ -71,6 +95,18 @@ function ensureSchema() {
         email VARCHAR(200) PRIMARY KEY,
         reason VARCHAR(60),
         at TIMESTAMPTZ DEFAULT NOW());
+      CREATE TABLE IF NOT EXISTS ticketsmodule_campaign_files (
+        id SERIAL PRIMARY KEY,
+        campaign_id INTEGER REFERENCES ticketsmodule_campaigns(id) ON DELETE CASCADE,
+        filename VARCHAR(300),
+        mime VARCHAR(120),
+        size_bytes INTEGER,
+        kind VARCHAR(10) DEFAULT 'link',   -- 'link' (кнопка «Скачать») или 'attach' (вложение в письмо)
+        token VARCHAR(48),
+        data BYTEA,
+        created_at TIMESTAMPTZ DEFAULT NOW());
+      CREATE INDEX IF NOT EXISTS idx_camp_files_cid ON ticketsmodule_campaign_files(campaign_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_camp_files_token ON ticketsmodule_campaign_files(token);
     `);
   })().catch(e => { _schema = null; throw e; });
   return _schema;
@@ -239,6 +275,44 @@ async function setRecipients(campaignId, emails) {
   return { ok: true, count: uniq.length };
 }
 
+// ── Файлы кампании (вложения / ссылки на скачивание) ────────────────────────
+async function addFile(campaignId, { filename, mime, dataBase64, kind }) {
+  await ensureSchema();
+  const buf = Buffer.from(String(dataBase64 || ''), 'base64');
+  if (!buf.length) throw new Error('Пустой файл');
+  if (buf.length > MAX_FILE_BYTES) throw new Error('Файл больше ' + fmtSize(MAX_FILE_BYTES));
+  const k = kind === 'attach' ? 'attach' : 'link';
+  const token = crypto.randomBytes(18).toString('base64url');
+  const { rows } = await pool.query(
+    `INSERT INTO ticketsmodule_campaign_files (campaign_id, filename, mime, size_bytes, kind, token, data)
+     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, filename, mime, size_bytes, kind, token`,
+    [campaignId, String(filename || 'file').slice(0, 300), String(mime || 'application/octet-stream').slice(0, 120), buf.length, k, token, buf]);
+  return rows[0];
+}
+async function listFiles(campaignId) {
+  await ensureSchema();
+  const { rows } = await pool.query(
+    'SELECT id, filename, mime, size_bytes, kind, token FROM ticketsmodule_campaign_files WHERE campaign_id=$1 ORDER BY id', [campaignId]);
+  return rows;
+}
+async function deleteFile(campaignId, fileId) {
+  await ensureSchema();
+  await pool.query('DELETE FROM ticketsmodule_campaign_files WHERE id=$1 AND campaign_id=$2', [fileId, campaignId]);
+  return { ok: true };
+}
+async function setFileKind(campaignId, fileId, kind) {
+  await ensureSchema();
+  await pool.query('UPDATE ticketsmodule_campaign_files SET kind=$1 WHERE id=$2 AND campaign_id=$3',
+    [kind === 'attach' ? 'attach' : 'link', fileId, campaignId]);
+  return { ok: true };
+}
+async function getFileByToken(token) {
+  await ensureSchema();
+  const { rows } = await pool.query(
+    'SELECT filename, mime, data FROM ticketsmodule_campaign_files WHERE token=$1', [String(token || '')]);
+  return rows[0] || null;
+}
+
 // Токен отписки (стабильный на email).
 function unsubToken(email) {
   const mac = crypto.createHmac('sha256', JWT_SECRET).update('unsub:' + email).digest('base64url').slice(0, 16);
@@ -263,27 +337,96 @@ function personalize(html, rec) {
     .replace(/\{\{\s*Компания\s*\}\}/gi, esc(rec.company_name || ''))
     .replace(/\{\{\s*Company\s*\}\}/gi, esc(rec.company_name || ''));
 }
-function wrapEmail(bodyHtml, unsubUrl) {
-  return `<div style="font-family:Inter,Arial,sans-serif;max-width:640px;margin:0 auto;color:#1a1e27;font-size:15px;line-height:1.6">
-    ${bodyHtml}
-    <hr style="border:none;border-top:1px solid #e3e6ef;margin:24px 0">
-    <p style="color:#9ca3af;font-size:12px">ProLabSupport · Казахстан<br>
-    Вы получили это письмо как клиент ProLabSupport. <a href="${unsubUrl}" style="color:#9ca3af">Отписаться</a></p>
-  </div>`;
+// Кнопки-«вложения ссылкой»: файлы, которые не аттачим, а даём скачать.
+function linkFilesBlock(linkFiles) {
+  if (!linkFiles || !linkFiles.length) return '';
+  const rows = linkFiles.map(f => `
+    <tr><td style="padding:5px 0">
+      <a href="${APP_BASE}/api/campaigns/file/${f.token}" target="_blank"
+         style="display:inline-block;background:#f5f6fa;border:1px solid #e3e6ef;border-radius:8px;padding:11px 16px;color:#1a1e27;text-decoration:none;font-size:14px;font-weight:600;font-family:Arial,sans-serif">
+        📎 ${esc(f.filename)} <span style="color:#9ca3af;font-weight:400">· ${fmtSize(f.size_bytes)}</span>
+      </a></td></tr>`).join('');
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:20px">
+    <tr><td style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;font-weight:700;padding-bottom:4px;font-family:Arial,sans-serif">Материалы для скачивания</td></tr>
+    ${rows}
+  </table>`;
 }
 
-async function sendOne(rec, campaign) {
+// Фирменная обёртка: шапка с логотипом → тело → блок вложений-ссылок → подпись → футер.
+function wrapEmail(bodyHtml, unsubUrl, opts = {}) {
+  const sigContacts = [
+    SIG.site  ? `<a href="https://${SIG.site.replace(/^https?:\/\//,'')}" style="color:${BRAND.accent};text-decoration:none">${esc(SIG.site)}</a>` : '',
+    SIG.email ? `<a href="mailto:${esc(SIG.email)}" style="color:${BRAND.accent};text-decoration:none">${esc(SIG.email)}</a>` : '',
+    SIG.phone ? esc(SIG.phone) : '',
+  ].filter(Boolean).join('&nbsp;&nbsp;·&nbsp;&nbsp;');
+
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light"></head>
+<body style="margin:0;padding:0;background:#eef0f5;-webkit-text-size-adjust:100%">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#eef0f5">
+ <tr><td align="center" style="padding:24px 12px">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="640" style="max-width:640px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(20,25,40,.06)">
+   <!-- Шапка -->
+   <tr><td style="padding:22px 32px 18px;border-bottom:3px solid ${BRAND.accent}">
+     <img src="${BRAND.logo}" alt="${esc(SIG.company)}" height="30" style="height:30px;display:block;border:0">
+   </td></tr>
+   <!-- Тело -->
+   <tr><td style="padding:28px 32px 8px;font-family:Arial,Helvetica,sans-serif;color:#1a1e27;font-size:15px;line-height:1.65">
+     ${bodyHtml}
+     ${linkFilesBlock(opts.linkFiles)}
+   </td></tr>
+   <!-- Подпись -->
+   <tr><td style="padding:20px 32px 24px">
+     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-top:1px solid #e3e6ef">
+       <tr><td style="padding-top:18px;font-family:Arial,Helvetica,sans-serif">
+         <div style="font-size:16px;font-weight:700;color:#1a1e27">${esc(SIG.company)}</div>
+         ${SIG.tagline ? `<div style="font-size:13px;color:#6b7280;margin-top:3px;line-height:1.5">${esc(SIG.tagline)}</div>` : ''}
+         ${sigContacts ? `<div style="font-size:13px;margin-top:8px">${sigContacts}</div>` : ''}
+       </td></tr>
+     </table>
+   </td></tr>
+   <!-- Футер -->
+   <tr><td style="padding:16px 32px 22px;background:#f5f6fa;font-family:Arial,Helvetica,sans-serif">
+     <div style="font-size:12px;color:#9ca3af;line-height:1.6">${esc(SIG.company)}${SIG.address ? ' · ' + esc(SIG.address) : ''}<br>
+     Вы получили это письмо как клиент ${esc(SIG.company)}. <a href="${unsubUrl}" style="color:#9ca3af;text-decoration:underline">Отписаться</a></div>
+   </td></tr>
+  </table>
+ </td></tr>
+</table>
+</body></html>`;
+}
+
+// Файлы кампании для отправки: link-файлы → кнопки в письме, attach-файлы →
+// вложения (грузим данные один раз на всю кампанию).
+async function filesForSend(campaignId) {
+  const { rows } = await pool.query(
+    'SELECT filename, mime, size_bytes, kind, token, data FROM ticketsmodule_campaign_files WHERE campaign_id=$1 ORDER BY id', [campaignId]);
+  return rows.map(r => ({
+    filename: r.filename, mime: r.mime, size_bytes: r.size_bytes, kind: r.kind, token: r.token,
+    base64: r.kind === 'attach' && r.data ? Buffer.from(r.data).toString('base64') : null,
+  }));
+}
+
+async function sendOne(rec, campaign, files) {
+  files = files || [];
+  const linkFiles = files.filter(f => f.kind === 'link');
+  const attachFiles = files.filter(f => f.kind === 'attach');
   const unsubUrl = `${APP_BASE}/api/campaigns/unsub?t=${unsubToken(rec.email)}`;
-  const html = wrapEmail(personalize(campaign.body_html, rec), unsubUrl);
-  if (PROVIDER === 'selzy') return sendOneSelzy(rec, campaign, html);
-  return sendOneResend(rec, campaign, html, unsubUrl);
+  const html = wrapEmail(personalize(campaign.body_html, rec), unsubUrl, { linkFiles });
+  if (PROVIDER === 'selzy') return sendOneSelzy(rec, campaign, html, attachFiles);
+  return sendOneResend(rec, campaign, html, unsubUrl, attachFiles);
 }
 
-async function sendOneResend(rec, campaign, html, unsubUrl) {
+async function sendOneResend(rec, campaign, html, unsubUrl, attachFiles) {
   const from = campaign.from_name ? campaign.from_name.replace(/<[^>]*>/g, '').trim() + ' <' + FROM_EMAIL + '>' : CAMPAIGN_FROM;
+  const payload = { from, to: [rec.email], subject: campaign.subject || '', html,
+    headers: { 'List-Unsubscribe': `<${unsubUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } };
+  if (attachFiles && attachFiles.length) {
+    payload.attachments = attachFiles.map(f => ({ filename: f.filename, content: f.base64 }));
+  }
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST', headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from, to: [rec.email], subject: campaign.subject || '', html, headers: { 'List-Unsubscribe': `<${unsubUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } }),
+    body: JSON.stringify(payload),
   });
   const d = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((d && (d.message || d.error)) || ('HTTP ' + res.status));
@@ -292,7 +435,7 @@ async function sendOneResend(rec, campaign, html, unsubUrl) {
 
 // Отправка через Selzy (ex-Unisender) методом sendEmail. Отправитель — подтверждённый
 // в Selzy адрес на поддомене. list_id нужен Selzy для ссылки отписки.
-async function sendOneSelzy(rec, campaign, html) {
+async function sendOneSelzy(rec, campaign, html, attachFiles) {
   if (!SELZY_KEY) throw new Error('SELZY_API_KEY не задан');
   if (!SELZY_LIST_ID) throw new Error('SELZY_LIST_ID не задан');
   const senderName = (campaign.from_name ? campaign.from_name.replace(/<[^>]*>/g, '').trim() : '') || FROM_NAME;
@@ -307,6 +450,10 @@ async function sendOneSelzy(rec, campaign, html) {
   params.set('list_id', String(SELZY_LIST_ID));
   params.set('track_read', '0');
   params.set('track_links', '0');
+  // Вложения: Selzy sendEmail принимает attachments[имя_файла]=содержимое (base64).
+  if (attachFiles && attachFiles.length) {
+    for (const f of attachFiles) params.set(`attachments[${f.filename}]`, f.base64 || '');
+  }
   const res = await fetch('https://api.selzy.com/en/api/sendEmail', {
     method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params.toString(),
   });
@@ -333,6 +480,7 @@ async function sendCampaign(campaignId) {
   (async () => {
     let sent = 0, failed = 0;
     try {
+      const files = await filesForSend(campaignId);
       const { rows: recs } = await pool.query(
         `SELECT r.* FROM ticketsmodule_campaign_recipients r
            WHERE r.campaign_id=$1 AND r.status='pending'
@@ -341,7 +489,7 @@ async function sendCampaign(campaignId) {
         const batch = recs.slice(i, i + SEND_BATCH);
         for (const rec of batch) {
           try {
-            const mid = await sendOne(rec, c);
+            const mid = await sendOne(rec, c, files);
             await pool.query('UPDATE ticketsmodule_campaign_recipients SET status=\'sent\', message_id=$1, at=NOW() WHERE id=$2', [mid, rec.id]);
             sent++;
           } catch (e) {
@@ -371,4 +519,5 @@ module.exports = {
   ensureSchema, syncAudience, getIndustries, getCompanies,
   createCampaign, updateCampaign, listCampaigns, getCampaign, deleteCampaign,
   setRecipients, sendCampaign, suppress, unsubVerify, industryMap,
+  addFile, listFiles, deleteFile, setFileKind, getFileByToken,
 };

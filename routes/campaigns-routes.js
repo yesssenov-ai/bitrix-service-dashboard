@@ -33,18 +33,18 @@ router.post('/', requireAuth(EDIT), express.json({ limit: '2mb' }), async (req, 
   try { res.json(await require('../campaigns-calc').createCampaign(req.body || {}, req.user.bitrix_user_id || null)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
-router.get('/:id', requireAuth(VIEW), async (req, res) => {
+router.get('/:id(\\d+)', requireAuth(VIEW), async (req, res) => {
   try {
     const c = await require('../campaigns-calc').getCampaign(parseInt(req.params.id, 10));
     if (!c) return res.status(404).json({ error: 'Не найдено' });
     res.json(c);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-router.put('/:id', requireAuth(EDIT), express.json({ limit: '2mb' }), async (req, res) => {
+router.put('/:id(\\d+)', requireAuth(EDIT), express.json({ limit: '2mb' }), async (req, res) => {
   try { res.json(await require('../campaigns-calc').updateCampaign(parseInt(req.params.id, 10), req.body || {})); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
-router.delete('/:id', requireAuth(EDIT), async (req, res) => {
+router.delete('/:id(\\d+)', requireAuth(EDIT), async (req, res) => {
   try { res.json(await require('../campaigns-calc').deleteCampaign(parseInt(req.params.id, 10))); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -58,6 +58,40 @@ router.post('/:id/send', requireAuth(EDIT), async (req, res) => {
     if (!r.ok) return res.status(400).json(r);
     res.json(r);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Файлы кампании (вложения / ссылки) ──────────────────────────────────────
+router.get('/:id/files', requireAuth(VIEW), async (req, res) => {
+  try { res.json({ files: await require('../campaigns-calc').listFiles(parseInt(req.params.id, 10)) }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Загрузка файла — base64 в JSON (лимит поднят под размер файла + оверхед base64).
+router.post('/:id/files', requireAuth(EDIT), express.json({ limit: '12mb' }), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const f = await require('../campaigns-calc').addFile(parseInt(req.params.id, 10), {
+      filename: b.filename, mime: b.mime, dataBase64: b.dataBase64, kind: b.kind,
+    });
+    res.json({ ok: true, file: f });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.put('/:id/files/:fid', requireAuth(EDIT), express.json(), async (req, res) => {
+  try { res.json(await require('../campaigns-calc').setFileKind(parseInt(req.params.id, 10), parseInt(req.params.fid, 10), (req.body || {}).kind)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.delete('/:id/files/:fid', requireAuth(EDIT), async (req, res) => {
+  try { res.json(await require('../campaigns-calc').deleteFile(parseInt(req.params.id, 10), parseInt(req.params.fid, 10))); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Публичное скачивание файла по токену (кликают получатели из письма).
+router.get('/file/:token', async (req, res) => {
+  try {
+    const f = await require('../campaigns-calc').getFileByToken(req.params.token);
+    if (!f) return res.status(404).send('Файл не найден');
+    res.set('Content-Type', f.mime || 'application/octet-stream');
+    res.set('Content-Disposition', 'attachment; filename="' + encodeURIComponent(f.filename || 'file') + '"');
+    res.send(Buffer.from(f.data));
+  } catch (e) { res.status(500).send('Ошибка'); }
 });
 
 // Публичная отписка (без авторизации).

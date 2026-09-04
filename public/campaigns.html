@@ -119,13 +119,29 @@ input:focus,textarea:focus,select:focus{border-color:var(--brand)}
         <input type="text" id="cSubject" placeholder="Напр.: Приглашаем на стенд ProLabSupport">
         <label class="fl">От кого (имя отправителя)</label>
         <input type="text" id="cFrom" placeholder="ProLabSupport">
+        <label class="fl">Шаблон</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn" onclick="loadTemplate('simple')">✉ Простое письмо</button>
+          <button class="btn" onclick="loadTemplate('news')">📰 Новости / анонс</button>
+          <button class="btn" onclick="loadTemplate('event')">🎟 Приглашение</button>
+        </div>
         <label class="fl">Текст письма (HTML, можно подстановку {{Компания}})</label>
         <textarea id="cBody" placeholder="Здравствуйте, {{Компания}}!&#10;&#10;Рады сообщить…"></textarea>
-        <div style="display:flex;gap:8px;margin-top:6px">
-          <button class="btn" onclick="preview()">👁 Предпросмотр</button>
-          <button class="btn" onclick="loadTemplate()">Шаблон</button>
+        <div class="hint" style="margin-top:4px">Логотип, фирменная подпись и футер с отпиской добавляются автоматически — их писать не нужно.</div>
+
+        <!-- Вложения -->
+        <label class="fl">Файлы (каталоги, прайсы, приглашения)</label>
+        <div id="fileList" class="hint" style="margin:2px 0 8px">Файлов нет.</div>
+        <label class="btn" style="cursor:pointer;display:inline-flex">📎 Добавить файл
+          <input type="file" id="fileInput" style="display:none" onchange="uploadFile(this)">
+        </label>
+        <div class="hint" style="margin-top:6px;line-height:1.5">
+          <b>Ссылкой</b> — в письме кнопка «Скачать» (лёгкое письмо, видно кто скачал; рекомендуется для массовых).<br>
+          <b>Вложением</b> — файл прикреплён прямо к письму (до 7 МБ, тяжелее, чуть выше риск спама).
         </div>
-        <div style="display:flex;gap:8px;margin-top:14px">
+
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="btn" onclick="preview()">👁 Предпросмотр</button>
           <button class="btn" onclick="saveDraft()">💾 Сохранить черновик</button>
           <button class="btn btn-p" onclick="sendNow()">📨 Отправить выбранным (<span id="sendN">0</span>)</button>
         </div>
@@ -147,7 +163,7 @@ async function boot(){
   ME=(await r.json()).user;
   await loadIndustries(); loadHistory();
   document.getElementById('domWarn').style.display='block';
-  document.getElementById('domWarn').textContent='⚠ Перед реальной отправкой заведи отдельный поддомен для рассылок и подтверди его в Resend (SPF/DKIM/DMARC), затем пропиши CAMPAIGN_FROM в окружении. Иначе письма уйдут в спам или не отправятся.';
+  document.getElementById('domWarn').textContent='💡 Поддомен рассылок настроен (SPF/DKIM/DMARC). Перед массовой отправкой всегда прогоняй тест на 1–2 своих адреса — проверь оформление, подпись и что письмо не улетело в спам.';
 }
 async function loadIndustries(){
   const {ok,d}=await api('/api/campaigns/industries');
@@ -189,15 +205,98 @@ async function syncAudience(){
   setTimeout(async()=>{ await loadIndustries(); b.disabled=false; b.textContent='⟳ Синхронизировать базу'; alert('Синхронизация запущена. Это может занять минуту-две — обнови сферы позже кнопкой ещё раз.'); },1500);
 }
 
-function loadTemplate(){
-  document.getElementById('cBody').value=
+const ACCENT='#C53B2F';
+const TEMPLATES={
+  simple:
 `<p>Здравствуйте, {{Компания}}!</p>
-<p>Приглашаем вас ознакомиться с новинками ProLabSupport…</p>
-<p>С уважением,<br>Команда ProLabSupport</p>`;
+<p>Пишу вам от лица команды ProLabSupport. [Основной текст письма — расскажите о новости, продукте или предложении.]</p>
+<p>Будем рады ответить на любые вопросы и обсудить сотрудничество.</p>`,
+  news:
+`<div style="background:${ACCENT};border-radius:10px;padding:26px 24px;color:#fff;margin-bottom:20px">
+  <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;opacity:.85">Новости ProLabSupport</div>
+  <div style="font-size:22px;font-weight:800;margin-top:6px;line-height:1.25">Заголовок анонса</div>
+</div>
+<p>Здравствуйте, {{Компания}}!</p>
+<p>[Расскажите, что нового: пополнение ассортимента, новое направление, важное объявление.]</p>
+<p><a href="https://prolabsupport.kz" style="display:inline-block;background:${ACCENT};color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700;margin-top:6px">Подробнее</a></p>`,
+  event:
+`<p style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:${ACCENT};font-weight:700;margin-bottom:4px">Приглашение</p>
+<h1 style="font-size:23px;font-weight:800;margin:0 0 14px;line-height:1.25">Название мероприятия</h1>
+<p>Здравствуйте, {{Компания}}!</p>
+<p>Приглашаем вас принять участие в [название мероприятия]. Будем рады видеть вас среди гостей.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;font-size:15px">
+  <tr><td style="padding:4px 16px 4px 0;color:#6b7280">📅 Дата</td><td style="font-weight:600">00 месяца 2026, 00:00</td></tr>
+  <tr><td style="padding:4px 16px 4px 0;color:#6b7280">📍 Место</td><td style="font-weight:600">Город, адрес площадки</td></tr>
+</table>
+<p><a href="https://prolabsupport.kz" style="display:inline-block;background:${ACCENT};color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700">Зарегистрироваться</a></p>`,
+};
+function loadTemplate(kind){
+  const tpl=TEMPLATES[kind]||TEMPLATES.simple;
+  const cur=document.getElementById('cBody');
+  if(cur.value.trim() && !confirm('Заменить текущий текст письма шаблоном?'))return;
+  cur.value=tpl; preview();
+}
+
+// Предпросмотр — показываем письмо ровно так, как его увидит получатель:
+// фирменная шапка с логотипом, тело, файлы-ссылки, единая подпись, футер.
+function previewWrap(bodyHtml){
+  const links=FILES.filter(f=>f.kind==='link');
+  const linkBlock=links.length?`<div style="margin-top:20px"><div style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:4px">Материалы для скачивания</div>${links.map(f=>`<div style="margin:5px 0"><span style="display:inline-block;background:#f5f6fa;border:1px solid #e3e6ef;border-radius:8px;padding:10px 16px;color:#1a1e27;font-size:14px;font-weight:600">📎 ${esc(f.filename)} <span style="color:#9ca3af;font-weight:400">· ${fmtSize(f.size_bytes)}</span></span></div>`).join('')}</div>`:'';
+  return `<div style="background:#eef0f5;padding:20px;border-radius:12px">
+    <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(20,25,40,.08)">
+      <div style="padding:20px 28px 16px;border-bottom:3px solid ${ACCENT}"><img src="/assets/logo-wordmark.png" alt="" style="height:28px;display:block"></div>
+      <div style="padding:24px 28px 8px;font-family:Arial,sans-serif;color:#1a1e27;font-size:15px;line-height:1.65">${bodyHtml}${linkBlock}</div>
+      <div style="padding:18px 28px;font-family:Arial,sans-serif"><div style="border-top:1px solid #e3e6ef;padding-top:16px">
+        <div style="font-size:16px;font-weight:700;color:#1a1e27">ProLabSupport</div>
+        <div style="font-size:13px;color:#6b7280;margin-top:3px">Комплексное оснащение лабораторий и сервис аналитического оборудования</div>
+        <div style="font-size:13px;margin-top:8px"><span style="color:${ACCENT}">prolabsupport.kz</span> &nbsp;·&nbsp; <span style="color:${ACCENT}">info@prolabsupport.kz</span></div>
+      </div></div>
+      <div style="padding:14px 28px 20px;background:#f5f6fa;font-family:Arial,sans-serif"><div style="font-size:12px;color:#9ca3af;line-height:1.6">ProLabSupport · Казахстан<br>Вы получили это письмо как клиент ProLabSupport. <span style="text-decoration:underline">Отписаться</span></div></div>
+    </div></div>`;
 }
 function preview(){
   const html=(document.getElementById('cBody').value||'').replace(/\{\{\s*Компания\s*\}\}/gi,'<b>Название компании</b>');
-  document.getElementById('previewBox').innerHTML=`<div class="fl">Предпросмотр</div><div style="border:1px solid var(--border2);border-radius:10px;padding:14px;background:var(--bg)">${html}<hr style="border:none;border-top:1px solid var(--border);margin:16px 0"><div class="hint">ProLabSupport · <a href="#" onclick="return false">Отписаться</a></div></div>`;
+  document.getElementById('previewBox').innerHTML=`<div class="fl">Предпросмотр (как увидит получатель)</div>${previewWrap(html)}`;
+}
+
+// ── Файлы ───────────────────────────────────────────────────────────────────
+let FILES=[];
+function fmtSize(b){b=Number(b)||0;if(b<1024)return b+' Б';if(b<1048576)return (b/1024).toFixed(0)+' КБ';return (b/1048576).toFixed(1)+' МБ';}
+async function loadFiles(){
+  if(!CUR_CAMP){FILES=[];renderFiles();return;}
+  const {ok,d}=await api('/api/campaigns/'+CUR_CAMP+'/files');
+  FILES=(ok&&d.files)||[]; renderFiles();
+}
+function renderFiles(){
+  const box=document.getElementById('fileList');
+  if(!FILES.length){box.innerHTML='Файлов нет.';return;}
+  box.innerHTML=FILES.map(f=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+    <span style="flex:1;color:var(--text-2);word-break:break-all">📎 ${esc(f.filename)} <span style="color:var(--text-4)">· ${fmtSize(f.size_bytes)}</span></span>
+    <select onchange="setKind(${f.id},this.value)" style="width:auto;padding:4px 8px;font-size:12px">
+      <option value="link" ${f.kind==='link'?'selected':''}>Ссылкой</option>
+      <option value="attach" ${f.kind==='attach'?'selected':''}>Вложением</option>
+    </select>
+    <button class="btn" style="padding:4px 9px" onclick="delFile(${f.id})">✕</button>
+  </div>`).join('');
+}
+async function uploadFile(input){
+  const file=input.files&&input.files[0]; if(!file)return;
+  input.value='';
+  if(file.size>7*1048576){msg('Файл больше 7 МБ — используйте вариант «ссылкой» с меньшим файлом или сожмите PDF','err');return;}
+  if(!CUR_CAMP){const id=await saveDraft();if(!id)return;}
+  msg('Загружаю «'+file.name+'»…','');
+  const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
+  const {ok,d}=await api('/api/campaigns/'+CUR_CAMP+'/files',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:file.name,mime:file.type||'application/octet-stream',dataBase64:b64,kind:'link'})});
+  if(!ok){msg(d.error||'Ошибка загрузки','err');return;}
+  msg('Файл добавлен','ok'); await loadFiles(); preview();
+}
+async function setKind(id,kind){
+  await api('/api/campaigns/'+CUR_CAMP+'/files/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind})});
+  const f=FILES.find(x=>x.id===id); if(f)f.kind=kind; preview();
+}
+async function delFile(id){
+  await api('/api/campaigns/'+CUR_CAMP+'/files/'+id,{method:'DELETE'});
+  await loadFiles(); preview();
 }
 async function saveDraft(){
   const payload={name:val('cName'),subject:val('cSubject'),fromName:val('cFrom'),bodyHtml:document.getElementById('cBody').value};
@@ -230,6 +329,7 @@ async function openCamp(id){
   CUR_CAMP=id; showTab('edit');
   document.getElementById('cName').value=d.name||''; document.getElementById('cSubject').value=d.subject||'';
   document.getElementById('cFrom').value=d.from_name||''; document.getElementById('cBody').value=d.body_html||'';
+  await loadFiles(); preview();
   msg('Загружена кампания #'+id+' ('+d.status+'). Отправлено '+(d.sent||0)+'/'+(d.total||0),'ok');
 }
 function showTab(t){document.getElementById('tabEdit').classList.toggle('on',t==='edit');document.getElementById('tabHist').classList.toggle('on',t==='hist');document.getElementById('paneEdit').style.display=t==='edit'?'block':'none';document.getElementById('paneHist').style.display=t==='hist'?'block':'none';if(t==='hist')loadHistory();}
