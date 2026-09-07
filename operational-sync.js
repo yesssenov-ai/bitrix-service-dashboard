@@ -17,7 +17,7 @@ const {
   F, PIPELINES, ENUM_FIELDS, PAY_SUPPLIER_LABELS, CLIENT_PAY_LABELS,
   getPipelineStages, buildEnumMap, resolveCompanies, fetchDeals,
   getClientPayMap, getBizprocTemplates, getActiveBizproc, matchActiveBp, invalidateDealDetail,
-  getBizprocTasksByWorkflow,
+  getBizprocTasksByWorkflow, getDealDetail,
 } = require('./operational');
 const { findChildrenOfDeal, resolveStageName } = require('./relations');
 
@@ -195,8 +195,10 @@ async function syncOneDeal(dealId) {
   // Webhook path: recompute processes/tasks (cheap); leave open_bp to the
   // fuller nightly/manual sync so we don't pull all BP instances per event.
   try { await updateAutomation(dealId, await computeAutomation(dealId)); } catch (e) { /* best-effort */ }
-  // Deal changed → drop its cached drill-down so the next open rebuilds fresh.
-  await invalidateDealDetail(dealId);
+  // НЕ сбрасываем кэш drill-down при вебхуке: по требованию бизнеса сделка на
+  // планёрке должна открываться мгновенно данными последнего ночного/утреннего
+  // синка. Обновлённая деталь подтягивается либо следующим полным прогоном
+  // (предсборка деталей), либо вручную кнопкой «↻ Обновить» внутри сделки.
 }
 
 // Удаление сделки из операционного зеркала (вебхук ONCRMDEALDELETE).
@@ -226,6 +228,10 @@ async function fullSync(opts = {}) {
   if (syncing) { console.log('operational fullSync: already running, skipped'); return { skipped: true }; }
   syncing = true; syncingSince = Date.now();
   const withAutomation = opts.withAutomation !== false;
+  // Предсборка drill-down (детали каждой сделки) в кэш — чтобы на планёрке сделки
+  // открывались мгновенно. По умолчанию идёт вместе с автоматизациями (ночной/
+  // утренний полный прогон); быстрый boot и ручное обновление доски её пропускают.
+  const withDetails = opts.withDetails !== undefined ? opts.withDetails : withAutomation;
   const startedAt = Date.now();
   await pool.query(
     `INSERT INTO ticketsmodule_operational_meta (id, last_started_at, last_source) VALUES (1, NOW(), $1)
@@ -280,8 +286,20 @@ async function fullSync(opts = {}) {
       }
     }
 
+    // Предсборка деталей: собираем drill-down каждой сделки в кэш (force=true →
+    // buildDealDetailLive + запись в ticketsmodule_operational_detail). После этого
+    // GET /deal/:id отдаёт кэш мгновенно, без обращения к Битриксу.
+    if (withDetails && seen.length) {
+      let built = 0;
+      for (const id of seen) {
+        try { await getDealDetail(id, true); built++; } catch (e) { /* по одной сделке — не валим весь прогон */ }
+        await sleep(60);
+      }
+      console.log(`operational fullSync (${source}): предсобрано деталей ${built}/${seen.length}`);
+    }
+
     const mins = ((Date.now() - startedAt) / 60000).toFixed(1);
-    console.log(`✅ operational fullSync (${source}): ${seen.length} сделок за ${mins} мин${withAutomation ? '' : ' (без автоматизаций)'}`);
+    console.log(`✅ operational fullSync (${source}): ${seen.length} сделок за ${mins} мин${withAutomation ? '' : ' (без автоматизаций)'}${withDetails ? ' + детали' : ''}`);
     return { count: seen.length };
   } catch (e) {
     // Раньше ошибка молча уходила в .catch() у планировщика, и данные «замирали».

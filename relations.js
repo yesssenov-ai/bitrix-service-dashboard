@@ -68,7 +68,10 @@ async function findChildrenOfDeal(dealId) {
 // Only these specific links represent real business automation chains.
 const EXPLICIT_RELATIONS = {
   1066: [{ childType: 1070, filterField: 'parentId1066' }],  // Закупки -> Логистика
-  1058: [{ childType: 1074, filterField: 'parentId1058' }],  // Заявка на сервис -> Командировка
+  1058: [
+    { childType: 1074, filterField: 'parentId1058' },       // Заявка на сервис -> Командировка
+    { childType: 1066, filterField: 'parentId1058' },        // Заявка на сервис (Подбор допов) -> Закупки
+  ],
   1050: [{ childType: 1058, filterField: 'parentId1050' }],  // Запланированные работы -> Заявка на сервис
 };
 

@@ -102,12 +102,15 @@ router.get('/board', requireCap('view'), async (req, res) => {
   }
 });
 
-// GET /api/operational/deal/:id — drill-down, served from cache (built lazily).
+// GET /api/operational/deal/:id — drill-down из КЭША, мгновенно и без живого
+// перепула из Битрикса (autoFresh=false). Данные — от ночного/утреннего синка;
+// за актуальными — кнопка «↻ Обновить» внутри сделки (POST .../refresh ниже).
+// Так на планёрке сотни сделок открываются мгновенно.
 router.get('/deal/:id', requireCap('view'), async (req, res) => {
   try {
     const dealId = parseInt(req.params.id, 10);
     if (!dealId) return res.status(400).json({ ok: false, error: 'Неверный ID сделки' });
-    const detail = await getDealDetail(dealId, false);
+    const detail = await getDealDetail(dealId, false, false);
     res.json(detail);
   } catch (e) {
     console.error('GET /api/operational/deal error:', e.message);

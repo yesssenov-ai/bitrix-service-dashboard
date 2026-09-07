@@ -603,6 +603,20 @@ initDB().then(() => {
     // (не зависнет на медленном пересчёте автоматизаций, если контейнер передеплоят).
     // Полный пересчёт с автоматизациями делает ночной прогон.
     setTimeout(() => operationalFullSync({ source: 'boot', withAutomation: false }).catch(e => console.error('operational boot sync error:', e.message)), 20000);
+    // Разовый прогрев кэша деталей: если таблица деталей пуста (первый деплой с
+    // предсборкой, либо новая база) — собираем детали в фоне, чтобы сделки
+    // открывались мгновенно ещё до ближайшего ночного прогона. Дальше кэш держат
+    // ночной (01:00) и утренний вторничный (09:00) прогоны.
+    setTimeout(async () => {
+      try {
+        const { rows } = await pool.query('SELECT COUNT(*)::int n FROM ticketsmodule_operational_detail');
+        if ((rows[0] && rows[0].n) > 0) return; // кэш уже наполнен — не трогаем
+        if (opIsSyncing()) return;
+        console.log('operational: кэш деталей пуст → фоновый прогрев (детали без автоматизаций)');
+        operationalFullSync({ source: 'warm-details', withAutomation: false, withDetails: true })
+          .catch(e => console.error('operational warm-details error:', e.message));
+      } catch (e) { console.error('operational warm-details check:', e.message); }
+    }, 120000);
     // Авто-рассылка операционного отчёта руководству (вт 18:00 Алматы = 13:00 UTC).
     try { require('./ops-report-scheduler').startOpsReportScheduler(); } catch (e) { console.error('ops-report scheduler start error:', e.message); }
     // Логистика: считается тяжело (~1 мин), поэтому НЕ на каждый заход страницы, а
@@ -618,7 +632,7 @@ initDB().then(() => {
     // Карта оборудования: кэш в БД, карта открывается мгновенно. Поднимаем кэш из
     // БД на старте; если пусто — полная сборка в фоне.
     setTimeout(() => equipmentRoutes.bootPreload().catch(e => console.error('equipment bootPreload error:', e.message)), 30000);
-    let lastOpNightlyDate = null, lastEquipSyncDate = null, lastOpCatchup = 0;
+    let lastOpNightlyDate = null, lastEquipSyncDate = null, lastOpCatchup = 0, lastOpTueDate = null;
     // ── Ночной синк «Реализации» + самолечение (устойчиво к рестартам) ─────────
     // Прежняя схема падала так: (1) ночной прогон срабатывал только если процесс
     // жив ровно в 20:00 UTC — пропущенный тик = нет обновления; (2) догоняющая
@@ -639,11 +653,20 @@ initDB().then(() => {
         const nightlyDue = now.getUTCHours() >= 20 && lastOpNightlyDate !== dateKey;
         // Самолечение: данные старше 20ч (при живом ночном такого быть не должно).
         const staleDue = ageH > 20;
-        if ((nightlyDue || staleDue) && !opIsSyncing() && Date.now() - lastOpCatchup > 20 * 60 * 1000) {
+        // Утренний прогон по ВТОРНИКАМ к планёрке: митинг в 10:00 по Кызылорде
+        // (UTC+5), запускаем в 04:00 UTC = 09:00 местного — есть час пересобрать
+        // всё (сделки + автоматизации + детали) до митинга. getUTCDay()===2 = вторник.
+        const tueMorningDue = now.getUTCDay() === 2 && now.getUTCHours() >= 4 && now.getUTCHours() < 8 && lastOpTueDate !== dateKey;
+        if ((nightlyDue || staleDue || tueMorningDue) && !opIsSyncing() && Date.now() - lastOpCatchup > 20 * 60 * 1000) {
           lastOpCatchup = Date.now();
-          const source = nightlyDue ? 'nightly' : 'catchup';
-          if (nightlyDue) lastOpNightlyDate = dateKey;
+          let source;
+          if (nightlyDue) { source = 'nightly'; lastOpNightlyDate = dateKey; }
+          else if (tueMorningDue) { source = 'tue-morning'; lastOpTueDate = dateKey; }
+          else source = 'catchup';
           console.log(`operational ${source}: age=${ageH === Infinity ? '∞' : Math.round(ageH) + 'ч'} → запускаю сверку`);
+          // Все плановые прогоны здесь (nightly / tue-morning / catchup) — полные:
+          // сделки + автоматизации + предсборка деталей (withDetails по умолчанию =
+          // withAutomation = true). Так на планёрке всё открывается мгновенно из кэша.
           const chain = operationalFullSync({ source })
             .catch(e => console.error(`operational ${source} sync error:`, e.message));
           // Тяжёлые статистику+логистику гоним только в НОЧНОМ прогоне.
