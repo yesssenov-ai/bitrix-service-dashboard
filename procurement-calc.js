@@ -1265,6 +1265,10 @@ async function autoCreateFromService(serviceItemId) {
 
   // Обратная связь: привязать созданную закупку к элементу подбора (1058) — best-effort
   try { await b24('crm.item.update', { entityTypeId: SERVICE_ENTITY, id: serviceItemId, fields: { [SERVICE_ZAKUPKI_FIELD]: out.bitrixItemId } }); } catch (e) { /* необязательно */ }
+  // Родитель-подбор на самой закупке (parentId1058) — чтобы в модуле «Реализация»
+  // закупка отображалась ВЛОЖЕННОЙ под строкой подбора (ветка подбор → закупка →
+  // логистика), а не плоско под сделкой. parentId2=сделка уже стоит (из createRequest).
+  try { await b24('crm.item.update', { entityTypeId: ENTITY, id: out.bitrixItemId, fields: { parentId1058: serviceItemId } }); } catch (e) { /* необязательно */ }
 
   // Уведомить менеджера склада о новой авто-заявке — best-effort
   try {
@@ -1890,4 +1894,28 @@ async function statusBoard() {
   });
 }
 
-module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, listDeletions, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, resolveDocFields, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, setAmount, setPayComment, setPoaSetup, currentStepKey, autoCreateFromService, scanServiceForAutoCreate, pendingActionsFor, statusBoard, itemUrl, dealUrl };
+// ── Разовый бэкофилл parentId1058 для УЖЕ созданных авто-закупок ─────────────
+// Ранее авто-закупки из подбора получали только parentId2=сделка. Чтобы они
+// показывались вложенными под подбором в «Реализации», проставляем parentId1058
+// = source_item_id (id элемента подбора). Идемпотентно, один раз (маркер -2).
+async function backfillServiceParent() {
+  await ensureSchema();
+  const done = await pool.query('SELECT 1 FROM ticketsmodule_procurement_autoseen WHERE source_item_id=-2');
+  if (done.rows.length) return { skipped: 'done' };
+  const { rows } = await pool.query(
+    'SELECT bitrix_item_id, source_item_id FROM ticketsmodule_procurement WHERE source_item_id IS NOT NULL AND source_item_id > 0 AND bitrix_item_id IS NOT NULL');
+  const nap = ms => new Promise(r => setTimeout(r, ms));
+  let ok = 0, fail = 0;
+  for (const r of rows) {
+    try {
+      await b24('crm.item.update', { entityTypeId: ENTITY, id: r.bitrix_item_id, fields: { parentId1058: r.source_item_id } });
+      ok++;
+    } catch (e) { fail++; }
+    await nap(150);
+  }
+  await pool.query('INSERT INTO ticketsmodule_procurement_autoseen (source_item_id) VALUES (-2) ON CONFLICT DO NOTHING').catch(() => {});
+  console.log(`procurement backfill parentId1058: обновлено ${ok}, ошибок ${fail} (из ${rows.length})`);
+  return { ok, fail, total: rows.length };
+}
+
+module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, listDeletions, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, resolveDocFields, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, setAmount, setPayComment, setPoaSetup, currentStepKey, autoCreateFromService, scanServiceForAutoCreate, backfillServiceParent, pendingActionsFor, statusBoard, itemUrl, dealUrl };

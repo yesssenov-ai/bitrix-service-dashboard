@@ -603,20 +603,27 @@ initDB().then(() => {
     // (не зависнет на медленном пересчёте автоматизаций, если контейнер передеплоят).
     // Полный пересчёт с автоматизациями делает ночной прогон.
     setTimeout(() => operationalFullSync({ source: 'boot', withAutomation: false }).catch(e => console.error('operational boot sync error:', e.message)), 20000);
-    // Разовый прогрев кэша деталей: если таблица деталей пуста (первый деплой с
-    // предсборкой, либо новая база) — собираем детали в фоне, чтобы сделки
-    // открывались мгновенно ещё до ближайшего ночного прогона. Дальше кэш держат
-    // ночной (01:00) и утренний вторничный (09:00) прогоны.
+    // Разовый бэкофилл ветки «подбор → закупка» + прогрев кэша деталей.
+    // Сначала (один раз) проставляем parentId1058 у уже созданных авто-закупок,
+    // затем пересобираем детали, если кэш пуст ИЛИ бэкофилл что-то поменял —
+    // чтобы вложенность подбор→закупка сразу попала в кэш. Дальше кэш деталей
+    // держат ночной (01:00) и утренний вторничный (09:00) прогоны.
     setTimeout(async () => {
       try {
-        const { rows } = await pool.query('SELECT COUNT(*)::int n FROM ticketsmodule_operational_detail');
-        if ((rows[0] && rows[0].n) > 0) return; // кэш уже наполнен — не трогаем
-        if (opIsSyncing()) return;
-        console.log('operational: кэш деталей пуст → фоновый прогрев (детали без автоматизаций)');
-        operationalFullSync({ source: 'warm-details', withAutomation: false, withDetails: true })
-          .catch(e => console.error('operational warm-details error:', e.message));
-      } catch (e) { console.error('operational warm-details check:', e.message); }
-    }, 120000);
+        let changed = false;
+        try {
+          const bf = await require('./procurement-calc').backfillServiceParent();
+          changed = !!(bf && bf.ok > 0);
+        } catch (e) { console.error('procurement backfill parentId1058 error:', e.message); }
+        const { rows } = await pool.query('SELECT COUNT(*)::int n FROM ticketsmodule_operational_detail').catch(() => ({ rows: [{ n: 0 }] }));
+        const empty = !(rows[0] && rows[0].n > 0);
+        if ((empty || changed) && !opIsSyncing()) {
+          console.log(`operational: прогрев кэша деталей (пусто=${empty}, бэкофилл=${changed})`);
+          operationalFullSync({ source: 'warm-details', withAutomation: false, withDetails: true })
+            .catch(e => console.error('operational warm-details error:', e.message));
+        }
+      } catch (e) { console.error('operational warm/backfill error:', e.message); }
+    }, 90000);
     // Авто-рассылка операционного отчёта руководству (вт 18:00 Алматы = 13:00 UTC).
     try { require('./ops-report-scheduler').startOpsReportScheduler(); } catch (e) { console.error('ops-report scheduler start error:', e.message); }
     // Логистика: считается тяжело (~1 мин), поэтому НЕ на каждый заход страницы, а
