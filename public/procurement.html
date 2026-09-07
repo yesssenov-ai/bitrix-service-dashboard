@@ -693,20 +693,35 @@ function rowHtml(r){
   </tr>`;
 }
 async function reloadList(){ const l=await fetch('/api/procurement/list'); LIST=(await l.json()).items||[]; _pollSig=listSig(LIST); render(); }
-// ── Автообновление статусов ────────────────────────────────────────────────
-// Пока пользователь смотрит заявку/сделку, кто-то другой мог сменить стадию.
-// Тихо опрашиваем список раз в 20с и, если что-то изменилось, перерисовываем
-// (в режиме просмотра заявки заодно перезагрузится её детальная карточка).
-// В режиме заполнения новой заявки НЕ трогаем — чтобы не стереть форму.
+// ── Фоновое автообновление статусов (без перезагрузки страницы) ─────────────
+// Пока пользователь смотрит закупки, кто-то другой мог сменить стадию. Тихо
+// опрашиваем список раз в 20с и, если что-то изменилось, ФОНОВО обновляем только
+// тело списка (статусы, суммы, комментарии) — не перерисовывая всю страницу:
+// прокрутка, поле поиска и открытая карточка заявки остаются на месте.
+// В режиме создания новой заявки НЕ трогаем — чтобы не стереть форму.
 let _pollSig='';
 function listSig(items){ return (items||[]).map(r=>r.id+':'+(r.stageId||'')+':'+(r.stepIndex!=null?r.stepIndex:'')+':'+(r.updatedAt||'')).join('|'); }
+function refreshBodyInPlace(){
+  const box=document.getElementById('rightBody'); if(!box) return;
+  const q=(RSEARCH||'').trim();
+  // Автообновляем только табличные виды «Мои/Завершённые» и результаты поиска.
+  // «По сделке»/«Журнал»/«Удалённые» не трогаем на автообновлении — там своё
+  // состояние (раскрытые строки, асинхронная подгрузка).
+  if(!q && (RVIEW==='deal'||RVIEW==='board'||RVIEW==='deleted')) return;
+  // Не мешаем, если пользователь печатает/выбирает прямо в теле списка.
+  const ae=document.activeElement;
+  if(ae && box.contains(ae) && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName||'')) return;
+  const scroll=box.scrollTop;
+  box.innerHTML=rightBodyHtml();   // перерисовываем ТОЛЬКО список (карточку слева не трогаем)
+  box.scrollTop=scroll;            // возвращаем прокрутку на место
+}
 async function pollRefresh(){
   if(document.visibilityState!=='visible') return;
   if(MODE==='create') return;
   try{
     const j=await (await fetch('/api/procurement/list')).json();
     const items=j.items||[]; const sig=listSig(items);
-    if(sig!==_pollSig){ _pollSig=sig; LIST=items; render(); }
+    if(sig!==_pollSig){ _pollSig=sig; LIST=items; refreshBodyInPlace(); }
   }catch(e){/* тихо */}
 }
 setInterval(pollRefresh, 20000);
