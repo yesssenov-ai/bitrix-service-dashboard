@@ -651,6 +651,70 @@ async function getBoard(filters = {}) {
   };
 }
 
+// ── Дерево: рекурсивный сбор / поиск-отсоединение узлов ──────────────────────
+function collectTreeNodes(node, pred, acc) {
+  if (!node) return acc;
+  if (pred(node)) acc.push(node);
+  (node.children || []).forEach(c => collectTreeNodes(c, pred, acc));
+  return acc;
+}
+function detachTreeNode(parent, pred) {
+  const kids = parent.children || [];
+  for (let i = 0; i < kids.length; i++) {
+    if (pred(kids[i])) return kids.splice(i, 1)[0];
+    const found = detachTreeNode(kids[i], pred);
+    if (found) return found;
+  }
+  return null;
+}
+
+// ── Ветка «Подбор допов → Закупки» по НАШЕЙ базе закупок ─────────────────────
+// Привязки Битрикса (parentId1058) для закупок из подбора могут быть не настроены,
+// поэтому такие закупки не попадают в дерево через parentId2/parentId1058. Берём
+// закупки сделки из ticketsmodule_procurement (deal_id ИЛИ source_item_id = id
+// подбора) и: (а) добавляем в дерево отсутствующие, (б) вкладываем закупки под их
+// подбор (по source_item_id). Так ветка видна независимо от настроек Битрикса.
+async function mergeProcurementBranch(tree, dealId) {
+  if (!tree) return;
+  try {
+    const podbory = collectTreeNodes(tree, n => Number(n.entityTypeId) === 1058, []);
+    const podborById = {}; podbory.forEach(n => { podborById[String(n.id)] = n; });
+    const podborIds = podbory.map(n => Number(n.id)).filter(Boolean);
+    const existing = new Set(collectTreeNodes(tree, n => Number(n.entityTypeId) === 1066, []).map(n => String(n.id)));
+
+    const params = [dealId];
+    let q = 'SELECT bitrix_item_id, source_item_id FROM ticketsmodule_procurement WHERE bitrix_item_id IS NOT NULL AND (deal_id=$1';
+    if (podborIds.length) { q += ' OR source_item_id = ANY($2::int[])'; params.push(podborIds); }
+    q += ')';
+    const { rows } = await pool.query(q, params);
+
+    for (const r of rows) {
+      const zid = String(r.bitrix_item_id);
+      const podbor = r.source_item_id ? podborById[String(r.source_item_id)] : null;
+      if (existing.has(zid)) {
+        // Уже в дереве — если есть подбор-родитель и закупка не под ним, перевесим.
+        if (podbor) {
+          const already = (podbor.children || []).some(c => String(c.id) === zid && Number(c.entityTypeId) === 1066);
+          if (!already) {
+            const node = detachTreeNode(tree, n => String(n.id) === zid && Number(n.entityTypeId) === 1066);
+            if (node) { podbor.children = podbor.children || []; podbor.children.push(node); }
+          }
+        }
+      } else {
+        // Отсутствует в дереве — собираем узел (со своими дочерними, напр. Логистикой) и вкладываем.
+        try {
+          const node = await buildTree(1066, r.bitrix_item_id);
+          if (node) {
+            if (podbor) { podbor.children = podbor.children || []; podbor.children.push(node); }
+            else { tree.children = tree.children || []; tree.children.push(node); }
+            existing.add(zid);
+          }
+        } catch (e) { /* по одной закупке — не валим всё дерево */ }
+      }
+    }
+  } catch (e) { console.error('mergeProcurementBranch:', e.message); }
+}
+
 // ── Per-deal drill-down: child smart processes (nested ladder), tasks, comments ─
 // Live build (hits Bitrix). Wrapped by getDealDetail's cache below.
 async function buildDealDetailLive(dealId) {
@@ -660,6 +724,8 @@ async function buildDealDetailLive(dealId) {
     getDealTasks(dealId, userMap),
     getDealComments(dealId, 15, userMap),
   ]);
+  // Достроить ветку закупок из подбора по нашей БД (parentId Битрикса ненадёжны).
+  await mergeProcurementBranch(tree, dealId);
   const processes = tree ? flattenProcessTree(tree.children || [], 0, userMap) : [];
   const automations = await getActiveBpDetailed(dealId, processes, userMap).catch(() => []);
   return { dealId, processes, tasks, comments, automations };

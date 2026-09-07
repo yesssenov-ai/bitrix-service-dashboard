@@ -616,23 +616,30 @@ initDB().then(() => {
           changed = !!(bf && bf.ok > 0);
         } catch (e) { console.error('procurement backfill parentId1058 error:', e.message); }
         // Прогрев нужен, если детали: (а) вообще отсутствуют, (б) собраны НЕ для всех
-        // сделок доски, (в) СТАРШЕ последней синхронизации доски (лежат с прошлого
-        // ручного прохода, ночной их не трогал), или (г) бэкофилл поменял привязки.
+        // сделок доски, (в) СТАРШЕ последней синхронизации доски, (г) бэкофилл поменял
+        // привязки, или (д) поменялась ВЕРСИЯ логики сборки деталей (DETAIL_BUILD_VERSION
+        // ниже) — тогда пересобираем разово, чтобы новые правила (напр. ветка закупок)
+        // сразу попали в кэш, не дожидаясь ночи.
+        const DETAIL_BUILD_VERSION = 2; // ↑ бампать при изменении логики сборки деталей
+        await pool.query('ALTER TABLE ticketsmodule_operational_meta ADD COLUMN IF NOT EXISTS detail_build_version INTEGER DEFAULT 0').catch(() => {});
         const dc = await pool.query('SELECT COUNT(*)::int n, MAX(synced_at) m FROM ticketsmodule_operational_detail').catch(() => ({ rows: [{ n: 0, m: null }] }));
-        const bc = await pool.query('SELECT deal_count, last_full_sync FROM ticketsmodule_operational_meta WHERE id=1').catch(() => ({ rows: [] }));
+        const bc = await pool.query('SELECT deal_count, last_full_sync, detail_build_version FROM ticketsmodule_operational_meta WHERE id=1').catch(() => ({ rows: [] }));
         const detailN = dc.rows[0] ? dc.rows[0].n : 0;
         const detailMax = dc.rows[0] ? dc.rows[0].m : null;
         const dealCount = bc.rows[0] ? (bc.rows[0].deal_count || 0) : 0;
         const boardSync = bc.rows[0] ? bc.rows[0].last_full_sync : null;
+        const storedVer = bc.rows[0] ? (bc.rows[0].detail_build_version || 0) : 0;
         const empty = detailN === 0;
         const incomplete = dealCount > 0 && detailN < dealCount;
         const stale = boardSync && (!detailMax || new Date(detailMax) < new Date(boardSync));
-        if ((empty || incomplete || stale || changed) && !opIsSyncing()) {
-          console.log(`operational: прогрев кэша деталей (пусто=${empty}, неполно=${incomplete} [${detailN}/${dealCount}], устарело=${stale}, бэкофилл=${changed})`);
+        const verChanged = storedVer < DETAIL_BUILD_VERSION;
+        if ((empty || incomplete || stale || changed || verChanged) && !opIsSyncing()) {
+          console.log(`operational: прогрев кэша деталей (пусто=${empty}, неполно=${incomplete} [${detailN}/${dealCount}], устарело=${stale}, бэкофилл=${changed}, версия=${storedVer}→${DETAIL_BUILD_VERSION})`);
           operationalFullSync({ source: 'warm-details', withAutomation: false, withDetails: true })
             .catch(e => console.error('operational warm-details error:', e.message));
+          await pool.query('UPDATE ticketsmodule_operational_meta SET detail_build_version=$1 WHERE id=1', [DETAIL_BUILD_VERSION]).catch(() => {});
         } else {
-          console.log(`operational: детали свежие (${detailN}/${dealCount}) — прогрев не нужен`);
+          console.log(`operational: детали свежие (${detailN}/${dealCount}, версия ${storedVer}) — прогрев не нужен`);
         }
       } catch (e) { console.error('operational warm/backfill error:', e.message); }
     }, 90000);
