@@ -615,12 +615,24 @@ initDB().then(() => {
           const bf = await require('./procurement-calc').backfillServiceParent();
           changed = !!(bf && bf.ok > 0);
         } catch (e) { console.error('procurement backfill parentId1058 error:', e.message); }
-        const { rows } = await pool.query('SELECT COUNT(*)::int n FROM ticketsmodule_operational_detail').catch(() => ({ rows: [{ n: 0 }] }));
-        const empty = !(rows[0] && rows[0].n > 0);
-        if ((empty || changed) && !opIsSyncing()) {
-          console.log(`operational: прогрев кэша деталей (пусто=${empty}, бэкофилл=${changed})`);
+        // Прогрев нужен, если детали: (а) вообще отсутствуют, (б) собраны НЕ для всех
+        // сделок доски, (в) СТАРШЕ последней синхронизации доски (лежат с прошлого
+        // ручного прохода, ночной их не трогал), или (г) бэкофилл поменял привязки.
+        const dc = await pool.query('SELECT COUNT(*)::int n, MAX(synced_at) m FROM ticketsmodule_operational_detail').catch(() => ({ rows: [{ n: 0, m: null }] }));
+        const bc = await pool.query('SELECT deal_count, last_full_sync FROM ticketsmodule_operational_meta WHERE id=1').catch(() => ({ rows: [] }));
+        const detailN = dc.rows[0] ? dc.rows[0].n : 0;
+        const detailMax = dc.rows[0] ? dc.rows[0].m : null;
+        const dealCount = bc.rows[0] ? (bc.rows[0].deal_count || 0) : 0;
+        const boardSync = bc.rows[0] ? bc.rows[0].last_full_sync : null;
+        const empty = detailN === 0;
+        const incomplete = dealCount > 0 && detailN < dealCount;
+        const stale = boardSync && (!detailMax || new Date(detailMax) < new Date(boardSync));
+        if ((empty || incomplete || stale || changed) && !opIsSyncing()) {
+          console.log(`operational: прогрев кэша деталей (пусто=${empty}, неполно=${incomplete} [${detailN}/${dealCount}], устарело=${stale}, бэкофилл=${changed})`);
           operationalFullSync({ source: 'warm-details', withAutomation: false, withDetails: true })
             .catch(e => console.error('operational warm-details error:', e.message));
+        } else {
+          console.log(`operational: детали свежие (${detailN}/${dealCount}) — прогрев не нужен`);
         }
       } catch (e) { console.error('operational warm/backfill error:', e.message); }
     }, 90000);
