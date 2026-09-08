@@ -42,6 +42,18 @@ function escapeHtml(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// Текст из окна переписки → аккуратный HTML: абзацы по пустой строке, одиночный
+// перенос строки → <br>. Не полагаемся на white-space:pre-wrap — Outlook его
+// игнорирует и склеивает весь текст в один абзац.
+function bodyToHtml(text) {
+  const esc = escapeHtml(text).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const paras = esc.split(/\n{2,}/).map(p => p.trim()).filter(p => p.length);
+  if (!paras.length) return '';
+  return paras
+    .map(p => `<p style="margin:0 0 14px;line-height:1.6">${p.replace(/\n/g, '<br>')}</p>`)
+    .join('');
+}
+
 function generateMessageId(ticketId) {
   return `<ticket-${ticketId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}@${REPLY_TO_DOMAIN}>`;
 }
@@ -78,7 +90,7 @@ async function sendTicketEmail({ ticketId, engineerUserId, engineerEmail, engine
   const threadedSubject = isFollowUp && !/^re:/i.test(subject) ? `Re: ${subject}` : subject;
   const messageId = generateMessageId(ticketId);
 
-  const fullHtml = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;white-space:pre-wrap">${escapeHtml(bodyHtml)}</div>${buildSignatureHtml(engineerName, jobTitle, mobilePhone)}`;
+  const fullHtml = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#222;line-height:1.6;max-width:640px">${bodyToHtml(bodyHtml)}</div>${buildSignatureHtml(engineerName, jobTitle, mobilePhone)}`;
 
   const headers = { 'Message-ID': messageId };
   if (isFollowUp) {
@@ -88,6 +100,16 @@ async function sendTicketEmail({ ticketId, engineerUserId, engineerEmail, engine
 
   const ccList = Array.isArray(cc) ? cc.filter(Boolean) : (cc ? String(cc).split(',').map(s => s.trim()).filter(Boolean) : []);
 
+  // Скрытая копия отправителю-инженеру: отправка идёт через Resend API (не через
+  // SMTP ящика), поэтому в «Отправленных» копии нет. BCC гарантирует, что ответ
+  // прилетит инженеру во «Входящие» и встанет в цепочку (In-Reply-To/References).
+  const toList = Array.isArray(to) ? to.filter(Boolean) : (to ? [to] : []);
+  const already = [...toList, ...ccList].map(x => String(x).trim().toLowerCase());
+  const bccList = [];
+  if (engineerEmail && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(engineerEmail) && !already.includes(engineerEmail.trim().toLowerCase())) {
+    bccList.push(engineerEmail.trim());
+  }
+
   const resendRes = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
@@ -95,6 +117,7 @@ async function sendTicketEmail({ ticketId, engineerUserId, engineerEmail, engine
       from: 'ProLabSupport Service <service@prolabsupport.kz>',
       to,
       ...(ccList.length ? { cc: ccList } : {}),
+      ...(bccList.length ? { bcc: bccList } : {}),
       reply_to: replyToForTicket(ticketId),
       subject: threadedSubject,
       html: fullHtml,
