@@ -162,8 +162,6 @@ async function boot(){
   const r=await fetch('/auth/me'); if(!r.ok){location.href='/login.html';return;}
   ME=(await r.json()).user;
   await loadIndustries(); loadHistory();
-  document.getElementById('domWarn').style.display='block';
-  document.getElementById('domWarn').textContent='💡 Поддомен рассылок настроен (SPF/DKIM/DMARC). Перед массовой отправкой всегда прогоняй тест на 1–2 своих адреса — проверь оформление, подпись и что письмо не улетело в спам.';
 }
 async function loadIndustries(){
   const {ok,d}=await api('/api/campaigns/industries');
@@ -206,29 +204,30 @@ async function syncAudience(){
 }
 
 const ACCENT='#C53B2F';
+const P='margin:0 0 16px;line-height:1.7';        // абзац как в примерах
+const SIGN=`<p style="${P}">С уважением,<br><b>Команда ProLabSupport</b></p>`;
+const CTA=(t,href)=>`<p style="${P}"><a href="${href||'https://prolabsupport.kz'}" style="display:inline-block;background:${ACCENT};color:#fff;text-decoration:none;padding:13px 26px;border-radius:8px;font-weight:700">${t}</a></p>`;
 const TEMPLATES={
   simple:
-`<p>Здравствуйте, {{Компания}}!</p>
-<p>Пишу вам от лица команды ProLabSupport. [Основной текст письма — расскажите о новости, продукте или предложении.]</p>
-<p>Будем рады ответить на любые вопросы и обсудить сотрудничество.</p>`,
+`<p style="${P}">Уважаемые коллеги!</p>
+<p style="${P}">[Основной текст письма — расскажите о новости, продукте или предложении. Ключевые фразы можно выделить <b>жирным</b>.]</p>
+<p style="${P}">Если вам требуется консультация, помощь в подборе оборудования или коммерческое предложение — ответьте на это письмо или напишите нам: <a href="mailto:sales@prolabsupport.kz" style="color:${ACCENT}">sales@prolabsupport.kz</a>.</p>
+${SIGN}`,
   news:
-`<div style="background:${ACCENT};border-radius:10px;padding:26px 24px;color:#fff;margin-bottom:20px">
-  <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;opacity:.85">Новости ProLabSupport</div>
-  <div style="font-size:22px;font-weight:800;margin-top:6px;line-height:1.25">Заголовок анонса</div>
-</div>
-<p>Здравствуйте, {{Компания}}!</p>
-<p>[Расскажите, что нового: пополнение ассортимента, новое направление, важное объявление.]</p>
-<p><a href="https://prolabsupport.kz" style="display:inline-block;background:${ACCENT};color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700;margin-top:6px">Подробнее</a></p>`,
+`<p style="${P}">Уважаемые коллеги!</p>
+<p style="${P}">Рады сообщить о <b>[новость: новое направление, партнёрство, пополнение ассортимента]</b>.</p>
+<p style="${P}">[Пара предложений о том, чем это полезно клиенту — какие задачи закрывает, что нового доступно в портфеле ProLabSupport.]</p>
+${CTA('Подробнее')}
+${SIGN}`,
   event:
-`<p style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:${ACCENT};font-weight:700;margin-bottom:4px">Приглашение</p>
-<h1 style="font-size:23px;font-weight:800;margin:0 0 14px;line-height:1.25">Название мероприятия</h1>
-<p>Здравствуйте, {{Компания}}!</p>
-<p>Приглашаем вас принять участие в [название мероприятия]. Будем рады видеть вас среди гостей.</p>
-<table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;font-size:15px">
-  <tr><td style="padding:4px 16px 4px 0;color:#6b7280">📅 Дата</td><td style="font-weight:600">00 месяца 2026, 00:00</td></tr>
-  <tr><td style="padding:4px 16px 4px 0;color:#6b7280">📍 Место</td><td style="font-weight:600">Город, адрес площадки</td></tr>
-</table>
-<p><a href="https://prolabsupport.kz" style="display:inline-block;background:${ACCENT};color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700">Зарегистрироваться</a></p>`,
+`<p style="${P}"><b>[00–00 месяца]</b> компания ProLabSupport примет участие в <b>[Название мероприятия]</b> — [короткое описание выставки/семинара].</p>
+<p style="${P}">📍 [Город, площадка, адрес]<br>
+🗓️ [Даты проведения]<br>
+📌 [Павильон / стенд №]</p>
+<p style="${P}">На нашем стенде мы представим <b>[ключевые решения и оборудование]</b> — [1–2 предложения о том, что увидят посетители].</p>
+<p style="${P}">Будем рады встрече!</p>
+${CTA('Зарегистрироваться','https://')}
+${SIGN}`,
 };
 function loadTemplate(kind){
   const tpl=TEMPLATES[kind]||TEMPLATES.simple;
@@ -243,15 +242,10 @@ function previewWrap(bodyHtml){
   const links=FILES.filter(f=>f.kind==='link');
   const linkBlock=links.length?`<div style="margin-top:20px"><div style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:4px">Материалы для скачивания</div>${links.map(f=>`<div style="margin:5px 0"><span style="display:inline-block;background:#f5f6fa;border:1px solid #e3e6ef;border-radius:8px;padding:10px 16px;color:#1a1e27;font-size:14px;font-weight:600">📎 ${esc(f.filename)} <span style="color:#9ca3af;font-weight:400">· ${fmtSize(f.size_bytes)}</span></span></div>`).join('')}</div>`:'';
   return `<div style="background:#eef0f5;padding:20px;border-radius:12px">
-    <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(20,25,40,.08)">
-      <div style="padding:20px 28px 16px;border-bottom:3px solid ${ACCENT}"><img src="/assets/logo-wordmark.png" alt="" style="height:28px;display:block"></div>
-      <div style="padding:24px 28px 8px;font-family:Arial,sans-serif;color:#1a1e27;font-size:15px;line-height:1.65">${bodyHtml}${linkBlock}</div>
-      <div style="padding:18px 28px;font-family:Arial,sans-serif"><div style="border-top:1px solid #e3e6ef;padding-top:16px">
-        <div style="font-size:16px;font-weight:700;color:#1a1e27">ProLabSupport</div>
-        <div style="font-size:13px;color:#6b7280;margin-top:3px">Комплексное оснащение лабораторий и сервис аналитического оборудования</div>
-        <div style="font-size:13px;margin-top:8px"><span style="color:${ACCENT}">prolabsupport.kz</span> &nbsp;·&nbsp; <span style="color:${ACCENT}">info@prolabsupport.kz</span></div>
-      </div></div>
-      <div style="padding:14px 28px 20px;background:#f5f6fa;font-family:Arial,sans-serif"><div style="font-size:12px;color:#9ca3af;line-height:1.6">ProLabSupport · Казахстан<br>Вы получили это письмо как клиент ProLabSupport. <span style="text-decoration:underline">Отписаться</span></div></div>
+    <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(20,25,40,.08)">
+      <div style="padding:30px 32px 8px;font-family:Arial,sans-serif;color:#2a2f3a;font-size:15px;line-height:1.7">${bodyHtml}${linkBlock}</div>
+      <div style="padding:22px 32px 6px;text-align:center"><img src="/assets/company-full-logo.png" alt="ProLabSupport" style="width:100%;max-width:480px;height:auto;display:block;margin:0 auto"></div>
+      <div style="padding:14px 32px 22px;font-family:Arial,sans-serif"><div style="border-top:1px solid #eef0f5;padding-top:14px;font-size:12px;color:#9ca3af;line-height:1.6">ProLabSupport · Казахстан · prolabsupport.kz<br>Вы получили это письмо как клиент ProLabSupport. <span style="text-decoration:underline">Отписаться</span></div></div>
     </div></div>`;
 }
 function preview(){

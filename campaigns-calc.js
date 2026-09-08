@@ -352,42 +352,33 @@ function linkFilesBlock(linkFiles) {
   </table>`;
 }
 
-// Фирменная обёртка: шапка с логотипом → тело → блок вложений-ссылок → подпись → футер.
+// Фирменная обёртка (стиль как в рассылках Selzy): тело → большой фирменный
+// блок-логотип (логотип + слоган + партнёры, одним изображением) → отписка.
 function wrapEmail(bodyHtml, unsubUrl, opts = {}) {
-  const sigContacts = [
-    SIG.site  ? `<a href="https://${SIG.site.replace(/^https?:\/\//,'')}" style="color:${BRAND.accent};text-decoration:none">${esc(SIG.site)}</a>` : '',
-    SIG.email ? `<a href="mailto:${esc(SIG.email)}" style="color:${BRAND.accent};text-decoration:none">${esc(SIG.email)}</a>` : '',
-    SIG.phone ? esc(SIG.phone) : '',
-  ].filter(Boolean).join('&nbsp;&nbsp;·&nbsp;&nbsp;');
+  const footerLogo = process.env.CAMPAIGN_FOOTER_LOGO_URL || `${APP_BASE}/assets/company-full-logo.png`;
+  const footContacts = [
+    SIG.address ? esc(SIG.address) : '',
+    SIG.site ? esc(SIG.site) : '',
+  ].filter(Boolean).join(' · ');
 
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light"></head>
 <body style="margin:0;padding:0;background:#eef0f5;-webkit-text-size-adjust:100%">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#eef0f5">
  <tr><td align="center" style="padding:24px 12px">
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="640" style="max-width:640px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(20,25,40,.06)">
-   <!-- Шапка -->
-   <tr><td style="padding:22px 32px 18px;border-bottom:3px solid ${BRAND.accent}">
-     <img src="${BRAND.logo}" alt="${esc(SIG.company)}" height="30" style="height:30px;display:block;border:0">
-   </td></tr>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="640" style="max-width:640px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(20,25,40,.07)">
    <!-- Тело -->
-   <tr><td style="padding:28px 32px 8px;font-family:Arial,Helvetica,sans-serif;color:#1a1e27;font-size:15px;line-height:1.65">
+   <tr><td style="padding:34px 36px 10px;font-family:Arial,Helvetica,sans-serif;color:#2a2f3a;font-size:15px;line-height:1.7">
      ${bodyHtml}
      ${linkFilesBlock(opts.linkFiles)}
    </td></tr>
-   <!-- Подпись -->
-   <tr><td style="padding:20px 32px 24px">
-     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-top:1px solid #e3e6ef">
-       <tr><td style="padding-top:18px;font-family:Arial,Helvetica,sans-serif">
-         <div style="font-size:16px;font-weight:700;color:#1a1e27">${esc(SIG.company)}</div>
-         ${SIG.tagline ? `<div style="font-size:13px;color:#6b7280;margin-top:3px;line-height:1.5">${esc(SIG.tagline)}</div>` : ''}
-         ${sigContacts ? `<div style="font-size:13px;margin-top:8px">${sigContacts}</div>` : ''}
-       </td></tr>
-     </table>
+   <!-- Фирменный блок: логотип + слоган + партнёры (одно изображение) -->
+   <tr><td align="center" style="padding:24px 36px 6px">
+     <img src="${footerLogo}" alt="${esc(SIG.company)}" width="520" style="width:100%;max-width:520px;height:auto;display:block;border:0">
    </td></tr>
-   <!-- Футер -->
-   <tr><td style="padding:16px 32px 22px;background:#f5f6fa;font-family:Arial,Helvetica,sans-serif">
-     <div style="font-size:12px;color:#9ca3af;line-height:1.6">${esc(SIG.company)}${SIG.address ? ' · ' + esc(SIG.address) : ''}<br>
+   <!-- Отписка -->
+   <tr><td style="padding:16px 36px 26px;font-family:Arial,Helvetica,sans-serif">
+     <div style="border-top:1px solid #eef0f5;padding-top:14px;font-size:12px;color:#9ca3af;line-height:1.6">${esc(SIG.company)}${footContacts ? ' · ' + footContacts : ''}<br>
      Вы получили это письмо как клиент ${esc(SIG.company)}. <a href="${unsubUrl}" style="color:#9ca3af;text-decoration:underline">Отписаться</a></div>
    </td></tr>
   </table>
