@@ -30,7 +30,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
 .hbtn:hover{border-color:var(--accent);color:var(--accent)}
 .hsub{font-size:13.5px;color:var(--text-3);font-weight:500}
 .hr{margin-left:auto;display:flex;gap:8px;align-items:center}
-.wrap{display:grid;grid-template-columns:260px 1fr 420px;gap:16px;padding:16px;height:calc(100vh - 56px)}
+.wrap{display:grid;grid-template-columns:230px minmax(300px,1fr) 580px;gap:16px;padding:16px;height:calc(100vh - 56px)}
+@media(max-width:1400px){.wrap{grid-template-columns:220px 1fr 520px}}
 @media(max-width:1100px){.wrap{grid-template-columns:1fr;height:auto}}
 .col{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;overflow:hidden;min-height:0}
 .col-h{padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -114,7 +115,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--brand)}
       <button class="btn" style="padding:5px 9px" onclick="selectAllVisible(false)">Снять</button></span></div>
     <div class="searchbox"><input type="text" id="compSearch" placeholder="Поиск по всем компаниям…" oninput="onCompSearch(this.value)"></div>
     <div class="col-b" id="compList"><div class="pad hint">Выбери сферу слева.</div></div>
-    <div class="selbar"><span>Выбрано адресов: <b id="selCount">0</b></span></div>
+    <div class="selbar"><span>Выбрано адресов: <b id="selCount">0</b></span><button class="btn" style="padding:5px 9px" onclick="showSelected()">📋 Показать список</button></div>
   </div>
 
   <!-- Editor + history -->
@@ -240,7 +241,29 @@ function toggleComp(idx){const el=document.getElementById('em-'+idx);if(el)el.cl
 function toggleEmail(email,on){if(on)SELECTED.add(email);else SELECTED.delete(email);updateSel();}
 function toggleCompany(idx,on){const c=COMPANIES[idx];if(!c)return;(c.emails||[]).forEach(e=>{if(on)SELECTED.add(e.email);else SELECTED.delete(e.email)});renderCompanies();}
 function selectAllVisible(on){COMPANIES.forEach(c=>(c.emails||[]).forEach(e=>{if(on)SELECTED.add(e.email);else SELECTED.delete(e.email)}));renderCompanies();}
-function updateSel(){document.getElementById('selCount').textContent=SELECTED.size;document.getElementById('sendN').textContent=SELECTED.size;}
+function updateSel(){document.getElementById('selCount').textContent=SELECTED.size;document.getElementById('sendN').textContent=SELECTED.size;if(document.getElementById('selOverlay'))renderSelectedList();}
+// Список уже выбранных адресатов — для перепроверки перед отправкой.
+function showSelected(){
+  let ov=document.getElementById('selOverlay');
+  if(ov){ov.remove();return;}
+  ov=document.createElement('div');ov.id='selOverlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+  ov.innerHTML='<div style="max-width:560px;width:100%;max-height:80vh;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--border2);border-radius:14px;overflow:hidden">'
+    +'<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px">'
+    +'<b style="font-size:15px">Выбранные адресаты · <span id="selModalCount">0</span></b>'
+    +'<span><button class="btn" style="padding:5px 9px" onclick="clearSelected()">Очистить все</button> <button class="btn" style="padding:5px 9px" onclick="showSelected()">Закрыть</button></span></div>'
+    +'<div id="selModalBody" style="overflow:auto;padding:8px 20px 16px"></div></div>';
+  ov.addEventListener('click',e=>{if(e.target===ov)showSelected();});
+  document.body.appendChild(ov);renderSelectedList();
+}
+function renderSelectedList(){
+  const body=document.getElementById('selModalBody');const cnt=document.getElementById('selModalCount');if(!body)return;
+  const arr=[...SELECTED].sort();if(cnt)cnt.textContent=arr.length;
+  if(!arr.length){body.innerHTML='<div class="pad hint">Пока никто не выбран. Отметь адреса галочками в списке компаний.</div>';return;}
+  body.innerHTML=arr.map(em=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)"><span style="flex:1;word-break:break-all">${esc(em)}</span><button class="btn" style="padding:3px 8px" onclick="removeSelected('${esc(em)}')" title="Убрать из рассылки">✕</button></div>`).join('');
+}
+function removeSelected(em){SELECTED.delete(em);renderCompanies();renderSelectedList();}
+function clearSelected(){if(!SELECTED.size)return;if(!confirm('Убрать всех выбранных адресатов?'))return;SELECTED.clear();renderCompanies();renderSelectedList();}
 
 async function syncAudience(){
   const b=document.getElementById('syncBtn'); b.disabled=true; b.textContent='Синхронизирую…';
