@@ -28,6 +28,16 @@ router.post('/stock/refresh', requireAuth(VIEW), async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Авансы (счёт 3510 + оплаты 1210/1010-1030) ──────────────────────────────
+router.get('/advances', requireAuth(VIEW), async (req, res) => {
+  try { res.json(await require('../finance-advances-calc').getAdvancesBoard()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.post('/advances/refresh', requireAuth(VIEW), async (req, res) => {
+  try { res.json(await require('../finance-advances-calc').syncAdvances()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Качество (сверка контрактов 1С ↔ сделок Битрикса) ───────────────────────
 router.get('/quality', requireAuth(VIEW), async (req, res) => {
   try { res.json(await require('../finance-quality-calc').getQualityBoard()); }
