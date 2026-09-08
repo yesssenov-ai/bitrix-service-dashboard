@@ -28,4 +28,14 @@ router.post('/stock/refresh', requireAuth(VIEW), async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Качество (сверка контрактов 1С ↔ сделок Битрикса) ───────────────────────
+router.get('/quality', requireAuth(VIEW), async (req, res) => {
+  try { res.json(await require('../finance-quality-calc').getQualityBoard()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.post('/quality/refresh', requireAuth(VIEW), async (req, res) => {
+  try { res.json(await require('../finance-quality-calc').syncQuality()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = { router };

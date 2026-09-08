@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ЦУП · Качество</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#14171d;--bg2:#20242e;--card:#1b1f27;--border:#2a2f3a;--border2:#363c49;--text:#eef0f3;--text-2:#c3c9d3;--text-3:#8b93a3;--text-4:#616a78;--accent:#e5544a;--brand:#4098e6;--good:#3ddc84;--good-l:rgba(61,220,132,.14);--warn:#e0a940;--warn-l:rgba(224,169,64,.14);--bad:#ef5a6a;--bad-l:rgba(239,90,106,.14);--radius:12px;--font:'Inter',system-ui,sans-serif}
+html[data-theme="light"]{--bg:#f5f6fa;--bg2:#eef0f7;--card:#fff;--border:#e3e6ef;--border2:#d0d4e4;--text:#111827;--text-2:#374151;--text-3:#6b7280;--text-4:#9ca3af;--accent:#C53B2F;--brand:#2563eb;--good:#059669;--good-l:rgba(5,150,105,.1);--warn:#d97706;--warn-l:rgba(217,119,6,.1);--bad:#dc2626;--bad-l:rgba(220,38,38,.1)}
+body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased}
+.header{background:var(--card);border-bottom:1px solid var(--border);height:56px;display:flex;align-items:center;padding:0 20px;gap:12px;position:sticky;top:0;z-index:100}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14px;text-decoration:none;color:inherit}.logo img{height:24px}
+.hbtn{font-size:12.5px;color:var(--text-3);text-decoration:none;border:1px solid var(--border2);padding:6px 12px;border-radius:8px;background:transparent;cursor:pointer;font-family:var(--font)}
+.hbtn:hover{border-color:var(--accent);color:var(--accent)}
+.hsub{font-size:13.5px;color:var(--text-3);font-weight:600}
+.hr{margin-left:auto;display:flex;gap:8px;align-items:center}
+.asof{font-size:12px;color:var(--text-3)}
+.mockbadge{font-size:11px;font-weight:700;color:var(--warn);border:1px solid var(--warn);border-radius:6px;padding:2px 8px}
+.tiles{display:flex;gap:12px;flex-wrap:wrap;padding:16px 16px 0}
+.tile{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;min-width:120px;cursor:pointer;flex:1}
+.tile.on{border-color:var(--brand)}
+.tile .v{font-size:22px;font-weight:800}.tile .l{font-size:11.5px;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin:16px;overflow:hidden}
+.searchbox{padding:12px 16px;border-bottom:1px solid var(--border)}
+.searchbox input{width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:var(--font);outline:none}
+.scroll{overflow:auto;max-height:calc(100vh - 300px)}
+table{border-collapse:collapse;font-size:12.5px;width:100%}
+th,td{padding:8px 12px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
+th{position:sticky;top:0;background:var(--bg2);font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);font-weight:700}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.badge{display:inline-block;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap}
+.b-ok{background:var(--good-l);color:var(--good)}.b-diff{background:var(--bad-l);color:var(--bad)}.b-only1c{background:var(--warn-l);color:var(--warn)}.b-onlyb24{background:var(--warn-l);color:var(--warn)}.b-nolink{background:var(--bg2);color:var(--text-3)}
+.mm{color:var(--bad);font-weight:600}
+.hint{color:var(--text-3);padding:20px}
+.dl{color:var(--brand);text-decoration:none}
+</style>
+</head>
+<body>
+<header class="header">
+  <a href="/" class="logo"><img src="/assets/logo-icon.png" alt="">ProLabSupport</a>
+  <a href="/" class="hbtn">← Все модули</a>
+  <span class="hsub">Качество · сверка 1С ↔ Битрикс</span>
+  <div class="hr">
+    <span class="asof" id="asof"></span>
+    <span class="mockbadge" id="mockBadge" style="display:none">демо-данные</span>
+    <button class="hbtn" id="refreshBtn" onclick="refresh()">↻ Обновить</button>
+    <button class="hbtn" onclick="logout()">Выйти</button>
+  </div>
+</header>
+
+<div class="tiles" id="tiles"></div>
+
+<div class="card">
+  <div class="searchbox"><input type="text" id="fSearch" placeholder="Поиск: контрагент, наименование, ID сделки…" oninput="render()"></div>
+  <div class="scroll"><table>
+    <thead><tr><th>ID сделки</th><th>Контрагент</th><th>Наименование (1С / Б24)</th><th class="num">Сумма 1С</th><th class="num">Сумма Б24</th><th class="num">Δ</th><th>Отдел</th><th>Статус</th><th>Расхождения</th></tr></thead>
+    <tbody id="body"></tbody>
+  </table></div>
+</div>
+
+<script>
+let DATA={rows:[],summary:{}}, FILTER='all';
+const STAT={ok:'Совпадают',diff:'Расхождения',only_1c:'Только 1С',only_b24:'Только Б24',no_link:'Нет связи'};
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const fmt=n=>n==null?'—':Math.round(Number(n)).toLocaleString('ru-RU').replace(/,/g,' ');
+async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.href='/login.html';return{ok:false,d:{}}}let d={};try{d=await r.json()}catch(e){}return{ok:r.ok,d}}
+async function boot(){const r=await fetch('/auth/me');if(!r.ok){location.href='/login.html';return;}await load();}
+async function load(){
+  const {ok,d}=await api('/api/finance/quality');
+  if(!ok){document.getElementById('body').innerHTML='<tr><td colspan="9" class="hint">Ошибка загрузки</td></tr>';return;}
+  DATA=d;
+  document.getElementById('asof').textContent=d.asOf?('По состоянию на '+new Date(d.asOf).toLocaleString('ru-RU')):'';
+  document.getElementById('mockBadge').style.display=d.mock?'inline-block':'none';
+  renderTiles();render();
+}
+function renderTiles(){
+  const s=DATA.summary||{};
+  const items=[['all','Всего',s.total,'--text'],['ok','Совпадают',s.ok,'--good'],['diff','Расхождения',s.diff,'--bad'],['only_1c','Только 1С',s.only_1c,'--warn'],['only_b24','Только Б24',s.only_b24,'--warn'],['no_link','Нет связи',s.no_link,'--text-3']];
+  document.getElementById('tiles').innerHTML=items.map(([k,l,v,c])=>`<div class="tile ${FILTER===k?'on':''}" onclick="setF('${k}')"><div class="v" style="color:var(${c})">${v||0}</div><div class="l">${l}</div></div>`).join('');
+}
+function setF(k){FILTER=k;renderTiles();render();}
+function render(){
+  const q=(document.getElementById('fSearch').value||'').toLowerCase();
+  let rows=DATA.rows||[];
+  if(FILTER!=='all')rows=rows.filter(r=>r.status===FILTER);
+  if(q)rows=rows.filter(r=>((r.contractor||'')+' '+(r.name_1c||'')+' '+(r.name_b24||'')+' '+(r.deal_id||'')).toLowerCase().includes(q));
+  document.getElementById('body').innerHTML=rows.length?rows.map(r=>{
+    const df=(r.diff_fields||'').split(', ').filter(Boolean);
+    const has=f=>df.includes(f);
+    const deal=r.deal_id?`<a class="dl" href="https://crm.prolabsupport.kz/crm/deal/details/${esc(r.deal_id)}/" target="_blank">#${esc(r.deal_id)}</a>`:'<span style="color:var(--warn)">—</span>';
+    const names=`${esc(r.name_1c||'')}${r.name_b24?`<div style="color:var(--text-3);margin-top:2px" class="${has('наименование')?'mm':''}">Б24: ${esc(r.name_b24)}</div>`:''}`;
+    const delta=(r.sum_1c!=null&&r.sum_b24!=null)?(r.sum_1c-r.sum_b24):null;
+    return `<tr>
+      <td>${deal}</td>
+      <td>${esc(r.contractor||'')}</td>
+      <td style="white-space:normal;max-width:360px">${names}</td>
+      <td class="num">${fmt(r.sum_1c)}</td>
+      <td class="num ${has('сумма')?'mm':''}">${fmt(r.sum_b24)}</td>
+      <td class="num ${delta?'mm':''}">${delta==null?'—':(delta>0?'+':'')+fmt(delta)}</td>
+      <td>${esc(r.dept_1c||r.dept_b24||'')}${(has('отдел'))?`<div class="mm" style="font-size:11px">Б24: ${esc(r.dept_b24)}</div>`:''}</td>
+      <td><span class="badge b-${r.status.replace('_','')}">${STAT[r.status]||r.status}</span></td>
+      <td class="mm">${esc(r.diff_fields||'')}</td>
+    </tr>`;
+  }).join(''):'<tr><td colspan="9" class="hint">Нет строк по фильтру.</td></tr>';
+}
+async function refresh(){const b=document.getElementById('refreshBtn');b.disabled=true;b.textContent='Обновляю…';await api('/api/finance/quality/refresh',{method:'POST'});await load();b.disabled=false;b.textContent='↻ Обновить';}
+async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
+boot();
+</script>
+</body>
+</html>

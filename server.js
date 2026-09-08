@@ -139,6 +139,7 @@ app.get('/procurement.html', requireModule('PROC'), (_, res) => res.sendFile(pat
 app.get('/campaigns.html', requireModule('CAM'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'campaigns.html')));
 app.get('/finance-debt.html', requireModule('DEBT'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'finance-debt.html')));
 app.get('/finance-stock.html', requireModule('STOCK'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'finance-stock.html')));
+app.get('/finance-quality.html', requireModule('QUALITY'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'finance-quality.html')));
 app.get('/cup-admin.html', requirePageAuth(['admin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'cup-admin.html')));
 app.get('/account.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'account.html')));
 // `index:false` — without this, static would auto-serve public/index.html
