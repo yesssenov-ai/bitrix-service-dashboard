@@ -62,6 +62,7 @@ textarea{min-height:180px;resize:vertical;line-height:1.5}
 .editor:empty:before{content:attr(data-ph);color:var(--text-4)}
 .editor p{margin:0 0 12px}
 .editor a{color:var(--brand)}
+.ph{display:inline-block;background:var(--brand-l);color:var(--brand);border:1px solid var(--brand);border-radius:5px;padding:0 7px;font-size:12.5px;font-weight:600;line-height:1.5;user-select:all}
 .emeta{font-size:10px;color:var(--text-4);border:1px solid var(--border2);border-radius:4px;padding:0 5px;margin-left:6px}
 input:focus,textarea:focus,select:focus{border-color:var(--brand)}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--text-2);font-family:var(--font)}
@@ -144,7 +145,8 @@ input:focus,textarea:focus,select:focus{border-color:var(--brand)}
           <button type="button" class="tb" onmousedown="event.preventDefault()" onclick="insCompany()" title="Подставит название компании получателя">Компания</button>
         </div>
         <div id="cBody" class="editor" contenteditable="true" data-ph="Здравствуйте, {{Компания}}! Напишите текст письма…" oninput="preview()"></div>
-        <div class="hint" style="margin-top:4px">Пишите как обычный текст, выделяйте важное кнопкой <b>Ж</b>. Логотип, фирменный блок с партнёрами и футер с отпиской добавляются автоматически. Кнопка «<b>Компания</b>» вставит название компании получателя.</div>
+        <div class="hint" style="margin-top:4px;line-height:1.5">Пишите как обычный текст, выделяйте важное кнопкой <b>Ж</b>. Логотип, фирменный блок с партнёрами и футер с отпиской добавляются автоматически.<br>
+        Кнопка «<b>Компания</b>» вставляет метку <span style="color:var(--brand)">Компания получателя</span> — при отправке каждому подставится его название компании (проверь в «Предпросмотре»). «<b>🔘 Кнопка</b>» добавляет кнопку-ссылку в конец письма.</div>
 
         <!-- Вложения -->
         <label class="fl">Файлы (каталоги, прайсы, приглашения)</label>
@@ -273,15 +275,32 @@ ${SIGN}`,
 ${SIGN}`,
 };
 // ── Редактор письма (WYSIWYG, без HTML-кода) ────────────────────────────────
-function getBody(){return document.getElementById('cBody').innerHTML;}
-function setBody(html){document.getElementById('cBody').innerHTML=html||'';preview();}
+// «Компания получателя» показывается в редакторе как наглядная фишка, а в письме
+// заменяется на реальное название компании каждого получателя ({{Компания}}).
+function chipHTML(){return '<span class="ph" contenteditable="false" data-ph="company">Компания получателя</span>';}
+function getBody(){
+  const ed=document.getElementById('cBody').cloneNode(true);
+  ed.querySelectorAll('[data-ph="company"]').forEach(el=>el.replaceWith(document.createTextNode('{{Компания}}')));
+  return ed.innerHTML;
+}
+function setBody(html){
+  const withChips=(html||'').replace(/\{\{\s*Компания\s*\}\}/gi,chipHTML());
+  document.getElementById('cBody').innerHTML=withChips;preview();
+}
 let _savedRange=null;
 function saveSel(){const s=window.getSelection();const ed=document.getElementById('cBody');if(s&&s.rangeCount&&ed.contains(s.anchorNode))_savedRange=s.getRangeAt(0).cloneRange();}
 function restoreSel(){const ed=document.getElementById('cBody');ed.focus();if(_savedRange){const s=window.getSelection();s.removeAllRanges();s.addRange(_savedRange);}}
 function fmt(cmd){document.execCommand(cmd,false,null);preview();}
 function insLink(){saveSel();const u=prompt('Адрес ссылки (URL):','https://');if(!u)return;restoreSel();const sel=window.getSelection();if(sel&&sel.toString())document.execCommand('createLink',false,u);else document.execCommand('insertHTML',false,'<a href="'+u.replace(/"/g,'%22')+'" style="color:'+ACCENT+'">'+esc(u)+'</a>');preview();}
-function insButton(){saveSel();const t=prompt('Текст кнопки:','Подробнее');if(t==null)return;const u=prompt('Адрес кнопки (URL):','https://');if(!u)return;restoreSel();const html='<p style="'+P+'"><a href="'+u.replace(/"/g,'%22')+'" style="display:inline-block;background:'+ACCENT+';color:#fff;text-decoration:none;padding:13px 26px;border-radius:8px;font-weight:700">'+esc(t)+'</a></p>';document.execCommand('insertHTML',false,html);preview();}
-function insCompany(){restoreSel();document.execCommand('insertText',false,'{{Компания}}');preview();}
+// Кнопку добавляем ОТДЕЛЬНЫМ блоком в конец письма (чтобы не втыкалась посреди слова).
+function insButton(){
+  const t=prompt('Текст кнопки:','Подробнее');if(t==null)return;
+  const u=prompt('Адрес кнопки (URL):','https://');if(!u)return;
+  const p=document.createElement('p');p.setAttribute('style',P+';text-align:center');
+  p.innerHTML='<a href="'+u.replace(/"/g,'%22')+'" style="display:inline-block;background:'+ACCENT+';color:#fff;text-decoration:none;padding:13px 26px;border-radius:8px;font-weight:700">'+esc(t)+'</a>';
+  document.getElementById('cBody').appendChild(p);preview();
+}
+function insCompany(){restoreSel();document.execCommand('insertHTML',false,chipHTML()+'&nbsp;');preview();}
 function loadTemplate(kind){
   const tpl=TEMPLATES[kind]||TEMPLATES.simple;
   const ed=document.getElementById('cBody');
