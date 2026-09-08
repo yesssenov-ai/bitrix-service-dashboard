@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ЦУП · Склад</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#14171d;--bg2:#20242e;--card:#1b1f27;--border:#2a2f3a;--border2:#363c49;--text:#eef0f3;--text-2:#c3c9d3;--text-3:#8b93a3;--text-4:#616a78;--accent:#e5544a;--brand:#4098e6;--radius:12px;--font:'Inter',system-ui,sans-serif}
+html[data-theme="light"]{--bg:#f5f6fa;--bg2:#eef0f7;--card:#fff;--border:#e3e6ef;--border2:#d0d4e4;--text:#111827;--text-2:#374151;--text-3:#6b7280;--text-4:#9ca3af;--accent:#C53B2F;--brand:#2563eb}
+body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased}
+.header{background:var(--card);border-bottom:1px solid var(--border);height:56px;display:flex;align-items:center;padding:0 20px;gap:12px;position:sticky;top:0;z-index:100}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14px;text-decoration:none;color:inherit}.logo img{height:24px}
+.hbtn{font-size:12.5px;color:var(--text-3);text-decoration:none;border:1px solid var(--border2);padding:6px 12px;border-radius:8px;background:transparent;cursor:pointer;font-family:var(--font)}
+.hbtn:hover{border-color:var(--accent);color:var(--accent)}
+.hsub{font-size:13.5px;color:var(--text-3);font-weight:600}
+.hr{margin-left:auto;display:flex;gap:8px;align-items:center}
+.asof{font-size:12px;color:var(--text-3)}
+.mockbadge{font-size:11px;font-weight:700;color:var(--warn,#e0a940);border:1px solid var(--warn,#e0a940);border-radius:6px;padding:2px 8px}
+.filters{display:flex;gap:10px;flex-wrap:wrap;padding:12px 16px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin:16px 16px 0}
+.fl{display:block;font-size:10.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+select,input[type=text]{background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text);font-family:var(--font);outline:none;min-width:150px}
+select:focus,input:focus{border-color:var(--brand)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin:16px;overflow:hidden}
+.tools{padding:9px 16px;border-bottom:1px solid var(--border);display:flex;gap:16px;align-items:center;font-size:13px;color:var(--text-2);flex-wrap:wrap}
+.tools b{font-variant-numeric:tabular-nums}
+.scroll{overflow:auto;max-height:calc(100vh - 210px)}
+table{border-collapse:collapse;font-size:12.5px;white-space:nowrap;min-width:100%}
+th,td{padding:7px 12px;border-bottom:1px solid var(--border);text-align:left}
+th{position:sticky;top:0;background:var(--bg2);z-index:1;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);font-weight:700}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+tr:hover td{background:var(--bg2)}
+.nm{white-space:normal;min-width:280px;max-width:420px;color:var(--text)}
+tfoot td{position:sticky;bottom:0;background:var(--card);font-weight:700;border-top:2px solid var(--border2)}
+.hint{color:var(--text-3);padding:20px;font-size:13px}
+</style>
+</head>
+<body>
+<header class="header">
+  <a href="/" class="logo"><img src="/assets/logo-icon.png" alt="">ProLabSupport</a>
+  <a href="/" class="hbtn">← Все модули</a>
+  <span class="hsub">Склад</span>
+  <div class="hr">
+    <span class="asof" id="asof"></span>
+    <span class="mockbadge" id="mockBadge" style="display:none">демо-данные</span>
+    <button class="hbtn" id="refreshBtn" onclick="refresh()">↻ Обновить</button>
+    <button class="hbtn" onclick="logout()">Выйти</button>
+  </div>
+</header>
+
+<div class="filters">
+  <div><label class="fl">№ заказа</label><select id="fOrder" onchange="render()"><option value="">Все</option></select></div>
+  <div><label class="fl">Производитель</label><select id="fMfr" onchange="render()"><option value="">Все</option></select></div>
+  <div><label class="fl">Склад</label><select id="fStore" onchange="render()"><option value="">Все</option></select></div>
+  <div style="flex:1;min-width:220px"><label class="fl">Поиск (номенклатура / код / партномер)</label><input type="text" id="fSearch" placeholder="Поиск…" oninput="render()" style="width:100%"></div>
+</div>
+
+<div class="card">
+  <div class="tools"><span>Позиций: <b id="cntRows">0</b></span><span>Количество: <b id="cntQty">0</b></span><span>Сумма: <b id="cntSum">0</b></span></div>
+  <div class="scroll">
+    <table>
+      <thead><tr>
+        <th class="nm">Номенклатура</th><th>Партномер</th><th>№ заказа</th><th>Номенкл. номер</th>
+        <th>Дата изгот.</th><th>Срок годн.</th><th class="num">Кол-во</th><th class="num">Цена</th><th class="num">Сумма</th>
+        <th>№ полки</th><th>Штрихкод</th><th>Склад</th><th>Производитель</th><th>Номер ГТД</th>
+      </tr></thead>
+      <tbody id="body"></tbody>
+      <tfoot id="foot"></tfoot>
+    </table>
+  </div>
+</div>
+
+<script>
+let DATA={rows:[],totals:{},filters:{}};
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const fmt=n=>Math.round(Number(n)||0).toLocaleString('ru-RU').replace(/,/g,' ');
+const dt=s=>s?new Date(s).toLocaleDateString('ru-RU'):'';
+async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.href='/login.html';return{ok:false,d:{}}}let d={};try{d=await r.json()}catch(e){}return{ok:r.ok,d}}
+async function boot(){const r=await fetch('/auth/me');if(!r.ok){location.href='/login.html';return;}await load();}
+async function load(){
+  const {ok,d}=await api('/api/finance/stock');
+  if(!ok){document.getElementById('body').innerHTML='<tr><td colspan="14" class="hint">Ошибка загрузки</td></tr>';return;}
+  DATA=d;
+  document.getElementById('asof').textContent=d.asOf?('По состоянию на '+new Date(d.asOf).toLocaleString('ru-RU')):'';
+  document.getElementById('mockBadge').style.display=d.mock?'inline-block':'none';
+  const opt=(arr)=>'<option value="">Все</option>'+(arr||[]).map(x=>`<option>${esc(x)}</option>`).join('');
+  document.getElementById('fOrder').innerHTML=opt(d.filters.orders);
+  document.getElementById('fMfr').innerHTML=opt(d.filters.manufacturers);
+  document.getElementById('fStore').innerHTML=opt(d.filters.stores);
+  render();
+}
+function filtered(){
+  const o=document.getElementById('fOrder').value,m=document.getElementById('fMfr').value,s=document.getElementById('fStore').value;
+  const q=(document.getElementById('fSearch').value||'').toLowerCase();
+  return (DATA.rows||[]).filter(r=>(!o||r.order_no===o)&&(!m||r.manufacturer===m)&&(!s||r.store===s)&&(!q||((r.name||'')+' '+(r.item_code||'')+' '+(r.part_no||'')).toLowerCase().includes(q)));
+}
+function render(){
+  const rows=filtered();
+  document.getElementById('body').innerHTML=rows.length?rows.map(r=>`<tr>
+    <td class="nm">${esc(r.name)}</td><td>${esc(r.part_no||'')}</td><td>${esc(r.order_no||'')}</td><td>${esc(r.item_code||'')}</td>
+    <td>${dt(r.made_date)}</td><td>${dt(r.expiry)}</td><td class="num">${fmt(r.qty)}</td><td class="num">${fmt(r.price)}</td><td class="num">${fmt(r.amount)}</td>
+    <td>${esc(r.shelf||'')}</td><td>${esc(r.barcode||'')}</td><td>${esc(r.store||'')}</td><td>${esc(r.manufacturer||'')}</td><td>${esc(r.gtd||'')}</td>
+  </tr>`).join(''):'<tr><td colspan="14" class="hint">Нет данных по фильтру.</td></tr>';
+  const q=rows.reduce((a,r)=>a+Number(r.qty||0),0),sum=rows.reduce((a,r)=>a+Number(r.amount||0),0);
+  document.getElementById('cntRows').textContent=fmt(rows.length);
+  document.getElementById('cntQty').textContent=fmt(q);
+  document.getElementById('cntSum').textContent=fmt(sum);
+  document.getElementById('foot').innerHTML=`<tr><td>Итого</td><td colspan="5"></td><td class="num">${fmt(q)}</td><td></td><td class="num">${fmt(sum)}</td><td colspan="5"></td></tr>`;
+}
+async function refresh(){const b=document.getElementById('refreshBtn');b.disabled=true;b.textContent='Обновляю…';await api('/api/finance/stock/refresh',{method:'POST'});await load();b.disabled=false;b.textContent='↻ Обновить';}
+async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
+boot();
+</script>
+</body>
+</html>

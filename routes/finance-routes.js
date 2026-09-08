@@ -18,4 +18,14 @@ router.post('/debt/refresh', requireAuth(VIEW), async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Склад (остатки на складах, fact_stock) ──────────────────────────────────
+router.get('/stock', requireAuth(VIEW), async (req, res) => {
+  try { res.json(await require('../finance-stock-calc').getStockBoard()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.post('/stock/refresh', requireAuth(VIEW), async (req, res) => {
+  try { res.json(await require('../finance-stock-calc').syncStock()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = { router };
