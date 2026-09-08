@@ -337,6 +337,7 @@ const PAL=['#5b8cff','#ffb020','#22c9a3','#a56bff','#ff6b81','#3ddc97','#4dd0e1'
 const stColor=(n,i)=>ST_COLORS[n]||PAL[i%PAL.length];
 const fmt=n=>Math.round(n).toLocaleString('ru-RU').replace(/,/g,' ');
 const fmt1=n=>n.toLocaleString('ru-RU',{minimumFractionDigits:1,maximumFractionDigits:1});
+const fmt3=n=>n.toLocaleString('ru-RU',{minimumFractionDigits:3,maximumFractionDigits:3});
 const easeOut=t=>1-Math.pow(1-t,3);
 function countUp(el,to,dur=1200,fmtFn=fmt){const s=performance.now();function step(now){const p=Math.min((now-s)/dur,1);el.textContent=fmtFn(to*easeOut(p));if(p<1)requestAnimationFrame(step);}requestAnimationFrame(step);}
 const pcColor=p=>p==null?'var(--dim2)':p>=60?'var(--good)':p>=30?'var(--warn)':'var(--bad)';
@@ -559,13 +560,13 @@ function renderKpi(f){
   const win=pct!=null&&pct>=100;
   const anyF=FILT.manuf.length||FILT.dept.length||FILT.month.length;
   const items=[
-    {l:selD.length===1?'Сумма ('+selD[0]+')':selD.length?'Сумма (отделов: '+selD.length+')':'Сумма контрактов',v:total/1e9,dec:1,suf:'млрд ₸',s:anyF?'по фильтру':'контрактных сделок',accent:true},
+    {l:selD.length===1?'Сумма ('+selD[0]+')':selD.length?'Сумма (отделов: '+selD.length+')':'Сумма контрактов',v:total/1e9,dec:3,suf:'млрд ₸',s:anyF?'по фильтру':'контрактных сделок',accent:true},
     {l:'Сделок',v:count,dec:0,suf:'',s:anyF?'по фильтру':'в портфеле года'},
     {l:'Средний чек',v:avg/1e6,dec:1,suf:'млн ₸',s:'на сделку'},
     {l:'Выполнение плана',v:pct==null?0:pct,dec:1,suf:'%',s:pct==null?'план не задан':`${fmt(total/1e6)} / ${fmt(plan/1e6)} млн`,color:win?null:pcColor(pct),win},
   ];
   document.getElementById('kpis').innerHTML=items.map(it=>`<div class="kpi${it.accent?' accent':''}"><div class="kl">${esc(it.l)}</div><div class="kv tabular${it.win?' win':''}"><span data-cu="${it.v}" data-dec="${it.dec}" style="${it.color?'color:'+it.color:''}">0</span> ${it.suf?`<small>${it.suf}</small>`:''}</div><div class="ks">${esc(it.s)}</div></div>`).join('');
-  document.querySelectorAll('#kpis [data-cu]').forEach(el=>countUp(el,+el.dataset.cu,1200,el.dataset.dec==='1'?fmt1:fmt));
+  document.querySelectorAll('#kpis [data-cu]').forEach(el=>countUp(el,+el.dataset.cu,1200,el.dataset.dec==='3'?fmt3:(el.dataset.dec==='1'?fmt1:fmt)));
   if(win&&!WASWIN)setTimeout(()=>confettiBurst(innerWidth*0.72,150),200);
   WASWIN=win;
 }
@@ -589,10 +590,10 @@ function renderDonut(){
     el.addEventListener('mouseleave',hideTip);
     svg.appendChild(el);off+=len;
   });
-  countUp(document.getElementById('donutTotal'),total/1e9,1300,fmt1);
+  countUp(document.getElementById('donutTotal'),total/1e9,1300,fmt3);
   document.getElementById('legend').innerHTML=names.map((nm,i)=>{
     const col=stColor(nm,i),cls=FILT.dept.length?(FILT.dept.includes(nm)?'on':'dim'):'';
-    return `<div class="lg ${cls}" onclick="toggleFilter('${nm.replace(/'/g,"\\'")}')"><span class="sw" style="background:${col}"></span><span class="nm">${esc(nm)}</span><span class="vl tabular">${fmt1(agg[nm]/1e9)}</span><span class="pc tabular" style="color:${col}">${Math.round(agg[nm]/total*100)}%</span></div>`;
+    return `<div class="lg ${cls}" onclick="toggleFilter('${nm.replace(/'/g,"\\'")}')"><span class="sw" style="background:${col}"></span><span class="nm">${esc(nm)}</span><span class="vl tabular">${fmt3(agg[nm]/1e9)}</span><span class="pc tabular" style="color:${col}">${Math.round(agg[nm]/total*100)}%</span></div>`;
   }).join('');
 }
 
@@ -747,7 +748,7 @@ let AREA=null;
     guide.style.left=xPx+'px';guide.style.display='block';
     dot.style.left=xPx+'px';dot.style.top=yPx+'px';dot.style.display=hasBit?'block':'none';
     const planB=planTotal*(i+1)/12;
-    showTip(`<b>${MONTHS[i]} ${YEAR}</b>${hasBit?`<br><span style="color:#5b8cff">■</span> Bitrix: ${fmt1(bit[i])} млрд ₸`:''}${planTotal>0?`<br><span style="color:#8592ad">■</span> План: ${fmt1(planB)} млрд ₸`:''}`,e.clientX,e.clientY);
+    showTip(`<b>${MONTHS[i]} ${YEAR}</b>${hasBit?`<br><span style="color:#5b8cff">■</span> Bitrix: ${fmt3(bit[i])} млрд ₸`:''}${planTotal>0?`<br><span style="color:#8592ad">■</span> План: ${fmt3(planB)} млрд ₸`:''}`,e.clientX,e.clientY);
   });
   wrap.addEventListener('mouseleave',()=>{guide.style.display='none';dot.style.display='none';hideTip();});
 })();
