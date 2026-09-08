@@ -44,11 +44,22 @@ async function b24(method, params = {}, retries = 3) {
         signal: controller.signal,
       });
       clearTimeout(timeout);
-      if (!res.ok) throw new Error(`Bitrix API HTTP ${res.status}`);
+      if (!res.ok) {
+        // Достаём тело ошибки Битрикса (error / error_description) — иначе видно
+        // только «HTTP 400» без причины.
+        let detail = '';
+        try {
+          const t = await res.text();
+          try { const j = JSON.parse(t); detail = j.error_description || j.error || t; }
+          catch (_) { detail = t; }
+        } catch (_) { /* тело недоступно */ }
+        throw new Error(`Bitrix API HTTP ${res.status}${detail ? ': ' + String(detail).slice(0, 300) : ''}`);
+      }
       return await res.json();
     } catch(e) {
       clearTimeout(timeout);
-      if (attempt === retries) throw e;
+      // Клиентские ошибки Битрикса (4xx) повторять бессмысленно — бросаем сразу.
+      if (/HTTP 4\d\d/.test(e.message) || attempt === retries) throw e;
       console.warn(`b24 ${method} attempt ${attempt} failed: ${e.message}, retrying in ${attempt}s...`);
       await new Promise(r => setTimeout(r, 1000 * attempt));
     }
