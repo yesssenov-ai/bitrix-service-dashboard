@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ЦУП · Дебет</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#14171d;--bg2:#20242e;--card:#1b1f27;--border:#2a2f3a;--border2:#363c49;--text:#eef0f3;--text-2:#c3c9d3;--text-3:#8b93a3;--text-4:#616a78;--accent:#e5544a;--brand:#4098e6;--brand-l:rgba(64,152,230,.15);--good:#3ddc84;--warn:#e0a940;--bad:#ef5a6a;--bad-l:rgba(239,90,106,.14);--radius:12px;--font:'Inter',system-ui,sans-serif}
+html[data-theme="light"]{--bg:#f5f6fa;--bg2:#eef0f7;--card:#fff;--border:#e3e6ef;--border2:#d0d4e4;--text:#111827;--text-2:#374151;--text-3:#6b7280;--text-4:#9ca3af;--accent:#C53B2F;--brand:#2563eb;--brand-l:rgba(37,99,235,.08);--good:#059669;--warn:#d97706;--bad:#dc2626;--bad-l:rgba(220,38,38,.08)}
+body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased}
+.header{background:var(--card);border-bottom:1px solid var(--border);height:56px;display:flex;align-items:center;padding:0 20px;gap:12px;position:sticky;top:0;z-index:100}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14px;text-decoration:none;color:inherit}.logo img{height:24px}
+.hbtn{font-size:12.5px;color:var(--text-3);text-decoration:none;border:1px solid var(--border2);padding:6px 12px;border-radius:8px;background:transparent;cursor:pointer;font-family:var(--font)}
+.hbtn:hover{border-color:var(--accent);color:var(--accent)}
+.hsub{font-size:13.5px;color:var(--text-3);font-weight:600}
+.hr{margin-left:auto;display:flex;gap:8px;align-items:center}
+.asof{font-size:12px;color:var(--text-3)}
+.mockbadge{font-size:11px;font-weight:700;color:var(--warn);border:1px solid var(--warn);border-radius:6px;padding:2px 8px}
+.wrap{display:grid;grid-template-columns:1fr 360px;gap:16px;padding:16px}
+@media(max-width:1000px){.wrap{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.card-h{padding:14px 18px;border-bottom:1px solid var(--border);font-weight:700;font-size:15px}
+.filters{display:flex;gap:10px;flex-wrap:wrap;padding:12px 16px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin:16px 16px 0}
+.fl{display:block;font-size:10.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+select,input[type=text]{background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text);font-family:var(--font);outline:none;min-width:160px}
+select:focus,input:focus{border-color:var(--brand)}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl td{padding:8px 12px;border-bottom:1px solid var(--border)}
+.grp{background:var(--bg2);font-weight:700}
+.grp td{padding:9px 12px}
+.sub td:first-child{padding-left:26px;color:var(--text-2)}
+.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.dept{color:var(--text-3);white-space:nowrap}
+.days{display:inline-block;min-width:34px;text-align:center;border-radius:5px;padding:1px 6px;font-size:11.5px;font-weight:700}
+.days.over{background:var(--bad-l);color:var(--bad)}
+.days.ok{color:var(--text-4)}
+.sumrow{display:flex;justify-content:space-between;padding:10px 18px;font-size:14px;border-bottom:1px solid var(--border)}
+.sumrow b{font-variant-numeric:tabular-nums}
+.deptrow{padding:10px 18px;border-bottom:1px solid var(--border)}
+.deptrow .top{display:flex;justify-content:space-between;gap:8px;margin-bottom:5px}
+.bar{height:7px;border-radius:4px;background:var(--bg2);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--brand)}
+.bar i.over{background:var(--bad)}
+.hint{color:var(--text-3);font-size:12.5px;padding:14px 18px}
+.tools{padding:8px 16px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--text-3)}
+</style>
+</head>
+<body>
+<header class="header">
+  <a href="/" class="logo"><img src="/assets/logo-icon.png" alt="">ProLabSupport</a>
+  <a href="/" class="hbtn">← Все модули</a>
+  <span class="hsub">Дебет</span>
+  <div class="hr">
+    <span class="asof" id="asof"></span>
+    <span class="mockbadge" id="mockBadge" style="display:none">демо-данные</span>
+    <button class="hbtn" id="refreshBtn" onclick="refresh()">↻ Обновить</button>
+    <button class="hbtn" onclick="logout()">Выйти</button>
+  </div>
+</header>
+
+<div class="filters">
+  <div><label class="fl">Отдел</label><select id="fDept" onchange="render()"><option value="">Все</option></select></div>
+  <div><label class="fl">Контрагент</label><select id="fContractor" onchange="render()"><option value="">Все</option></select></div>
+  <div style="flex:1;min-width:200px"><label class="fl">Поиск (договор / контрагент)</label><input type="text" id="fSearch" placeholder="Поиск…" oninput="render()" style="width:100%"></div>
+</div>
+
+<div class="wrap">
+  <div class="card">
+    <div class="card-h">Дебиторская задолженность</div>
+    <div class="tools"><span>Договоров: <b id="cntRows" style="color:var(--text-2)">0</b></span><span style="margin-left:auto">Долг по фильтру: <b id="cntDebt" style="color:var(--text-2)">0</b></span></div>
+    <div style="overflow:auto;max-height:calc(100vh - 230px)"><table class="tbl"><tbody id="debtBody"></tbody></table></div>
+  </div>
+  <div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-h">Отделы</div>
+      <div id="deptBox"></div>
+    </div>
+    <div class="card">
+      <div class="card-h">Топ просрочки</div>
+      <div id="topBox"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let DATA={rows:[],depts:[],totals:{},filters:{}};
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const fmt=n=>Math.round(Number(n)||0).toLocaleString('ru-RU').replace(/,/g,' ');
+async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.href='/login.html';return{ok:false,d:{}}}let d={};try{d=await r.json()}catch(e){}return{ok:r.ok,d}}
+
+async function boot(){
+  const r=await fetch('/auth/me'); if(!r.ok){location.href='/login.html';return;}
+  await load();
+}
+async function load(){
+  const {ok,d}=await api('/api/finance/debt');
+  if(!ok){document.getElementById('debtBody').innerHTML='<tr><td class="hint">Ошибка загрузки</td></tr>';return;}
+  DATA=d;
+  document.getElementById('asof').textContent=d.asOf?('По состоянию на '+new Date(d.asOf).toLocaleString('ru-RU')):'';
+  document.getElementById('mockBadge').style.display=d.mock?'inline-block':'none';
+  const fd=document.getElementById('fDept');fd.innerHTML='<option value="">Все</option>'+(d.filters.departments||[]).map(x=>`<option>${esc(x)}</option>`).join('');
+  const fc=document.getElementById('fContractor');fc.innerHTML='<option value="">Все</option>'+(d.filters.contractors||[]).map(x=>`<option>${esc(x)}</option>`).join('');
+  render();
+}
+function filtered(){
+  const dep=document.getElementById('fDept').value;
+  const con=document.getElementById('fContractor').value;
+  const q=(document.getElementById('fSearch').value||'').toLowerCase();
+  return (DATA.rows||[]).filter(r=>(!dep||r.department===dep)&&(!con||r.contractor===con)&&(!q||((r.contractor||'')+' '+(r.contract||'')).toLowerCase().includes(q)));
+}
+function render(){
+  const rows=filtered();
+  // группировка по контрагенту
+  const groups={};for(const r of rows){(groups[r.contractor]=groups[r.contractor]||[]).push(r);}
+  const body=document.getElementById('debtBody');
+  const names=Object.keys(groups).sort((a,b)=>groups[b].reduce((s,r)=>s+r.debt,0)-groups[a].reduce((s,r)=>s+r.debt,0));
+  body.innerHTML=names.length?names.map(nm=>{
+    const g=groups[nm];const tot=g.reduce((s,r)=>s+r.debt,0);
+    const head=`<tr class="grp"><td>${esc(nm)}</td><td class="num">${fmt(tot)}</td><td></td><td class="dept">${esc(g[0].department||'')}</td></tr>`;
+    const subs=g.map(r=>{
+      const deal=r.bitrix_deal_id?` <a href="https://crm.prolabsupport.kz/crm/deal/details/${esc(r.bitrix_deal_id)}/" target="_blank" style="color:var(--brand);text-decoration:none;font-size:11.5px" title="Сделка Битрикса">🔗 #${esc(r.bitrix_deal_id)}</a>`:' <span style="color:var(--warn);font-size:11px" title="Нет ID сделки Битрикса в 1С">⚠ нет связи</span>';
+      return `<tr class="sub"><td>${esc(r.contract)}${deal}</td><td class="num">${fmt(r.debt)}</td><td class="num"><span class="days ${r.overdue_days>0?'over':'ok'}">${r.overdue_days>0?'+':''}${r.overdue_days}</span></td><td class="dept">${esc(r.department||'')}</td></tr>`;
+    }).join('');
+    return head+subs;
+  }).join(''):'<tr><td class="hint">Нет данных по фильтру.</td></tr>';
+  document.getElementById('cntRows').textContent=rows.length;
+  document.getElementById('cntDebt').textContent=fmt(rows.reduce((s,r)=>s+r.debt,0));
+  // сводка по отделам (по фильтру)
+  const byDept={};for(const r of rows){const d=r.department||'—';byDept[d]=byDept[d]||{total:0,over:0};byDept[d].total+=r.debt;if(r.overdue_days>0)byDept[d].over+=r.debt;}
+  const depts=Object.entries(byDept).map(([department,v])=>({department,...v})).sort((a,b)=>b.total-a.total);
+  const maxT=Math.max(1,...depts.map(d=>d.total));
+  document.getElementById('deptBox').innerHTML=depts.length?depts.map(d=>`<div class="deptrow"><div class="top"><span>${esc(d.department)}</span><span class="num"><b>${fmt(d.total)}</b>${d.over?` · <span style="color:var(--bad)">просроч. ${fmt(d.over)}</span>`:''}</span></div><div class="bar"><i style="width:${(d.total/maxT*100).toFixed(1)}%"></i></div>${d.over?`<div class="bar" style="margin-top:3px"><i class="over" style="width:${(d.over/maxT*100).toFixed(1)}%"></i></div>`:''}</div>`).join('')
+    +`<div class="sumrow" style="font-weight:700"><span>Итого</span><span><b>${fmt(rows.reduce((s,r)=>s+r.debt,0))}</b></span></div>`:'<div class="hint">—</div>';
+  // топ просрочки
+  const top=rows.filter(r=>r.overdue_days>0).sort((a,b)=>b.debt-a.debt).slice(0,8);
+  document.getElementById('topBox').innerHTML=top.length?top.map(r=>`<div class="deptrow"><div class="top"><span>${esc(r.contractor)}</span><span class="num" style="color:var(--bad)"><b>${fmt(r.debt)}</b></span></div><div class="hint" style="padding:0;font-size:11.5px">${esc(r.contract)} · просрочка ${r.overdue_days} дн.</div></div>`).join(''):'<div class="hint">Просроченных нет.</div>';
+}
+async function refresh(){
+  const b=document.getElementById('refreshBtn');b.disabled=true;b.textContent='Обновляю…';
+  await api('/api/finance/debt/refresh',{method:'POST'});
+  await load();b.disabled=false;b.textContent='↻ Обновить';
+}
+async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
+boot();
+</script>
+</body>
+</html>
