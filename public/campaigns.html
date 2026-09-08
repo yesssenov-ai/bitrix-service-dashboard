@@ -54,6 +54,15 @@ input[type=checkbox]{width:15px;height:15px;accent-color:var(--brand);cursor:poi
 .fl{display:block;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 5px}
 input[type=text],textarea,select{width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:var(--font);outline:none}
 textarea{min-height:180px;resize:vertical;line-height:1.5}
+.etoolbar{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px}
+.tb{border:1px solid var(--border2);background:var(--bg);color:var(--text-2);border-radius:7px;padding:5px 10px;font-size:12.5px;cursor:pointer;font-family:var(--font);line-height:1}
+.tb:hover{border-color:var(--brand);color:var(--brand)}
+.editor{min-height:210px;max-height:440px;overflow:auto;background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:12px 14px;font-size:14px;color:var(--text);line-height:1.6;outline:none}
+.editor:focus{border-color:var(--brand)}
+.editor:empty:before{content:attr(data-ph);color:var(--text-4)}
+.editor p{margin:0 0 12px}
+.editor a{color:var(--brand)}
+.emeta{font-size:10px;color:var(--text-4);border:1px solid var(--border2);border-radius:4px;padding:0 5px;margin-left:6px}
 input:focus,textarea:focus,select:focus{border-color:var(--brand)}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--text-2);font-family:var(--font)}
 .btn:hover{background:var(--bg2)}
@@ -102,7 +111,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--brand)}
     <div class="col-h"><span id="compTitle">Компании</span>
       <span><button class="btn" style="padding:5px 9px" onclick="selectAllVisible(true)">Выбрать все</button>
       <button class="btn" style="padding:5px 9px" onclick="selectAllVisible(false)">Снять</button></span></div>
-    <div class="searchbox"><input type="text" id="compSearch" placeholder="Поиск компании…" oninput="renderCompanies()"></div>
+    <div class="searchbox"><input type="text" id="compSearch" placeholder="Поиск по всем компаниям…" oninput="onCompSearch(this.value)"></div>
     <div class="col-b" id="compList"><div class="pad hint">Выбери сферу слева.</div></div>
     <div class="selbar"><span>Выбрано адресов: <b id="selCount">0</b></span></div>
   </div>
@@ -125,9 +134,17 @@ input:focus,textarea:focus,select:focus{border-color:var(--brand)}
           <button class="btn" onclick="loadTemplate('news')">📰 Новости / анонс</button>
           <button class="btn" onclick="loadTemplate('event')">🎟 Приглашение</button>
         </div>
-        <label class="fl">Текст письма (HTML, можно подстановку {{Компания}})</label>
-        <textarea id="cBody" placeholder="Здравствуйте, {{Компания}}!&#10;&#10;Рады сообщить…"></textarea>
-        <div class="hint" style="margin-top:4px">Логотип, фирменная подпись и футер с отпиской добавляются автоматически — их писать не нужно.</div>
+        <label class="fl">Текст письма</label>
+        <div class="etoolbar">
+          <button type="button" class="tb" onmousedown="event.preventDefault()" onclick="fmt('bold')" title="Жирный"><b>Ж</b></button>
+          <button type="button" class="tb" onmousedown="event.preventDefault()" onclick="fmt('italic')" title="Курсив"><i>К</i></button>
+          <button type="button" class="tb" onmousedown="event.preventDefault()" onclick="fmt('insertUnorderedList')" title="Маркированный список">• Список</button>
+          <button type="button" class="tb" onmousedown="event.preventDefault()" onclick="insLink()" title="Сделать выделенный текст ссылкой">🔗 Ссылка</button>
+          <button type="button" class="tb" onmousedown="event.preventDefault()" onclick="insButton()" title="Вставить кнопку со ссылкой">🔘 Кнопка</button>
+          <button type="button" class="tb" onmousedown="event.preventDefault()" onclick="insCompany()" title="Подставит название компании получателя">Компания</button>
+        </div>
+        <div id="cBody" class="editor" contenteditable="true" data-ph="Здравствуйте, {{Компания}}! Напишите текст письма…" oninput="preview()"></div>
+        <div class="hint" style="margin-top:4px">Пишите как обычный текст, выделяйте важное кнопкой <b>Ж</b>. Логотип, фирменный блок с партнёрами и футер с отпиской добавляются автоматически. Кнопка «<b>Компания</b>» вставит название компании получателя.</div>
 
         <!-- Вложения -->
         <label class="fl">Файлы (каталоги, прайсы, приглашения)</label>
@@ -140,10 +157,10 @@ input:focus,textarea:focus,select:focus{border-color:var(--brand)}
           <b>Вложением</b> — файл прикреплён прямо к письму (до 7 МБ, тяжелее, чуть выше риск спама).
         </div>
 
-        <div style="display:flex;gap:8px;margin-top:12px">
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
           <button class="btn" onclick="preview()">👁 Предпросмотр</button>
-          <button class="btn" onclick="saveDraft()">💾 Сохранить черновик</button>
-          <button class="btn btn-p" onclick="sendNow()">📨 Отправить выбранным (<span id="sendN">0</span>)</button>
+          <button class="btn" onclick="saveDraft()">💾 Черновик</button>
+          <button class="btn btn-p" style="white-space:nowrap" onclick="sendNow()">📨 Отправить&nbsp;·&nbsp;<span id="sendN">0</span></button>
         </div>
         <div class="msg" id="editMsg"></div>
         <div id="previewBox" style="margin-top:14px"></div>
@@ -162,6 +179,12 @@ async function boot(){
   const r=await fetch('/auth/me'); if(!r.ok){location.href='/login.html';return;}
   ME=(await r.json()).user;
   await loadIndustries(); loadHistory();
+  try{document.execCommand('styleWithCSS',false,false);}catch(e){}   // жирный как <b>, не span-стили
+  const ed=document.getElementById('cBody');
+  if(ed){
+    ed.addEventListener('paste',e=>{e.preventDefault();const t=(e.clipboardData||window.clipboardData).getData('text/plain');document.execCommand('insertText',false,t);});
+    ed.addEventListener('keyup',saveSel); ed.addEventListener('mouseup',saveSel);
+  }
 }
 async function loadIndustries(){
   const {ok,d}=await api('/api/campaigns/industries');
@@ -172,29 +195,49 @@ async function loadIndustries(){
   if(!INDUSTRIES.length){ box.innerHTML='<div class="pad hint">База пуста. Нажми «Синхронизировать базу» вверху — подтянем компании и e-mail из Битрикса.</div>'; return; }
   box.innerHTML=INDUSTRIES.map(i=>`<div class="ind ${CUR_IND===i.id?'on':''}" onclick="pickIndustry('${esc(i.id)}')"><div><div class="n">${esc(i.name)}</div><div class="c">${i.companies} компаний</div></div><div class="c">${i.emails} e-mail</div></div>`).join('');
 }
+let SEARCH_MODE=false;
 async function pickIndustry(id){
-  CUR_IND=id; loadIndustries();
+  CUR_IND=id; SEARCH_MODE=false;
+  const s=document.getElementById('compSearch'); if(s) s.value='';
+  loadIndustries();
   const {ok,d}=await api('/api/campaigns/companies?industry='+encodeURIComponent(id));
   COMPANIES=(ok&&d.companies)||[];
   document.getElementById('compTitle').textContent=(INDUSTRIES.find(x=>x.id===id)||{}).name||'Компании';
   renderCompanies();
 }
+// Сквозной поиск по ВСЕЙ базе (не только по выбранной сфере). Пусто — вернуть сферу.
+let _searchT=null;
+function onCompSearch(v){
+  clearTimeout(_searchT);
+  const q=(v||'').trim();
+  if(q.length<2){
+    SEARCH_MODE=false;
+    if(CUR_IND){ document.getElementById('compTitle').textContent=(INDUSTRIES.find(x=>x.id===CUR_IND)||{}).name||'Компании'; api('/api/campaigns/companies?industry='+encodeURIComponent(CUR_IND)).then(({ok,d})=>{COMPANIES=(ok&&d.companies)||[];renderCompanies();}); }
+    else { COMPANIES=[]; document.getElementById('compList').innerHTML='<div class="pad hint">Начни вводить название компании (от 2 букв) — искать буду по всей базе.</div>'; }
+    return;
+  }
+  _searchT=setTimeout(async()=>{
+    document.getElementById('compTitle').textContent='Поиск по всей базе';
+    const {ok,d}=await api('/api/campaigns/companies?q='+encodeURIComponent(q));
+    COMPANIES=(ok&&d.companies)||[]; SEARCH_MODE=true; renderCompanies();
+  },250);
+}
 function renderCompanies(){
-  const q=(document.getElementById('compSearch').value||'').toLowerCase();
   const box=document.getElementById('compList');
-  const list=COMPANIES.filter(c=>!q||c.name.toLowerCase().includes(q));
-  if(!list.length){box.innerHTML='<div class="pad hint">Нет компаний.</div>';return;}
+  const list=COMPANIES;
+  if(!list.length){box.innerHTML='<div class="pad hint">'+(SEARCH_MODE?'Ничего не найдено.':'Нет компаний.')+'</div>';updateSel();return;}
   box.innerHTML=list.map((c,idx)=>{
     const emails=(c.emails||[]);
+    const indTag=(SEARCH_MODE&&c.industry)?` <span class="emeta">${esc(c.industry)}</span>`:'';
     const rows=emails.map(e=>`<div class="em"><input type="checkbox" ${SELECTED.has(e.email)?'checked':''} onchange="toggleEmail('${esc(e.email)}',this.checked)"><label>${esc(e.email)}${e.name?` <span class="src">${esc(e.name)}</span>`:''} <span class="src">${e.source==='contact'?'контакт':'компания'}</span></label></div>`).join('');
-    return `<div class="comp"><div class="comp-h" onclick="toggleComp(${idx})"><input type="checkbox" onclick="event.stopPropagation()" ${emails.every(e=>SELECTED.has(e.email))&&emails.length?'checked':''} onchange="toggleCompany(${idx},this.checked)"><div class="comp-t">${esc(c.name)}</div><span class="comp-cnt">${emails.length} e-mail</span></div><div class="emails" id="em-${idx}">${rows||'<div class="hint">нет адресов</div>'}</div></div>`;
+    return `<div class="comp"><div class="comp-h" onclick="toggleComp(${idx})"><input type="checkbox" onclick="event.stopPropagation()" ${emails.every(e=>SELECTED.has(e.email))&&emails.length?'checked':''} onchange="toggleCompany(${idx},this.checked)"><div class="comp-t">${esc(c.name)}${indTag}</div><span class="comp-cnt">${emails.length} e-mail</span></div><div class="emails" id="em-${idx}">${rows||'<div class="hint">нет адресов</div>'}</div></div>`;
   }).join('');
   updateSel();
 }
 function toggleComp(idx){const el=document.getElementById('em-'+idx);if(el)el.classList.toggle('open');}
 function toggleEmail(email,on){if(on)SELECTED.add(email);else SELECTED.delete(email);updateSel();}
-function toggleCompany(idx,on){const c=COMPANIES.filter(cc=>{const q=(document.getElementById('compSearch').value||'').toLowerCase();return !q||cc.name.toLowerCase().includes(q)})[idx];if(!c)return;(c.emails||[]).forEach(e=>{if(on)SELECTED.add(e.email);else SELECTED.delete(e.email)});renderCompanies();}
-function selectAllVisible(on){const q=(document.getElementById('compSearch').value||'').toLowerCase();COMPANIES.filter(c=>!q||c.name.toLowerCase().includes(q)).forEach(c=>(c.emails||[]).forEach(e=>{if(on)SELECTED.add(e.email);else SELECTED.delete(e.email)}));renderCompanies();}
+function toggleCompany(idx,on){const c=COMPANIES[idx];if(!c)return;(c.emails||[]).forEach(e=>{if(on)SELECTED.add(e.email);else SELECTED.delete(e.email)});renderCompanies();}
+function selectAllVisible(on){COMPANIES.forEach(c=>(c.emails||[]).forEach(e=>{if(on)SELECTED.add(e.email);else SELECTED.delete(e.email)}));renderCompanies();}
 function updateSel(){document.getElementById('selCount').textContent=SELECTED.size;document.getElementById('sendN').textContent=SELECTED.size;}
 
 async function syncAudience(){
@@ -206,7 +249,8 @@ async function syncAudience(){
 const ACCENT='#C53B2F';
 const P='margin:0 0 16px;line-height:1.7';        // абзац как в примерах
 const SIGN=`<p style="${P}">С уважением,<br><b>Команда ProLabSupport</b></p>`;
-const CTA=(t,href)=>`<p style="${P}"><a href="${href||'https://prolabsupport.kz'}" style="display:inline-block;background:${ACCENT};color:#fff;text-decoration:none;padding:13px 26px;border-radius:8px;font-weight:700">${t}</a></p>`;
+// Шаблоны — уже оформленный текст (в редакторе виден как обычный текст, не код).
+// Кнопку со ссылкой добавляй через «🔘 Кнопка» — сам зададишь текст и адрес.
 const TEMPLATES={
   simple:
 `<p style="${P}">Уважаемые коллеги!</p>
@@ -217,7 +261,7 @@ ${SIGN}`,
 `<p style="${P}">Уважаемые коллеги!</p>
 <p style="${P}">Рады сообщить о <b>[новость: новое направление, партнёрство, пополнение ассортимента]</b>.</p>
 <p style="${P}">[Пара предложений о том, чем это полезно клиенту — какие задачи закрывает, что нового доступно в портфеле ProLabSupport.]</p>
-${CTA('Подробнее')}
+<p style="${P}">Подробности — на нашем сайте <a href="https://prolabsupport.kz" style="color:${ACCENT}">prolabsupport.kz</a> или ответным письмом.</p>
 ${SIGN}`,
   event:
 `<p style="${P}"><b>[00–00 месяца]</b> компания ProLabSupport примет участие в <b>[Название мероприятия]</b> — [короткое описание выставки/семинара].</p>
@@ -225,15 +269,24 @@ ${SIGN}`,
 🗓️ [Даты проведения]<br>
 📌 [Павильон / стенд №]</p>
 <p style="${P}">На нашем стенде мы представим <b>[ключевые решения и оборудование]</b> — [1–2 предложения о том, что увидят посетители].</p>
-<p style="${P}">Будем рады встрече!</p>
-${CTA('Зарегистрироваться','https://')}
+<p style="${P}">Будем рады встрече! Для участия нужна регистрация — добавь кнопку со ссылкой на форму через «🔘 Кнопка».</p>
 ${SIGN}`,
 };
+// ── Редактор письма (WYSIWYG, без HTML-кода) ────────────────────────────────
+function getBody(){return document.getElementById('cBody').innerHTML;}
+function setBody(html){document.getElementById('cBody').innerHTML=html||'';preview();}
+let _savedRange=null;
+function saveSel(){const s=window.getSelection();const ed=document.getElementById('cBody');if(s&&s.rangeCount&&ed.contains(s.anchorNode))_savedRange=s.getRangeAt(0).cloneRange();}
+function restoreSel(){const ed=document.getElementById('cBody');ed.focus();if(_savedRange){const s=window.getSelection();s.removeAllRanges();s.addRange(_savedRange);}}
+function fmt(cmd){document.execCommand(cmd,false,null);preview();}
+function insLink(){saveSel();const u=prompt('Адрес ссылки (URL):','https://');if(!u)return;restoreSel();const sel=window.getSelection();if(sel&&sel.toString())document.execCommand('createLink',false,u);else document.execCommand('insertHTML',false,'<a href="'+u.replace(/"/g,'%22')+'" style="color:'+ACCENT+'">'+esc(u)+'</a>');preview();}
+function insButton(){saveSel();const t=prompt('Текст кнопки:','Подробнее');if(t==null)return;const u=prompt('Адрес кнопки (URL):','https://');if(!u)return;restoreSel();const html='<p style="'+P+'"><a href="'+u.replace(/"/g,'%22')+'" style="display:inline-block;background:'+ACCENT+';color:#fff;text-decoration:none;padding:13px 26px;border-radius:8px;font-weight:700">'+esc(t)+'</a></p>';document.execCommand('insertHTML',false,html);preview();}
+function insCompany(){restoreSel();document.execCommand('insertText',false,'{{Компания}}');preview();}
 function loadTemplate(kind){
   const tpl=TEMPLATES[kind]||TEMPLATES.simple;
-  const cur=document.getElementById('cBody');
-  if(cur.value.trim() && !confirm('Заменить текущий текст письма шаблоном?'))return;
-  cur.value=tpl; preview();
+  const ed=document.getElementById('cBody');
+  if((ed.textContent||'').trim() && !confirm('Заменить текущий текст письма шаблоном?'))return;
+  setBody(tpl);
 }
 
 // Предпросмотр — показываем письмо ровно так, как его увидит получатель:
@@ -249,7 +302,7 @@ function previewWrap(bodyHtml){
     </div></div>`;
 }
 function preview(){
-  const html=(document.getElementById('cBody').value||'').replace(/\{\{\s*Компания\s*\}\}/gi,'<b>Название компании</b>');
+  const html=(getBody()||'').replace(/\{\{\s*Компания\s*\}\}/gi,'<b>Название компании</b>');
   document.getElementById('previewBox').innerHTML=`<div class="fl">Предпросмотр (как увидит получатель)</div>${previewWrap(html)}`;
 }
 
@@ -293,7 +346,7 @@ async function delFile(id){
   await loadFiles(); preview();
 }
 async function saveDraft(){
-  const payload={name:val('cName'),subject:val('cSubject'),fromName:val('cFrom'),bodyHtml:document.getElementById('cBody').value};
+  const payload={name:val('cName'),subject:val('cSubject'),fromName:val('cFrom'),bodyHtml:getBody()};
   if(!payload.subject||!payload.bodyHtml){msg('Заполни тему и текст письма','err');return null;}
   let id=CUR_CAMP;
   if(id){ await api('/api/campaigns/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); }
@@ -322,7 +375,7 @@ async function openCamp(id){
   const {ok,d}=await api('/api/campaigns/'+id); if(!ok)return;
   CUR_CAMP=id; showTab('edit');
   document.getElementById('cName').value=d.name||''; document.getElementById('cSubject').value=d.subject||'';
-  document.getElementById('cFrom').value=d.from_name||''; document.getElementById('cBody').value=d.body_html||'';
+  document.getElementById('cFrom').value=d.from_name||''; setBody(d.body_html||'');
   await loadFiles(); preview();
   msg('Загружена кампания #'+id+' ('+d.status+'). Отправлено '+(d.sent||0)+'/'+(d.total||0),'ok');
 }

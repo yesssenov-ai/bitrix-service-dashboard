@@ -13,7 +13,11 @@ router.get('/industries', requireAuth(VIEW), async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.get('/companies', requireAuth(VIEW), async (req, res) => {
-  try { res.json({ companies: await require('../campaigns-calc').getCompanies(req.query.industry || '') }); }
+  try {
+    const q = (req.query.q || '').trim();
+    if (q) return res.json({ companies: await require('../campaigns-calc').searchCompanies(q), search: true });
+    res.json({ companies: await require('../campaigns-calc').getCompanies(req.query.industry || '') });
+  }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.post('/sync', requireAuth(EDIT), async (req, res) => {

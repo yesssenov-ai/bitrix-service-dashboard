@@ -222,6 +222,22 @@ async function getCompanies(industryId) {
   return rows.map(r => ({ companyId: r.company_id, name: r.name || ('Компания #' + r.company_id), emails: r.emails || [] }));
 }
 
+// Сквозной поиск компаний по ВСЕЙ базе (независимо от выбранной сферы) —
+// по названию компании ИЛИ по e-mail. Возвращает и название сферы для метки.
+async function searchCompanies(q) {
+  await ensureSchema();
+  const like = '%' + String(q || '').trim().toLowerCase() + '%';
+  const { rows } = await pool.query(
+    `SELECT COALESCE(company_id::text, 'c:'||MIN(email)) AS gid,
+            MAX(company_name) AS name, MAX(industry_name) AS industry,
+            json_agg(json_build_object('email', email, 'name', contact_name, 'source', source) ORDER BY email) AS emails
+       FROM ticketsmodule_campaign_audience
+       WHERE LOWER(company_name) LIKE $1 OR LOWER(email) LIKE $1
+       GROUP BY COALESCE(company_id::text, 'c:'||email)
+       ORDER BY name NULLS LAST LIMIT 300`, [like]);
+  return rows.map(r => ({ companyId: r.gid, name: r.name || 'Без названия', industry: r.industry || '', emails: r.emails || [] }));
+}
+
 // ── Кампании ────────────────────────────────────────────────────────────────
 async function createCampaign(payload, byBid) {
   await ensureSchema();
@@ -507,7 +523,7 @@ async function sendCampaign(campaignId) {
 }
 
 module.exports = {
-  ensureSchema, syncAudience, getIndustries, getCompanies,
+  ensureSchema, syncAudience, getIndustries, getCompanies, searchCompanies,
   createCampaign, updateCampaign, listCampaigns, getCampaign, deleteCampaign,
   setRecipients, sendCampaign, suppress, unsubVerify, industryMap,
   addFile, listFiles, deleteFile, setFileKind, getFileByToken,
