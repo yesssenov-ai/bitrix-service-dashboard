@@ -344,6 +344,15 @@ async function reloadData(){
   try{ await fetchData(); renderAll(); document.getElementById('updated').textContent=fmtUpd(DATA.meta.updatedAt); }
   catch(e){ /* тихо */ }
 }
+// Тихий тик: сначала дёшево проверяем версию зеркала; полные данные тянем только при изменении.
+let _psVer='';
+async function reloadIfChanged(){
+  try{
+    const vr=await (await fetch('/api/plansales/version')).json();
+    if(vr && vr.v){ if(vr.v===_psVer) return; _psVer=vr.v; }
+    await reloadData();
+  }catch(e){ /* тихо */ }
+}
 async function load(){
   try{
     await fetchData();
@@ -362,8 +371,9 @@ async function load(){
     document.getElementById('updated').textContent=fmtUpd(DATA.meta.updatedAt);
     document.getElementById('liveDot').style.display='';
     // Онлайн: периодически подтягиваем свежие данные из зеркала (его обновляет вебхук Bitrix).
-    setInterval(()=>{ if(document.visibilityState==='visible') reloadData(); }, 60000);
-    document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') reloadData(); });
+    // Сначала дёшево проверяем версию — полный список тянем только при изменении (экономит egress).
+    setInterval(()=>{ if(document.visibilityState==='visible') reloadIfChanged(); }, 60000);
+    document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') reloadIfChanged(); });
   }catch(e){
     document.getElementById('tree').innerHTML='<div class="empty">Не удалось загрузить: '+esc(e.message)+'</div>';
   }

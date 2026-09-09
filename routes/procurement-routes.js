@@ -78,6 +78,19 @@ router.get('/bin', requireAuth(ROLES), async (req, res) => {
   }
 });
 
+// GET /api/procurement/list-version — дешёвый маркер изменений для поллинга.
+// Фронт опрашивает его каждые 20с (несколько байт) и тянет полный /list только
+// когда маркер изменился — это резко снижает egress из Supabase.
+router.get('/list-version', requireAuth(VIEW_ROLES), async (req, res) => {
+  try {
+    const { tableVersion } = require('../db-version');
+    res.json({ v: await tableVersion('ticketsmodule_procurement') });
+  } catch (e) {
+    console.error('GET /api/procurement/list-version error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // GET /api/procurement/list — наши заявки (из локальной таблицы)
 router.get('/list', requireAuth(VIEW_ROLES), async (req, res) => {
   try {

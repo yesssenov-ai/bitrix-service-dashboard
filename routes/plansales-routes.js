@@ -46,6 +46,19 @@ router.get('/', requireAuth(VIEW_ROLES), async (req, res) => {
   }
 });
 
+// GET /api/plansales/version — дешёвый маркер изменений для поллинга (фронт тянет
+// полный список только когда он изменился — экономит egress из Supabase).
+router.get('/version', requireAuth(VIEW_ROLES), async (req, res) => {
+  try {
+    const { tableVersion } = require('../db-version');
+    res.set('Cache-Control', 'no-store');
+    res.json({ v: await tableVersion('ticketsmodule_stat_deals') });
+  } catch (e) {
+    console.error('GET /api/plansales/version error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /api/plansales/refresh — быстрая инкрементальная синхронизация (как в
 // Контрактах): тянет из Bitrix только сделки, изменённые с последней синхронизации.
 let _refreshing = false;

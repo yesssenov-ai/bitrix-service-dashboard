@@ -86,6 +86,19 @@ async function fetchByIds(client, ids) {
   return rows;
 }
 
+// ── GET /api/planner/events/version — дешёвый маркер изменений для поллинга ──
+// Фронт тянет полный список событий только когда маркер изменился (экономит
+// egress из Supabase). Объявлен ПЕРЕД /events, чтобы не перехватывался.
+router.get('/events/version', requireAuth(), async (req, res) => {
+  try {
+    const { tableVersion } = require('../db-version');
+    res.json({ v: await tableVersion('ticketsmodule_planner_events') });
+  } catch (e) {
+    console.error('GET /api/planner/events/version error:', e.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // ── GET /api/planner/events — full list ────────────────────────────────────
 router.get('/events', requireAuth(), async (req, res) => {
   try {

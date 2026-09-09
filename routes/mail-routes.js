@@ -25,6 +25,15 @@ router.get('/emails', requireAuth(), async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// GET /api/mail/emails/version — дешёвый маркер изменений для поллинга (фронт
+// тянет полный список только когда он изменился — экономит egress из Supabase).
+router.get('/emails/version', requireAuth(), async (req, res) => {
+  try {
+    const { tableVersion } = require('../db-version');
+    res.json({ v: await tableVersion('ticketsmodule_mail_emails') });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 router.get('/stats', requireAuth(), async (req, res) => {
   try {
     const mailbox = mailboxFilterFor(req.user);

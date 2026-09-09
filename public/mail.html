@@ -744,7 +744,17 @@ async function triggerPoll(){
 
 async function refresh(){await loadEmails();}
 loadUserInfo();refresh();
-setInterval(refresh,2*60*1000);
+// Тихий тик: сначала дёшево проверяем версию (несколько байт), полный список писем
+// тянем только когда что-то изменилось, и не опрашиваем скрытую вкладку — экономит egress.
+let _mailVer='';
+setInterval(async ()=>{
+  if(document.visibilityState==='hidden') return;
+  try{
+    const vr=await (await fetch('/api/mail/emails/version')).json();
+    if(vr && vr.v){ if(vr.v===_mailVer) return; _mailVer=vr.v; }
+    await refresh();
+  }catch(e){/* тихо */}
+},2*60*1000);
 </script>
 </body>
 </html>

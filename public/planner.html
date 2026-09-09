@@ -812,9 +812,14 @@ async function init() {
 // it asks — this quietly re-fetches events every couple of minutes so people
 // don't have to manually reload to see a new/changed assignment appear.
 function startSilentRefresh(){
+  let _plnVer='';
   setInterval(async () => {
     if (dragging || resizing || drawing) return; // don't disrupt an in-progress interaction
+    if (document.visibilityState === 'hidden') return; // не опрашиваем скрытую вкладку
     try {
+      // Сначала дёшево проверяем версию; полный список событий тянем только при изменении (экономит egress).
+      const vr = await (await fetch('/api/planner/events/version')).json();
+      if (vr && vr.v) { if (vr.v === _plnVer) return; _plnVer = vr.v; }
       events = await apiLoadEvents();
       buildStickyRows();
       renderEvents();

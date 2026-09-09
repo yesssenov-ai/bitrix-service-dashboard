@@ -715,10 +715,15 @@ function refreshBodyInPlace(){
   box.innerHTML=rightBodyHtml();   // перерисовываем ТОЛЬКО список (карточку слева не трогаем)
   box.scrollTop=scroll;            // возвращаем прокрутку на место
 }
+let _listVer='';
 async function pollRefresh(){
   if(document.visibilityState!=='visible') return;
   if(MODE==='create') return;
   try{
+    // Сначала дёшево спрашиваем «изменилось ли что-нибудь?» (несколько байт).
+    // Полный список тянем только когда версия изменилась — экономит egress.
+    const vr=await (await fetch('/api/procurement/list-version')).json();
+    if(vr && vr.v){ if(vr.v===_listVer) return; _listVer=vr.v; }
     const j=await (await fetch('/api/procurement/list')).json();
     const items=j.items||[]; const sig=listSig(items);
     if(sig!==_pollSig){ _pollSig=sig; LIST=items; refreshBodyInPlace(); }
