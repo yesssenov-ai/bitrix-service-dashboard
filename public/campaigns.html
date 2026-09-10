@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ProLabSupport - Рассылки</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -23,6 +23,8 @@ html[data-theme="light"]{
   --signal:#0f766e;--shadow:0 4px 16px rgba(0,0,0,.08);
 }
 body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased}
+#cBody{font-family:'Montserrat',Arial,sans-serif}
+.etoolbar select{background:var(--bg);border:1px solid var(--border2);border-radius:7px;padding:4px 6px;font-size:12.5px;color:var(--text);font-family:var(--font);cursor:pointer;width:auto}
 .header{background:var(--card);border-bottom:1px solid var(--border);height:56px;display:flex;align-items:center;padding:0 20px;position:sticky;top:0;z-index:100;gap:12px}
 .logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14px}
 .logo img{height:24px}
@@ -115,12 +117,16 @@ input:focus,textarea:focus,select:focus{border-color:var(--brand)}
       <button class="btn" style="padding:5px 9px" onclick="selectAllVisible(false)">Снять</button></span></div>
     <div class="searchbox"><input type="text" id="compSearch" placeholder="Поиск по всем компаниям…" oninput="onCompSearch(this.value)"></div>
     <div class="col-b" id="compList"><div class="pad hint">Выбери сферу слева.</div></div>
-    <div class="selbar"><span>Выбрано адресов: <b id="selCount">0</b></span><button class="btn" style="padding:5px 9px" onclick="showSelected()">📋 Показать список</button></div>
+    <div class="selbar" style="flex-wrap:wrap;gap:6px"><span>Выбрано адресов: <b id="selCount">0</b></span><button class="btn" style="padding:5px 9px" onclick="showSelected()">📋 Показать список</button>
+      <span style="display:inline-flex;gap:5px;flex:1;min-width:200px">
+        <input type="text" id="manualEmail" placeholder="Добавить адрес вручную…" style="flex:1;padding:5px 9px;font-size:12.5px" onkeydown="if(event.key==='Enter'){event.preventDefault();addManual()}">
+        <button class="btn" style="padding:5px 9px;white-space:nowrap" onclick="addManual()">+ Добавить</button>
+      </span></div>
   </div>
 
   <!-- Editor + history -->
   <div class="col">
-    <div class="tabbar"><button class="tab on" id="tabEdit" onclick="showTab('edit')">✍ Письмо</button><button class="tab" id="tabHist" onclick="showTab('hist')">📜 История</button></div>
+    <div class="tabbar"><button class="tab on" id="tabEdit" onclick="showTab('edit')">✍ Письмо</button><button class="tab" id="tabDraft" onclick="showTab('draft')">📝 Черновики</button><button class="tab" id="tabHist" onclick="showTab('hist')">📜 История</button></div>
     <div class="col-b">
       <div id="paneEdit" class="pad">
         <div class="warnbar" id="domWarn" style="display:none"></div>
@@ -144,6 +150,25 @@ input:focus,textarea:focus,select:focus{border-color:var(--brand)}
           <button type="button" class="tb" onmousedown="event.preventDefault()" onclick="insLink()" title="Сделать выделенный текст ссылкой">🔗 Ссылка</button>
           <button type="button" class="tb" onmousedown="event.preventDefault()" onclick="insButton()" title="Вставить кнопку со ссылкой">🔘 Кнопка</button>
           <button type="button" class="tb" onmousedown="event.preventDefault()" onclick="insCompany()" title="Подставит название компании получателя">Компания</button>
+          <select onmousedown="saveSel()" onchange="setFont(this.value)" title="Шрифт">
+            <option value="Montserrat">Montserrat</option>
+            <option value="Arial">Arial</option>
+            <option value="Georgia">Georgia</option>
+            <option value="Times New Roman">Times New Roman</option>
+            <option value="Tahoma">Tahoma</option>
+            <option value="Verdana">Verdana</option>
+            <option value="Courier New">Courier New</option>
+          </select>
+          <select onmousedown="saveSel()" onchange="setFontSize(this.value)" title="Размер шрифта">
+            <option value="">Размер</option>
+            <option value="12px">12</option>
+            <option value="14px">14</option>
+            <option value="15px">15 (обычный)</option>
+            <option value="17px">17</option>
+            <option value="20px">20</option>
+            <option value="24px">24</option>
+            <option value="28px">28</option>
+          </select>
         </div>
         <div id="cBody" class="editor" contenteditable="true" data-ph="Здравствуйте, {{Компания}}! Напишите текст письма…" oninput="preview()"></div>
         <div class="hint" style="margin-top:4px;line-height:1.5">Пишите как обычный текст, выделяйте важное кнопкой <b>Ж</b>. Логотип, фирменный блок с партнёрами и футер с отпиской добавляются автоматически.<br>
@@ -162,12 +187,13 @@ input:focus,textarea:focus,select:focus{border-color:var(--brand)}
 
         <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
           <button class="btn" onclick="preview()">👁 Предпросмотр</button>
-          <button class="btn" onclick="saveDraft()">💾 Черновик</button>
+          <button class="btn" onclick="saveDraftBtn()">💾 Черновик</button>
           <button class="btn btn-p" style="white-space:nowrap" onclick="sendNow()">📨 Отправить&nbsp;·&nbsp;<span id="sendN">0</span></button>
         </div>
         <div class="msg" id="editMsg"></div>
         <div id="previewBox" style="margin-top:14px"></div>
       </div>
+      <div id="paneDraft" style="display:none"></div>
       <div id="paneHist" style="display:none"></div>
     </div>
   </div>
@@ -263,6 +289,21 @@ function renderSelectedList(){
   body.innerHTML=arr.map(em=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)"><span style="flex:1;word-break:break-all">${esc(em)}</span><button class="btn" style="padding:3px 8px" onclick="removeSelected('${esc(em)}')" title="Убрать из рассылки">✕</button></div>`).join('');
 }
 function removeSelected(em){SELECTED.delete(em);renderCompanies();renderSelectedList();}
+// Ручной ввод адреса — можно добавлять адреса, которых нет в базе сфер.
+function addManual(){
+  const inp=document.getElementById('manualEmail'); if(!inp)return;
+  const raw=(inp.value||'').trim().toLowerCase();
+  if(!raw){return;}
+  // поддержка нескольких адресов через запятую/пробел/точку с запятой
+  const parts=raw.split(/[\s,;]+/).filter(Boolean);
+  const re=/^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+  let added=0,bad=[];
+  parts.forEach(e=>{ if(re.test(e)){ if(!SELECTED.has(e)){SELECTED.add(e);added++;} } else bad.push(e); });
+  inp.value='';
+  renderCompanies(); renderSelectedList(); updateSel();
+  if(bad.length) msg('Не похоже на адрес: '+bad.join(', '), 'err');
+  else if(added) msg('Добавлено адресов: '+added, 'ok');
+}
 function clearSelected(){if(!SELECTED.size)return;if(!confirm('Убрать всех выбранных адресатов?'))return;SELECTED.clear();renderCompanies();renderSelectedList();}
 
 async function syncAudience(){
@@ -314,6 +355,26 @@ let _savedRange=null;
 function saveSel(){const s=window.getSelection();const ed=document.getElementById('cBody');if(s&&s.rangeCount&&ed.contains(s.anchorNode))_savedRange=s.getRangeAt(0).cloneRange();}
 function restoreSel(){const ed=document.getElementById('cBody');ed.focus();if(_savedRange){const s=window.getSelection();s.removeAllRanges();s.addRange(_savedRange);}}
 function fmt(cmd){document.execCommand(cmd,false,null);preview();}
+// Шрифт и размер применяем к выделению как inline-стиль (styleWithCSS включаем
+// только на время операции, потом возвращаем false — чтобы «Ж» оставался <b>).
+function setFont(family){
+  if(!family)return; restoreSel();
+  try{document.execCommand('styleWithCSS',true,true);document.execCommand('fontName',false,family);}catch(e){}
+  try{document.execCommand('styleWithCSS',false,false);}catch(e){}
+  preview();
+}
+function setFontSize(px){
+  if(!px)return; restoreSel();
+  try{
+    document.execCommand('styleWithCSS',true,true);
+    document.execCommand('fontSize',false,'7');                 // маркер, заменим на px
+    document.getElementById('cBody').querySelectorAll('font[size="7"],span[style*="xxx-large"]').forEach(f=>{
+      const s=document.createElement('span'); s.style.fontSize=px; s.innerHTML=f.innerHTML; f.replaceWith(s);
+    });
+    document.execCommand('styleWithCSS',false,false);
+  }catch(e){}
+  preview();
+}
 function insLink(){saveSel();const u=prompt('Адрес ссылки (URL):','https://');if(!u)return;restoreSel();const sel=window.getSelection();if(sel&&sel.toString())document.execCommand('createLink',false,u);else document.execCommand('insertHTML',false,'<a href="'+u.replace(/"/g,'%22')+'" style="color:'+ACCENT+'">'+esc(u)+'</a>');preview();}
 // Кнопку добавляем ОТДЕЛЬНЫМ блоком в конец письма (чтобы не втыкалась посреди слова).
 function insButton(){
@@ -338,7 +399,7 @@ function previewWrap(bodyHtml){
   const linkBlock=links.length?`<div style="margin-top:20px"><div style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:4px">Материалы для скачивания</div>${links.map(f=>`<div style="margin:5px 0"><span style="display:inline-block;background:#f5f6fa;border:1px solid #e3e6ef;border-radius:8px;padding:10px 16px;color:#1a1e27;font-size:14px;font-weight:600">📎 ${esc(f.filename)} <span style="color:#9ca3af;font-weight:400">· ${fmtSize(f.size_bytes)}</span></span></div>`).join('')}</div>`:'';
   return `<div style="background:#eef0f5;padding:20px;border-radius:12px">
     <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(20,25,40,.08)">
-      <div style="padding:30px 32px 8px;font-family:Arial,sans-serif;color:#2a2f3a;font-size:15px;line-height:1.7">${bodyHtml}${linkBlock}</div>
+      <div style="padding:30px 32px 8px;font-family:'Montserrat',Arial,sans-serif;color:#2a2f3a;font-size:15px;line-height:1.7">${bodyHtml}${linkBlock}</div>
       <div style="padding:22px 32px 6px;text-align:center"><img src="/assets/company-full-logo.png" alt="ProLabSupport" style="width:100%;max-width:480px;height:auto;display:block;margin:0 auto"></div>
       <div style="padding:14px 32px 22px;font-family:Arial,sans-serif"><div style="border-top:1px solid #eef0f5;padding-top:14px;font-size:12px;color:#9ca3af;line-height:1.6">ProLabSupport · Казахстан · prolabsupport.kz<br>Вы получили это письмо как клиент ProLabSupport. <span style="text-decoration:underline">Отписаться</span></div></div>
     </div></div>`;
@@ -395,6 +456,8 @@ async function saveDraft(){
   else { const {ok,d}=await api('/api/campaigns',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); if(!ok){msg(d.error||'Ошибка','err');return null;} id=d.id; CUR_CAMP=id; }
   msg('Черновик сохранён','ok'); loadHistory(); return id;
 }
+// Кнопка «Черновик»: сохранить и показать вкладку Черновики.
+async function saveDraftBtn(){ const id=await saveDraft(); if(id) showTab('draft'); }
 async function sendNow(){
   if(!SELECTED.size){msg('Не выбраны получатели','err');return;}
   if(!confirm('Отправить рассылку на '+SELECTED.size+' адресов?\nПеред массовой отправкой убедись, что поддомен для рассылок настроен (SPF/DKIM/DMARC).'))return;
@@ -406,12 +469,24 @@ async function sendNow(){
   msg('Рассылка запущена — статус в «Истории».','ok'); showTab('hist'); loadHistory();
 }
 
+const fmtDT=v=>{ if(!v)return''; const d=new Date(v); return isNaN(d)?'':d.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); };
+function campCard(c){
+  const when = c.status==='draft'
+    ? (c.created_at?('создан '+fmtDT(c.created_at)):'')
+    : (c.sent_at?('отправлено '+fmtDT(c.sent_at)):(c.created_at?('создан '+fmtDT(c.created_at)):''));
+  const stat = c.status==='draft' ? '' : `<div class="hint">${c.sent||0}/${c.total||0} отправлено${c.failed?(' · ошибок '+c.failed):''}</div>`;
+  return `<div class="camp" onclick="openCamp(${c.id})"><div><div style="font-weight:600;font-size:13px">${esc(c.name||('#'+c.id))}</div><div class="hint">${esc(c.subject||'')}</div>${stat}${when?`<div class="hint">🕒 ${when}</div>`:''}</div><span class="pill ${c.status}">${c.status}</span></div>`;
+}
 async function loadHistory(){
   const {ok,d}=await api('/api/campaigns');
-  const box=document.getElementById('paneHist');
-  if(!ok){box.innerHTML='<div class="pad hint">Ошибка</div>';return;}
+  const hbox=document.getElementById('paneHist'), dbox=document.getElementById('paneDraft');
+  if(!ok){ if(hbox)hbox.innerHTML='<div class="pad hint">Ошибка</div>'; return; }
   const cs=d.campaigns||[];
-  box.innerHTML=cs.length?cs.map(c=>`<div class="camp" onclick="openCamp(${c.id})"><div><div style="font-weight:600;font-size:13px">${esc(c.name||('#'+c.id))}</div><div class="hint">${esc(c.subject||'')}</div><div class="hint">${c.sent||0}/${c.total||0} отправлено${c.failed?(' · ошибок '+c.failed):''}</div></div><span class="pill ${c.status}">${c.status}</span></div>`).join(''):'<div class="pad hint">Кампаний пока нет.</div>';
+  const drafts=cs.filter(c=>c.status==='draft');
+  const sent=cs.filter(c=>c.status!=='draft');
+  if(dbox) dbox.innerHTML=drafts.length?drafts.map(campCard).join(''):'<div class="pad hint">Черновиков пока нет. Нажми «💾 Черновик» в письме — сохранённое письмо появится здесь.</div>';
+  if(hbox) hbox.innerHTML=sent.length?sent.map(campCard).join(''):'<div class="pad hint">Отправленных кампаний пока нет.</div>';
+  const td=document.getElementById('tabDraft'); if(td) td.textContent='📝 Черновики'+(drafts.length?' ('+drafts.length+')':'');
 }
 async function openCamp(id){
   const {ok,d}=await api('/api/campaigns/'+id); if(!ok)return;
@@ -421,7 +496,15 @@ async function openCamp(id){
   await loadFiles(); preview();
   msg('Загружена кампания #'+id+' ('+d.status+'). Отправлено '+(d.sent||0)+'/'+(d.total||0),'ok');
 }
-function showTab(t){document.getElementById('tabEdit').classList.toggle('on',t==='edit');document.getElementById('tabHist').classList.toggle('on',t==='hist');document.getElementById('paneEdit').style.display=t==='edit'?'block':'none';document.getElementById('paneHist').style.display=t==='hist'?'block':'none';if(t==='hist')loadHistory();}
+function showTab(t){
+  document.getElementById('tabEdit').classList.toggle('on',t==='edit');
+  document.getElementById('tabDraft').classList.toggle('on',t==='draft');
+  document.getElementById('tabHist').classList.toggle('on',t==='hist');
+  document.getElementById('paneEdit').style.display=t==='edit'?'block':'none';
+  document.getElementById('paneDraft').style.display=t==='draft'?'block':'none';
+  document.getElementById('paneHist').style.display=t==='hist'?'block':'none';
+  if(t==='hist'||t==='draft')loadHistory();
+}
 function val(id){const e=document.getElementById(id);return e?e.value.trim():'';}
 function msg(t,c){const e=document.getElementById('editMsg');e.className='msg '+(c||'');e.textContent=t;}
 async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
