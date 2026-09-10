@@ -479,6 +479,8 @@ function createCardHtml(){
       <label class="fl" style="margin-top:12px">Файл закупки</label>
       <input type="file" id="createFiles" multiple>
       <div class="hint" style="margin-top:4px">Можно приложить один или несколько файлов — их увидит ответственный на этапе «Запрос счёта на оплату», чтобы запросить счёт.</div>
+      <label class="fl" style="margin-top:12px">Комментарий <span style="color:var(--text-4);font-weight:400">(необязательно)</span></label>
+      <textarea id="createComment" rows="3" placeholder="Дополнительная информация по закупке — попадёт в комментарий заявки"></textarea>
       <div class="msg" id="msg"></div>
       <button class="btn btn-p" id="createBtn" style="margin-top:14px;width:100%;justify-content:center" onclick="submitReq()">Создать заявку</button>
     </div>`;
@@ -512,6 +514,7 @@ function editCardHtml(){
       </div>
       <div class="rtitle">${esc(r.title||('Заявка #'+r.bitrixItemId))}</div>
       <div class="hint">#${r.bitrixItemId||'—'}${r.dealId?` · сделка <a class="lnk" href="${esc(r.dealUrl)}" target="_blank">#${r.dealId}</a>`:''}${r.itemUrl?` · <a class="lnk" href="${esc(r.itemUrl)}" target="_blank">в Битриксе ↗</a>`:''}</div>
+      <div class="hint">👤 Кем создано: <b style="color:var(--text-2)">${esc(pl._createdByName||'—')}</b>${r.createdAt?` · ${fmtDateTime(r.createdAt)}`:''}</div>
       ${r.sourceItemId?`<div class="deth" style="margin-top:14px">Файлы допов (из подбора)</div><div id="dopyBox"><div class="hint">загрузка…</div></div>`:''}
 
       <div id="editFields-${r.id}" style="display:none;margin-top:12px;padding:14px;border:1px solid var(--border2);border-radius:12px;background:var(--bg)">
@@ -683,7 +686,7 @@ function rowHtml(r){
   const cmtFull=pl.payComment||'';
   const cmt=cmtFull?`<span title="${esc(cmtFull)}">${esc(cmtFull.length>70?cmtFull.slice(0,70)+'…':cmtFull)}</span>`:'<span class="hint">—</span>';
   return `<tr class="${EDIT===r.id?'selrow':''}" style="cursor:pointer" onclick="selectReq(${r.id})">
-    <td><b>${esc(r.title||'—')}</b><div class="hint">#${r.bitrixItemId||'—'}</div></td>
+    <td><b>${esc(r.title||'—')}</b><div class="hint">#${r.bitrixItemId||'—'}${pl._createdByName?(' · 👤 '+esc(pl._createdByName)):''}</div></td>
     <td>${r.dealId?`<a class="lnk" href="${esc(r.dealUrl)}" target="_blank" onclick="event.stopPropagation()">#${r.dealId}</a>`:'—'}</td>
     <td>${badge}</td>
     <td style="white-space:nowrap">${sum}</td>
@@ -1312,7 +1315,7 @@ async function submitReq(){
     dealId:DEAL?DEAL.id:null,
     companyId:(COMPANY&&COMPANY.id)||null, companyName:(COMPANY&&COMPANY.title)||'', bin:(val('bin').replace(/\D/g,''))||'',
     title:val('title'), source:val('source'), assigned:val('assigned'),
-    vidZakupki:vid,
+    vidZakupki:vid, comment:val('createComment'),
   };
   const btn=document.getElementById('createBtn'); btn.disabled=true; btn.textContent='Создаю…';
   try{
