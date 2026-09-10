@@ -600,8 +600,9 @@ function statOf(r){
   return {k:'sent',t:'Ожидает'};
 }
 function funnelRow(label,val,base,color){
-  const w=base? Math.max(2,Math.round(val/base*100)):0;
-  return `<div class="fun-row"><div>${label}</div><div class="fun-bar"><i style="width:${w}%;background:${color}"></i></div><div class="fun-val">${val} · ${w}%</div></div>`;
+  const p=base? Math.round(val/base*100):0;      // настоящий процент
+  const w=val>0? Math.max(2,p):0;                // минимальная ширина полоски — только для ненулевых
+  return `<div class="fun-row"><div>${label}</div><div class="fun-bar"><i style="width:${w}%;background:${color}"></i></div><div class="fun-val">${val} · ${p}%</div></div>`;
 }
 function tilesHTML(a){
   const sent=a.sent||0;
