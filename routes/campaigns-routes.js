@@ -110,6 +110,23 @@ router.get('/unsub', async (req, res) => {
     </div>`);
 });
 
+// ── Аналитика рассылок ──────────────────────────────────────────────────────
+// Сводная по всем отправленным кампаниям.
+router.get('/analytics/overall', requireAuth(VIEW), async (req, res) => {
+  try { res.json(await require('../campaigns-stats').getOverall()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Аналитика по одной кампании (воронка + детализация по адресатам).
+router.get('/:id(\\d+)/analytics', requireAuth(VIEW), async (req, res) => {
+  try { res.json(await require('../campaigns-stats').getCampaignAnalytics(parseInt(req.params.id, 10))); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Подтянуть свежие статусы из Selzy по кампании и вернуть обновлённую аналитику.
+router.post('/:id(\\d+)/analytics/refresh', requireAuth(VIEW), async (req, res) => {
+  try { res.json(await require('../campaigns-stats').refreshCampaign(parseInt(req.params.id, 10))); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Логотип письма (заменяемый) ─────────────────────────────────────────────
 const LOGO_EDIT = ['admin', 'marketolog'];   // менять логотип могут админ и маркетолог
 

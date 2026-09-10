@@ -465,8 +465,10 @@ async function sendOneSelzy(rec, campaign, html, attachFiles) {
   params.set('subject', campaign.subject || '');
   params.set('body', html);
   params.set('list_id', String(SELZY_LIST_ID));
-  params.set('track_read', '0');
-  params.set('track_links', '0');
+  // Трекинг включён — нужен для аналитики (открытия/клики). Статусы по каждому
+  // письму потом тянем методом checkEmail по сохранённому email_id (message_id).
+  params.set('track_read', '1');
+  params.set('track_links', '1');
   // Вложения: Selzy sendEmail принимает attachments[имя_файла]=содержимое (base64).
   if (attachFiles && attachFiles.length) {
     for (const f of attachFiles) params.set(`attachments[${f.filename}]`, f.base64 || '');

@@ -25,6 +25,32 @@ html[data-theme="light"]{
 body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased}
 #cBody{font-family:'Montserrat',Arial,sans-serif}
 .etoolbar select{background:var(--bg);border:1px solid var(--border2);border-radius:7px;padding:4px 6px;font-size:12.5px;color:var(--text);font-family:var(--font);cursor:pointer;width:auto}
+/* Аналитика */
+.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:6px 0 14px}
+.stat{background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:12px 14px}
+.stat .v{font-size:24px;font-weight:800;line-height:1.1;letter-spacing:-.5px}
+.stat .l{font-size:11.5px;color:var(--text-3);margin-top:3px;text-transform:uppercase;letter-spacing:.4px}
+.stat .p{font-size:12px;color:var(--text-3);margin-top:2px}
+.stat.good .v{color:var(--good)} .stat.brand .v{color:var(--brand)} .stat.warn .v{color:var(--warn)} .stat.bad .v{color:var(--bad)}
+.fun{display:flex;flex-direction:column;gap:7px;margin:4px 0 14px}
+.fun-row{display:grid;grid-template-columns:120px 1fr 96px;align-items:center;gap:10px;font-size:12.5px}
+.fun-bar{height:22px;border-radius:6px;background:var(--bg2);overflow:hidden}
+.fun-bar>i{display:block;height:100%;border-radius:6px}
+.fun-val{text-align:right;font-variant-numeric:tabular-nums;color:var(--text-2)}
+.atable{width:100%;border-collapse:collapse;font-size:12.5px}
+.atable th{position:sticky;top:0;background:var(--card);text-align:left;color:var(--text-3);font-weight:600;padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+.atable td{padding:6px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+.atable tr:hover td{background:var(--bg2)}
+.stbadge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.st-clicked{background:var(--brand-l);color:var(--brand)} .st-opened{background:var(--good-l);color:var(--good)}
+.st-delivered{background:rgba(120,130,150,.15);color:var(--text-2)} .st-sent{background:rgba(120,130,150,.1);color:var(--text-3)}
+.st-unsub{background:var(--warn);color:#3a2a00} .st-bounced{background:var(--bad-l);color:var(--bad)} .st-failed{background:var(--bad-l);color:var(--bad)}
+.chip-f{cursor:pointer;border:1px solid var(--border2);background:var(--bg);border-radius:20px;padding:4px 11px;font-size:12px;color:var(--text-2)}
+.chip-f.on{background:var(--brand-l);border-color:var(--brand);color:var(--brand)}
+.acard{background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:14px 16px;cursor:pointer;margin-bottom:8px}
+.acard:hover{border-color:var(--brand)}
+.mini{display:inline-flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--text-3);margin-top:5px}
+.mini b{color:var(--text-2);font-variant-numeric:tabular-nums}
 .header{background:var(--card);border-bottom:1px solid var(--border);height:56px;display:flex;align-items:center;padding:0 20px;position:sticky;top:0;z-index:100;gap:12px}
 .logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14px}
 .logo img{height:24px}
@@ -126,7 +152,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--brand)}
 
   <!-- Editor + history -->
   <div class="col">
-    <div class="tabbar"><button class="tab on" id="tabEdit" onclick="showTab('edit')">✍ Письмо</button><button class="tab" id="tabDraft" onclick="showTab('draft')">📝 Черновики</button><button class="tab" id="tabHist" onclick="showTab('hist')">📜 История</button></div>
+    <div class="tabbar"><button class="tab on" id="tabEdit" onclick="showTab('edit')">✍ Письмо</button><button class="tab" id="tabDraft" onclick="showTab('draft')">📝 Черновики</button><button class="tab" id="tabStats" onclick="showTab('stats')">📊 Аналитика</button><button class="tab" id="tabHist" onclick="showTab('hist')">📜 История</button></div>
     <div class="col-b">
       <div id="paneEdit" class="pad">
         <div class="warnbar" id="domWarn" style="display:none"></div>
@@ -208,6 +234,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--brand)}
         <div id="previewBox" style="margin-top:14px"></div>
       </div>
       <div id="paneDraft" style="display:none"></div>
+      <div id="paneStats" class="pad" style="display:none"></div>
       <div id="paneHist" style="display:none"></div>
     </div>
   </div>
@@ -538,14 +565,144 @@ async function openCamp(id){
 function showTab(t){
   document.getElementById('tabEdit').classList.toggle('on',t==='edit');
   document.getElementById('tabDraft').classList.toggle('on',t==='draft');
+  document.getElementById('tabStats').classList.toggle('on',t==='stats');
   document.getElementById('tabHist').classList.toggle('on',t==='hist');
   document.getElementById('paneEdit').style.display=t==='edit'?'block':'none';
   document.getElementById('paneDraft').style.display=t==='draft'?'block':'none';
+  document.getElementById('paneStats').style.display=t==='stats'?'block':'none';
   document.getElementById('paneHist').style.display=t==='hist'?'block':'none';
   if(t==='hist'||t==='draft')loadHistory();
+  if(t==='stats')loadOverall();
 }
 function val(id){const e=document.getElementById(id);return e?e.value.trim():'';}
 function msg(t,c){const e=document.getElementById('editMsg');e.className='msg '+(c||'');e.textContent=t;}
+// ── Аналитика рассылок ──────────────────────────────────────────────────────
+let STATS_CAMP=null, STATS_FILTER='';
+function pct(n,d){ n=Number(n)||0; d=Number(d)||0; return d? Math.round(n/d*100) : 0; }
+function statOf(r){
+  if(r.bounced_at) return {k:'bounced',t:'Отказ'};
+  if(r.unsub_at)   return {k:'unsub',t:'Отписался'};
+  if(r.clicked_at) return {k:'clicked',t:'Кликнул'};
+  if(r.opened_at)  return {k:'opened',t:'Открыл'};
+  if(r.delivered_at) return {k:'delivered',t:'Доставлено'};
+  if(r.status==='failed') return {k:'failed',t:'Ошибка отправки'};
+  if(r.status==='sent') return {k:'sent',t:'Отправлено'};
+  return {k:'sent',t:'Ожидает'};
+}
+function funnelRow(label,val,base,color){
+  const w=base? Math.max(2,Math.round(val/base*100)):0;
+  return `<div class="fun-row"><div>${label}</div><div class="fun-bar"><i style="width:${w}%;background:${color}"></i></div><div class="fun-val">${val} · ${w}%</div></div>`;
+}
+function tilesHTML(a){
+  const sent=a.sent||0;
+  return `<div class="stat-row">
+    <div class="stat"><div class="v">${sent}</div><div class="l">Отправлено</div></div>
+    <div class="stat brand"><div class="v">${a.delivered||0}</div><div class="l">Доставлено</div><div class="p">${pct(a.delivered,sent)}% от отправленных</div></div>
+    <div class="stat good"><div class="v">${a.opened||0}</div><div class="l">Открыто</div><div class="p">${pct(a.opened,a.delivered)}% от доставленных</div></div>
+    <div class="stat good"><div class="v">${a.clicked||0}</div><div class="l">Клики</div><div class="p">${pct(a.clicked,a.delivered)}% от доставленных</div></div>
+    <div class="stat warn"><div class="v">${a.unsub||0}</div><div class="l">Отписки</div><div class="p">${pct(a.unsub,a.delivered)}% от доставленных</div></div>
+    <div class="stat bad"><div class="v">${a.bounced||0}</div><div class="l">Отказы</div><div class="p">${pct(a.bounced,sent)}% от отправленных</div></div>
+  </div>`;
+}
+function funnelHTML(a){
+  const base=a.sent||a.total||1;
+  return `<div class="fun">
+    ${funnelRow('Отправлено',a.sent||0,base,'var(--text-4)')}
+    ${funnelRow('Доставлено',a.delivered||0,base,'var(--brand)')}
+    ${funnelRow('Открыто',a.opened||0,base,'var(--good)')}
+    ${funnelRow('Кликнули',a.clicked||0,base,'#8b5cf6')}
+  </div>`;
+}
+async function loadOverall(){
+  const box=document.getElementById('paneStats');
+  box.innerHTML='<div class="hint">Загрузка аналитики…</div>';
+  const {ok,d}=await api('/api/campaigns/analytics/overall');
+  if(!ok){box.innerHTML='<div class="hint">Ошибка загрузки аналитики</div>';return;}
+  const t=d.totals||{}; const cs=d.campaigns||[];
+  STATS_CAMP=null;
+  let html=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+      <b style="font-size:15px">Сводная аналитика · ${t.campaigns||0} рассылок</b>
+      <span class="hint">Статусы подтягиваются из Selzy. Открой рассылку и нажми «Обновить», чтобы подтянуть свежие.</span>
+    </div>`;
+  html+=tilesHTML(t);
+  html+=`<div class="fl" style="margin-top:4px">Воронка по всем рассылкам</div>`+funnelHTML(t);
+  html+=`<div class="fl" style="margin-top:10px">Рассылки (нажми, чтобы открыть детально)</div>`;
+  if(!cs.length){ html+='<div class="hint">Отправленных рассылок пока нет.</div>'; }
+  else html+=cs.map(c=>`<div class="acard" onclick="openCampStats(${c.id})">
+      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <div style="font-weight:600;font-size:13px">${esc(c.name||('#'+c.id))}</div>
+        <div class="hint">${c.sent_at?('🕒 '+fmtDT(c.sent_at)):''}</div>
+      </div>
+      <div class="hint">${esc(c.subject||'')}</div>
+      <div class="mini">
+        <span>Отпр.: <b>${c.sent}</b></span>
+        <span>Дост.: <b>${c.delivered}</b> (${pct(c.delivered,c.sent)}%)</span>
+        <span>Откр.: <b>${c.opened}</b> (${pct(c.opened,c.delivered)}%)</span>
+        <span>Клики: <b>${c.clicked}</b></span>
+        <span>Отписки: <b>${c.unsub}</b></span>
+        <span>Отказы: <b>${c.bounced}</b></span>
+      </div>
+    </div>`).join('');
+  box.innerHTML=html;
+}
+async function openCampStats(id){
+  const box=document.getElementById('paneStats');
+  box.innerHTML='<div class="hint">Загрузка…</div>';
+  const {ok,d}=await api('/api/campaigns/'+id+'/analytics');
+  if(!ok||!d.ok){box.innerHTML='<div class="hint">Ошибка</div>';return;}
+  STATS_CAMP=d; STATS_FILTER=''; renderCampStats();
+}
+async function refreshCampStats(){
+  if(!STATS_CAMP||!STATS_CAMP.campaign)return;
+  const id=STATS_CAMP.campaign.id;
+  const btn=document.getElementById('stRefBtn'); if(btn){btn.disabled=true;btn.textContent='Обновляю из Selzy…';}
+  const {ok,d}=await api('/api/campaigns/'+id+'/analytics/refresh',{method:'POST'});
+  if(ok&&d.ok){ STATS_CAMP=d; renderCampStats(); }
+  else { if(btn){btn.disabled=false;btn.textContent='🔄 Обновить из Selzy';} alert((d&&d.error)||'Не удалось обновить'); }
+}
+function setStatsFilter(f){ STATS_FILTER=(STATS_FILTER===f?'':f); renderCampStats(); }
+function renderCampStats(){
+  const box=document.getElementById('paneStats'); const D=STATS_CAMP; if(!D)return;
+  const a=D.agg||{}; const c=D.campaign||{};
+  const recs=(D.recipients||[]).map(r=>({r,s:statOf(r)}));
+  const counts={};recs.forEach(x=>counts[x.s.k]=(counts[x.s.k]||0)+1);
+  const shown=STATS_FILTER?recs.filter(x=>x.s.k===STATS_FILTER):recs;
+  const chip=(k,label)=>`<span class="chip-f ${STATS_FILTER===k?'on':''}" onclick="setStatsFilter('${k}')">${label}${counts[k]?(' · '+counts[k]):''}</span>`;
+  let html=`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      <button class="btn" onclick="loadOverall()">← Все рассылки</button>
+      <b style="font-size:15px">${esc(c.name||('#'+c.id))}</b>
+      <span class="hint">${c.sent_at?('🕒 '+fmtDT(c.sent_at)):''}</span>
+      <button class="btn" id="stRefBtn" style="margin-left:auto" onclick="refreshCampStats()">🔄 Обновить из Selzy</button>
+    </div>
+    <div class="hint" style="margin:-2px 0 8px">${esc(c.subject||'')}</div>`;
+  html+=tilesHTML(a);
+  html+=`<div class="fl">Воронка</div>`+funnelHTML(a);
+  html+=`<div class="fl" style="margin-top:8px">Детализация по адресатам</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 10px">
+      <span class="chip-f ${STATS_FILTER===''?'on':''}" onclick="setStatsFilter('')">Все · ${recs.length}</span>
+      ${chip('delivered','Доставлено')}
+      ${chip('opened','Открыли')}
+      ${chip('clicked','Кликнули')}
+      ${chip('unsub','Отписались')}
+      ${chip('bounced','Отказы')}
+      ${chip('sent','Без статуса')}
+      ${chip('failed','Ошибка')}
+    </div>`;
+  html+=`<div style="max-height:52vh;overflow:auto;border:1px solid var(--border);border-radius:10px">
+    <table class="atable"><thead><tr><th>E-mail</th><th>Компания</th><th>Статус</th><th>Открыто</th><th>Клик</th><th>Отписка/Отказ</th></tr></thead><tbody>`;
+  if(!shown.length) html+=`<tr><td colspan="6" class="hint" style="padding:14px">Нет адресатов в этом фильтре.</td></tr>`;
+  else html+=shown.map(({r,s})=>`<tr>
+      <td style="word-break:break-all">${esc(r.email)}</td>
+      <td>${esc(r.company_name||'')}</td>
+      <td><span class="stbadge st-${s.k}">${s.t}</span></td>
+      <td class="hint">${r.opened_at?fmtDT(r.opened_at):'—'}</td>
+      <td class="hint">${r.clicked_at?fmtDT(r.clicked_at):'—'}</td>
+      <td class="hint">${r.unsub_at?('отписка '+fmtDT(r.unsub_at)):(r.bounced_at?('отказ'+(r.track_status?(' · '+esc(r.track_status)):'')):'—')}</td>
+    </tr>`).join('');
+  html+=`</tbody></table></div>
+    <div class="hint" style="margin-top:8px;line-height:1.5">Открытия/клики считаются трекингом Selzy — из-за защиты почты (Apple Mail, блокировка картинок) числа приблизительные. <b>Пересылку письма отследить нельзя</b> — этой метрики нет ни у кого.</div>`;
+  box.innerHTML=html;
+}
 async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
 boot();
 </script>
