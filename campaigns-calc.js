@@ -28,6 +28,16 @@ const SELZY_INTERVAL_MS = parseInt(process.env.SELZY_INTERVAL_MS || '1100', 10);
 const FROM_NAME = (CAMPAIGN_FROM.match(/^([^<]+)</) || [null, 'ProLabSupport'])[1].trim();
 const FROM_EMAIL = (CAMPAIGN_FROM.match(/<([^>]+)>/) || [null, CAMPAIGN_FROM])[1].trim();
 const SELZY_SENDER_EMAIL = process.env.SELZY_SENDER_EMAIL || FROM_EMAIL;
+// Трекинг Selzy — ПО УМОЛЧАНИЮ ВЫКЛЮЧЕН, чтобы письма гарантированно доходили.
+// Трекинг ссылок (track_links) переписывает все ссылки на трекинговый домен Selzy;
+// если он не выровнен с твоим поддоменом (SPF/DKIM/DMARC), письма уходят в спам.
+// Включай через Railway → Variables только когда убедишься в доставляемости:
+//   SELZY_TRACK_READ=1   — трекинг открытий (пиксель; риск для доставки низкий)
+//   SELZY_TRACK_LINKS=1  — трекинг кликов (переписывает ссылки; риск выше)
+// Аналитика доставки (отправлено/доставлено/отказ/отписка) работает и БЕЗ трекинга;
+// открытия/клики появляются только при включённых флагах.
+const SELZY_TRACK_READ = process.env.SELZY_TRACK_READ === '1' ? '1' : '0';
+const SELZY_TRACK_LINKS = process.env.SELZY_TRACK_LINKS === '1' ? '1' : '0';
 
 // ── Фирменное оформление письма ─────────────────────────────────────────────
 // Логотип берётся по абсолютному URL (в письме нельзя относительные пути).
@@ -465,10 +475,12 @@ async function sendOneSelzy(rec, campaign, html, attachFiles) {
   params.set('subject', campaign.subject || '');
   params.set('body', html);
   params.set('list_id', String(SELZY_LIST_ID));
-  // Трекинг включён — нужен для аналитики (открытия/клики). Статусы по каждому
-  // письму потом тянем методом checkEmail по сохранённому email_id (message_id).
-  params.set('track_read', '1');
-  params.set('track_links', '1');
+  // Трекинг по умолчанию выключен (иначе письма попадают в спам). Включается
+  // через env SELZY_TRACK_READ / SELZY_TRACK_LINKS. Статусы доставки всё равно
+  // тянутся методом checkEmail по сохранённому email_id — трекинг нужен только
+  // для метрик «открыто/клик».
+  params.set('track_read', SELZY_TRACK_READ);
+  params.set('track_links', SELZY_TRACK_LINKS);
   // Вложения: Selzy sendEmail принимает attachments[имя_файла]=содержимое (base64).
   if (attachFiles && attachFiles.length) {
     for (const f of attachFiles) params.set(`attachments[${f.filename}]`, f.base64 || '');
