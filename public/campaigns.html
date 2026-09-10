@@ -536,12 +536,22 @@ async function sendNow(){
 }
 
 const fmtDT=v=>{ if(!v)return''; const d=new Date(v); return isNaN(d)?'':d.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); };
+const isAdmin=()=>!!(ME&&ME.role==='admin');
+// Удаление рассылки (только админ) — из Черновиков, Истории и Аналитики. Необратимо.
+async function delCamp(id){
+  if(!confirm('Удалить рассылку #'+id+' безвозвратно?\nВместе с ней удалятся все получатели и вся статистика по ней.'))return;
+  const {ok,d}=await api('/api/campaigns/'+id,{method:'DELETE'});
+  if(!ok){alert((d&&d.error)||'Не удалось удалить');return;}
+  if(CUR_CAMP===id)CUR_CAMP=null;
+  loadHistory();
+  if(document.getElementById('paneStats').style.display!=='none') loadOverall();
+}
 function campCard(c){
   const when = c.status==='draft'
     ? (c.created_at?('создан '+fmtDT(c.created_at)):'')
     : (c.sent_at?('отправлено '+fmtDT(c.sent_at)):(c.created_at?('создан '+fmtDT(c.created_at)):''));
   const stat = c.status==='draft' ? '' : `<div class="hint">${c.sent||0}/${c.total||0} отправлено${c.failed?(' · ошибок '+c.failed):''}</div>`;
-  return `<div class="camp" onclick="openCamp(${c.id})"><div><div style="font-weight:600;font-size:13px">${esc(c.name||('#'+c.id))}</div><div class="hint">${esc(c.subject||'')}</div>${stat}${when?`<div class="hint">🕒 ${when}</div>`:''}</div><span class="pill ${c.status}">${c.status}</span></div>`;
+  return `<div class="camp" onclick="openCamp(${c.id})"><div><div style="font-weight:600;font-size:13px">${esc(c.name||('#'+c.id))}</div><div class="hint">${esc(c.subject||'')}</div>${stat}${when?`<div class="hint">🕒 ${when}</div>`:''}</div><div style="display:flex;align-items:center;gap:6px"><span class="pill ${c.status}">${c.status}</span>${isAdmin()?`<button class="btn" style="padding:3px 8px" onclick="event.stopPropagation();delCamp(${c.id})" title="Удалить рассылку">🗑</button>`:''}</div></div>`;
 }
 async function loadHistory(){
   const {ok,d}=await api('/api/campaigns');
@@ -629,9 +639,9 @@ async function loadOverall(){
   html+=`<div class="fl" style="margin-top:10px">Рассылки (нажми, чтобы открыть детально)</div>`;
   if(!cs.length){ html+='<div class="hint">Отправленных рассылок пока нет.</div>'; }
   else html+=cs.map(c=>`<div class="acard" onclick="openCampStats(${c.id})">
-      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">
         <div style="font-weight:600;font-size:13px">${esc(c.name||('#'+c.id))}</div>
-        <div class="hint">${c.sent_at?('🕒 '+fmtDT(c.sent_at)):''}</div>
+        <div style="display:flex;align-items:center;gap:8px"><span class="hint">${c.sent_at?('🕒 '+fmtDT(c.sent_at)):''}</span>${isAdmin()?`<button class="btn" style="padding:3px 8px" onclick="event.stopPropagation();delCamp(${c.id})" title="Удалить рассылку">🗑</button>`:''}</div>
       </div>
       <div class="hint">${esc(c.subject||'')}</div>
       <div class="mini">
@@ -673,6 +683,7 @@ function renderCampStats(){
       <b style="font-size:15px">${esc(c.name||('#'+c.id))}</b>
       <span class="hint">${c.sent_at?('🕒 '+fmtDT(c.sent_at)):''}</span>
       <button class="btn" id="stRefBtn" style="margin-left:auto" onclick="refreshCampStats()">🔄 Обновить из Selzy</button>
+      ${isAdmin()?`<button class="btn" onclick="delCamp(${c.id})" title="Удалить рассылку">🗑 Удалить</button>`:''}
     </div>
     <div class="hint" style="margin:-2px 0 8px">${esc(c.subject||'')}</div>`;
   html+=tilesHTML(a);

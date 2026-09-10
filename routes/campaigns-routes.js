@@ -48,7 +48,9 @@ router.put('/:id(\\d+)', requireAuth(EDIT), express.json({ limit: '2mb' }), asyn
   try { res.json(await require('../campaigns-calc').updateCampaign(parseInt(req.params.id, 10), req.body || {})); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
-router.delete('/:id(\\d+)', requireAuth(EDIT), async (req, res) => {
+// Удаление рассылки (черновик/отправленная) — ТОЛЬКО админ. Удаляет и получателей,
+// и статистику, и файлы (каскадом). Действие необратимо.
+router.delete('/:id(\\d+)', requireAuth(['admin']), async (req, res) => {
   try { res.json(await require('../campaigns-calc').deleteCampaign(parseInt(req.params.id, 10))); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
