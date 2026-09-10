@@ -107,6 +107,12 @@ function ensureSchema() {
         created_at TIMESTAMPTZ DEFAULT NOW());
       CREATE INDEX IF NOT EXISTS idx_camp_files_cid ON ticketsmodule_campaign_files(campaign_id);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_camp_files_token ON ticketsmodule_campaign_files(token);
+      CREATE TABLE IF NOT EXISTS ticketsmodule_campaign_assets (
+        akey VARCHAR(40) PRIMARY KEY,          -- напр. 'footer_logo'
+        mime VARCHAR(120),
+        data BYTEA,
+        updated_by INTEGER,
+        updated_at TIMESTAMPTZ DEFAULT NOW());
     `);
   })().catch(e => { _schema = null; throw e; });
   return _schema;
@@ -371,7 +377,10 @@ function linkFilesBlock(linkFiles) {
 // Фирменная обёртка (стиль как в рассылках Selzy): тело → большой фирменный
 // блок-логотип (логотип + слоган + партнёры, одним изображением) → отписка.
 function wrapEmail(bodyHtml, unsubUrl, opts = {}) {
-  const footerLogo = process.env.CAMPAIGN_FOOTER_LOGO_URL || `${APP_BASE}/assets/company-full-logo.png`;
+  // Логотип футера: заменяемый через интерфейс (admin/marketolog) — отдаётся из БД
+  // публичным эндпоинтом /api/campaigns/logo; если не заменён, эндпоинт вернёт
+  // дефолтный /assets/company-full-logo.png. Можно переопределить env-переменной.
+  const footerLogo = process.env.CAMPAIGN_FOOTER_LOGO_URL || `${APP_BASE}/api/campaigns/logo`;
   const footContacts = [
     SIG.address ? esc(SIG.address) : '',
     SIG.site ? esc(SIG.site) : '',
@@ -523,9 +532,35 @@ async function sendCampaign(campaignId) {
   return { ok: true, started: true };
 }
 
+// ── Ассеты рассылок (логотип письма) ────────────────────────────────────────
+// Логотип футера письма можно заменить из интерфейса (admin/marketolog). Храним
+// картинку в БД; отдаётся публично через /api/campaigns/logo, а письма ссылаются
+// на этот URL. Размер/поля подгоняются автоматически самим шаблоном (img width:100%).
+async function getAsset(key) {
+  await ensureSchema();
+  const { rows } = await pool.query('SELECT mime, data, updated_at FROM ticketsmodule_campaign_assets WHERE akey=$1', [key]);
+  if (!rows.length || !rows[0].data) return null;
+  return { mime: rows[0].mime || 'image/png', data: rows[0].data, updatedAt: rows[0].updated_at };
+}
+async function setAsset(key, mime, buffer, userId) {
+  await ensureSchema();
+  await pool.query(
+    `INSERT INTO ticketsmodule_campaign_assets (akey, mime, data, updated_by, updated_at)
+       VALUES ($1,$2,$3,$4,NOW())
+       ON CONFLICT (akey) DO UPDATE SET mime=EXCLUDED.mime, data=EXCLUDED.data, updated_by=EXCLUDED.updated_by, updated_at=NOW()`,
+    [key, mime || 'image/png', buffer, userId || null]);
+  return { ok: true };
+}
+async function deleteAsset(key) {
+  await ensureSchema();
+  await pool.query('DELETE FROM ticketsmodule_campaign_assets WHERE akey=$1', [key]);
+  return { ok: true };
+}
+
 module.exports = {
   ensureSchema, syncAudience, getIndustries, getCompanies, searchCompanies,
   createCampaign, updateCampaign, listCampaigns, getCampaign, deleteCampaign,
   setRecipients, sendCampaign, suppress, unsubVerify, industryMap,
   addFile, listFiles, deleteFile, setFileKind, getFileByToken,
+  getAsset, setAsset, deleteAsset,
 };

@@ -185,6 +185,20 @@ input:focus,textarea:focus,select:focus{border-color:var(--brand)}
           <b>Вложением</b> — файл прикреплён прямо к письму (до 7 МБ, тяжелее, чуть выше риск спама).
         </div>
 
+        <!-- Логотип письма (заменяемый; только admin/маркетолог) -->
+        <div id="logoBox" style="display:none;margin-top:14px;padding:12px 14px;border:1px solid var(--border2);border-radius:10px">
+          <label class="fl" style="margin-top:0">Логотип письма (футер)</label>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <img id="logoPrev" src="/api/campaigns/logo" alt="логотип" style="height:46px;max-width:280px;width:auto;background:#fff;border:1px solid var(--border);border-radius:6px;padding:4px">
+            <label class="btn" style="cursor:pointer;display:inline-flex">🖼 Заменить логотип
+              <input type="file" id="logoInput" accept="image/*" style="display:none" onchange="uploadLogo(this)">
+            </label>
+            <button class="btn" onclick="resetLogo()">↺ Сбросить</button>
+            <span class="hint" id="logoStatus"></span>
+          </div>
+          <div class="hint" style="margin-top:6px;line-height:1.5">PNG/JPG/SVG до 6 МБ. Размер и поля подгоняются автоматически (ширина по блоку письма) — лучше широкий логотип на прозрачном фоне.</div>
+        </div>
+
         <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
           <button class="btn" onclick="preview()">👁 Предпросмотр</button>
           <button class="btn" onclick="saveDraftBtn()">💾 Черновик</button>
@@ -201,12 +215,14 @@ input:focus,textarea:focus,select:focus{border-color:var(--brand)}
 
 <script>
 let ME=null, INDUSTRIES=[], CUR_IND=null, COMPANIES=[], SELECTED=new Set(), CUR_CAMP=null;
+let LOGO_TS=Date.now();   // кэш-бастер для превью логотипа
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 async function api(u,o){const r=await fetch(u,o);let d={};try{d=await r.json()}catch(e){}return{ok:r.ok,d}}
 
 async function boot(){
   const r=await fetch('/auth/me'); if(!r.ok){location.href='/login.html';return;}
   ME=(await r.json()).user;
+  if(ME && ['admin','marketolog'].includes(ME.role)){ const lb=document.getElementById('logoBox'); if(lb) lb.style.display=''; }
   await loadIndustries(); loadHistory();
   try{document.execCommand('styleWithCSS',false,false);}catch(e){}   // жирный как <b>, не span-стили
   const ed=document.getElementById('cBody');
@@ -400,7 +416,7 @@ function previewWrap(bodyHtml){
   return `<div style="background:#eef0f5;padding:20px;border-radius:12px">
     <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(20,25,40,.08)">
       <div style="padding:30px 32px 8px;font-family:'Montserrat',Arial,sans-serif;color:#2a2f3a;font-size:15px;line-height:1.7">${bodyHtml}${linkBlock}</div>
-      <div style="padding:22px 32px 6px;text-align:center"><img src="/assets/company-full-logo.png" alt="ProLabSupport" style="width:100%;max-width:480px;height:auto;display:block;margin:0 auto"></div>
+      <div style="padding:22px 32px 6px;text-align:center"><img src="/api/campaigns/logo?ts=${LOGO_TS}" alt="ProLabSupport" style="width:100%;max-width:480px;height:auto;display:block;margin:0 auto"></div>
       <div style="padding:14px 32px 22px;font-family:Arial,sans-serif"><div style="border-top:1px solid #eef0f5;padding-top:14px;font-size:12px;color:#9ca3af;line-height:1.6">ProLabSupport · Казахстан · prolabsupport.kz<br>Вы получили это письмо как клиент ProLabSupport. <span style="text-decoration:underline">Отписаться</span></div></div>
     </div></div>`;
 }
@@ -447,6 +463,29 @@ async function setKind(id,kind){
 async function delFile(id){
   await api('/api/campaigns/'+CUR_CAMP+'/files/'+id,{method:'DELETE'});
   await loadFiles(); preview();
+}
+// ── Логотип письма ──────────────────────────────────────────────────────────
+function refreshLogo(){
+  LOGO_TS=Date.now();
+  const p=document.getElementById('logoPrev'); if(p) p.src='/api/campaigns/logo?ts='+LOGO_TS;
+  preview();
+}
+async function uploadLogo(input){
+  const file=input.files&&input.files[0]; if(!file)return; input.value='';
+  const st=document.getElementById('logoStatus');
+  if(file.size>6*1048576){ if(st){st.textContent='Файл больше 6 МБ';} return; }
+  if(st) st.textContent='Загружаю…';
+  const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
+  const {ok,d}=await api('/api/campaigns/logo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dataBase64:b64,mime:file.type||'image/png'})});
+  if(!ok){ if(st) st.textContent=(d&&d.error)||'Ошибка'; return; }
+  if(st) st.textContent='Логотип обновлён'; refreshLogo();
+}
+async function resetLogo(){
+  if(!confirm('Вернуть логотип по умолчанию?'))return;
+  const st=document.getElementById('logoStatus');
+  const {ok,d}=await api('/api/campaigns/logo',{method:'DELETE'});
+  if(!ok){ if(st) st.textContent=(d&&d.error)||'Ошибка'; return; }
+  if(st) st.textContent='Сброшено к дефолтному'; refreshLogo();
 }
 async function saveDraft(){
   const payload={name:val('cName'),subject:val('cSubject'),fromName:val('cFrom'),bodyHtml:getBody()};

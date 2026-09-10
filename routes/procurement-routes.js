@@ -7,11 +7,30 @@ const ROLES = ['admin', 'coordinator', 'store'];
 // Просмотр + согласование: те же + engineer/sales (видит ТОЛЬКО свои закупки —
 // где он согласующий/ответственный/инициатор; правами на правку не наделяется,
 // но может согласовывать назначенные на него закупки).
-const VIEW_ROLES = ['admin', 'coordinator', 'store', 'engineer', 'accountant'];
-// Роли, которые видят/согласовывают ТОЛЬКО свои закупки (без прав на правку).
-const OWN_ONLY = ['engineer', 'accountant'];
+const VIEW_ROLES = ['admin', 'coordinator', 'store', 'engineer', 'accountant', 'marketolog'];
+// Роли, которые видят/согласовывают ТОЛЬКО свои закупки.
+// marketolog — «полный цикл по своим»: правит только свои заявки (см. canEditReq).
+const OWN_ONLY = ['engineer', 'accountant', 'marketolog'];
 // Удаление закупок — БЕЗ store (store может всё, кроме удаления).
 const DEL_ROLES = ['admin', 'coordinator'];
+// Роли редактирования: полный доступ + marketolog (только к своим — проверяется ownsRequest).
+const EDIT_ROLES = [...ROLES, 'marketolog'];
+const DENY_OWN = { error: 'Можно редактировать только свои закупки.' };
+// Может ли пользователь редактировать ЭТУ заявку: admin/coordinator/store — любые;
+// marketolog — только свои (полный цикл по своим); остальные — нет.
+async function canEditReq(user, id) {
+  if (ROLES.includes(user.role)) return true;
+  if (user.role === 'marketolog') {
+    try { return await require('../procurement-calc').ownsRequest(id, user); } catch (e) { return false; }
+  }
+  return false;
+}
+// Для маршрутов VIEW_ROLES (где инженер/бухгалтер уже допущены): НЕ трогаем их права,
+// а marketolog ограничиваем только своими заявками. true = пропустить дальше.
+async function marketologOwnOk(user, id) {
+  if (user.role !== 'marketolog') return true;
+  try { return await require('../procurement-calc').ownsRequest(id, user); } catch (e) { return false; }
+}
 
 // GET /api/procurement/meta — стадии + справочники для формы (кэш 30 мин, ?force=1)
 // GET /api/procurement/doc-fields — коды файловых полей Битрикса (для проверки, что
@@ -96,8 +115,10 @@ router.get('/list', requireAuth(VIEW_ROLES), async (req, res) => {
   try {
     const { listRequests } = require('../procurement-calc');
     // engineer/sales и бухгалтер видят только свои закупки; остальные роли — все.
-    const ownerBid = OWN_ONLY.includes(req.user.role) ? (req.user.bitrix_user_id || -1) : null;
-    res.json({ items: await listRequests(ownerBid) });
+    const own = OWN_ONLY.includes(req.user.role);
+    const ownerBid = own ? (req.user.bitrix_user_id || null) : null;
+    const ownerUid = own ? req.user.id : null;   // marketolog видит по _createdBy (может быть без Bitrix-связки)
+    res.json({ items: await listRequests(ownerBid, ownerUid) });
   } catch (e) {
     console.error('GET /api/procurement/list error:', e.message);
     res.status(500).json({ error: e.message, items: [] });
@@ -154,12 +175,17 @@ router.post('/:id/stage', requireAuth(VIEW_ROLES), express.json(), async (req, r
     // сам двинуть заявку ТОЛЬКО с «Оплаты закупки» на «Ожидание товара» (после
     // того как приложил подтверждение оплаты — это проверит moveStage).
     if (!ROLES.includes(role)) {
-      if (!(role === 'accountant' && body.stageKey === 'waiting')) {
-        return res.status(403).json({ error: 'Недостаточно прав для смены стадии' });
-      }
-      const cur = await currentStepKey(id);
-      if (cur !== 'payment') {
-        return res.status(403).json({ error: 'Двигать заявку можно только с этапа «Оплата закупки».' });
+      if (role === 'marketolog') {
+        // Маркетолог ведёт полный цикл ТОЛЬКО по своим закупкам.
+        if (!(await canEditReq(req.user, id))) return res.status(403).json({ error: 'Можно двигать только свои закупки.' });
+      } else {
+        if (!(role === 'accountant' && body.stageKey === 'waiting')) {
+          return res.status(403).json({ error: 'Недостаточно прав для смены стадии' });
+        }
+        const cur = await currentStepKey(id);
+        if (cur !== 'payment') {
+          return res.status(403).json({ error: 'Двигать заявку можно только с этапа «Оплата закупки».' });
+        }
       }
     }
     // Админ может пропускать стадии (force) — шлюзы требований не проверяются.
@@ -178,6 +204,7 @@ router.post('/:id/files', requireAuth(VIEW_ROLES), express.json({ limit: '45mb' 
   try {
     const { addFile } = require('../procurement-calc');
     const id = parseInt(req.params.id, 10);
+    if (!(await marketologOwnOk(req.user, id))) return res.status(403).json(DENY_OWN);
     const { slot, filename, base64, mime, warehouse, acceptDate, comment } = req.body || {};
     if (!slot || !base64) return res.status(400).json({ error: 'Нужны slot и base64' });
     const out = await addFile(id, slot, { filename: filename || 'file', base64, mime, warehouse, acceptDate, comment }, req.user.bitrix_user_id || null);
@@ -193,6 +220,7 @@ router.post('/:id/files-batch', requireAuth(VIEW_ROLES), express.json({ limit: '
   try {
     const { addFilesBatch } = require('../procurement-calc');
     const id = parseInt(req.params.id, 10);
+    if (!(await marketologOwnOk(req.user, id))) return res.status(403).json(DENY_OWN);
     const { slot, files } = req.body || {};
     if (!slot || !Array.isArray(files) || !files.length) return res.status(400).json({ error: 'Нужны slot и files[]' });
     const out = await addFilesBatch(id, slot, files, req.user.bitrix_user_id || null);
@@ -280,9 +308,10 @@ router.delete('/deal/:dealId/ship-file/:fileId', requireAuth(ROLES), async (req,
 });
 
 // POST /api/procurement/:id/fully-received { value } — отметка «Полностью принят»
-router.post('/:id/fully-received', requireAuth(ROLES), express.json(), async (req, res) => {
+router.post('/:id/fully-received', requireAuth(EDIT_ROLES), express.json(), async (req, res) => {
   try {
     const { setFullyReceived } = require('../procurement-calc');
+    if (!(await canEditReq(req.user, parseInt(req.params.id, 10)))) return res.status(403).json(DENY_OWN);
     res.json(await setFullyReceived(parseInt(req.params.id, 10), !!(req.body || {}).value, req.user.bitrix_user_id || null));
   } catch (e) {
     console.error('POST /api/procurement/:id/fully-received error:', e.message);
@@ -291,9 +320,10 @@ router.post('/:id/fully-received', requireAuth(ROLES), express.json(), async (re
 });
 
 // PUT /api/procurement/:id — редактирование базовых полей заявки
-router.put('/:id', requireAuth(ROLES), express.json(), async (req, res) => {
+router.put('/:id', requireAuth(EDIT_ROLES), express.json(), async (req, res) => {
   try {
     const { updateRequest } = require('../procurement-calc');
+    if (!(await canEditReq(req.user, parseInt(req.params.id, 10)))) return res.status(403).json(DENY_OWN);
     res.json(await updateRequest(parseInt(req.params.id, 10), req.body || {}));
   } catch (e) {
     console.error('PUT /api/procurement/:id error:', e.message);
@@ -332,9 +362,10 @@ router.get('/:id/detail', requireAuth(VIEW_ROLES), async (req, res) => {
 });
 
 // POST /api/procurement/:id/upload { fieldCode, filename, base64 } — загрузка документа
-router.post('/:id/upload', requireAuth(ROLES), express.json({ limit: '25mb' }), async (req, res) => {
+router.post('/:id/upload', requireAuth(EDIT_ROLES), express.json({ limit: '25mb' }), async (req, res) => {
   try {
     const { uploadDoc } = require('../procurement-calc');
+    if (!(await canEditReq(req.user, parseInt(req.params.id, 10)))) return res.status(403).json(DENY_OWN);
     const { fieldCode, filename, base64 } = req.body || {};
     if (!fieldCode || !base64) return res.status(400).json({ error: 'Нужны fieldCode и base64' });
     res.json(await uploadDoc(parseInt(req.params.id, 10), fieldCode, filename || 'file', base64));
@@ -345,9 +376,10 @@ router.post('/:id/upload', requireAuth(ROLES), express.json({ limit: '25mb' }), 
 });
 
 // POST /api/procurement/:id/amount { opportunity, currency } — сумма закупки (2 этап)
-router.post('/:id/amount', requireAuth(ROLES), express.json(), async (req, res) => {
+router.post('/:id/amount', requireAuth(EDIT_ROLES), express.json(), async (req, res) => {
   try {
     const { setAmount } = require('../procurement-calc');
+    if (!(await canEditReq(req.user, parseInt(req.params.id, 10)))) return res.status(403).json(DENY_OWN);
     const { opportunity, currency } = req.body || {};
     if (!(Number(opportunity) > 0)) return res.status(400).json({ error: 'Укажите сумму закупки больше 0' });
     res.json(await setAmount(parseInt(req.params.id, 10), opportunity, currency));
@@ -362,6 +394,7 @@ router.post('/:id/amount', requireAuth(ROLES), express.json(), async (req, res) 
 router.post('/:id/pay-comment', requireAuth(VIEW_ROLES), express.json(), async (req, res) => {
   try {
     const { setPayComment } = require('../procurement-calc');
+    if (!(await marketologOwnOk(req.user, parseInt(req.params.id, 10)))) return res.status(403).json(DENY_OWN);
     res.json(await setPayComment(parseInt(req.params.id, 10), (req.body || {}).comment));
   } catch (e) {
     console.error('POST /api/procurement/:id/pay-comment error:', e.message);
@@ -370,9 +403,10 @@ router.post('/:id/pay-comment', requireAuth(VIEW_ROLES), express.json(), async (
 });
 
 // POST /api/procurement/:id/poa-setup { required, accountantBid } — доверенность (2 этап)
-router.post('/:id/poa-setup', requireAuth(ROLES), express.json(), async (req, res) => {
+router.post('/:id/poa-setup', requireAuth(EDIT_ROLES), express.json(), async (req, res) => {
   try {
     const { setPoaSetup } = require('../procurement-calc');
+    if (!(await canEditReq(req.user, parseInt(req.params.id, 10)))) return res.status(403).json(DENY_OWN);
     const { required, accountantBid } = req.body || {};
     res.json(await setPoaSetup(parseInt(req.params.id, 10), !!required, accountantBid));
   } catch (e) {
@@ -382,9 +416,10 @@ router.post('/:id/poa-setup', requireAuth(ROLES), express.json(), async (req, re
 });
 
 // POST /api/procurement/:id/request-approval { approverId } — отправить на согласование
-router.post('/:id/request-approval', requireAuth(ROLES), express.json(), async (req, res) => {
+router.post('/:id/request-approval', requireAuth(EDIT_ROLES), express.json(), async (req, res) => {
   try {
     const { requestApproval } = require('../procurement-calc');
+    if (!(await canEditReq(req.user, parseInt(req.params.id, 10)))) return res.status(403).json(DENY_OWN);
     const b = req.body || {};
     const approvers = b.approverIds != null ? b.approverIds : b.approverId;
     res.json(await requestApproval(parseInt(req.params.id, 10), approvers, b.note));
@@ -417,9 +452,10 @@ router.post('/:id/approval', requireAuth(VIEW_ROLES), express.json(), async (req
 });
 
 // POST /api/procurement/:id/accountant { accountantBid } — сменить бухгалтера на оплату
-router.post('/:id/accountant', requireAuth(ROLES), express.json(), async (req, res) => {
+router.post('/:id/accountant', requireAuth(EDIT_ROLES), express.json(), async (req, res) => {
   try {
     const { setAccountant } = require('../procurement-calc');
+    if (!(await canEditReq(req.user, parseInt(req.params.id, 10)))) return res.status(403).json(DENY_OWN);
     res.json(await setAccountant(parseInt(req.params.id, 10), (req.body || {}).accountantBid));
   } catch (e) {
     console.error('POST /api/procurement/:id/accountant error:', e.message);

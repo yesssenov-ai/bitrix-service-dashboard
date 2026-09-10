@@ -4,8 +4,8 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../auth');
 
-const VIEW = ['admin', 'coordinator', 'manager', 'store', 'engineer', 'viewer'];
-const EDIT = ['admin', 'coordinator', 'manager'];
+const VIEW = ['admin', 'coordinator', 'manager', 'store', 'engineer', 'viewer', 'marketolog'];
+const EDIT = ['admin', 'coordinator', 'manager', 'marketolog'];
 
 // Аудитория
 router.get('/industries', requireAuth(VIEW), async (req, res) => {
@@ -108,6 +108,59 @@ router.get('/unsub', async (req, res) => {
       <h2>${email ? 'Вы отписались от рассылки' : 'Ссылка недействительна'}</h2>
       <p style="color:#6b7280">${email ? 'Больше писем на этот адрес мы не отправим. Спасибо!' : 'Проверьте ссылку из письма.'}</p>
     </div>`);
+});
+
+// ── Логотип письма (заменяемый) ─────────────────────────────────────────────
+const LOGO_EDIT = ['admin', 'marketolog'];   // менять логотип могут админ и маркетолог
+
+// Публичная выдача логотипа футера (его грузят почтовые клиенты получателей).
+// Если логотип заменён — отдаём из БД; иначе — дефолтный файл из /assets.
+router.get('/logo', async (req, res) => {
+  try {
+    const a = await require('../campaigns-calc').getAsset('footer_logo');
+    if (a && a.data) {
+      res.set('Content-Type', a.mime || 'image/png');
+      res.set('Cache-Control', 'public, max-age=300');
+      return res.send(Buffer.from(a.data));
+    }
+    const path = require('path'), fs = require('fs');
+    const def = path.join(__dirname, '..', 'public', 'assets', 'company-full-logo.png');
+    if (fs.existsSync(def)) {
+      res.set('Content-Type', 'image/png');
+      res.set('Cache-Control', 'public, max-age=300');
+      return res.send(fs.readFileSync(def));
+    }
+    res.status(404).send('нет логотипа');
+  } catch (e) { res.status(500).send('Ошибка'); }
+});
+
+// Инфо о текущем логотипе (для интерфейса): заменён или дефолтный + время.
+router.get('/logo/info', requireAuth(VIEW), async (req, res) => {
+  try {
+    const a = await require('../campaigns-calc').getAsset('footer_logo');
+    res.json({ custom: !!(a && a.data), mime: a ? a.mime : null, updatedAt: a ? a.updatedAt : null,
+      canEdit: LOGO_EDIT.includes(req.user.role) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Загрузить новый логотип (admin/marketolog). Принимает { dataBase64, mime }.
+router.post('/logo', requireAuth(LOGO_EDIT), express.json({ limit: '8mb' }), async (req, res) => {
+  try {
+    const { dataBase64, mime } = req.body || {};
+    if (!dataBase64) return res.status(400).json({ error: 'Нет изображения' });
+    const okMime = /^image\/(png|jpe?g|gif|webp|svg\+xml)$/i.test(mime || '');
+    if (!okMime) return res.status(400).json({ error: 'Только изображение (PNG, JPG, GIF, WEBP, SVG)' });
+    const buf = Buffer.from(dataBase64, 'base64');
+    if (buf.length > 6 * 1024 * 1024) return res.status(400).json({ error: 'Файл больше 6 МБ' });
+    await require('../campaigns-calc').setAsset('footer_logo', mime, buf, req.user.id);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Сбросить логотип к дефолтному (admin/marketolog).
+router.delete('/logo', requireAuth(LOGO_EDIT), async (req, res) => {
+  try { await require('../campaigns-calc').deleteAsset('footer_logo'); res.json({ ok: true }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 module.exports = { router };
