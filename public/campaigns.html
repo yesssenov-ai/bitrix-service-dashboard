@@ -672,48 +672,91 @@ async function refreshCampStats(){
   else { if(btn){btn.disabled=false;btn.textContent='🔄 Обновить из Selzy';} alert((d&&d.error)||'Не удалось обновить'); }
 }
 function setStatsFilter(f){ STATS_FILTER=(STATS_FILTER===f?'':f); renderCampStats(); }
+// Фильтры/счётчики — накопительные (совпадают с плитками): «Доставлено» = все,
+// кто дошёл минимум до доставки, и т.д. Один адресат может попадать в несколько.
+function matchF(r,k){
+  switch(k){
+    case '': return true;
+    case 'sent': return r.status==='sent' && !r.delivered_at && !r.bounced_at; // отправлено, статус ещё не пришёл
+    case 'delivered': return !!r.delivered_at;
+    case 'opened': return !!r.opened_at;
+    case 'clicked': return !!r.clicked_at;
+    case 'unsub': return !!r.unsub_at;
+    case 'bounced': return !!r.bounced_at;
+    case 'failed': return r.status==='failed';
+    default: return true;
+  }
+}
 function renderCampStats(){
   const box=document.getElementById('paneStats'); const D=STATS_CAMP; if(!D)return;
   const a=D.agg||{}; const c=D.campaign||{};
-  const recs=(D.recipients||[]).map(r=>({r,s:statOf(r)}));
-  const counts={};recs.forEach(x=>counts[x.s.k]=(counts[x.s.k]||0)+1);
-  const shown=STATS_FILTER?recs.filter(x=>x.s.k===STATS_FILTER):recs;
-  const chip=(k,label)=>`<span class="chip-f ${STATS_FILTER===k?'on':''}" onclick="setStatsFilter('${k}')">${label}${counts[k]?(' · '+counts[k]):''}</span>`;
-  let html=`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+  const recs=D.recipients||[];
+  const cnt=k=>recs.filter(r=>matchF(r,k)).length;
+  const shown=recs.filter(r=>matchF(r,STATS_FILTER));
+  const chip=(k,label)=>`<span class="chip-f ${STATS_FILTER===k?'on':''}" onclick="setStatsFilter('${k}')">${label} · ${cnt(k)}</span>`;
+  let html=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
       <button class="btn" onclick="loadOverall()">← Все рассылки</button>
       <b style="font-size:15px">${esc(c.name||('#'+c.id))}</b>
       <span class="hint">${c.sent_at?('🕒 '+fmtDT(c.sent_at)):''}</span>
-      <button class="btn" id="stRefBtn" style="margin-left:auto" onclick="refreshCampStats()">🔄 Обновить из Selzy</button>
+      <span style="margin-left:auto"></span>
+      <button class="btn" onclick="exportStatsCSV()" title="Скачать детализацию в CSV (Excel)">⬇ Экспорт CSV</button>
+      <button class="btn" id="stRefBtn" onclick="refreshCampStats()">🔄 Обновить из Selzy</button>
       ${isAdmin()?`<button class="btn" onclick="delCamp(${c.id})" title="Удалить рассылку">🗑 Удалить</button>`:''}
     </div>
     <div class="hint" style="margin:-2px 0 8px">${esc(c.subject||'')}</div>`;
   html+=tilesHTML(a);
   html+=`<div class="fl">Воронка</div>`+funnelHTML(a);
-  html+=`<div class="fl" style="margin-top:8px">Детализация по адресатам</div>
+  html+=`<div class="fl" style="margin-top:8px">Детализация по адресатам · показано ${shown.length}</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 10px">
       <span class="chip-f ${STATS_FILTER===''?'on':''}" onclick="setStatsFilter('')">Все · ${recs.length}</span>
       ${chip('delivered','Доставлено')}
       ${chip('opened','Открыли')}
       ${chip('clicked','Кликнули')}
-      ${chip('unsub','Отписались')}
       ${chip('bounced','Отказы')}
-      ${chip('sent','Без статуса')}
+      ${chip('unsub','Отписались')}
       ${chip('failed','Ошибка')}
+      ${chip('sent','Без статуса')}
     </div>`;
-  html+=`<div style="max-height:52vh;overflow:auto;border:1px solid var(--border);border-radius:10px">
-    <table class="atable"><thead><tr><th>E-mail</th><th>Компания</th><th>Статус</th><th>Открыто</th><th>Клик</th><th>Отписка/Отказ</th></tr></thead><tbody>`;
+  html+=`<div style="overflow:auto;max-height:52vh;border:1px solid var(--border);border-radius:10px">
+    <table class="atable" style="min-width:820px">
+      <thead><tr>
+        <th style="min-width:260px">E-mail</th>
+        <th style="min-width:200px">Компания</th>
+        <th style="min-width:120px">Статус</th>
+        <th style="min-width:130px">Открыто</th>
+        <th style="min-width:130px">Клик</th>
+        <th style="min-width:170px">Отписка/Отказ</th>
+      </tr></thead><tbody>`;
   if(!shown.length) html+=`<tr><td colspan="6" class="hint" style="padding:14px">Нет адресатов в этом фильтре.</td></tr>`;
-  else html+=shown.map(({r,s})=>`<tr>
-      <td style="word-break:break-all">${esc(r.email)}</td>
+  else html+=shown.map(r=>{ const s=statOf(r); return `<tr>
+      <td style="white-space:nowrap">${esc(r.email)}</td>
       <td>${esc(r.company_name||'')}</td>
       <td><span class="stbadge st-${s.k}">${s.t}</span></td>
-      <td class="hint">${r.opened_at?fmtDT(r.opened_at):'—'}</td>
-      <td class="hint">${r.clicked_at?fmtDT(r.clicked_at):'—'}</td>
-      <td class="hint">${r.unsub_at?('отписка '+fmtDT(r.unsub_at)):(r.bounced_at?('отказ'+(r.track_status?(' · '+esc(r.track_status)):'')):'—')}</td>
-    </tr>`).join('');
+      <td class="hint" style="white-space:nowrap">${r.opened_at?fmtDT(r.opened_at):'—'}</td>
+      <td class="hint" style="white-space:nowrap">${r.clicked_at?fmtDT(r.clicked_at):'—'}</td>
+      <td class="hint" style="white-space:nowrap">${r.unsub_at?('отписка '+fmtDT(r.unsub_at)):(r.bounced_at?('отказ'+(r.track_status?(' · '+esc(r.track_status)):'')):'—')}</td>
+    </tr>`; }).join('');
   html+=`</tbody></table></div>
-    <div class="hint" style="margin-top:8px;line-height:1.5">Открытия/клики считаются трекингом Selzy — из-за защиты почты (Apple Mail, блокировка картинок) числа приблизительные. <b>Пересылку письма отследить нельзя</b> — этой метрики нет ни у кого.</div>`;
+    <div class="hint" style="margin-top:8px;line-height:1.5">Счётчики накопительные: «Доставлено» включает открытых и кликнувших, «Открыли» — кликнувших. Открытия/клики считаются трекингом Selzy — из-за защиты почты (Apple Mail, блокировка картинок) числа приблизительные. <b>Пересылку письма отследить нельзя.</b></div>`;
   box.innerHTML=html;
+}
+// Экспорт детализации в CSV (Excel, кириллица через BOM, разделитель «;»).
+function exportStatsCSV(){
+  const D=STATS_CAMP; if(!D)return;
+  const rows=D.recipients||[];
+  const q=v=>{ v=(v==null?'':String(v)); return /[";\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+  const head=['E-mail','Компания','Статус','Отправлено','Доставлено','Открыто','Клик','Отписка','Отказ','Код Selzy'];
+  const lines=[head.join(';')];
+  rows.forEach(r=>{ const s=statOf(r);
+    lines.push([r.email,r.company_name||'',s.t,
+      r.at?fmtDT(r.at):'', r.delivered_at?fmtDT(r.delivered_at):'', r.opened_at?fmtDT(r.opened_at):'',
+      r.clicked_at?fmtDT(r.clicked_at):'', r.unsub_at?fmtDT(r.unsub_at):'', r.bounced_at?fmtDT(r.bounced_at):'',
+      r.track_status||''].map(q).join(';'));
+  });
+  const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=url; a.download='рассылка-'+((D.campaign&&D.campaign.id)||'')+'-детализация.csv';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
 boot();
