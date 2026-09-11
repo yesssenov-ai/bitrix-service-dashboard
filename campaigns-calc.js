@@ -38,6 +38,9 @@ const SELZY_SENDER_EMAIL = process.env.SELZY_SENDER_EMAIL || FROM_EMAIL;
 // открытия/клики появляются только при включённых флагах.
 const SELZY_TRACK_READ = process.env.SELZY_TRACK_READ === '1' ? '1' : '0';
 const SELZY_TRACK_LINKS = process.env.SELZY_TRACK_LINKS === '1' ? '1' : '0';
+// Куда идут ОТВЕТЫ клиентов (Reply-To). Отправитель остаётся news@client...,
+// но ответы/вопросы пусть падают на общий ящик. Переопределяется env.
+const REPLY_TO = process.env.CAMPAIGN_REPLY_TO || 'client@prolabsupport.kz';
 
 // ── Фирменное оформление письма ─────────────────────────────────────────────
 // Логотип берётся по абсолютному URL (в письме нельзя относительные пути).
@@ -447,6 +450,7 @@ async function sendOne(rec, campaign, files) {
 async function sendOneResend(rec, campaign, html, unsubUrl, attachFiles) {
   const from = campaign.from_name ? campaign.from_name.replace(/<[^>]*>/g, '').trim() + ' <' + FROM_EMAIL + '>' : CAMPAIGN_FROM;
   const payload = { from, to: [rec.email], subject: campaign.subject || '', html,
+    reply_to: REPLY_TO,
     headers: { 'List-Unsubscribe': `<${unsubUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } };
   if (attachFiles && attachFiles.length) {
     payload.attachments = attachFiles.map(f => ({ filename: f.filename, content: f.base64 }));
@@ -481,6 +485,8 @@ async function sendOneSelzy(rec, campaign, html, attachFiles) {
   // для метрик «открыто/клик».
   params.set('track_read', SELZY_TRACK_READ);
   params.set('track_links', SELZY_TRACK_LINKS);
+  // Ответы клиентов — на общий ящик (Selzy разрешает только Reply-To и Priority).
+  params.set('headers', 'Reply-To: ' + REPLY_TO);
   // Вложения: Selzy sendEmail принимает attachments[имя_файла]=содержимое (base64).
   if (attachFiles && attachFiles.length) {
     for (const f of attachFiles) params.set(`attachments[${f.filename}]`, f.base64 || '');
