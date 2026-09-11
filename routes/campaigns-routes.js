@@ -112,6 +112,13 @@ router.get('/unsub', async (req, res) => {
     </div>`);
 });
 
+// Доотправить тем, кому письмо не ушло (ошибка отправки) + оставшимся pending.
+// Жёсткие отказы (несуществующие адреса) не повторяются.
+router.post('/:id(\\d+)/retry-failed', requireAuth(EDIT), async (req, res) => {
+  try { res.json(await require('../campaigns-calc').retryFailed(parseInt(req.params.id, 10))); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Аналитика рассылок ──────────────────────────────────────────────────────
 // Сводная по всем отправленным кампаниям.
 router.get('/analytics/overall', requireAuth(VIEW), async (req, res) => {

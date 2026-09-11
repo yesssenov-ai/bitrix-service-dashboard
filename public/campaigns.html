@@ -590,7 +590,7 @@ function msg(t,c){const e=document.getElementById('editMsg');e.className='msg '+
 let STATS_CAMP=null, STATS_FILTER='';
 function pct(n,d){ n=Number(n)||0; d=Number(d)||0; return d? Math.round(n/d*100) : 0; }
 function statOf(r){
-  if(r.bounced_at) return {k:'bounced',t:'Отказ'};
+  if(r.bounced_at) return {k:'bounced',t:'Сбой'};
   if(r.unsub_at)   return {k:'unsub',t:'Отписался'};
   if(r.clicked_at) return {k:'clicked',t:'Кликнул'};
   if(r.opened_at)  return {k:'opened',t:'Открыл'};
@@ -604,15 +604,21 @@ function funnelRow(label,val,base,color){
   const w=val>0? Math.max(2,p):0;                // минимальная ширина полоски — только для ненулевых
   return `<div class="fun-row"><div>${label}</div><div class="fun-bar"><i style="width:${w}%;background:${color}"></i></div><div class="fun-val">${val} · ${p}%</div></div>`;
 }
-function tilesHTML(a){
+function tilesHTML(a, clickable){
   const sent=a.sent||0;
+  // При clickable=true плитки кликабельны и фильтруют детализацию снизу.
+  const t=(cls,val,label,sub,key)=>{
+    const on=clickable && STATS_FILTER===key ? ' on' : '';
+    const clk=clickable ? ` onclick="setStatsFilter('${key}')" style="cursor:pointer"` : '';
+    return `<div class="stat ${cls}${on}"${clk}><div class="v">${val}</div><div class="l">${label}</div>${sub?`<div class="p">${sub}</div>`:''}</div>`;
+  };
   return `<div class="stat-row">
-    <div class="stat"><div class="v">${sent}</div><div class="l">Отправлено</div></div>
-    <div class="stat brand"><div class="v">${a.delivered||0}</div><div class="l">Доставлено</div><div class="p">${pct(a.delivered,sent)}% от отправленных</div></div>
-    <div class="stat good"><div class="v">${a.opened||0}</div><div class="l">Открыто</div><div class="p">${pct(a.opened,a.delivered)}% от доставленных</div></div>
-    <div class="stat good"><div class="v">${a.clicked||0}</div><div class="l">Клики</div><div class="p">${pct(a.clicked,a.delivered)}% от доставленных</div></div>
-    <div class="stat warn"><div class="v">${a.unsub||0}</div><div class="l">Отписки</div><div class="p">${pct(a.unsub,a.delivered)}% от доставленных</div></div>
-    <div class="stat bad"><div class="v">${a.bounced||0}</div><div class="l">Отказы</div><div class="p">${pct(a.bounced,sent)}% от отправленных</div></div>
+    ${t('', sent, 'Отправлено', '', 'sentall')}
+    ${t('brand', a.delivered||0, 'Доставлено', pct(a.delivered,sent)+'% от отправленных', 'delivered')}
+    ${t('good', a.opened||0, 'Открыто', pct(a.opened,a.delivered)+'% от доставленных', 'opened')}
+    ${t('good', a.clicked||0, 'Клики', pct(a.clicked,a.delivered)+'% от доставленных', 'clicked')}
+    ${t('warn', a.unsub||0, 'Отписки', pct(a.unsub,a.delivered)+'% от доставленных', 'unsub')}
+    ${t('bad', a.bounced||0, 'Сбой', pct(a.bounced,sent)+'% от отправленных', 'bounced')}
   </div>`;
 }
 function funnelHTML(a){
@@ -663,20 +669,42 @@ async function openCampStats(id){
   if(!ok||!d.ok){box.innerHTML='<div class="hint">Ошибка</div>';return;}
   STATS_CAMP=d; STATS_FILTER=''; renderCampStats();
 }
-async function refreshCampStats(){
+// Доотправка тем, кому можно (ошибки отправки + не обработанные). Сбой (жёсткие
+// отказы) НЕ трогаем.
+async function retryFailedSend(){
   if(!STATS_CAMP||!STATS_CAMP.campaign)return;
   const id=STATS_CAMP.campaign.id;
-  const btn=document.getElementById('stRefBtn'); if(btn){btn.disabled=true;btn.textContent='Обновляю из Selzy…';}
-  const {ok,d}=await api('/api/campaigns/'+id+'/analytics/refresh',{method:'POST'});
-  if(ok&&d.ok){ STATS_CAMP=d; renderCampStats(); }
-  else { if(btn){btn.disabled=false;btn.textContent='🔄 Обновить из Selzy';} alert((d&&d.error)||'Не удалось обновить'); }
+  if(!confirm('Дослать письма тем, кому НЕ ушло (ошибки отправки) и кто ещё не обработан?\nНесуществующие адреса из категории «Сбой» не затрагиваются.'))return;
+  const r=await api('/api/campaigns/'+id+'/retry-failed',{method:'POST'});
+  if(r.ok){
+    alert('Доотправка запущена'+(r.d&&r.d.reset!=null?(' · возвращено в очередь: '+r.d.reset):'')+'.\nСтатусы будут меняться по мере отправки — позже нажми «Обновить из Selzy».');
+    await openCampStats(id);
+  } else alert((r.d&&r.d.error)||'Не удалось запустить доотправку');
 }
-function setStatsFilter(f){ STATS_FILTER=(STATS_FILTER===f?'':f); renderCampStats(); }
+async function refreshCampStats(){
+  if(!STATS_CAMP||!STATS_CAMP.campaign)return;
+  const id=STATS_CAMP.campaign.id; const keepFilter=STATS_FILTER;
+  const btn=document.getElementById('stRefBtn'); if(btn){btn.disabled=true;btn.textContent='Обновляю из Selzy…';}
+  // Запускаем обновление статусов…
+  const r=await api('/api/campaigns/'+id+'/analytics/refresh',{method:'POST'});
+  // …и НЕЗАВИСИМО от ответа подтягиваем свежие данные GET-ом и перерисовываем
+  // прямо на месте (без ручного F5). Если refresh уже вернул данные — используем их.
+  let data=(r.ok&&r.d&&r.d.ok)?r.d:null;
+  if(!data){ const g=await api('/api/campaigns/'+id+'/analytics'); if(g.ok&&g.d&&g.d.ok) data=g.d; }
+  if(data){ STATS_CAMP=data; STATS_FILTER=keepFilter; renderCampStats(); }
+  else { if(btn){btn.disabled=false;btn.textContent='🔄 Обновить из Selzy';} alert((r.d&&r.d.error)||'Не удалось обновить'); }
+}
+function setStatsFilter(f){
+  STATS_FILTER=(STATS_FILTER===f?'':f); renderCampStats();
+  // Прокрутить к детализации, чтобы сразу были видны адресаты выбранного статуса.
+  if(STATS_FILTER){ const el=document.getElementById('detailAnchor'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }
+}
 // Фильтры/счётчики — накопительные (совпадают с плитками): «Доставлено» = все,
 // кто дошёл минимум до доставки, и т.д. Один адресат может попадать в несколько.
 function matchF(r,k){
   switch(k){
     case '': return true;
+    case 'sentall': return r.status==='sent'; // все реально отправленные
     case 'sent': return r.status==='sent' && !r.delivered_at && !r.bounced_at; // отправлено, статус ещё не пришёл
     case 'delivered': return !!r.delivered_at;
     case 'opened': return !!r.opened_at;
@@ -699,20 +727,21 @@ function renderCampStats(){
       <b style="font-size:15px">${esc(c.name||('#'+c.id))}</b>
       <span class="hint">${c.sent_at?('🕒 '+fmtDT(c.sent_at)):''}</span>
       <span style="margin-left:auto"></span>
+      ${((a.failed||0)+(a.pending||0))>0?`<button class="btn" onclick="retryFailedSend()" title="Повторно отправить тем, кому письмо не ушло (ошибки отправки) + не обработанным. Несуществующие адреса (Сбой) не затрагиваются.">↻ Дослать не ушедшим · ${(a.failed||0)+(a.pending||0)}</button>`:''}
       <button class="btn" onclick="exportStatsCSV()" title="Скачать детализацию в CSV (Excel)">⬇ Экспорт CSV</button>
       <button class="btn" id="stRefBtn" onclick="refreshCampStats()">🔄 Обновить из Selzy</button>
       ${isAdmin()?`<button class="btn" onclick="delCamp(${c.id})" title="Удалить рассылку">🗑 Удалить</button>`:''}
     </div>
     <div class="hint" style="margin:-2px 0 8px">${esc(c.subject||'')}</div>`;
-  html+=tilesHTML(a);
+  html+=tilesHTML(a, true);
   html+=`<div class="fl">Воронка</div>`+funnelHTML(a);
-  html+=`<div class="fl" style="margin-top:8px">Детализация по адресатам · показано ${shown.length}</div>
+  html+=`<div class="fl" id="detailAnchor" style="margin-top:8px">Детализация по адресатам · показано ${shown.length}</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 10px">
       <span class="chip-f ${STATS_FILTER===''?'on':''}" onclick="setStatsFilter('')">Все · ${recs.length}</span>
       ${chip('delivered','Доставлено')}
       ${chip('opened','Открыли')}
       ${chip('clicked','Кликнули')}
-      ${chip('bounced','Отказы')}
+      ${chip('bounced','Сбой')}
       ${chip('unsub','Отписались')}
       ${chip('failed','Ошибка')}
       ${chip('sent','Без статуса')}
@@ -734,7 +763,7 @@ function renderCampStats(){
       <td><span class="stbadge st-${s.k}">${s.t}</span></td>
       <td class="hint" style="white-space:nowrap">${r.opened_at?fmtDT(r.opened_at):'—'}</td>
       <td class="hint" style="white-space:nowrap">${r.clicked_at?fmtDT(r.clicked_at):'—'}</td>
-      <td class="hint" style="white-space:nowrap">${r.unsub_at?('отписка '+fmtDT(r.unsub_at)):(r.bounced_at?('отказ'+(r.track_status?(' · '+esc(r.track_status)):'')):'—')}</td>
+      <td class="hint" style="white-space:nowrap">${r.unsub_at?('отписка '+fmtDT(r.unsub_at)):(r.bounced_at?('сбой'+(r.track_status?(' · '+esc(r.track_status)):'')):'—')}</td>
     </tr>`; }).join('');
   html+=`</tbody></table></div>
     <div class="hint" style="margin-top:8px;line-height:1.5">Счётчики накопительные: «Доставлено» включает открытых и кликнувших, «Открыли» — кликнувших. Открытия/клики считаются трекингом Selzy — из-за защиты почты (Apple Mail, блокировка картинок) числа приблизительные. <b>Пересылку письма отследить нельзя.</b></div>`;
@@ -745,7 +774,7 @@ function exportStatsCSV(){
   const D=STATS_CAMP; if(!D)return;
   const rows=D.recipients||[];
   const q=v=>{ v=(v==null?'':String(v)); return /[";\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
-  const head=['E-mail','Компания','Статус','Отправлено','Доставлено','Открыто','Клик','Отписка','Отказ','Код Selzy'];
+  const head=['E-mail','Компания','Статус','Отправлено','Доставлено','Открыто','Клик','Отписка','Сбой','Код Selzy'];
   const lines=[head.join(';')];
   rows.forEach(r=>{ const s=statOf(r);
     lines.push([r.email,r.company_name||'',s.t,

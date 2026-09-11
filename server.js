@@ -650,6 +650,10 @@ initDB().then(() => {
     }, 90000);
     // Авто-рассылка операционного отчёта руководству (вт 18:00 Алматы = 13:00 UTC).
     try { require('./ops-report-scheduler').startOpsReportScheduler(); } catch (e) { console.error('ops-report scheduler start error:', e.message); }
+    // Рассылки: авто-доотправка прерванных кампаний (напр. после рестарта/деплоя) —
+    // продолжаем с места остановки без дублей. На старте + подстраховка раз в 10 мин.
+    setTimeout(() => { try { require('./campaigns-calc').resumeInterrupted(); } catch (e) { console.error('campaigns resume boot error:', e.message); } }, 15000);
+    setInterval(() => { try { require('./campaigns-calc').resumeInterrupted(); } catch (e) {} }, 10 * 60 * 1000);
     // Логистика: считается тяжело (~1 мин), поэтому НЕ на каждый заход страницы, а
     // в фоне — прогрев кэша на старте + освежение раз в час. Страница отдаёт кэш
     // мгновенно; кнопка «Обновить» пересчитывает по требованию.

@@ -501,7 +501,21 @@ async function sendOneSelzy(rec, campaign, html, attachFiles) {
   return id ? String(id) : null;
 }
 
-// Запуск рассылки (в фоне). Троттлинг + стоп-лист + запись статусов.
+// Кампании, отправляемые ПРЯМО СЕЙЧАС в этом процессе (защита от двойного запуска).
+const _activeSends = new Set();
+
+// Пересчитать счётчики sent/failed из таблицы получателей (корректно и при доотправке).
+async function recomputeCounts(campaignId) {
+  await pool.query(
+    `UPDATE ticketsmodule_campaigns SET
+       sent=(SELECT COUNT(*) FROM ticketsmodule_campaign_recipients WHERE campaign_id=$1 AND status='sent'),
+       failed=(SELECT COUNT(*) FROM ticketsmodule_campaign_recipients WHERE campaign_id=$1 AND status='failed')
+     WHERE id=$1`, [campaignId]);
+}
+
+// Запуск/доотправка рассылки (в фоне). Троттлинг + стоп-лист + запись статусов.
+// Крах-устойчиво: шлём ТОЛЬКО status='pending', каждого сразу помечаем — поэтому
+// при рестарте сервера отправка продолжается с места остановки и БЕЗ дублей.
 async function sendCampaign(campaignId) {
   await ensureSchema();
   if (PROVIDER === 'selzy') {
@@ -512,10 +526,12 @@ async function sendCampaign(campaignId) {
   }
   const c = (await pool.query('SELECT * FROM ticketsmodule_campaigns WHERE id=$1', [campaignId])).rows[0];
   if (!c) return { ok: false, error: 'Кампания не найдена' };
-  if (c.status === 'sending') return { ok: false, error: 'Рассылка уже идёт' };
-  await pool.query('UPDATE ticketsmodule_campaigns SET status=\'sending\', sent_at=NOW() WHERE id=$1', [campaignId]);
+  // Двойную отправку в одном процессе не допускаем. Но статус 'sending', оставшийся
+  // от упавшего процесса, НЕ блокирует — его подхватит доотправка.
+  if (_activeSends.has(campaignId)) return { ok: false, error: 'Рассылка уже идёт' };
+  _activeSends.add(campaignId);
+  await pool.query("UPDATE ticketsmodule_campaigns SET status='sending', sent_at=COALESCE(sent_at,NOW()) WHERE id=$1", [campaignId]);
   (async () => {
-    let sent = 0, failed = 0;
     try {
       const files = await filesForSend(campaignId);
       const { rows: recs } = await pool.query(
@@ -525,31 +541,63 @@ async function sendCampaign(campaignId) {
       for (let i = 0; i < recs.length; i += SEND_BATCH) {
         const batch = recs.slice(i, i + SEND_BATCH);
         for (const rec of batch) {
+          // Ещё раз проверяем статус ПЕРЕД отправкой — чтобы не отправить повторно,
+          // если запись уже обработана (защита от дублей при гонках/повторном запуске).
+          const cur = await pool.query("SELECT status FROM ticketsmodule_campaign_recipients WHERE id=$1", [rec.id]);
+          if (!cur.rows.length || cur.rows[0].status !== 'pending') continue;
           try {
             const mid = await sendOne(rec, c, files);
-            await pool.query('UPDATE ticketsmodule_campaign_recipients SET status=\'sent\', message_id=$1, at=NOW() WHERE id=$2', [mid, rec.id]);
-            sent++;
+            await pool.query("UPDATE ticketsmodule_campaign_recipients SET status='sent', message_id=$1, at=NOW() WHERE id=$2 AND status='pending'", [mid, rec.id]);
           } catch (e) {
-            await pool.query('UPDATE ticketsmodule_campaign_recipients SET status=\'failed\', error=$1, at=NOW() WHERE id=$2', [String(e.message).slice(0, 300), rec.id]);
-            failed++;
+            await pool.query("UPDATE ticketsmodule_campaign_recipients SET status='failed', error=$1, at=NOW() WHERE id=$2 AND status='pending'", [String(e.message).slice(0, 300), rec.id]);
           }
-          // Selzy: не чаще 60 писем/мин — держим паузу между письмами.
           if (PROVIDER === 'selzy') await sleep(SELZY_INTERVAL_MS);
         }
-        await pool.query('UPDATE ticketsmodule_campaigns SET sent=$1, failed=$2 WHERE id=$3', [sent, failed, campaignId]);
+        await recomputeCounts(campaignId);
         if (i + SEND_BATCH < recs.length) await sleep(SEND_PAUSE_MS);
       }
       // отписанных помечаем
       await pool.query(`UPDATE ticketsmodule_campaign_recipients r SET status='unsub'
         WHERE r.campaign_id=$1 AND r.status='pending' AND EXISTS (SELECT 1 FROM ticketsmodule_campaign_suppression s WHERE s.email=r.email)`, [campaignId]);
-      await pool.query('UPDATE ticketsmodule_campaigns SET status=\'sent\', sent=$1, failed=$2 WHERE id=$3', [sent, failed, campaignId]);
-      console.log(`campaigns: кампания #${campaignId} — отправлено ${sent}, ошибок ${failed}`);
+      await recomputeCounts(campaignId);
+      await pool.query("UPDATE ticketsmodule_campaigns SET status='sent' WHERE id=$1", [campaignId]);
+      console.log(`campaigns: кампания #${campaignId} — отправка завершена`);
     } catch (e) {
       console.error('sendCampaign run error:', e.message);
-      await pool.query('UPDATE ticketsmodule_campaigns SET status=\'failed\' WHERE id=$1', [campaignId]).catch(() => {});
+      // НЕ ставим 'failed' — оставляем 'sending', чтобы авто-доотправка продолжила с места остановки.
+      await recomputeCounts(campaignId).catch(() => {});
+    } finally {
+      _activeSends.delete(campaignId);
     }
   })();
   return { ok: true, started: true };
+}
+
+// Доотправить тем, кому МОЖНО: у кого письмо не ушло (ошибка отправки) — их
+// возвращаем в 'pending'; плюс sendCampaign сам дошлёт всех оставшихся 'pending'.
+// Жёсткие отказы ('bounced' — несуществующие адреса) НЕ трогаем: повтор по ним
+// вредит репутации. Дублей нет — отправка идёт только по 'pending'.
+async function retryFailed(campaignId) {
+  await ensureSchema();
+  const { rowCount } = await pool.query(
+    "UPDATE ticketsmodule_campaign_recipients SET status='pending', error=NULL WHERE campaign_id=$1 AND status='failed'",
+    [campaignId]);
+  const out = await sendCampaign(campaignId);
+  return { ok: out.ok !== false, reset: rowCount, ...out };
+}
+
+// Авто-доотправка прерванных рассылок (напр. после рестарта/деплоя): продолжаем
+// с места остановки. Дублей нет — шлём только тех, кто ещё 'pending'.
+async function resumeInterrupted() {
+  try {
+    await ensureSchema();
+    const { rows } = await pool.query("SELECT id FROM ticketsmodule_campaigns WHERE status='sending' ORDER BY id");
+    for (const r of rows) {
+      if (_activeSends.has(r.id)) continue;
+      console.log('campaigns: возобновляю прерванную рассылку #' + r.id);
+      sendCampaign(r.id);
+    }
+  } catch (e) { console.error('resumeInterrupted error:', e.message); }
 }
 
 // ── Ассеты рассылок (логотип письма) ────────────────────────────────────────
@@ -580,7 +628,7 @@ async function deleteAsset(key) {
 module.exports = {
   ensureSchema, syncAudience, getIndustries, getCompanies, searchCompanies,
   createCampaign, updateCampaign, listCampaigns, getCampaign, deleteCampaign,
-  setRecipients, sendCampaign, suppress, unsubVerify, industryMap,
+  setRecipients, sendCampaign, resumeInterrupted, retryFailed, suppress, unsubVerify, industryMap,
   addFile, listFiles, deleteFile, setFileKind, getFileByToken,
   getAsset, setAsset, deleteAsset,
 };
