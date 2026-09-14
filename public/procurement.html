@@ -1004,21 +1004,28 @@ function renderDetail(id,d){
     if(curKey==='approve'){ body+=approvalHtml(id,d)+'<div style="margin-top:16px"></div>'; hdr='Согласование закупки'; }
     else hdr='Документы закупки';
     if(role==='accountant'){
+      // Бухгалтер видит ВСЕ закупки, но действует только по СВОИМ — тем, где он
+      // назначен бухгалтером на оплату (или он главбух и бухгалтер не назначен),
+      // либо назначен на доверенность. По чужим — только просмотр документов.
+      const mineAcc = !!meBid && String(d.accountantBid||META.chiefAccountant||'')===meBid;
+      const minePoa = d.poaRequired && String(d.poaAccountantBid||'')===meBid;
       // Бухгалтер грузит ТОЛЬКО то, что относится к нему: подтверждение оплаты
-      // (на этапе «Оплата»), и доверенность — если она требуется и назначена
-      // именно ему. Накладные / гарантийный / чужая доверенность — не его слоты
-      // (их видно выше в «Приложенных документах», без кнопки загрузки).
+      // (на этапе «Оплата», если оплата на нём), и доверенность — если она
+      // требуется и назначена именно ему.
       const up=[];
-      if(curKey==='payment'){ up.push('pay'); hdr='Оплата закупки'; }
-      if(d.poaRequired && String(d.poaAccountantBid||'')===meBid) up.push('poa');
+      if(curKey==='payment' && mineAcc){ up.push('pay'); hdr='Оплата закупки'; }
+      if(minePoa) up.push('poa');
       if(up.length){
         body+='<div class="deth">Загрузка документов</div>';
         up.forEach(sl=>{ body+=`<div class="fl" style="margin-top:10px">${DOC_LABELS[sl]}</div>`+filesSlotHtml(id,d,sl); });
+      } else if(curKey==='payment' && !mineAcc){
+        body+='<div class="hint" style="margin-top:6px">Эта закупка на оплату назначена другому бухгалтеру — доступен только просмотр документов.</div>';
       } else {
         body+='<div class="hint" style="margin-top:6px">Документы закупки показаны выше. Загрузка от вас на этом этапе не требуется.</div>';
       }
-      // Комментарий бухгалтера + ручной переход на «Ожидание товара» — на этапе оплаты.
-      if(curKey==='payment'){
+      // Комментарий бухгалтера + ручной переход на «Ожидание товара» — только по
+      // своим закупкам на этапе оплаты.
+      if(curKey==='payment' && mineAcc){
         body+=payCommentBlock(id);
         const hasPay=((d.files&&d.files.pay)||[]).length>0;
         const hasPoa=((d.files&&d.files.poa)||[]).length>0;

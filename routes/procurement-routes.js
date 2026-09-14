@@ -8,9 +8,14 @@ const ROLES = ['admin', 'coordinator', 'store'];
 // где он согласующий/ответственный/инициатор; правами на правку не наделяется,
 // но может согласовывать назначенные на него закупки).
 const VIEW_ROLES = ['admin', 'coordinator', 'store', 'engineer', 'accountant', 'marketolog'];
-// Роли, которые видят/согласовывают ТОЛЬКО свои закупки.
+// Роли, «прилипающие» к своим закупкам при согласовании (approval) — решают только
+// от своего имени и только если назначены согласующими.
 // marketolog — «полный цикл по своим»: правит только свои заявки (см. canEditReq).
 const OWN_ONLY = ['engineer', 'accountant', 'marketolog'];
+// Роли, которые в ПЕРЕЧНЕ видят только свои закупки. Бухгалтер (accountant) сюда
+// НЕ входит: он видит ВСЕ закупки (для сверки/контроля), но действует только по
+// своим — это проверяется на самих операциях через ownScopedOk/ownsRequest.
+const LIST_OWN_ONLY = ['engineer', 'marketolog'];
 // Удаление закупок — БЕЗ store (store может всё, кроме удаления).
 const DEL_ROLES = ['admin', 'coordinator'];
 // Роли редактирования: полный доступ + marketolog (только к своим — проверяется ownsRequest).
@@ -25,10 +30,11 @@ async function canEditReq(user, id) {
   }
   return false;
 }
-// Для маршрутов VIEW_ROLES (где инженер/бухгалтер уже допущены): НЕ трогаем их права,
-// а marketolog ограничиваем только своими заявками. true = пропустить дальше.
-async function marketologOwnOk(user, id) {
-  if (user.role !== 'marketolog') return true;
+// Для маршрутов VIEW_ROLES (куда допущены и бухгалтер, и маркетолог): пропускаем
+// всех, КРОМЕ own-only ролей (marketolog, accountant), которым разрешаем операцию
+// только по СВОИМ заявкам. true = пропустить дальше.
+async function ownScopedOk(user, id) {
+  if (user.role !== 'marketolog' && user.role !== 'accountant') return true;
   try { return await require('../procurement-calc').ownsRequest(id, user); } catch (e) { return false; }
 }
 
@@ -114,8 +120,8 @@ router.get('/list-version', requireAuth(VIEW_ROLES), async (req, res) => {
 router.get('/list', requireAuth(VIEW_ROLES), async (req, res) => {
   try {
     const { listRequests } = require('../procurement-calc');
-    // engineer/sales и бухгалтер видят только свои закупки; остальные роли — все.
-    const own = OWN_ONLY.includes(req.user.role);
+    // engineer/sales и marketolog видят только свои закупки; остальные (вкл. бухгалтера) — все.
+    const own = LIST_OWN_ONLY.includes(req.user.role);
     const ownerBid = own ? (req.user.bitrix_user_id || null) : null;
     const ownerUid = own ? req.user.id : null;   // marketolog видит по _createdBy (может быть без Bitrix-связки)
     res.json({ items: await listRequests(ownerBid, ownerUid) });
@@ -182,6 +188,8 @@ router.post('/:id/stage', requireAuth(VIEW_ROLES), express.json(), async (req, r
         if (!(role === 'accountant' && body.stageKey === 'waiting')) {
           return res.status(403).json({ error: 'Недостаточно прав для смены стадии' });
         }
+        // Бухгалтер двигает только СВОИ заявки (назначенные ему на оплату).
+        if (!(await ownScopedOk(req.user, id))) return res.status(403).json(DENY_OWN);
         const cur = await currentStepKey(id);
         if (cur !== 'payment') {
           return res.status(403).json({ error: 'Двигать заявку можно только с этапа «Оплата закупки».' });
@@ -204,7 +212,7 @@ router.post('/:id/files', requireAuth(VIEW_ROLES), express.json({ limit: '45mb' 
   try {
     const { addFile } = require('../procurement-calc');
     const id = parseInt(req.params.id, 10);
-    if (!(await marketologOwnOk(req.user, id))) return res.status(403).json(DENY_OWN);
+    if (!(await ownScopedOk(req.user, id))) return res.status(403).json(DENY_OWN);
     const { slot, filename, base64, mime, warehouse, acceptDate, comment } = req.body || {};
     if (!slot || !base64) return res.status(400).json({ error: 'Нужны slot и base64' });
     const out = await addFile(id, slot, { filename: filename || 'file', base64, mime, warehouse, acceptDate, comment }, req.user.bitrix_user_id || null);
@@ -220,7 +228,7 @@ router.post('/:id/files-batch', requireAuth(VIEW_ROLES), express.json({ limit: '
   try {
     const { addFilesBatch } = require('../procurement-calc');
     const id = parseInt(req.params.id, 10);
-    if (!(await marketologOwnOk(req.user, id))) return res.status(403).json(DENY_OWN);
+    if (!(await ownScopedOk(req.user, id))) return res.status(403).json(DENY_OWN);
     const { slot, files } = req.body || {};
     if (!slot || !Array.isArray(files) || !files.length) return res.status(400).json({ error: 'Нужны slot и files[]' });
     const out = await addFilesBatch(id, slot, files, req.user.bitrix_user_id || null);
@@ -394,7 +402,7 @@ router.post('/:id/amount', requireAuth(EDIT_ROLES), express.json(), async (req, 
 router.post('/:id/pay-comment', requireAuth(VIEW_ROLES), express.json(), async (req, res) => {
   try {
     const { setPayComment } = require('../procurement-calc');
-    if (!(await marketologOwnOk(req.user, parseInt(req.params.id, 10)))) return res.status(403).json(DENY_OWN);
+    if (!(await ownScopedOk(req.user, parseInt(req.params.id, 10)))) return res.status(403).json(DENY_OWN);
     res.json(await setPayComment(parseInt(req.params.id, 10), (req.body || {}).comment));
   } catch (e) {
     console.error('POST /api/procurement/:id/pay-comment error:', e.message);

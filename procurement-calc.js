@@ -535,13 +535,26 @@ async function listRequests(ownerBid, ownerUid) {
 // инициатор/ответственный по Bitrix-id.
 async function ownsRequest(localId, user) {
   if (!user) return false;
-  const { rows } = await pool.query('SELECT payload, created_by FROM ticketsmodule_procurement WHERE id=$1', [localId]);
+  const { rows } = await pool.query('SELECT payload, created_by, accountant_bid, stage_id FROM ticketsmodule_procurement WHERE id=$1', [localId]);
   if (!rows.length) return false;
-  const pl = rows[0].payload || {};
+  const r = rows[0];
+  const pl = r.payload || {};
   const uid = user.id != null ? String(user.id) : null;
   const bid = user.bitrix_user_id ? String(user.bitrix_user_id) : null;
-  if (uid && (String(pl._createdBy || '') === uid || (rows[0].created_by != null && String(rows[0].created_by) === uid))) return true;
+  if (uid && (String(pl._createdBy || '') === uid || (r.created_by != null && String(r.created_by) === uid))) return true;
   if (bid && (String(pl.initiatorBid || '') === bid || String(pl.assigned || '') === bid)) return true;
+  // Бухгалтер «владеет» заявкой, назначенной ему на оплату или на доверенность, а
+  // также (главбух) заявкой без явного бухгалтера, дошедшей до этапа «Оплата закупки»
+  // — та же логика причастности, что и в перечне (listRequests).
+  if (bid) {
+    if (String(r.accountant_bid || '') === bid || String(pl.poaAccountantBid || '') === bid) return true;
+    const paymentIdx = FLOW.findIndex(s => s.key === 'payment');
+    const stepIndex = stepIndexForStage(r.stage_id);
+    if (paymentIdx >= 0 && stepIndex >= paymentIdx) {
+      const acc = r.accountant_bid ? String(r.accountant_bid) : String(chiefAccountantId() || '');
+      if (acc && acc === bid) return true;
+    }
+  }
   return false;
 }
 
