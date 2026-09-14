@@ -19,6 +19,13 @@ function parseYears(req) {
   return arr.length ? [...new Set(arr)].sort((a, b) => a - b) : [new Date().getFullYear()];
 }
 
+// GET /api/stats/lead-entry — «Заведение сделок»: кто и на какой стадии впервые
+// завёл сделку, помесячно. Возвращает все годы разом; фильтрация — на фронте.
+router.get('/lead-entry', requireAuth(PM_ROLES), async (req, res) => {
+  try { res.json(await require('../stats-leadentry-calc').getLeadEntry()); }
+  catch (e) { console.error('GET /api/stats/lead-entry error:', e.message); res.status(500).json({ error: e.message }); }
+});
+
 // GET /api/stats/board?years=2025,2026 — единый борд новой Статистики (все вкладки).
 // Мультивыбор лет: данные суммируются. Кэш в процессе на 10 мин по набору лет.
 const _boardCache = new Map();

@@ -121,6 +121,30 @@ tbody tr:hover td.l{background:var(--panel-h)}
 .cxbox{background:rgba(53,208,192,.08);border:1px solid rgba(53,208,192,.25);border-radius:10px;padding:10px 14px;margin:14px 0 4px;font-size:13px;color:var(--dim)}
 .cxbox b{color:var(--text)}
 .empty{color:var(--faint);text-align:center;padding:40px;font-size:14px}
+/* Эффективность / заведение сделок */
+.chip-le{display:inline-block;padding:5px 11px;margin:0 4px 4px 0;border-radius:20px;border:1px solid var(--line-2);background:var(--panel);color:var(--dim);font-size:12.5px;font-weight:600;cursor:pointer}
+.chip-le.on{background:var(--brand);border-color:var(--brand);color:#fff}
+.le-filters{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.le-fl{font-size:12px;color:var(--dim);margin-bottom:5px;font-weight:600}
+.le-hint{color:var(--faint);font-weight:400}
+.le-chips{max-width:440px}
+.le-mgr{position:relative}
+.le-mgr>summary{list-style:none;cursor:pointer;background:var(--panel);border:1px solid var(--line-2);border-radius:10px;padding:8px 13px;font-size:13px;font-weight:600;color:var(--text);min-width:170px}
+.le-mgr>summary::-webkit-details-marker{display:none}
+.le-mgr-menu{position:absolute;z-index:40;margin-top:6px;background:var(--panel-h);border:1px solid var(--line-2);border-radius:12px;padding:6px;min-width:240px;max-height:320px;overflow:auto;box-shadow:0 16px 40px rgba(0,0,0,.55)}
+.le-mgr-menu label{display:flex;gap:9px;align-items:center;padding:6px 8px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--text)}
+.le-mgr-menu label:hover{background:var(--panel)}
+.le-mgr-menu input{width:auto;accent-color:var(--signal)}
+.le-mact{display:flex;gap:12px;padding:4px 8px 6px}
+.le-mact a{color:var(--signal);font-size:12px;cursor:pointer}.le-mact a:hover{text-decoration:underline}
+.le-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12.5px;color:var(--dim)}
+.le-legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.le-chart{display:flex;gap:10px;align-items:flex-end;overflow-x:auto;padding-top:18px;min-height:260px}
+.le-col{flex:1;min-width:34px;display:flex;flex-direction:column;align-items:center;gap:4px}
+.le-tot{font-size:12px;color:var(--text);font-weight:700;height:16px;font-variant-numeric:tabular-nums}
+.le-stack{width:100%;max-width:46px;height:220px;display:flex;flex-direction:column-reverse;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.03)}
+.le-stack i{width:100%;display:block}
+.le-x{font-size:11.5px;color:var(--dim);white-space:nowrap}
 .spin{width:30px;height:30px;border:3px solid var(--line);border-top-color:var(--signal);border-radius:50%;animation:sp 1s linear infinite;margin:60px auto}
 @keyframes sp{to{transform:rotate(360deg)}}
 .hint{color:var(--faint);font-size:12px;margin:8px 2px}
@@ -235,7 +259,7 @@ function render(){
     <div class="kpi" style="--kc:var(--signal)"><div class="kv">${F(k.companies)}</div><div class="kl">Компаний-покупателей</div></div>
     <div class="kpi" style="--kc:var(--warn)"><div class="kv">${F(k.managers)}</div><div class="kl">Менеджеров с продажами</div></div>
   </div>`;
-  const tabs=`<div class="tabs">${tabBtn('producers','Производители')}${tabBtn('managers','Менеджеры')}${tabBtn('instruments','Приборы')}${tabBtn('companies','Компании')}${tabBtn('spheres','Сферы')}${tabBtn('conversions','Конверсии')}</div><div id="tab"></div>`;
+  const tabs=`<div class="tabs">${tabBtn('producers','Производители')}${tabBtn('managers','Менеджеры')}${tabBtn('instruments','Приборы')}${tabBtn('companies','Компании')}${tabBtn('spheres','Сферы')}${tabBtn('conversions','Конверсии')}${tabBtn('leadentry','Эффективность')}</div><div id="tab"></div>`;
   document.getElementById('content').innerHTML=kpis+'<div id="funnelWrap"></div>'+tabs;
   renderFunnel();
   renderTab();
@@ -294,6 +318,7 @@ function renderTab(){
   else if(TAB==='companies')el.innerHTML=renderCompanies();
   else if(TAB==='spheres')el.innerHTML=renderSpheres();
   else if(TAB==='conversions')el.innerHTML=renderConversions();
+  else if(TAB==='leadentry')el.innerHTML=renderLeadEntry();
 }
 
 function renderProducers(){
@@ -573,6 +598,74 @@ function convTable(title,rows){
     <div class="tscroll"><table><thead><tr>
       <th class="l">${esc(title)}</th><th>Сделка</th><th>КП</th><th>Контракт</th><th>Конв.</th><th>Ср. до КП</th><th>Ср. цикл</th>
     </tr></thead><tbody>${body}</tbody></table></div></div>`;
+}
+// ── Эффективность: заведение сделок по стадиям (кто и на какой стадии завёл) ──
+let LE=null, LE_Y=new Set(), LE_M=new Set(), LE_MGR=new Set(), LE_INIT=false;
+const LE_STEPS=['P10','P30','P60','P80','Contract'];
+const LE_COL={P10:'#5b8cff',P30:'#a56bff',P60:'#ffb020',P80:'#22c9a3',Contract:'#3ddc84'};
+const LE_MON=['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+async function loadLeadEntry(){
+  try{const r=await fetch('/api/stats/lead-entry');LE=await r.json();}catch(e){LE={ok:false,rows:[],managers:[],years:[]};}
+  if(TAB==='leadentry') render();
+}
+function leToggle(set,val){ if(set.has(val))set.delete(val); else set.add(val); render(); }
+function leAllMgr(on){ LE_MGR.clear(); if(on)(LE.managers||[]).forEach(m=>LE_MGR.add(m.id)); render(); }
+function renderLeadEntry(){
+  if(!LE){ loadLeadEntry(); return '<div class="empty">Загрузка…</div>'; }
+  if(!LE.rows) return '<div class="empty">Нет данных.</div>';
+  if(!LE_INIT){
+    const cy=new Date().getFullYear();
+    LE_Y=new Set([ (LE.years&&LE.years.includes(cy))?cy:((LE.years&&LE.years[0])||cy) ]);
+    LE_M=new Set(); LE_MGR=new Set(); LE_INIT=true;
+  }
+  const now=new Date(), curY=now.getFullYear(), curM=now.getMonth();
+  const years=(LE.years&&LE.years.length?LE.years:[curY]);
+  const useMgr=LE_MGR.size>0, useM=LE_M.size>0;
+  const rows=LE.rows.filter(r=> LE_Y.has(r.year) && (!useM||LE_M.has(r.month)) && (!useMgr||LE_MGR.has(r.creator)));
+  const cols=[];
+  [...LE_Y].sort((a,b)=>a-b).forEach(y=>{ for(let m=0;m<12;m++){
+    if(useM && !LE_M.has(m)) continue;
+    if(y>curY || (y===curY && m>curM)) continue;   // будущие месяцы не показываем
+    cols.push({y,m});
+  }});
+  const cell={}, mgrTot={};
+  rows.forEach(r=>{
+    const ck=r.year+'-'+r.month; (cell[ck]=cell[ck]||{})[r.step]=(cell[ck][r.step]||0)+r.n;
+    const mt=mgrTot[r.creator]=mgrTot[r.creator]||{total:0}; mt[r.step]=(mt[r.step]||0)+r.n; mt.total+=r.n;
+  });
+  const colTotal=c=>LE_STEPS.reduce((s,st)=>s+((cell[c.y+'-'+c.m]||{})[st]||0),0);
+  const maxT=Math.max(1,...cols.map(colTotal));
+  const yBtns=years.map(y=>`<span class="chip-le ${LE_Y.has(y)?'on':''}" onclick="leToggle(LE_Y,${y})">${y}</span>`).join('');
+  const mBtns=LE_MON.map((nm,i)=>`<span class="chip-le ${LE_M.has(i)?'on':''}" onclick="leToggle(LE_M,${i})">${nm}</span>`).join('');
+  const mgrOpts=(LE.managers||[]).map(m=>`<label><input type="checkbox" ${LE_MGR.has(m.id)?'checked':''} onchange="leToggle(LE_MGR,'${m.id}')"><span>${esc(m.name)}</span></label>`).join('');
+  const filters=`<div class="card"><div class="le-filters">
+      <div><div class="le-fl">Год</div><div class="le-chips">${yBtns}</div></div>
+      <div><div class="le-fl">Месяцы <span class="le-hint">(пусто = все)</span></div><div class="le-chips">${mBtns}</div></div>
+      <div><div class="le-fl">Сотрудники <span class="le-hint">(пусто = все)</span></div>
+        <details class="le-mgr"><summary>${LE_MGR.size?(LE_MGR.size+' выбрано'):'Все сотрудники'}</summary>
+          <div class="le-mgr-menu"><div class="le-mact"><a onclick="leAllMgr(true)">выбрать все</a><a onclick="leAllMgr(false)">сбросить</a></div>${mgrOpts||'<div class="le-hint" style="padding:6px">нет данных</div>'}</div>
+        </details>
+      </div>
+    </div>
+    <div class="le-legend">${LE_STEPS.map(st=>`<span><i style="background:${LE_COL[st]}"></i>${st}</span>`).join('')}</div>
+  </div>`;
+  let chart;
+  if(!cols.length){ chart='<div class="card"><div class="empty">Нет данных за выбранный период.</div></div>'; }
+  else {
+    const bars=cols.map(c=>{
+      const d=cell[c.y+'-'+c.m]||{}; const tot=colTotal(c);
+      const segs=LE_STEPS.map(st=>{ const v=d[st]||0; if(!v)return ''; return `<i title="${st}: ${v}" style="height:${(v/maxT*100).toFixed(2)}%;background:${LE_COL[st]}"></i>`; }).join('');
+      const lbl=LE_MON[c.m]+(LE_Y.size>1?(' '+String(c.y).slice(2)):'');
+      return `<div class="le-col"><div class="le-tot">${tot||''}</div><div class="le-stack">${segs}</div><div class="le-x">${lbl}</div></div>`;
+    }).join('');
+    chart=`<div class="card"><h3>Заведение сделок по стадиям · помесячно</h3><div class="le-chart">${bars}</div></div>`;
+  }
+  const mgrRows=Object.entries(mgrTot).map(([cid,mt])=>({name:((LE.managers.find(m=>m.id===cid)||{}).name)||('#'+cid),mt})).sort((a,b)=>b.mt.total-a.mt.total);
+  const gtot={total:0}; LE_STEPS.forEach(st=>gtot[st]=0); mgrRows.forEach(r=>{gtot.total+=r.mt.total;LE_STEPS.forEach(st=>gtot[st]+=(r.mt[st]||0));});
+  const tbl=`<div class="card"><h3>По сотрудникам</h3><div class="tscroll"><table><thead><tr><th style="text-align:left">Сотрудник</th>${LE_STEPS.map(st=>`<th>${st}</th>`).join('')}<th>Итого</th></tr></thead><tbody>
+    ${mgrRows.map(r=>`<tr><td style="text-align:left">${esc(r.name)}</td>${LE_STEPS.map(st=>`<td>${r.mt[st]||''}</td>`).join('')}<td><b>${r.mt.total}</b></td></tr>`).join('')||`<tr><td colspan="${LE_STEPS.length+2}" class="empty">Нет данных</td></tr>`}
+    </tbody><tfoot><tr><td style="text-align:left"><b>Итого</b></td>${LE_STEPS.map(st=>`<td><b>${gtot[st]||''}</b></td>`).join('')}<td><b>${gtot.total}</b></td></tr></tfoot></table></div></div>`;
+  return filters+chart+tbl;
 }
 async function loadConversions(){
   try{const r=await fetch('/api/stats/conversions?year='+BOARD.year);CONV=await r.json();if(!CONV.year)CONV.year=BOARD.year;}

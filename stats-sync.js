@@ -42,7 +42,7 @@ const CATEGORY_IDS = ['0', '1', '2', '3'];
 
 const SELECT_FIELDS = [
   'ID', 'TITLE', 'CATEGORY_ID', 'STAGE_ID', 'TYPE_ID', 'OPPORTUNITY', 'CURRENCY_ID', 'DATE_CREATE',
-  'COMPANY_ID', 'ASSIGNED_BY_ID', REAL_CONTRACT_DATE_FIELD, INSTRUMENT_FIELD, DEPARTMENT_FIELD, MANUF_FIELD, MODEL_FIELD,
+  'COMPANY_ID', 'ASSIGNED_BY_ID', 'CREATED_BY_ID', REAL_CONTRACT_DATE_FIELD, INSTRUMENT_FIELD, DEPARTMENT_FIELD, MANUF_FIELD, MODEL_FIELD,
   PLANNED_PURCHASE_FIELD, LIKELY_DEAL_FIELD, INSTALL_DATE_FIELD, WARRANTY_END_FIELD, END_USER_FIELD,
   KP_TYPE_FIELD, COMPLEX_FLAG_FIELD, PARENT_DEAL_FIELD, COMPANY_GROUP_FIELD,
 ];
@@ -191,18 +191,18 @@ async function upsertDeal(d) {
       (deal_id, category_id, stage_id, deal_type_id, opportunity, currency_id, company_id, assigned_by_id,
        contract_date, instrument_name, department_id, manufacturer, industry, deal_title, date_create, company_name,
        planned_purchase_date, likely_deal, install_date, warranty_end, end_user,
-       kp_type, is_complex, parent_deal_id, group_ref, synced_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,NOW())
+       kp_type, is_complex, parent_deal_id, group_ref, created_by_id, synced_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,NOW())
      ON CONFLICT (deal_id) DO UPDATE SET
        category_id=$2, stage_id=$3, deal_type_id=$4, opportunity=$5, currency_id=$6, company_id=$7, assigned_by_id=$8,
        contract_date=$9, instrument_name=$10, department_id=$11, manufacturer=$12, industry=$13, deal_title=$14,
        date_create=$15, company_name=$16, planned_purchase_date=$17, likely_deal=$18, install_date=$19, warranty_end=$20, end_user=$21,
-       kp_type=$22, is_complex=$23, parent_deal_id=$24, group_ref=$25, synced_at=NOW()`,
+       kp_type=$22, is_complex=$23, parent_deal_id=$24, group_ref=$25, created_by_id=$26, synced_at=NOW()`,
     [d.ID, parseInt(d.CATEGORY_ID, 10), d.STAGE_ID, d.TYPE_ID || null, parseFloat(d.OPPORTUNITY) || 0, d.CURRENCY_ID || 'KZT',
      d.COMPANY_ID || null, d.ASSIGNED_BY_ID ? parseInt(d.ASSIGNED_BY_ID, 10) : null,
      contractDate, instrumentName, d[DEPARTMENT_FIELD] || null, manufacturer, company.industry, d.TITLE || null,
      dateCreate, company.name || null, plannedPurchase, likelyDeal, installDate, warrantyEnd, endUser,
-     kpType, isComplex, parentDealId, groupRef]
+     kpType, isComplex, parentDealId, groupRef, d.CREATED_BY_ID ? parseInt(d.CREATED_BY_ID, 10) : null]
   );
 }
 

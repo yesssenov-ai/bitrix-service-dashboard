@@ -303,6 +303,9 @@ async function initDB() {
     ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS planned_purchase_date DATE;
     ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS likely_deal BOOLEAN DEFAULT FALSE;
     CREATE INDEX IF NOT EXISTS idx_stat_deals_planned ON ticketsmodule_stat_deals(planned_purchase_date);
+    -- Для отчёта «Эффективность/Заведение сделок»: КТО создал сделку (CREATED_BY_ID).
+    ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS created_by_id INTEGER;
+    CREATE INDEX IF NOT EXISTS idx_stat_deals_createdby ON ticketsmodule_stat_deals(created_by_id);
     -- Для модуля «КП · Сервис» (таргетинг по установочной базе): дата установки/
     -- начала гарантии и окончание гарантии из сделки Bitrix.
     ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS install_date DATE;
