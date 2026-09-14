@@ -148,6 +148,28 @@ tbody tr:hover td.l{background:var(--panel-h)}
 .spin{width:30px;height:30px;border:3px solid var(--line);border-top-color:var(--signal);border-radius:50%;animation:sp 1s linear infinite;margin:60px auto}
 @keyframes sp{to{transform:rotate(360deg)}}
 .hint{color:var(--faint);font-size:12px;margin:8px 2px}
+/* ── Проигранные ── */
+.ldays{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.ltiles{display:flex;gap:12px;flex-wrap:wrap;margin:14px 0}
+.ltile{flex:1;min-width:150px;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--lc,#5b8cff);border-radius:12px;padding:12px 14px;cursor:pointer;transition:.15s}
+.ltile:hover{border-color:var(--lc)}
+.ltile.on{background:color-mix(in srgb,var(--lc) 14%,var(--panel));border-color:var(--lc)}
+.ltile .lt-n{font-size:24px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums;line-height:1}
+.ltile .lt-l{font-size:12.5px;color:var(--dim);margin-top:4px}
+.ltile .lt-s{font-size:12px;color:var(--faint);margin-top:2px}
+.lrbars{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.lrbar{display:grid;grid-template-columns:minmax(160px,260px) 1fr 40px;align-items:center;gap:10px;cursor:pointer;padding:4px 6px;border-radius:8px}
+.lrbar:hover{background:rgba(255,255,255,.03)}
+.lrbar.on{background:color-mix(in srgb,var(--brand) 12%,transparent)}
+.lrb-l{font-size:12.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lrb-track{height:14px;background:rgba(255,255,255,.05);border-radius:7px;overflow:hidden}
+.lrb-fill{height:100%;background:linear-gradient(90deg,var(--brand),var(--brand-h));border-radius:7px}
+.lrb-n{font-size:12.5px;font-weight:700;text-align:right;color:var(--text);font-variant-numeric:tabular-nums}
+.lbadge{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:var(--lc,#9aa3b2);border-radius:6px;padding:1px 7px;margin-right:6px}
+.lstage{font-size:11.5px;color:var(--dim)}
+.lnote{cursor:help}
+.lmuted{color:var(--faint)}
+.lhead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 </style>
 </head>
 <body>
@@ -259,7 +281,7 @@ function render(){
     <div class="kpi" style="--kc:var(--signal)"><div class="kv">${F(k.companies)}</div><div class="kl">Компаний-покупателей</div></div>
     <div class="kpi" style="--kc:var(--warn)"><div class="kv">${F(k.managers)}</div><div class="kl">Менеджеров с продажами</div></div>
   </div>`;
-  const tabs=`<div class="tabs">${tabBtn('producers','Производители')}${tabBtn('managers','Менеджеры')}${tabBtn('instruments','Приборы')}${tabBtn('companies','Компании')}${tabBtn('spheres','Сферы')}${tabBtn('conversions','Конверсии')}${tabBtn('leadentry','Эффективность')}</div><div id="tab"></div>`;
+  const tabs=`<div class="tabs">${tabBtn('producers','Производители')}${tabBtn('managers','Менеджеры')}${tabBtn('instruments','Приборы')}${tabBtn('companies','Компании')}${tabBtn('spheres','Сферы')}${tabBtn('conversions','Конверсии')}${tabBtn('leadentry','Эффективность')}${tabBtn('lost','Проигранные')}</div><div id="tab"></div>`;
   document.getElementById('content').innerHTML=kpis+'<div id="funnelWrap"></div>'+tabs;
   renderFunnel();
   renderTab();
@@ -319,6 +341,7 @@ function renderTab(){
   else if(TAB==='spheres')el.innerHTML=renderSpheres();
   else if(TAB==='conversions')el.innerHTML=renderConversions();
   else if(TAB==='leadentry')el.innerHTML=renderLeadEntry();
+  else if(TAB==='lost')el.innerHTML=renderLost();
 }
 
 function renderProducers(){
@@ -666,6 +689,82 @@ function renderLeadEntry(){
     ${mgrRows.map(r=>`<tr><td style="text-align:left">${esc(r.name)}</td>${LE_STEPS.map(st=>`<td>${r.mt[st]||''}</td>`).join('')}<td><b>${r.mt.total}</b></td></tr>`).join('')||`<tr><td colspan="${LE_STEPS.length+2}" class="empty">Нет данных</td></tr>`}
     </tbody><tfoot><tr><td style="text-align:left"><b>Итого</b></td>${LE_STEPS.map(st=>`<td><b>${gtot[st]||''}</b></td>`).join('')}<td><b>${gtot.total}</b></td></tr></tfoot></table></div></div>`;
   return filters+chart+tbl;
+}
+// ── Проигранные сделки (Заморожена + Провалена) за N дней + причины ──
+let LOST=null, LOST_DAYS=7, LOST_LOADING=false, LOST_FTYPE='', LOST_FREASON='';
+const LOST_TYPE_COL={'Заморожена':'#7aa2ff','Провалена':'#ff6b6b'};
+async function loadLost(){
+  LOST_LOADING=true;
+  try{const r=await fetch('/api/stats/lost?days='+LOST_DAYS);LOST=await r.json();}
+  catch(e){LOST={ok:false,deals:[],error:e.message};}
+  LOST_LOADING=false;
+  if(TAB==='lost')renderTab();
+}
+function setLostDays(d){ if(LOST_DAYS===d)return; LOST_DAYS=d; LOST=null; LOST_FTYPE=''; LOST_FREASON=''; loadLost(); renderTab(); }
+function lostFType(t){ LOST_FTYPE=(LOST_FTYPE===t?'':t); renderTab(); }
+function lostFReason(r){ LOST_FREASON=(LOST_FREASON===r?'':r); renderTab(); }
+function lostReset(){ LOST_FTYPE=''; LOST_FREASON=''; renderTab(); }
+function lostFiltered(){
+  let d=(LOST&&LOST.deals)||[];
+  if(LOST_FTYPE)d=d.filter(x=>x.stageType===LOST_FTYPE);
+  if(LOST_FREASON)d=d.filter(x=>x.reason===LOST_FREASON);
+  return d;
+}
+function exportLostCSV(){
+  const d=lostFiltered();
+  const head=['Дата','ID','Сделка','Воронка','Стадия','Тип','Сумма','Валюта','Сумма_KZT','Менеджер','Создал','Причина','Комментарий'];
+  const rows=d.map(x=>[x.date||'',x.id,x.title,x.category,x.stageName,x.stageType,x.sum,x.currency,Math.round(x.sumKzt),x.manager,x.creator,x.reason,x.note||'']);
+  const csv=[head,...rows].map(r=>r.map(c=>{c=String(c==null?'':c);return /[",;\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c;}).join(';')).join('\r\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='proigrannye_'+LOST_DAYS+'dn.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+}
+function renderLost(){
+  if(!LOST&&!LOST_LOADING){ loadLost(); return '<div class="empty">Загрузка…</div>'; }
+  if(LOST_LOADING) return daysBar()+'<div class="card"><div class="empty">Загрузка проигранных сделок…</div></div>';
+  if(!LOST||!LOST.ok) return daysBar()+'<div class="card"><div class="empty">Не удалось загрузить'+(LOST&&LOST.error?': '+esc(LOST.error):'')+'</div></div>';
+  const deals=lostFiltered();
+  // Сводные плитки по типу (Заморожена/Провалена) — кликабельные.
+  const typeTiles=(LOST.byType||[]).map(t=>{
+    const on=LOST_FTYPE===t.type; const col=LOST_TYPE_COL[t.type]||'#9aa3b2';
+    return `<div class="ltile ${on?'on':''}" style="--lc:${col}" onclick="lostFType('${esc(t.type)}')">
+      <div class="lt-n">${t.n}</div><div class="lt-l">${esc(t.type)}</div><div class="lt-s">${M(t.sumKzt)} ₸</div></div>`;
+  }).join('');
+  const totalTile=`<div class="ltile ${(!LOST_FTYPE&&!LOST_FREASON)?'on':''}" style="--lc:#5b8cff" onclick="lostReset()">
+      <div class="lt-n">${LOST.count}</div><div class="lt-l">Всего проиграно</div><div class="lt-s">${M(LOST.totalKzt)} ₸</div></div>`;
+  const tiles=`<div class="ltiles">${totalTile}${typeTiles}</div>`;
+  // Разбивка по причинам — кликабельные бары.
+  const maxR=Math.max(1,...(LOST.byReason||[]).map(r=>r.n));
+  const reasonBars=(LOST.byReason||[]).map(r=>{
+    const on=LOST_FREASON===r.reason;
+    return `<div class="lrbar ${on?'on':''}" onclick="lostFReason('${esc(r.reason).replace(/'/g,"\\'")}')" title="${esc(r.reason)}: ${r.n} · ${M(r.sumKzt)} ₸">
+      <div class="lrb-l">${esc(r.reason)}</div>
+      <div class="lrb-track"><div class="lrb-fill" style="width:${(r.n/maxR*100).toFixed(1)}%"></div></div>
+      <div class="lrb-n">${r.n}</div></div>`;
+  }).join('');
+  const reasonCard=`<div class="card"><h3>Причины отказа</h3><div class="lrbars">${reasonBars||'<div class="empty">Нет данных</div>'}</div>
+    <div class="hint">Причина — из поля сделки «Причина отказа от покупки / сервиса / обучения». «(причина не указана)» — поле в карточке не заполнено.</div></div>`;
+  // Таблица сделок.
+  const stCol=x=>`<span class="lbadge" style="--lc:${LOST_TYPE_COL[x.stageType]||'#9aa3b2'}">${esc(x.stageType)}</span>`;
+  const body=deals.map(x=>`<tr>
+    <td>${esc(x.date||'')}</td>
+    <td style="text-align:left"><a href="#" onclick="return false" title="#${x.id}">${esc(x.title)}</a>${x.note?` <span class="lnote" title="${esc(x.note)}">💬</span>`:''}</td>
+    <td>${esc(x.category)}</td>
+    <td>${stCol(x)}<span class="lstage">${esc(x.stageName)}</span></td>
+    <td style="text-align:right">${x.sum?F(x.sum)+' '+esc(x.currency):'—'}</td>
+    <td style="text-align:left">${esc(x.manager)}</td>
+    <td style="text-align:left" class="${x.hasReason?'':'lmuted'}">${esc(x.reason)}</td>
+  </tr>`).join('');
+  const tbl=`<div class="card"><div class="lhead"><h3>Сделки${(LOST_FTYPE||LOST_FREASON)?' · отфильтровано '+deals.length:''}</h3>
+      <button class="btn" onclick="exportLostCSV()">Выгрузить CSV</button></div>
+    <div class="tscroll"><table><thead><tr>
+      <th>Дата</th><th style="text-align:left">Сделка</th><th>Воронка</th><th style="text-align:left">Стадия</th><th style="text-align:right">Сумма</th><th style="text-align:left">Менеджер</th><th style="text-align:left">Причина</th>
+    </tr></thead><tbody>${body||`<tr><td colspan="7" class="empty">Проигранных сделок за период нет</td></tr>`}</tbody></table></div></div>`;
+  return daysBar()+tiles+reasonCard+tbl;
+}
+function daysBar(){
+  const b=(d,l)=>`<button class="${LOST_DAYS===d?'on':''}" onclick="setLostDays(${d})">${l}</button>`;
+  return `<div class="card"><div class="ldays"><span class="le-fl">Период</span><div class="seg">${b(7,'7 дней')}${b(14,'14 дней')}${b(30,'30 дней')}</div>
+    <span class="hint" style="margin-left:auto">Дата — по моменту перевода в стадию проигрыша</span></div></div>`;
 }
 async function loadConversions(){
   try{const r=await fetch('/api/stats/conversions?year='+BOARD.year);CONV=await r.json();if(!CONV.year)CONV.year=BOARD.year;}

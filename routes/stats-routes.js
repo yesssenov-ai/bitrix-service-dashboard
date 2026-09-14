@@ -26,6 +26,24 @@ router.get('/lead-entry', requireAuth(PM_ROLES), async (req, res) => {
   catch (e) { console.error('GET /api/stats/lead-entry error:', e.message); res.status(500).json({ error: e.message }); }
 });
 
+// GET /api/stats/lost?days=7 — «Проигранные сделки за N дней + причины».
+// Живой запрос в Битрикс; кэш в процессе на 5 мин по количеству дней (?force=1 сбрасывает).
+const _lostCache = new Map();
+router.get('/lost', requireAuth(PM_ROLES), async (req, res) => {
+  try {
+    const days = Math.max(1, Math.min(90, parseInt(req.query.days, 10) || 7));
+    const force = req.query.force === '1';
+    const cached = _lostCache.get(days);
+    if (cached && !force && Date.now() - cached.at < 5 * 60 * 1000) return res.json(cached.data);
+    const data = await require('../stats-lost-calc').getLostDeals(days);
+    _lostCache.set(days, { at: Date.now(), data });
+    res.json(data);
+  } catch (e) {
+    console.error('GET /api/stats/lost error:', e.message);
+    res.status(500).json({ error: 'Не удалось получить проигранные сделки: ' + e.message });
+  }
+});
+
 // GET /api/stats/board?years=2025,2026 — единый борд новой Статистики (все вкладки).
 // Мультивыбор лет: данные суммируются. Кэш в процессе на 10 мин по набору лет.
 const _boardCache = new Map();
