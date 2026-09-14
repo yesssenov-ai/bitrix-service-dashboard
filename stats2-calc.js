@@ -433,8 +433,67 @@ async function computeConversions(year) {
   };
 }
 
+// ── Когортный анализ: «год контракта → год создания сделки» ──────────────────
+// Для сделок, ЗАКОНТРАКТОВАННЫХ в выбранном году (contractDate), показываем, в
+// каком году они были ЗАВЕДЕНЫ (createDate) — сколько сделок и на какую сумму,
+// с разрезом по отделам. Отвечает на вопрос «контракты 2026 года — с какого
+// периода сделки в них залетели». Только имеющиеся данные зеркала.
+async function computeCohort(year) {
+  const years = (Array.isArray(year) ? year : [year]).map(y => parseInt(y, 10)).filter(Boolean);
+  const yearsSel = years.length ? [...new Set(years)].sort((a, b) => a - b) : [new Date().getFullYear()];
+  const inSel = y => yearsSel.includes(y);
+  const primary = yearsSel[yearsSel.length - 1];
+
+  const { rate, all } = await loadEnriched();
+  // Законтрактованные (контракт и далее) в выбранном году контракта.
+  const sold = all.filter(d => isSold(d.stage) && inSel(yr(d.contractDate)));
+
+  // Список отделов и когорт (годов создания), встречающихся в выборке.
+  const NA = 'Не указан';
+  const deptSet = new Set(), cohortSet = new Set();
+  const cells = {}; // "cohort|dept" -> {n, sum}
+  const byCohort = {}; // cohort -> {n, sum}
+  const byDept = {};   // dept -> {n, sum}
+  for (const d of sold) {
+    const cohort = yr(d.createDate); // год создания
+    const ck = cohort == null ? NA : String(cohort);
+    const dept = d.dept || NA;
+    deptSet.add(dept); cohortSet.add(ck);
+    const k = ck + '|' + dept;
+    (cells[k] = cells[k] || { n: 0, sum: 0 }); cells[k].n++; cells[k].sum += d.sum;
+    (byCohort[ck] = byCohort[ck] || { n: 0, sum: 0 }); byCohort[ck].n++; byCohort[ck].sum += d.sum;
+    (byDept[dept] = byDept[dept] || { n: 0, sum: 0 }); byDept[dept].n++; byDept[dept].sum += d.sum;
+  }
+
+  // Сортировки: когорты по году (числа возр., «Не указан» в конец), отделы по имени.
+  const cohorts = [...cohortSet].sort((a, b) => {
+    if (a === NA) return 1; if (b === NA) return -1; return parseInt(a, 10) - parseInt(b, 10);
+  });
+  const depts = [...deptSet].sort((a, b) => {
+    if (a === NA) return 1; if (b === NA) return -1; return a.localeCompare(b, 'ru');
+  });
+
+  // Плоский список ячеек для фронта (год создания × отдел).
+  const matrix = cohorts.map(c => ({
+    cohort: c,
+    total: byCohort[c] || { n: 0, sum: 0 },
+    byDept: depts.map(dp => ({ dept: dp, ...(cells[c + '|' + dp] || { n: 0, sum: 0 }) })),
+  }));
+
+  const total = { n: sold.length, sum: sum(sold) };
+  // Годы контракта, доступные для фильтра.
+  const contractYears = [...new Set(all.map(d => yr(d.contractDate)).filter(Boolean))].sort((a, b) => b - a);
+
+  return {
+    ok: true, year: primary, yearsSel, rate,
+    cohorts, depts, matrix,
+    byDept: depts.map(dp => ({ dept: dp, ...(byDept[dp] || { n: 0, sum: 0 }) })),
+    total, contractYears,
+  };
+}
+
 module.exports = {
-  computeBoard, computeConversions,
+  computeBoard, computeConversions, computeCohort,
   // для выгрузки по сферам (stats-export.js)
   loadEnriched, isSold, isPre, step, yr, funnelName,
   FUNNEL_ORDER, PRE_ORDER, PRE_LABELS,

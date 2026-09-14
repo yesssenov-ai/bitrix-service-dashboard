@@ -170,6 +170,9 @@ tbody tr:hover td.l{background:var(--panel-h)}
 .lnote{cursor:help}
 .lmuted{color:var(--faint)}
 .lhead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.chbar{height:5px;background:rgba(255,255,255,.05);border-radius:3px;overflow:hidden;margin-top:4px;max-width:180px}
+.chbar i{display:block;height:100%;background:linear-gradient(90deg,var(--brand),var(--brand-h));border-radius:3px}
+.chtot{background:rgba(255,255,255,.03)}
 </style>
 </head>
 <body>
@@ -281,7 +284,7 @@ function render(){
     <div class="kpi" style="--kc:var(--signal)"><div class="kv">${F(k.companies)}</div><div class="kl">Компаний-покупателей</div></div>
     <div class="kpi" style="--kc:var(--warn)"><div class="kv">${F(k.managers)}</div><div class="kl">Менеджеров с продажами</div></div>
   </div>`;
-  const tabs=`<div class="tabs">${tabBtn('producers','Производители')}${tabBtn('managers','Менеджеры')}${tabBtn('instruments','Приборы')}${tabBtn('companies','Компании')}${tabBtn('spheres','Сферы')}${tabBtn('conversions','Конверсии')}${tabBtn('leadentry','Эффективность')}${tabBtn('lost','Проигранные')}</div><div id="tab"></div>`;
+  const tabs=`<div class="tabs">${tabBtn('producers','Производители')}${tabBtn('managers','Менеджеры')}${tabBtn('instruments','Приборы')}${tabBtn('companies','Компании')}${tabBtn('spheres','Сферы')}${tabBtn('conversions','Конверсии')}${tabBtn('leadentry','Эффективность')}${tabBtn('lost','Проигранные')}${tabBtn('cohort','Когорты')}</div><div id="tab"></div>`;
   document.getElementById('content').innerHTML=kpis+'<div id="funnelWrap"></div>'+tabs;
   renderFunnel();
   renderTab();
@@ -342,6 +345,7 @@ function renderTab(){
   else if(TAB==='conversions')el.innerHTML=renderConversions();
   else if(TAB==='leadentry')el.innerHTML=renderLeadEntry();
   else if(TAB==='lost')el.innerHTML=renderLost();
+  else if(TAB==='cohort')el.innerHTML=renderCohort();
 }
 
 function renderProducers(){
@@ -765,6 +769,70 @@ function daysBar(){
   const b=(d,l)=>`<button class="${LOST_DAYS===d?'on':''}" onclick="setLostDays(${d})">${l}</button>`;
   return `<div class="card"><div class="ldays"><span class="le-fl">Период</span><div class="seg">${b(7,'7 дней')}${b(14,'14 дней')}${b(30,'30 дней')}</div>
     <span class="hint" style="margin-left:auto">Дата — по моменту перевода в стадию проигрыша</span></div></div>`;
+}
+// ── Когорты: год контракта → год создания сделки (кол-во/сумма, по отделам) ──
+let CH=null, CH_Y=new Set(), CH_INIT=false, CH_METRIC='n', CH_LOADING=false, CH_KEY='';
+function chYearsKey(){ return [...CH_Y].sort((a,b)=>a-b).join(','); }
+async function loadCohort(){
+  const key=chYearsKey(); CH_KEY=key; CH_LOADING=true;
+  try{const r=await fetch('/api/stats/cohort?years='+encodeURIComponent(key));const j=await r.json();if(CH_KEY===key){CH=j;}}
+  catch(e){CH={ok:false,error:e.message,matrix:[],depts:[],cohorts:[]};}
+  CH_LOADING=false;
+  if(TAB==='cohort')renderTab();
+}
+function chToggleYear(y){ if(CH_Y.has(y))CH_Y.delete(y); else CH_Y.add(y); if(!CH_Y.size)CH_Y.add(y); loadCohort(); renderTab(); }
+function chMetric(m){ CH_METRIC=m; renderTab(); }
+function exportCohortCSV(){
+  if(!CH||!CH.matrix)return;
+  const head=['Год создания',...CH.depts,'Итого (кол-во)','Итого (сумма KZT)'];
+  const rows=CH.matrix.map(r=>[r.cohort,...r.byDept.map(c=>CH_METRIC==='n'?c.n:Math.round(c.sum)),r.total.n,Math.round(r.total.sum)]);
+  const foot=['Итого',...CH.byDept.map(c=>CH_METRIC==='n'?c.n:Math.round(c.sum)),CH.total.n,Math.round(CH.total.sum)];
+  const csv=[head,...rows,foot].map(r=>r.map(c=>{c=String(c==null?'':c);return /[",;\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c;}).join(';')).join('\r\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='kogorty_'+chYearsKey()+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+}
+function renderCohort(){
+  if(!CH_INIT){
+    const cy=new Date().getFullYear();
+    const avail=(BOARD&&BOARD.years&&BOARD.years.length)?BOARD.years:[cy];
+    CH_Y=new Set([avail.includes(cy)?cy:avail[0]]); CH_INIT=true; loadCohort();
+    return chFilters(avail)+'<div class="card"><div class="empty">Загрузка…</div></div>';
+  }
+  const availYears=(CH&&CH.contractYears&&CH.contractYears.length)?CH.contractYears:((BOARD&&BOARD.years)||[new Date().getFullYear()]);
+  const head=chFilters(availYears);
+  if(CH_LOADING||!CH) return head+'<div class="card"><div class="empty">Загрузка…</div></div>';
+  if(!CH.ok) return head+'<div class="card"><div class="empty">Не удалось загрузить'+(CH.error?': '+esc(CH.error):'')+'</div></div>';
+  if(!CH.matrix.length) return head+'<div class="card"><div class="empty">Нет законтрактованных сделок за выбранный год.</div></div>';
+  const val=c=>CH_METRIC==='n'?(c.n||''):(c.sum?M(c.sum):'');
+  const ttl=c=>`${c.n} сделок · ${M(c.sum)} ₸`;
+  // Плитки-итоги.
+  const yrsTxt=[...CH_Y].sort((a,b)=>a-b).join(', ');
+  const tiles=`<div class="ltiles">
+    <div class="ltile on" style="--lc:#3ddc84"><div class="lt-n">${CH.total.n}</div><div class="lt-l">Контрактов ${esc(yrsTxt)}</div><div class="lt-s">${M(CH.total.sum)} ₸</div></div>
+    ${CH.matrix.map(r=>`<div class="ltile" style="--lc:#5b8cff"><div class="lt-n">${r.total.n}</div><div class="lt-l">заведены в ${esc(r.cohort)}</div><div class="lt-s">${M(r.total.sum)} ₸</div></div>`).join('')}
+  </div>`;
+  // Матрица: строки = год создания, столбцы = отделы.
+  const maxCohort=Math.max(1,...CH.matrix.map(r=>CH_METRIC==='n'?r.total.n:r.total.sum));
+  const body=CH.matrix.map(r=>{
+    const share=(CH_METRIC==='n'?r.total.n:r.total.sum)/maxCohort*100;
+    return `<tr>
+      <td style="text-align:left"><b>${esc(r.cohort)}</b><div class="chbar"><i style="width:${share.toFixed(1)}%"></i></div></td>
+      ${r.byDept.map(c=>`<td title="${c.n?ttl(c):''}" class="${c.n?'':'lmuted'}">${val(c)}</td>`).join('')}
+      <td class="chtot" title="${ttl(r.total)}"><b>${val(r.total)}</b></td>
+    </tr>`;
+  }).join('');
+  const foot=`<tr><td style="text-align:left"><b>Итого</b></td>${CH.byDept.map(c=>`<td title="${ttl(c)}"><b>${val(c)}</b></td>`).join('')}<td class="chtot" title="${ttl(CH.total)}"><b>${val(CH.total)}</b></td></tr>`;
+  const tbl=`<div class="card"><div class="lhead"><h3>Год контракта → год создания · по отделам</h3>
+      <div class="seg"><button class="${CH_METRIC==='n'?'on':''}" onclick="chMetric('n')">Кол-во</button><button class="${CH_METRIC==='sum'?'on':''}" onclick="chMetric('sum')">Сумма</button></div>
+      <button class="btn" onclick="exportCohortCSV()">CSV</button></div>
+    <div class="tscroll"><table><thead><tr><th style="text-align:left">Год создания</th>${CH.depts.map(d=>`<th>${esc(d)}</th>`).join('')}<th>Итого</th></tr></thead>
+      <tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>
+    <div class="hint">Сделки, законтрактованные в выбранном году, — по году их первичного создания (заведения). Наведение на ячейку — количество и сумма. «Год создания» = дата создания сделки в CRM.</div></div>`;
+  return head+tiles+tbl;
+}
+function chFilters(years){
+  const chips=years.map(y=>`<span class="chip-le ${CH_Y.has(y)?'on':''}" onclick="chToggleYear(${y})">${y}</span>`).join('');
+  return `<div class="card"><div class="le-filters"><div><div class="le-fl">Год контракта <span class="le-hint">(можно несколько)</span></div><div class="le-chips">${chips}</div></div></div></div>`;
 }
 async function loadConversions(){
   try{const r=await fetch('/api/stats/conversions?year='+BOARD.year);CONV=await r.json();if(!CONV.year)CONV.year=BOARD.year;}

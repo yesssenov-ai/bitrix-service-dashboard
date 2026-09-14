@@ -26,6 +26,26 @@ router.get('/lead-entry', requireAuth(PM_ROLES), async (req, res) => {
   catch (e) { console.error('GET /api/stats/lead-entry error:', e.message); res.status(500).json({ error: e.message }); }
 });
 
+// GET /api/stats/cohort?years=2026 — когортный анализ «год контракта → год создания».
+// Кэш в процессе на 10 мин по набору лет (?force=1 сбрасывает).
+const _cohortCache = new Map();
+router.get('/cohort', requireAuth(PM_ROLES), async (req, res) => {
+  try {
+    const years = parseYears(req);
+    const key = years.join(',');
+    const force = req.query.force === '1';
+    const cached = _cohortCache.get(key);
+    if (cached && !force && Date.now() - cached.at < 10 * 60 * 1000) return res.json(cached.data);
+    const { computeCohort } = require('../stats2-calc');
+    const data = await computeCohort(years);
+    _cohortCache.set(key, { at: Date.now(), data });
+    res.json(data);
+  } catch (e) {
+    console.error('GET /api/stats/cohort error:', e.message);
+    res.status(500).json({ error: 'Не удалось рассчитать когорты: ' + e.message });
+  }
+});
+
 // GET /api/stats/lost?days=7 — «Проигранные сделки за N дней + причины».
 // Живой запрос в Битрикс; кэш в процессе на 5 мин по количеству дней (?force=1 сбрасывает).
 const _lostCache = new Map();
@@ -119,6 +139,7 @@ router.post('/refresh', requireAuth(PM_ROLES), express.json(), async (req, res) 
     }
     _boardCache.clear();
     _convCache.clear();
+    _cohortCache.clear();
     const { rows: r2 } = await pool.query('SELECT MAX(synced_at) AS t FROM ticketsmodule_stat_deals');
     res.json({ ok: true, updated: r.updated || 0, deleted, updatedAt: r2[0] && r2[0].t ? new Date(r2[0].t).toISOString() : null });
   } catch (e) {
