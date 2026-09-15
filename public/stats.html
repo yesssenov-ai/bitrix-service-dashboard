@@ -173,6 +173,12 @@ tbody tr:hover td.l{background:var(--panel-h)}
 .chbar{height:5px;background:rgba(255,255,255,.05);border-radius:3px;overflow:hidden;margin-top:4px;max-width:180px}
 .chbar i{display:block;height:100%;background:linear-gradient(90deg,var(--brand),var(--brand-h));border-radius:3px}
 .chtot{background:rgba(255,255,255,.03)}
+.mcell-clk{cursor:pointer;transition:.15s;border:1px solid transparent}
+.mcell-clk:hover{background:rgba(255,255,255,.05);border-color:var(--line-2)}
+.mcell-on{background:color-mix(in srgb,var(--good) 14%,transparent);border-color:var(--good)}
+.mzoom{opacity:.5;font-size:11px}
+.drill{margin-top:12px;border-top:1px solid var(--line);padding-top:12px}
+.drill h4{font-size:13.5px;color:var(--text)}
 </style>
 </head>
 <body>
@@ -206,8 +212,8 @@ const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').rep
 const pct=(v,t)=>t?Math.round(v/t*100):0;
 let BOARD=null, TAB='producers', DEPT='', INSTR='sold', CSEARCH='', EXPANDM={}, CX='all';
 let FDEPT='', FMGR='', FMONTH='', FMANUF='', FINSTR='', IS_ADMIN=false, CONV=null, CONV_POLL=null;
-let CO_YEAR=null, CO_DEPT='', CO_MGR='';
-let YEARS=null, SPH_SCOPE='sold', _yearsAtOpen='';
+let CO_YEAR=null, CO_DEPT='', CO_MGR='', CO_IND='';
+let YEARS=null, SPH_SCOPE='sold', _yearsAtOpen='', SPH_DRILL=null;
 const MONTHS_RU=['','января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 const MONTHS_NOM=['','Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 // Группы «направлений» (отдел/сфера). Значение-группа в фильтре означает союз
@@ -448,16 +454,21 @@ function renderCompanies(){
   const cmgrMap={};src.forEach(d=>{if(d.mId!=null)cmgrMap[d.mId]=d.mgr;});
   const cmgrs=Object.entries(cmgrMap).sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'ru'));
   const years=(BOARD.years&&BOARD.years.length)?BOARD.years:[BOARD.year];
+  const cinds=[...new Set(src.map(d=>d.ind).filter(x=>x&&x!=='Не указана'))].sort((a,b)=>a.localeCompare(b,'ru'));
   const optc=(v,label,sel)=>`<option value="${esc(v)}" ${String(sel)===String(v)?'selected':''}>${esc(label)}</option>`;
   const filters=`<div class="ffilters">
     <select onchange="CO_YEAR=this.value;renderTab()"><option value="">Все годы</option>${years.map(y=>optc(y,y,CO_YEAR)).join('')}</select>
     <select onchange="CO_DEPT=this.value;renderTab()"><option value="">Все отделы</option>${cdepts.map(d=>optc(d,d,CO_DEPT)).join('')}</select>
+    <select onchange="CO_IND=this.value;renderTab()"><option value="">Все сферы</option>${cinds.map(s=>optc(s,s,CO_IND)).join('')}</select>
     <select onchange="CO_MGR=this.value;renderTab()"><option value="">Все менеджеры</option>${cmgrs.map(([id,nm])=>optc(id,nm,CO_MGR)).join('')}</select>
-    ${(CO_YEAR||CO_DEPT||CO_MGR)?'<button class="btn" onclick="CO_YEAR=\'\';CO_DEPT=CO_MGR=\'\';renderTab()">Сбросить</button>':''}
+    ${(CO_YEAR||CO_DEPT||CO_MGR||CO_IND)?'<button class="btn" onclick="CO_YEAR=\'\';CO_DEPT=CO_MGR=CO_IND=\'\';renderTab()">Сбросить</button>':''}
+    <span style="flex:1"></span>
+    <button class="btn btn-p" onclick="exportCompaniesXlsx()" title="Excel: компании (с учётом фильтров) + детализация сделок">⤓ Выгрузка в Excel</button>
   </div>`;
   let deals=src;
   if(CO_YEAR)deals=deals.filter(d=>String(d.y)===CO_YEAR);
   if(CO_DEPT)deals=deals.filter(d=>deptMatches(d.dept,CO_DEPT));
+  if(CO_IND)deals=deals.filter(d=>d.ind===CO_IND);
   if(CO_MGR)deals=deals.filter(d=>String(d.mId)===CO_MGR);
   const base=aggCompanies(deals);
   const q=CSEARCH.toLowerCase();
@@ -488,6 +499,77 @@ function renderCompanies(){
   return bar+`<div class="hint">${list.length} компаний${list.length>200?' (показаны первые 200)':''}. «В комплексе» — компании, бравшие 2+ категории (прибор + расходка + сервис/обучение). Раскрой — разбивка по категориям, топ-приборы, бренды.</div><div class="list">`+rows+'</div>';
 }
 function refocus(){const s=document.getElementById('csearch');if(s){const v=s.value;s.focus();s.setSelectionRange(v.length,v.length);}}
+// Отфильтрованные сделки для «Компаний» (те же фильтры, что в renderCompanies).
+function companiesFilteredDeals(){
+  let deals=(BOARD.companyDeals||[]);
+  if(CO_YEAR)deals=deals.filter(d=>String(d.y)===CO_YEAR);
+  if(CO_DEPT)deals=deals.filter(d=>deptMatches(d.dept,CO_DEPT));
+  if(CO_IND)deals=deals.filter(d=>d.ind===CO_IND);
+  if(CO_MGR)deals=deals.filter(d=>String(d.mId)===CO_MGR);
+  return deals;
+}
+function exportCompaniesXlsx(){
+  if(typeof XLSX==='undefined'){alert('Библиотека Excel ещё не загрузилась — обновите страницу и повторите.');return;}
+  const R=n=>Math.round(n||0);
+  let deals=companiesFilteredDeals();
+  let list=aggCompanies(deals);
+  const q=(CSEARCH||'').toLowerCase();
+  if(q)list=list.filter(c=>(c.name||'').toLowerCase().includes(q)||(c.industry||'').toLowerCase().includes(q));
+  if(CX==='complex')list=list.filter(c=>c.complexity>=2);
+  // Если активны поиск/комплекс — детализацию сделок ограничиваем компаниями из списка.
+  const nameSet=new Set(list.map(c=>String(c.companyId||c.name)));
+  if(q||CX==='complex')deals=deals.filter(d=>nameSet.has(String(d.cId||d.co)));
+  const catv=(c,k)=>{const e=c.byCat.find(x=>x.key===k);return e?R(e.sum):0;};
+  const wb=XLSX.utils.book_new();
+  const compAoa=[['Компания','Сфера','Сделок','Сумма ₸','Средний чек ₸','Приборы ₸','Расходники ₸','Услуги ₸','Тренинг-центр ₸','Категорий','Топ-прибор','Топ-бренд'],
+    ...list.map(c=>[c.name,c.industry||'',c.count,R(c.sum),R(c.avg),catv(c,'Приборы'),catv(c,'Расходники'),catv(c,'Услуги'),catv(c,'Тренинг-центр'),c.complexity,(c.topInstruments[0]||{}).key||'',(c.byManuf[0]||{}).key||'']),
+  ];
+  const dealAoa=[['Дата','ID','Сделка','Компания','Сфера','Отдел','Воронка','Категория','Прибор','Бренд','Менеджер','Сумма ₸'],
+    ...deals.sort((a,b)=>b.sum-a.sum).map(d=>[d.date||'',d.id||'',d.title||'',d.co||'',d.ind||'',d.dept||'',d.funnel||'',d.cat||'',d.instr||'',d.manuf||'',d.mgr||'',R(d.sum)])];
+  const add=(name,aoa)=>{try{XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),name.slice(0,31));}catch(e){}};
+  add('Компании',compAoa); add('Сделки',dealAoa);
+  const tag=[CO_YEAR||'всегоды',CO_DEPT||'всеотделы',CO_IND||'всесферы'].join('_').replace(/[^\wа-яА-Я0-9]+/g,'-');
+  XLSX.writeFile(wb,'kompanii_'+tag+'.xlsx');
+}
+// ── Дровилл «Сфер»: клик по типу (Приборы/Расходники/Сервис/ТЦ) → список сделок ──
+function sphYears(){ return (BOARD.yearsSel&&BOARD.yearsSel.length)?BOARD.yearsSel.map(Number):[Number(BOARD.year)]; }
+function sphDrillDeals(industry,funnel){
+  const YS=sphYears();
+  return (BOARD.companyDeals||[]).filter(d=>YS.includes(Number(d.y))&&d.ind===industry&&d.funnel===funnel).sort((a,b)=>b.sum-a.sum);
+}
+function sphDrill(i,funnel){
+  if(SPH_DRILL&&SPH_DRILL.i===i&&SPH_DRILL.funnel===funnel)SPH_DRILL=null;
+  else SPH_DRILL={i,funnel};
+  renderTab();
+}
+function renderSphDrill(i,industry){
+  if(!SPH_DRILL||SPH_DRILL.i!==i)return '';
+  const deals=sphDrillDeals(industry,SPH_DRILL.funnel);
+  const sum=deals.reduce((s,d)=>s+d.sum,0);
+  const body=deals.map(d=>`<tr>
+    <td>${esc(d.date||'')}</td>
+    <td style="text-align:left">${esc(d.title||('#'+d.id))}</td>
+    <td style="text-align:left">${esc(d.co||'')}</td>
+    <td style="text-align:left">${esc(d.instr||'')}</td>
+    <td style="text-align:left">${esc(d.manuf||'')}</td>
+    <td style="text-align:left">${esc(d.mgr||'')}</td>
+    <td style="text-align:right">${M(d.sum)} ₸</td></tr>`).join('');
+  return `<div class="drill"><div class="lhead"><h4 style="margin:0">${esc(industry)} · ${esc(SPH_DRILL.funnel)} — ${deals.length} сделок · ${M(sum)} ₸</h4>
+      <button class="btn" onclick="exportSphDrill(${i},'${String(industry).replace(/'/g,"\\'")}')">⤓ Excel</button></div>
+    <div class="tscroll"><table><thead><tr><th>Дата</th><th style="text-align:left">Сделка</th><th style="text-align:left">Компания</th><th style="text-align:left">Прибор</th><th style="text-align:left">Бренд</th><th style="text-align:left">Менеджер</th><th style="text-align:right">Сумма</th></tr></thead>
+      <tbody>${body||`<tr><td colspan="7" class="empty">Нет сделок</td></tr>`}</tbody></table></div></div>`;
+}
+function exportSphDrill(i,industry){
+  if(typeof XLSX==='undefined'){alert('Библиотека Excel ещё не загрузилась — обновите страницу.');return;}
+  const R=n=>Math.round(n||0);
+  const deals=sphDrillDeals(industry,SPH_DRILL.funnel);
+  const aoa=[['Дата','ID','Сделка','Компания','Отдел','Прибор','Бренд','Менеджер','Сумма ₸'],
+    ...deals.map(d=>[d.date||'',d.id||'',d.title||'',d.co||'',d.dept||'',d.instr||'',d.manuf||'',d.mgr||'',R(d.sum)])];
+  const wb=XLSX.utils.book_new();
+  try{XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),'Сделки');}catch(e){}
+  const tag=(industry+'_'+SPH_DRILL.funnel).replace(/[^\wа-яА-Я0-9]+/g,'-');
+  XLSX.writeFile(wb,'sfera_'+tag+'.xlsx');
+}
 
 const SPH_FUNNELS=['Приборы','Расходники','Сервис','Тренинг-центр'];
 function renderSpheres(){
@@ -500,13 +582,14 @@ function renderSpheres(){
     <button class="btn btn-p" onclick="exportSpheres()" title="Excel: свод по сферам, по компаниям и детализация сделок (подписанные и в работе)">⤓ Выгрузка в Excel</button>
   </div>`;
   if(!list.length)return toolbar+'<div class="empty">Нет данных по сферам за выбранные годы.</div>';
-  const rows=list.map((s,i)=>`<div class="row" id="sp${i}">
+  const rows=list.map((s,i)=>`<div class="row${SPH_DRILL&&SPH_DRILL.i===i?' open':''}" id="sp${i}">
     <div class="rhead" onclick="document.getElementById('sp${i}').classList.toggle('open')">
       <div><div class="rname">${esc(s.industry)}</div><div class="rmeta">${s.companies} компаний · ${s.count} сделок · чек ${M(s.avg)} ₸</div></div>
       <div class="rspacer"></div><div><div class="rsum">${M(s.sum)} ₸</div><div class="rsub">${pct(s.sum,totalSum)}% ${scope==='sold'?'от продаж':'в работе'}</div></div><span class="rcaret">▶</span>
     </div>
     <div class="rbody">
-      <div class="mini" style="margin-top:14px">${SPH_FUNNELS.map(cat=>{const e=s.byCat.find(x=>x.key===cat);return `<div class="mcell"><div class="mv" style="color:${e?'var(--good)':'var(--faint)'}">${e?M(e.sum)+' ₸':'—'}</div><div class="ml">${cat}${e&&e.count!=null?` · <b style="color:var(--dim)">${e.count} шт</b>`:''}</div></div>`;}).join('')}</div>
+      <div class="mini" style="margin-top:14px">${SPH_FUNNELS.map(cat=>{const e=s.byCat.find(x=>x.key===cat);const clk=scope==='sold'&&e;const on=SPH_DRILL&&SPH_DRILL.i===i&&SPH_DRILL.funnel===cat;return `<div class="mcell${clk?' mcell-clk':''}${on?' mcell-on':''}" ${clk?`onclick="event.stopPropagation();sphDrill(${i},'${cat}')"`:''}><div class="mv" style="color:${e?'var(--good)':'var(--faint)'}">${e?M(e.sum)+' ₸':'—'}</div><div class="ml">${cat}${e&&e.count!=null?` · <b style="color:var(--dim)">${e.count} шт</b>`:''}${clk?' <span class="mzoom">🔍</span>':''}</div></div>`;}).join('')}</div>
+      ${scope==='sold'?renderSphDrill(i,s.industry):''}
       ${scope==='pipe'&&s.byStep&&s.byStep.length?`<div class="mini" style="margin-top:10px">${s.byStep.map(st=>`<div class="mcell"><div class="mv" style="color:var(--p60)">${M(st.sum)} ₸</div><div class="ml">${esc(st.label)}${st.count!=null?` · <b style="color:var(--dim)">${st.count} шт</b>`:''}</div></div>`).join('')}</div>`:''}
     </div>
   </div>`).join('');

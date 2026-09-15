@@ -130,9 +130,11 @@ async function computeBoard(year) {
   // Все продажи (любой год) в компактном виде — для клиентской фильтрации
   // вкладки «Компании» по году / отделу / менеджеру.
   const soldAll = all.filter(d => isSold(d.stage)).map(d => ({
+    id: d.id, title: d.title,
     cId: d.companyId, co: d.company, ind: d.industry, y: yr(d.contractDate),
     dept: d.dept, mId: d.managerId, mgr: d.manager,
-    cat: d.catGroup, manuf: d.manufacturer, instr: d.instrument, sum: d.sum,
+    cat: d.catGroup, funnel: d.funnel, manuf: d.manufacturer, instr: d.instrument, sum: d.sum,
+    date: d.contractDate,
   }));
 
   return {
