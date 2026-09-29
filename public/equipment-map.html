@@ -400,8 +400,11 @@ async function init() {
 
 function initMap() {
   map = L.map('map', { center: [48.5, 66.9], zoom: 5 });
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap', maxZoom: 19,
+  // Тайлы CARTO (Voyager) — свободный drop-in. Раньше стоял tile.openstreetmap.org,
+  // но OSM заблокировал домен приложения по своей tile usage policy (403 Access blocked).
+  // Тёмный вариант карты: заменить 'rastertiles/voyager' на 'dark_all'.
+  L.tileLayer('https://{s}.basemap.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors, © CARTO', subdomains: 'abcd', maxZoom: 20,
   }).addTo(map);
   clusterGroup = L.markerClusterGroup({
     showCoverageOnHover: false,
