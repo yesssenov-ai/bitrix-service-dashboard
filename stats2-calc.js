@@ -136,6 +136,16 @@ async function computeBoard(year) {
     cat: d.catGroup, funnel: d.funnel, manuf: d.manufacturer, instr: d.instrument, sum: d.sum,
     date: d.contractDate,
   }));
+  // Доконтрактные (в работе, P10–P80) в компактном виде — для вкладки «Компании»
+  // в режиме «В работе». Год — по дате создания (сделка ещё не законтрактована);
+  // step — стадия (P10/P30/P60/P80) для детализации/выгрузки.
+  const pipeAll = all.filter(d => isPre(d.stage)).map(d => ({
+    id: d.id, title: d.title,
+    cId: d.companyId, co: d.company, ind: d.industry, y: yr(d.createDate),
+    dept: d.dept, mId: d.managerId, mgr: d.manager,
+    cat: d.catGroup, funnel: d.funnel, manuf: d.manufacturer, instr: d.instrument, sum: d.sum,
+    date: d.createDate, step: d.step,
+  }));
 
   return {
     year: primary, yearsSel, rate,
@@ -155,6 +165,7 @@ async function computeBoard(year) {
     instrumentsKp: byInstrument(kp),
     companies: byCompany(sold),
     companyDeals: soldAll,
+    companyDealsPipe: pipeAll,
     spheres: bySphere(sold),
     spheresPipe: bySpherePipe(pipe),
     years: [...new Set(all.map(d => yr(d.contractDate) || yr(d.createDate)).filter(Boolean))].sort((a, b) => b - a),
