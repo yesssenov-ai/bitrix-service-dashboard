@@ -307,25 +307,49 @@ function bySphere(deals) {
   })).sort((a, b) => b.sum - a.sum);
 }
 
-// Сферы (доконтрактные / в работе, P10–P80) — разрез по воронкам и по стадиям,
-// сумма И количество сделок в каждой ячейке.
+// Возраст доконтрактной сделки — сколько дней «висит» с даты создания.
+// Внимание: у мигрированных сделок (date_create = день миграции 2025-10-17)
+// возраст считается с даты миграции — реальный возраст может быть больше.
+const AGE_EDGES = [30, 90, 180];
+const AGE_LABELS = ['≤30 дн', '31–90 дн', '91–180 дн', '>180 дн'];
+function ageDaysOf(dateStr) { const t = Date.parse(dateStr); if (!t) return null; return Math.max(0, Math.floor((Date.now() - t) / 86400000)); }
+function ageBucketIdx(days) { if (days == null) return null; if (days <= AGE_EDGES[0]) return 0; if (days <= AGE_EDGES[1]) return 1; if (days <= AGE_EDGES[2]) return 2; return 3; }
+// Пустой аккумулятор старения (4 корзины) + методы наполнения/финализации.
+function newAging() { return { ageSum: 0, ageN: 0, bSum: [0, 0, 0, 0], bCnt: [0, 0, 0, 0] }; }
+function addAging(a, dateStr, sum) {
+  const days = ageDaysOf(dateStr); if (days == null) return;
+  a.ageSum += days; a.ageN++;
+  const i = ageBucketIdx(days); a.bSum[i] += sum; a.bCnt[i]++;
+}
+function finalizeAging(a) {
+  return {
+    avgAge: a.ageN ? Math.round(a.ageSum / a.ageN) : 0,
+    aging: AGE_LABELS.map((label, i) => ({ key: label, sum: a.bSum[i], count: a.bCnt[i] })),
+    staleCount: a.bCnt[2] + a.bCnt[3], staleSum: a.bSum[2] + a.bSum[3], // >90 дн — «застоявшиеся»
+  };
+}
+
+// Сферы (доконтрактные / в работе, P10–P80) — разрез по воронкам, по стадиям и по
+// возрасту (как давно висят), сумма И количество сделок в каждой ячейке.
 function bySpherePipe(deals) {
   const by = {};
   for (const d of deals) {
     const k = d.industry;
-    if (!by[k]) by[k] = { industry: k, sum: 0, count: 0, byCat: {}, byCatC: {}, byStep: {}, byStepC: {}, companies: new Set() };
+    if (!by[k]) by[k] = { industry: k, sum: 0, count: 0, byCat: {}, byCatC: {}, byStep: {}, byStepC: {}, aging: newAging(), companies: new Set() };
     const s = by[k];
     s.sum += d.sum; s.count++;
     s.byCat[d.funnel] = (s.byCat[d.funnel] || 0) + d.sum;
     s.byCatC[d.funnel] = (s.byCatC[d.funnel] || 0) + 1;
     s.byStep[d.step] = (s.byStep[d.step] || 0) + d.sum;
     s.byStepC[d.step] = (s.byStepC[d.step] || 0) + 1;
+    addAging(s.aging, d.createDate, d.sum);
     if (d.companyId) s.companies.add(d.companyId);
   }
   return Object.values(by).map(s => ({
     industry: s.industry, sum: s.sum, count: s.count, avg: s.count ? s.sum / s.count : 0,
     companies: s.companies.size, byCat: topEntries(s.byCat, s.byCatC),
     byStep: PRE_ORDER.filter(st => s.byStep[st]).map(st => ({ key: st, label: PRE_LABELS[st], sum: s.byStep[st], count: s.byStepC[st] || 0 })),
+    ...finalizeAging(s.aging),
   })).sort((a, b) => b.sum - a.sum);
 }
 
