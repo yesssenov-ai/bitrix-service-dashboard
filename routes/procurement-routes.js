@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { requireAuth, requireModuleApi } = require('../auth');
+const { requireAuth, requireModuleApi, userModuleCodes } = require('../auth');
 
 // Доступ к модулю «Закупки»: admin, coordinator и store правят закупки.
 const ROLES = ['admin', 'coordinator', 'store'];
@@ -38,6 +38,23 @@ async function ownScopedOk(user, id) {
   try { return await require('../procurement-calc').ownsRequest(id, user); } catch (e) { return false; }
 }
 
+// Гейт ПРОСМОТРА/согласования: пускаем, если роль во VIEW_ROLES ИЛИ пользователю
+// выдан модуль «Закупки» (PROC). Раньше эти эндпоинты резались только по роли,
+// хотя сама СТРАНИЦА пускает по гранту модуля — из-за чего согласующий (напр.
+// директор ТЦ), которому выдан модуль, но чья роль не во VIEW_ROLES, открывал
+// страницу, но получал 403 на /meta,/list,/approval («Не удалось загрузить
+// справочники») и не мог согласовать. Теперь API согласовано со страницей.
+function viewGate() {
+  return [requireAuth(), async (req, res, next) => {
+    try {
+      if (VIEW_ROLES.includes(req.user.role)) return next();
+      const codes = await userModuleCodes(req.user); // null = все модули (admin)
+      if (codes === null || codes.has('PROC')) return next();
+      return res.status(403).json({ ok: false, error: 'Нет доступа к модулю' });
+    } catch (e) { return res.status(403).json({ ok: false, error: 'Нет доступа к модулю' }); }
+  }];
+}
+
 // GET /api/procurement/meta — стадии + справочники для формы (кэш 30 мин, ?force=1)
 // GET /api/procurement/doc-fields — коды файловых полей Битрикса (для проверки, что
 // «Файл закупки» подхватился). Админ. ?force=1 — сбросить кэш резолва.
@@ -48,11 +65,14 @@ router.get('/doc-fields', requireAuth(['admin']), async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.get('/meta', requireAuth(VIEW_ROLES), async (req, res) => {
+router.get('/meta', viewGate(), async (req, res) => {
   try {
-    const { getMeta } = require('../procurement-calc');
+    const { getMeta, resolveUserBid } = require('../procurement-calc');
     const meta = await getMeta(req.query.force === '1');
-    res.json({ ...meta, me: { bitrixUserId: req.user.bitrix_user_id || null, name: req.user.display_name, role: req.user.role } });
+    // bitrixUserId — с фолбэком по имени (getMeta уже подтянул карту сотрудников),
+    // чтобы согласующий без явной привязки видел кнопку и решение писалось от него.
+    const meBid = req.user.bitrix_user_id || resolveUserBid(req.user) || null;
+    res.json({ ...meta, me: { bitrixUserId: meBid, name: req.user.display_name, role: req.user.role } });
   } catch (e) {
     console.error('GET /api/procurement/meta error:', e.message);
     res.status(500).json({ error: 'Не удалось загрузить справочники: ' + e.message });
@@ -106,7 +126,7 @@ router.get('/bin', requireAuth(ROLES), async (req, res) => {
 // GET /api/procurement/list-version — дешёвый маркер изменений для поллинга.
 // Фронт опрашивает его каждые 20с (несколько байт) и тянет полный /list только
 // когда маркер изменился — это резко снижает egress из Supabase.
-router.get('/list-version', requireAuth(VIEW_ROLES), async (req, res) => {
+router.get('/list-version', ...viewGate(), async (req, res) => {
   try {
     const { tableVersion } = require('../db-version');
     res.json({ v: await tableVersion('ticketsmodule_procurement') });
@@ -117,7 +137,7 @@ router.get('/list-version', requireAuth(VIEW_ROLES), async (req, res) => {
 });
 
 // GET /api/procurement/list — наши заявки (из локальной таблицы)
-router.get('/list', requireAuth(VIEW_ROLES), async (req, res) => {
+router.get('/list', ...viewGate(), async (req, res) => {
   try {
     const { listRequests } = require('../procurement-calc');
     // engineer/sales и marketolog видят только свои закупки; остальные (вкл. бухгалтера) — все.
@@ -240,7 +260,7 @@ router.post('/:id/files-batch', requireAuth(VIEW_ROLES), express.json({ limit: '
 });
 
 // GET /api/procurement/:id/files/:fileId/download — скачать файл
-router.get('/:id/files/:fileId/download', requireAuth(VIEW_ROLES), async (req, res) => {
+router.get('/:id/files/:fileId/download', ...viewGate(), async (req, res) => {
   try {
     const { getFileBytes } = require('../procurement-calc');
     const f = await getFileBytes(parseInt(req.params.id, 10), parseInt(req.params.fileId, 10));
@@ -359,7 +379,7 @@ router.delete('/:id', requireAuth(DEL_ROLES), async (req, res) => {
 });
 
 // GET /api/procurement/:id/detail — документы + согласование (из 1066)
-router.get('/:id/detail', requireAuth(VIEW_ROLES), async (req, res) => {
+router.get('/:id/detail', ...viewGate(), async (req, res) => {
   try {
     const { getItemDetail } = require('../procurement-calc');
     res.json(await getItemDetail(parseInt(req.params.id, 10)));
@@ -438,20 +458,27 @@ router.post('/:id/request-approval', requireAuth(EDIT_ROLES), express.json(), as
 });
 
 // POST /api/procurement/:id/approval { status, approverId, comment } — решение по согласованию
-router.post('/:id/approval', requireAuth(VIEW_ROLES), express.json(), async (req, res) => {
+router.post('/:id/approval', ...viewGate(), express.json(), async (req, res) => {
   try {
-    const { setApproval, getItemDetail } = require('../procurement-calc');
+    const { setApproval, getItemDetail, resolveUserBid } = require('../procurement-calc');
     const localId = parseInt(req.params.id, 10);
     let { status, approverId, comment } = req.body || {};
-    // engineer/sales и бухгалтер решают ТОЛЬКО от своего имени и только если он
-    // в списке согласующих этой закупки.
-    if (OWN_ONLY.includes(req.user.role)) {
-      const bid = String(req.user.bitrix_user_id || '');
-      approverId = bid;
-      const det = await getItemDetail(localId).catch(() => null);
-      const list = (det && det.approval && det.approval.approvers || []).map(a => String(a.bid));
-      if (!bid || !list.includes(bid)) return res.status(403).json({ error: 'Вы не назначены согласующим по этой закупке' });
+    // Решение согласующего ВСЕГДА пишется от его имени: берём его Bitrix-id
+    // (с фолбэком по имени) и сверяем со списком согласующих этой закупки.
+    // Кто в списке — решает только за себя (нельзя случайно записать решение на
+    // первого/чужого). Кто НЕ в списке: управляющие (admin/coordinator/store)
+    // могут решить за указанного (approverId из тела) — как раньше; остальным 403.
+    const myBid = String(req.user.bitrix_user_id || resolveUserBid(req.user) || '');
+    const det = await getItemDetail(localId).catch(() => null);
+    const list = (det && det.approval && det.approval.approvers || []).map(a => String(a.bid));
+    const inList = !!myBid && list.includes(myBid);
+    const isMgr = ['admin', 'coordinator', 'store'].includes(req.user.role);
+    if (inList) {
+      approverId = myBid;                       // решаешь строго от своего имени
+    } else if (!isMgr) {
+      return res.status(403).json({ error: 'Вы не назначены согласующим по этой закупке' });
     }
+    // isMgr && !inList → управляющий согласует за указанного (approverId из тела)
     res.json(await setApproval(localId, status, approverId, comment));
   } catch (e) {
     console.error('POST /api/procurement/:id/approval error:', e.message);
@@ -473,7 +500,7 @@ router.post('/:id/accountant', requireAuth(EDIT_ROLES), express.json(), async (r
 
 // GET /api/procurement/pending-count — число действий, за которые отвечает
 // текущий пользователь (для бейджа на иконке установленного приложения).
-router.get('/pending-count', requireAuth(VIEW_ROLES), async (req, res) => {
+router.get('/pending-count', ...viewGate(), async (req, res) => {
   try {
     const { pendingActionsFor } = require('../procurement-calc');
     const bid = req.user && req.user.bitrix_user_id;

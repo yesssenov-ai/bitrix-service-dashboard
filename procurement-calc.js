@@ -13,6 +13,21 @@ const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g,
 // Человекочитаемая дата-время (Астана) для писем/уведомлений.
 const fmtWhen = iso => { try { return new Date(iso).toLocaleString('ru-RU', { timeZone: 'Asia/Almaty', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return String(iso || ''); } };
 const findUserId = re => { const e = Object.entries(USERS || {}).find(([, name]) => re.test(name)); return e ? Number(e[0]) : null; };
+// Bitrix-id пользователя ЦУП. Приоритет — явная привязка bitrix_user_id; иначе
+// фолбэк по точному совпадению имени (engineer_name, затем display_name) с картой
+// сотрудников Bitrix (USERS). Нужно, чтобы согласующий без явной привязки всё равно
+// «узнавался» как назначенный согласующий (кнопка согласования + авторство решения).
+function resolveUserBid(user) {
+  if (!user) return null;
+  if (user.bitrix_user_id) return Number(user.bitrix_user_id);
+  const byName = nm => {
+    const n = String(nm || '').trim();
+    if (!n) return null;
+    const e = Object.entries(USERS || {}).find(([, name]) => String(name).trim() === n);
+    return e ? Number(e[0]) : null;
+  };
+  return byName(user.engineer_name) || byName(user.display_name) || null;
+}
 // ЕДИНАЯ тема письма на всю закупку — чтобы Outlook собирал все уведомления по
 // одной закупке в ОДНУ ветку. Тема НЕ меняется от события к событию; конкретика
 // (что именно произошло) — всегда в теле письма. Формат: «Закупка #123 · <PO/название>».
@@ -1952,4 +1967,4 @@ async function backfillServiceParent() {
   return { ok, fail, total: rows.length };
 }
 
-module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, listDeletions, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, resolveDocFields, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, setAmount, setPayComment, setPoaSetup, currentStepKey, autoCreateFromService, scanServiceForAutoCreate, backfillServiceParent, pendingActionsFor, statusBoard, itemUrl, dealUrl, ownsRequest };
+module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, listDeletions, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, resolveDocFields, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, setAmount, setPayComment, setPoaSetup, currentStepKey, autoCreateFromService, scanServiceForAutoCreate, backfillServiceParent, pendingActionsFor, statusBoard, itemUrl, dealUrl, ownsRequest, resolveUserBid };

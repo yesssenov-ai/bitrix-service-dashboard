@@ -837,7 +837,11 @@ function approvalHtml(id,d){
   const YES=String(META.approve.yes), NO=String(META.approve.no||'1828');
   const apprs=ap.approvers||[];
   const myBid=(META.me&&META.me.bitrixUserId)||null;
-  const mine = myBid ? apprs.find(a=>String(a.bid)===String(myBid)) : null;
+  const myName=(META.me&&META.me.name)||'';
+  // Основной матч — по Bitrix-id; фолбэк — по точному совпадению имени (на случай
+  // учётки согласующего без явной привязки к Bitrix).
+  let mine = myBid ? apprs.find(a=>String(a.bid)===String(myBid)) : null;
+  if(!mine && myName) mine = apprs.find(a=>String(a.name||'').trim()===String(myName).trim());
   const amApprover = !!(mine && !mine.decided) && ap.requested && !ap.approved;
   const rejected = ap.status && String(ap.status)===NO && ap.decided;
   const approved = !!ap.approved;
