@@ -291,11 +291,13 @@ async function init() {
 
 function initMap() {
   map = L.map('map', { center: [48.5, 66.9], zoom: 5 });
-  // Тайлы CARTO (Voyager) — свободный drop-in. Раньше стоял tile.openstreetmap.org,
-  // но OSM заблокировал домен приложения по своей tile usage policy (403 Access blocked).
-  // Тёмный вариант карты: заменить 'rastertiles/voyager' на 'dark_all'.
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors, © CARTO', subdomains: 'abcd', maxZoom: 20,
+  // Тайлы Esri (ArcGIS World Street Map) — работают БЕЗ API-ключа.
+  // История: OSM заблокировал домен (403), затем CARTO закрыл бесплатные тайлы за ключ
+  // (API KEY REQUIRED). Esri — стабильный no-key вариант. Порядок сегментов {z}/{y}/{x}.
+  // Альтернативы: серый фон — .../Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x};
+  // спутник — .../World_Imagery/MapServer/tile/{z}/{y}/{x}.
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles &copy; Esri', maxZoom: 19,
   }).addTo(map);
   clusterGroup = L.markerClusterGroup({
     showCoverageOnHover: false,
