@@ -87,9 +87,18 @@ async function getProjects() {
     }
   }
 
+  // Фаза сделки для KAM-вида: доконтракт (P10–P80) / контракт / завершена / прочее.
+  // (Отдельный шаг «Реализация» появится при связке с модулем Реализация по deal_id.)
+  const phaseOf = d => {
+    if (d._st.kind === 'pipeline') return 'pre';
+    if (/(^|:)WON$/.test(d.stage_id || '')) return 'done';
+    if (d._st.kind === 'contract') return 'contract';
+    return 'other';
+  };
   const dealCard = d => ({
     dealId: Number(d.deal_id), title: d.deal_title || d.company_name || ('Сделка #' + d.deal_id),
     company: d.company_name || '', product: d._product, step: d._st.step, kind: d._st.kind,
+    phase: phaseOf(d),
     stage: d.stage_id, sum: d._sum, ownerId: d.assigned_by_id || null, owner: uname(d.assigned_by_id),
     isComplex: !!d.is_complex, endUser: d.end_user || null, url: url(d.deal_id),
   });
