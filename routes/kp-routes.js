@@ -9,7 +9,24 @@ const { notifyPersonal } = require('../kp-notify');
 // simple role check for now — matches the existing role model instead of
 // inventing a new "PM" role.
 const PM_ROLES = ['admin', 'coordinator'];
-function isPm(user) { return PM_ROLES.includes(user.role); }
+// Доп. PM-доступ к подмодулю МЛК (вкладка «Каталог» + PM-действия) для отдельных
+// сотрудников БЕЗ смены глобальной роли — чтобы менеджер (напр. Айнур, КAM по МЛК)
+// получил Каталог/КП, но сохранил свой доступ в других модулях и НЕ видел «Сервис».
+// Задаётся env KP_MLK_PM — через запятую: логины (почты), ЦУП-id или Bitrix-id.
+// Пример: KP_MLK_PM="project@prolabsupport.kz". Касается ТОЛЬКО подмодуля МЛК.
+const MLK_PM_EXTRA = new Set(
+  (process.env.KP_MLK_PM || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+);
+function inMlkPm(user) {
+  if (!user) return false;
+  const keys = [String(user.id || ''), String(user.username || '').toLowerCase(), String(user.bitrix_user_id || '')];
+  return keys.some(k => k && MLK_PM_EXTRA.has(k));
+}
+function isPm(user) { return PM_ROLES.includes(user.role) || inMlkPm(user); }
+// Middleware для PM-действий подмодуля МЛК: пускаем PM-роли ИЛИ аллоулист МЛК.
+function requirePm() {
+  return [requireAuth(), (req, res, next) => isPm(req.user) ? next() : res.status(403).json({ error: 'Недостаточно прав' })];
+}
 // Создавать заявки в подмодуле МЛК может ещё и менеджер (но не остальные
 // PM-действия: назначение экспертов, согласование, каталог — только admin/coordinator).
 const CREATE_ROLES = ['admin', 'coordinator', 'manager'];
@@ -225,7 +242,7 @@ router.put('/requests/:id/categories/:categoryId', requireAuth(), async (req, re
 });
 
 // PM sends a category (or whole request) back for revision, with a comment
-router.post('/requests/:id/revise', requireAuth(PM_ROLES), async (req, res) => {
+router.post('/requests/:id/revise', ...requirePm(), async (req, res) => {
   const kpId = parseInt(req.params.id, 10);
   const { categoryId, comment } = req.body;
   if (!comment || !comment.trim()) return res.status(400).json({ error: 'Добавьте комментарий' });
@@ -266,7 +283,7 @@ router.post('/requests/:id/revise', requireAuth(PM_ROLES), async (req, res) => {
 });
 
 // PM approves — marks the request approved (document generation is wired in separately)
-router.post('/requests/:id/approve', requireAuth(PM_ROLES), async (req, res) => {
+router.post('/requests/:id/approve', ...requirePm(), async (req, res) => {
   try {
     const kpId = parseInt(req.params.id, 10);
     await pool.query(`UPDATE ticketsmodule_kp_requests SET status='approved', updated_at=NOW() WHERE id=$1`, [kpId]);
@@ -283,7 +300,7 @@ router.get('/experts', requireAuth(CREATE_ROLES), async (req, res) => {
 });
 
 // PM adds a category to an already-created request
-router.post('/requests/:id/categories', requireAuth(PM_ROLES), async (req, res) => {
+router.post('/requests/:id/categories', ...requirePm(), async (req, res) => {
   const kpId = parseInt(req.params.id, 10);
   const { categoryId } = req.body;
   const ids = normExpertIds(req.body);
@@ -305,7 +322,7 @@ router.post('/requests/:id/categories', requireAuth(PM_ROLES), async (req, res) 
 });
 
 // PM reassigns the expert(s) for one category in an existing request (несколько сотрудников)
-router.put('/requests/:id/categories/:categoryId/assign', requireAuth(PM_ROLES), async (req, res) => {
+router.put('/requests/:id/categories/:categoryId/assign', ...requirePm(), async (req, res) => {
   const kpId = parseInt(req.params.id, 10);
   const categoryId = parseInt(req.params.categoryId, 10);
   const ids = normExpertIds(req.body);
@@ -329,7 +346,7 @@ router.put('/requests/:id/categories/:categoryId/assign', requireAuth(PM_ROLES),
 // Download the generated KP document — only once the request is approved.
 // PDF is temporarily disabled: it doesn't match the branded Word template
 // visually yet (see kp-generate-pdf.js), so only docx is offered for now.
-router.get('/requests/:id/document', requireAuth(PM_ROLES), async (req, res) => {
+router.get('/requests/:id/document', ...requirePm(), async (req, res) => {
   const kpId = parseInt(req.params.id, 10);
   if (req.query.format === 'pdf') {
     return res.status(400).json({ error: 'PDF временно отключён — используйте Word' });
@@ -353,7 +370,7 @@ router.get('/requests/:id/document', requireAuth(PM_ROLES), async (req, res) => 
 });
 
 // ── Catalog version management (upload / rollback) ──────────────────────────
-router.get('/catalog/versions', requireAuth(PM_ROLES), async (req, res) => {
+router.get('/catalog/versions', ...requirePm(), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT v.id, v.uploaded_at, v.filename, v.note, v.active, u.display_name AS uploaded_by_name,
@@ -366,7 +383,7 @@ router.get('/catalog/versions', requireAuth(PM_ROLES), async (req, res) => {
   } catch (e) { console.error('GET /catalog/versions error:', e.message); res.status(500).json({ error: 'Server error' }); }
 });
 
-router.post('/catalog/upload', requireAuth(PM_ROLES), upload.single('file'), async (req, res) => {
+router.post('/catalog/upload', ...requirePm(), upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Файл не получен' });
   try {
     const { importCatalogVersion } = require('../kp-catalog-import');
@@ -384,7 +401,7 @@ router.post('/catalog/upload', requireAuth(PM_ROLES), upload.single('file'), asy
   }
 });
 
-router.post('/catalog/versions/:id/activate', requireAuth(PM_ROLES), async (req, res) => {
+router.post('/catalog/versions/:id/activate', ...requirePm(), async (req, res) => {
   try {
     const versionId = parseInt(req.params.id, 10);
     const { rows } = await pool.query('SELECT id FROM ticketsmodule_kp_catalog_versions WHERE id=$1', [versionId]);
