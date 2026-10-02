@@ -91,15 +91,18 @@ function dealIdOf(c) {
 async function fetchDebtRaw() {
   if (!onecMod.isConfigured()) return mockDebt();
 
-  // Период для проводок (с начала года по сегодня). Сервисы: dim/contract,
+  // Для ОСТАТКА дебиторки берём ВСЮ историю проводок (входящее сальдо + движения),
+  // иначе долг занижен относительно Power BI, который показывает полный остаток.
+  // Начало периода настраивается env ONEC_BALANCE_FROM. Сервисы: dim/contract,
   // dim/contractor, fact/receivables?dateFrom&dateTo (счёт 1210). Ответ: {count, items}.
-  const yr = new Date().getFullYear();
-  const dateFrom = yr + '-01-01';
+  const dateFrom = process.env.ONEC_BALANCE_FROM || '2000-01-01';
   const dateTo = new Date().toISOString().slice(0, 10);
+  // Устойчивый забор: сбой fact-сервиса не должен обнулять весь модуль.
+  const safe = async (svc, params) => { try { return await onecMod.onec(svc, params); } catch (e) { console.error('1С', svc, 'error:', e.message); return { items: [], _error: e.message }; } };
   const [contractsRaw, contractorsRaw, ledgerRaw] = await Promise.all([
     onecMod.onec('dim/contract'),
     onecMod.onec('dim/contractor'),
-    onecMod.onec('fact/receivables', { dateFrom, dateTo }),
+    safe('fact/receivables', { dateFrom, dateTo }),
   ]);
   const asArr = d => Array.isArray(d) ? d : (d && (d.items || d.rows || d.data || d.value)) || [];
   const contracts = asArr(contractsRaw);

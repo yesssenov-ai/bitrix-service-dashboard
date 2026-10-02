@@ -1,0 +1,446 @@
+<meta charset="utf-8">
+<title>LIMS для ТЦ — план внедрения</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&family=PT+Sans:wght@400;700&family=PT+Serif:wght@700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --red:#E42834; --red2:#E63a48; --redsoft:#FBEAEC;
+  --ink:#1B1F27; --body:#3d4450; --muted:#8b919b;
+  --card:#F1F2F4; --line:#e6e7ea; --black:#111319;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:#54585f;font-family:'PT Sans',system-ui,Arial,sans-serif;color:var(--body)}
+.deck{display:flex;flex-direction:column;align-items:center;gap:26px;padding:26px 12px}
+.slide{width:1280px;height:720px;background:#fff;position:relative;overflow:hidden;flex:0 0 auto;
+  box-shadow:0 10px 40px rgba(0,0,0,.35)}
+.pad{position:absolute;inset:0;padding:64px 72px}
+h1,h2,h3,.kick,.big{font-family:'Montserrat',sans-serif;color:var(--ink)}
+.kick{font-size:15px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--ink)}
+.h-title{font-size:52px;font-weight:800;line-height:1.05;margin:14px 0 0}
+.sub{font-size:23px;line-height:1.35;color:var(--body);margin:16px 0 0;max-width:1050px}
+.pageno{position:absolute;right:34px;bottom:22px;font-family:'Montserrat';font-size:14px;color:#b9bdc4}
+/* logo */
+.logo{display:flex;align-items:flex-end;gap:8px}
+.logo .txt{font-family:'PT Serif',Georgia,serif;font-weight:700;font-size:23px;color:#20242c;letter-spacing:.2px;white-space:nowrap}
+.logo .bars{display:inline-flex;gap:3px;align-items:flex-end;height:26px}
+.logo .bars i{width:4px;background:var(--red);display:block}
+.logo .bars i:nth-child(1){height:26px}.logo .bars i:nth-child(2){height:18px}.logo .bars i:nth-child(3){height:26px}.logo .bars i:nth-child(4){height:12px}
+.logo .rule{height:3px;background:var(--red);width:100%;margin-top:3px}
+.logo-wrap{position:absolute;top:52px;right:72px;width:250px;flex:0 0 auto}
+.logo-tl{position:absolute;top:56px;left:72px;width:230px}
+/* top kicker row */
+.toprow{display:flex;justify-content:space-between;align-items:flex-start}
+/* cards */
+.grid{display:grid;gap:22px}
+.card{background:var(--card);border-radius:18px;padding:26px 28px}
+.card.pink{background:var(--redsoft)}
+.card.red{background:var(--red);color:#fff}
+.card.red *{color:#fff}
+.badge{width:44px;height:44px;border-radius:50%;background:var(--red);color:#fff;font-family:'Montserrat';font-weight:800;
+  font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.card h3{font-size:23px;font-weight:800;margin:0}
+.card p{font-size:18px;line-height:1.34;margin:12px 0 0;color:var(--body)}
+.card.red p{color:#fff}
+.cardhead{display:flex;align-items:center;gap:14px}
+/* banner */
+.banner{border-radius:16px;padding:20px 28px;font-family:'Montserrat';font-weight:800;font-size:21px;line-height:1.3}
+.banner.red{background:var(--red);color:#fff}
+.banner.black{background:var(--black);color:#fff}
+.vyv{display:flex;gap:18px;align-items:flex-start;margin-top:26px}
+.vyv .w{font-family:'Montserrat';font-weight:800;color:var(--red);font-size:20px;flex:0 0 auto}
+.vyv .t{font-family:'Montserrat';font-weight:800;color:var(--ink);font-size:20px;line-height:1.3}
+/* stat grid */
+.stat .n{font-family:'Montserrat';font-weight:800;color:var(--red);font-size:44px;line-height:1}
+.stat .l{font-size:19px;color:var(--body);margin-top:8px}
+/* step chain */
+.chain{display:flex;align-items:stretch;gap:8px}
+.step{background:var(--card);border-radius:14px;padding:18px 16px;flex:1;position:relative}
+.step.red{background:var(--red)} .step.red *{color:#fff!important}
+.step .sn{font-family:'Montserrat';font-weight:800;color:var(--red);font-size:16px}
+.step h4{font-family:'Montserrat';font-weight:800;color:var(--ink);font-size:18px;margin:6px 0 6px}
+.step p{font-size:14.5px;line-height:1.3;margin:0;color:var(--body)}
+.arrow{align-self:center;color:var(--red);font-size:26px;font-weight:800;flex:0 0 auto}
+/* table */
+table{width:100%;border-collapse:collapse;font-size:17.5px}
+thead th{background:var(--black);color:#fff;font-family:'Montserrat';font-weight:800;text-align:left;padding:14px 18px}
+tbody td{padding:13px 18px;border-bottom:1px solid var(--line);color:var(--body);vertical-align:top}
+tbody tr:nth-child(even){background:#f7f8f9}
+td.b{font-family:'Montserrat';font-weight:800;color:var(--ink)}
+.tight{font-size:13px}.tight thead th{padding:9px 16px}.tight tbody td{padding:6.5px 16px}
+.tag{display:inline-block;font-family:'Montserrat';font-weight:800;font-size:13px;padding:3px 10px;border-radius:20px}
+.tag.easy{background:#e7f6ee;color:#12905a}.tag.mid{background:#fdeede;color:#c47a12}
+/* divider slide */
+.divider{background:var(--red2)}
+.divider .pad{padding:0}
+.divider .left{position:absolute;left:0;top:0;bottom:0;width:56%;padding:80px 72px;display:flex;flex-direction:column;justify-content:center}
+.divider .rzd{font-family:'Montserrat';font-weight:800;color:#fff;letter-spacing:.12em;font-size:16px}
+.divider h2{font-family:'Montserrat';font-weight:800;color:#fff;font-size:58px;line-height:1.05;margin:26px 0 0}
+.divider .wr{width:120px;height:4px;background:#fff;margin:34px 0 0}
+.divider .ds{color:#fff;font-size:22px;line-height:1.4;margin-top:26px;max-width:520px;opacity:.96}
+.divider .right{position:absolute;right:0;top:0;bottom:0;width:44%;background:
+  radial-gradient(120% 120% at 80% 20%, #ffffff10 0 40%, transparent 41%),
+  linear-gradient(160deg,#c81828,#7d0f1a);display:flex;align-items:center;justify-content:center}
+.bigbars{display:flex;gap:10px;align-items:flex-end;height:150px;opacity:.9}
+.bigbars i{width:14px;background:#fff;border-radius:2px}
+.bigbars i:nth-child(1){height:150px}.bigbars i:nth-child(2){height:96px}.bigbars i:nth-child(3){height:130px}.bigbars i:nth-child(4){height:60px}.bigbars i:nth-child(5){height:150px}.bigbars i:nth-child(6){height:88px}
+.rmark{color:var(--red)} .gmark{color:#aeb3bb}
+/* cover */
+.cover .lbar{position:absolute;left:0;top:0;bottom:0;width:26px;background:var(--red)}
+.cover .right{position:absolute;right:0;top:0;bottom:0;width:42%;background:linear-gradient(160deg,#e42834,#8d101c);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;color:#fff}
+.cover .right .pls{font-family:'PT Serif',Georgia,serif;font-size:34px;font-weight:700}
+.pill{display:inline-block;background:var(--red);color:#fff;font-family:'Montserrat';font-weight:800;font-size:19px;
+  line-height:1.3;padding:16px 26px;border-radius:12px;max-width:640px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:22px}
+.four{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:18px}
+ul.b{margin:12px 0 0;padding-left:0;list-style:none}
+ul.b li{font-size:17px;line-height:1.5;color:var(--body);padding-left:18px;position:relative}
+ul.b li::before{content:"•";color:var(--red);position:absolute;left:0;font-weight:800}
+/* timeline */
+.tl{margin-top:8px}
+.tlrow{display:flex;align-items:center;gap:16px;margin:14px 0}
+.tlname{width:250px;font-family:'Montserrat';font-weight:800;color:var(--ink);font-size:17px}
+.tltrack{flex:1;background:#eef0f2;border-radius:10px;height:34px;position:relative}
+.tlbar{position:absolute;top:0;bottom:0;border-radius:10px;background:var(--red);display:flex;align-items:center;
+  justify-content:center;color:#fff;font-family:'Montserrat';font-weight:800;font-size:14px}
+.tlbar.soft{background:#f4a0a7;color:#7d1620}
+.tlaxis{display:flex;margin-left:266px;color:var(--muted);font-size:13px;font-family:'Montserrat';font-weight:700;justify-content:space-between}
+.mile{font-family:'Montserrat';font-weight:800;color:var(--red)}
+@media print{
+  body{background:#fff}
+  .deck{gap:0;padding:0}
+  .slide{box-shadow:none;page-break-after:always}
+  @page{size:1280px 720px;margin:0}
+}
+</style>
+<div class="deck">
+
+<!-- 1. COVER -->
+<section class="slide cover">
+  <div class="lbar"></div>
+  <div class="logo-tl"><div class="logo"><span class="txt">Pro Lab Support</span><span class="bars"><i></i><i></i><i></i><i></i></span></div><div class="rule" style="height:3px;background:var(--red);margin-top:4px;width:200px"></div></div>
+  <div class="pad" style="padding:64px 72px;display:flex;flex-direction:column;justify-content:center;width:60%">
+    <h1 class="h-title" style="font-size:58px">LIMS ДЛЯ<br>ТРЕНИНГ-ЦЕНТРА<br>PROLABSUPPORT</h1>
+    <p class="sub" style="max-width:560px">Собственная лабораторная система контроля: этапы внедрения, сроки, трудозатраты и ресурсы для запуска.</p>
+    <div style="margin-top:40px"><span class="pill">План внедрения — своими силами, на стеке ЦУП (Node + Postgres)</span></div>
+  </div>
+  <div class="right">
+    <div class="bigbars"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="pls">ProLabSupport</div>
+    <div style="font-family:'Montserrat';font-weight:800;letter-spacing:.14em;font-size:14px;opacity:.85">LIMS · ТРЕНИНГ-ЦЕНТР</div>
+  </div>
+  <div class="pageno" style="color:#c9ccd2">01</div>
+</section>
+
+<!-- 2. WHY / PROBLEM -->
+<section class="slide">
+  <div class="pad">
+    <div class="toprow"><div class="kick">Зачем LIMS</div><div class="logo-wrap" style="position:static"><div class="logo"><span class="txt">Pro Lab Support</span><span class="bars"><i></i><i></i><i></i><i></i></span></div><div class="rule"></div></div></div>
+    <h2 class="h-title">Контроль в ТЦ ведётся вручную, а данные<br>приборов не связаны между собой</h2>
+    <p class="sub">Четыре проблемы мешают вести пробы, результаты и качество как единую систему:</p>
+    <div class="four" style="margin-top:34px">
+      <div class="card pink"><div class="cardhead"><div class="badge">01</div><h3>Разрозненные данные</h3></div><p>Результаты живут в софте приборов и файлах — единой истории пробы нет.</p></div>
+      <div class="card"><div class="cardhead"><div class="badge">02</div><h3>Ручной контроль</h3></div><p>Журналы в Excel и на бумаге — легко потерять и трудно найти.</p></div>
+      <div class="card pink"><div class="cardhead"><div class="badge">03</div><h3>Нет прослеживаемости</h3></div><p>Кто, когда, на каком приборе и с каким реактивом — не собрано вместе.</p></div>
+      <div class="card"><div class="cardhead"><div class="badge">04</div><h3>Нет автоввода</h3></div><p>Результаты не подтягиваются с приборов автоматически, всё вносится руками.</p></div>
+    </div>
+    <div class="vyv"><div class="w">Вывод</div><div class="t">Нужна лёгкая LIMS для внутреннего контроля ТЦ — без аккредитации и валидации, но с единой историей пробы и автовводом с приборов.</div></div>
+  </div>
+  <div class="pageno">02</div>
+</section>
+
+<!-- 3. SOLUTION -->
+<section class="slide">
+  <div class="pad">
+    <div class="toprow"><div class="kick">Решение</div><div class="logo-wrap" style="position:static"><div class="logo"><span class="txt">Pro Lab Support</span><span class="bars"><i></i><i></i><i></i><i></i></span></div><div class="rule"></div></div></div>
+    <h2 class="h-title">LIMS-lite: одна система на весь путь пробы —<br>от регистрации до протокола</h2>
+    <p class="sub">Рабочее ядро взято из ТЗ НЦЭЛС (SampleManager), но без регуляторной тяжести.</p>
+    <div style="display:grid;grid-template-columns:300px 1fr 1fr;gap:22px;margin-top:34px;align-items:stretch">
+      <div class="card red" style="display:flex;flex-direction:column;justify-content:center">
+        <h3 style="font-size:30px">LIMS-lite<br>ТЦ</h3>
+        <p>единая история пробы, контроль качества и результатов</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="card pink" style="padding:16px 22px"><b style="font-family:Montserrat;color:var(--ink);font-size:19px">Регистрация проб + штрихкод</b></div>
+        <div class="card" style="padding:16px 22px"><b style="font-family:Montserrat;color:var(--ink);font-size:19px">Автоввод результатов с приборов</b></div>
+        <div class="card" style="padding:16px 22px"><b style="font-family:Montserrat;color:var(--ink);font-size:19px">Проверка и утверждение</b></div>
+        <div class="card" style="padding:16px 22px"><b style="font-family:Montserrat;color:var(--ink);font-size:19px">Протоколы и дашборды</b></div>
+      </div>
+      <div class="card" style="display:flex;flex-direction:column;justify-content:center">
+        <h3 style="color:var(--red)">ТЦ получает</h3>
+        <ul class="b" style="margin-top:14px">
+          <li>единую историю по каждой пробе</li>
+          <li>автоввод результатов приборов</li>
+          <li>контроль сроков и поверок</li>
+          <li>протоколы и аудит «кто/когда»</li>
+        </ul>
+      </div>
+    </div>
+    <div class="banner red" style="margin-top:26px">Без IQ/OQ, ЭЦП и аккредитации — только рабочий контроль. Стек тот же, что у ЦУП.</div>
+  </div>
+  <div class="pageno">03</div>
+</section>
+
+<!-- 4. INSTRUMENTS -->
+<section class="slide">
+  <div class="pad">
+    <div class="toprow"><div class="kick">Наш парк приборов</div><div class="logo-wrap" style="position:static"><div class="logo"><span class="txt">Pro Lab Support</span><span class="bars"><i></i><i></i><i></i><i></i></span></div><div class="rule"></div></div></div>
+    <h2 class="h-title" style="font-size:29px">Данные снимаем через экспорт софта приборов — 14 приборов</h2>
+    <table class="tight" style="margin-top:12px">
+      <thead><tr><th style="width:31%">Прибор</th><th style="width:24%">Софт</th><th>Канал / выгрузка</th><th style="width:14%">Сложность</th></tr></thead>
+      <tbody>
+        <tr><td class="b">ИСП-ОЭС 5900 SVDV</td><td>ICP Expert</td><td>авто-экспорт CSV</td><td><span class="tag easy">лёгкая</span></td></tr>
+        <tr><td class="b">ААС 240 FS</td><td>SpectrAA</td><td>экспорт CSV</td><td><span class="tag easy">лёгкая</span></td></tr>
+        <tr><td class="b">МП-АЭС 4210</td><td>MP Expert</td><td>экспорт CSV</td><td><span class="tag easy">лёгкая</span></td></tr>
+        <tr><td class="b">РФА Epsilon 4</td><td>Epsilon 4 (Malvern)</td><td>CSV / отчёт</td><td><span class="tag easy">лёгкая</span></td></tr>
+        <tr><td class="b">ИХ 940 Prof. Vario</td><td>MagIC Net</td><td>встроенный LIMS-экспорт</td><td><span class="tag easy">лёгкая</span></td></tr>
+        <tr><td class="b">Весы XA 220.3Y A</td><td>Radwag / RS-232</td><td>строка веса (serial)</td><td><span class="tag easy">лёгкая</span></td></tr>
+        <tr><td class="b">Весы PS 2500 3Y</td><td>Radwag / RS-232</td><td>строка веса (serial)</td><td><span class="tag easy">лёгкая</span></td></tr>
+        <tr><td class="b">914 pH / O₂ / конд.</td><td>ПО прибора / RS-232</td><td>одно значение</td><td><span class="tag easy">лёгкая</span></td></tr>
+        <tr><td class="b">ИСП-МС 7900</td><td>ICP-MS MassHunter</td><td>batch-экспорт CSV</td><td><span class="tag mid">средняя</span></td></tr>
+        <tr><td class="b">ГХ 8890</td><td>OpenLab CDS</td><td>шаблон отчёта → CSV/XML</td><td><span class="tag mid">средняя</span></td></tr>
+        <tr><td class="b">ВЭЖХ 1260 Infinity III</td><td>OpenLab CDS</td><td>тот же парсер, что ГХ</td><td><span class="tag mid">средняя</span></td></tr>
+        <tr><td class="b">Титратор Titrando 905</td><td>tiamo</td><td>экспорт CSV / отчёт</td><td><span class="tag mid">средняя</span></td></tr>
+        <tr><td class="b">XRD Aeris</td><td>Aeris + HighScore</td><td>экспорт фаз / содержаний</td><td><span class="tag mid">сложнее</span></td></tr>
+      </tbody>
+    </table>
+    <div class="banner red" style="margin-top:14px;font-size:14px">8 лёгких приборов — первыми, затем 4 средних (ИСП-МС, ГХ/ВЭЖХ, титратор) и XRD Aeris.</div>
+  </div>
+  <div class="pageno">04</div>
+</section>
+
+<!-- 5. HOW IT WORKS -->
+<section class="slide">
+  <div class="pad">
+    <div class="toprow"><div class="kick">Как это работает</div><div class="logo-wrap" style="position:static"><div class="logo"><span class="txt">Pro Lab Support</span><span class="bars"><i></i><i></i><i></i><i></i></span></div><div class="rule"></div></div></div>
+    <h2 class="h-title">Код пробы связывает прибор и систему</h2>
+    <p class="sub">Аналитик один раз вписывает код пробы в софт прибора — дальше всё автоматически.</p>
+    <div class="chain" style="margin-top:40px">
+      <div class="step"><div class="sn">01</div><h4>Регистрация</h4><p>Проба заводится в LIMS, печатается штрихкод-код TC-2026-…</p></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="sn">02</div><h4>Код в прибор</h4><p>Аналитик вписывает/сканирует код в поле Sample Name.</p></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="sn">03</div><h4>Экспорт в папку</h4><p>Софт прибора выгружает файл результата в «горячую папку».</p></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="sn">04</div><h4>Агент-парсер</h4><p>Сервис читает файл, разбирает по формату софта.</p></div>
+      <div class="arrow">→</div>
+      <div class="step red"><div class="sn">05</div><h4>Результат в LIMS</h4><p>Привязка к пробе по коду, статус, история.</p></div>
+    </div>
+    <div class="banner black" style="margin-top:40px">В приборы не вмешиваемся: работаем с экспортом их штатного ПО. Модель как в LabStation — «папка → парсинг → импорт».</div>
+  </div>
+  <div class="pageno">05</div>
+</section>
+
+<!-- 6. NETWORK / INFRA -->
+<section class="slide">
+  <div class="pad">
+    <div class="toprow"><div class="kick">Инфраструктура</div><div class="logo-wrap" style="position:static"><div class="logo"><span class="txt">Pro Lab Support</span><span class="bars"><i></i><i></i><i></i><i></i></span></div><div class="rule"></div></div></div>
+    <h2 class="h-title">Одна сеть и мини-ПК-сборщик — сервер не нужен</h2>
+    <div style="display:grid;grid-template-columns:340px 1fr;gap:26px;margin-top:34px">
+      <div class="card" style="display:flex;flex-direction:column;justify-content:center">
+        <h3>Что нужно по сети</h3>
+        <ul class="b" style="margin-top:14px">
+          <li>приборные ПК и сборщик — в одной LAN</li>
+          <li>общая папка для экспорта результатов</li>
+          <li>единое время (NTP) для аудита</li>
+          <li>интернет только у сборщика</li>
+        </ul>
+      </div>
+      <div class="two">
+        <div class="card"><div class="cardhead"><div class="badge">☁</div><h3>Облако (LIMS)</h3></div><p>Бэкенд и база — Railway + Supabase, как ЦУП. Веб-доступ из браузера.</p></div>
+        <div class="card"><div class="cardhead"><div class="badge">▣</div><h3>Мини-ПК сборщик</h3></div><p>Всегда включён, следит за папками, парсит и шлёт в облако.</p></div>
+        <div class="card"><div class="cardhead"><div class="badge">▤</div><h3>Принтер + сканер</h3></div><p>Термопринтер этикеток и сканер штрихкодов для проб.</p></div>
+        <div class="card"><div class="cardhead"><div class="badge">⚙</div><h3>Экспорт ПО</h3></div><p>Настройка выгрузки результатов в папку в софте каждого прибора.</p></div>
+      </div>
+    </div>
+    <div class="banner red" style="margin-top:24px">Приборные ПК не трогаем — только указываем путь экспорта. Данные могут жить в облаке или локально.</div>
+  </div>
+  <div class="pageno">06</div>
+</section>
+
+<!-- 7. MODULES -->
+<section class="slide">
+  <div class="pad">
+    <div class="toprow"><div class="kick">Состав системы</div><div class="logo-wrap" style="position:static"><div class="logo"><span class="txt">Pro Lab Support</span><span class="bars"><i></i><i></i><i></i><i></i></span></div><div class="rule"></div></div></div>
+    <h2 class="h-title">Модули LIMS для тренинг-центра</h2>
+    <div class="four" style="margin-top:32px;grid-template-columns:1fr 1fr;gap:16px 40px">
+      <div style="display:flex;gap:14px"><div class="badge">01</div><div><b style="font-family:Montserrat;color:var(--ink);font-size:19px">Регистрация проб + штрихкод</b><p style="margin:4px 0 0;font-size:16px">коды, шаблоны, печать этикеток</p></div></div>
+      <div style="display:flex;gap:14px"><div class="badge">05</div><div><b style="font-family:Montserrat;color:var(--ink);font-size:19px">Пределы и проверка</b><p style="margin:4px 0 0;font-size:16px">спецификации, «пометить/запретить», утверждение</p></div></div>
+      <div style="display:flex;gap:14px"><div class="badge">02</div><div><b style="font-family:Montserrat;color:var(--ink);font-size:19px">Статусы и движение пробы</b><p style="margin:4px 0 0;font-size:16px">жизненный цикл, подобразцы, инциденты</p></div></div>
+      <div style="display:flex;gap:14px"><div class="badge">06</div><div><b style="font-family:Montserrat;color:var(--ink);font-size:19px">Протоколы и отчёты</b><p style="margin:4px 0 0;font-size:16px">аналитический лист, протокол, экспорт Excel/PDF</p></div></div>
+      <div style="display:flex;gap:14px"><div class="badge">03</div><div><b style="font-family:Montserrat;color:var(--ink);font-size:19px">Методы и рабочие листы</b><p style="margin:4px 0 0;font-size:16px">справочник аналитов, назначение, ворклисты</p></div></div>
+      <div style="display:flex;gap:14px"><div class="badge">07</div><div><b style="font-family:Montserrat;color:var(--ink);font-size:19px">Оборудование и реактивы</b><p style="margin:4px 0 0;font-size:16px">поверка/калибровка со сроками, партии, остатки</p></div></div>
+      <div style="display:flex;gap:14px"><div class="badge">04</div><div><b style="font-family:Montserrat;color:var(--ink);font-size:19px">Ввод + автоимпорт</b><p style="margin:4px 0 0;font-size:16px">ручной ввод и парсеры приборов</p></div></div>
+      <div style="display:flex;gap:14px"><div class="badge">08</div><div><b style="font-family:Montserrat;color:var(--ink);font-size:19px">Обучение/допуски + аудит</b><p style="margin:4px 0 0;font-size:16px">допуск к методу/прибору, полный аудит-трейл</p></div></div>
+    </div>
+    <div class="banner red" style="margin-top:28px">Модуль «Обучение и допуски» — двойная польза: контроль качества и учёт обучения слушателей ТЦ.</div>
+  </div>
+  <div class="pageno">07</div>
+</section>
+
+<!-- 8. PHASES DIVIDER-STYLE OVERVIEW -->
+<section class="slide">
+  <div class="pad">
+    <div class="toprow"><div class="kick">Этапы</div><div class="logo-wrap" style="position:static"><div class="logo"><span class="txt">Pro Lab Support</span><span class="bars"><i></i><i></i><i></i><i></i></span></div><div class="rule"></div></div></div>
+    <h2 class="h-title">Внедрение по четырём фазам</h2>
+    <p class="sub">Каждая фаза даёт рабочий результат. Начинаем с фундамента (MVP), приборы подключаем по одному.</p>
+    <div class="four" style="margin-top:30px">
+      <div class="card red"><div style="font-family:Montserrat;font-weight:800;font-size:15px;letter-spacing:.06em">ФАЗА 0 · MVP</div><h3 style="font-size:24px;margin-top:6px">Фундамент</h3><ul class="b" style="margin-top:12px">
+        <li>регистрация + штрихкод</li><li>статусы и движение</li><li>ручной ввод результатов</li><li>протокол PDF, роли, аудит</li></ul></div>
+      <div class="card"><div style="font-family:Montserrat;font-weight:800;font-size:15px;letter-spacing:.06em;color:var(--red)">ФАЗА 1</div><h3 style="font-size:22px;margin-top:6px">8 лёгких приборов</h3><ul class="b" style="margin-top:12px">
+        <li>ИСП-ОЭС, ААС, МП-АЭС, РФА, ИХ</li><li>весы (2 шт) и pH-метр 914</li><li>пределы, уведомления</li></ul></div>
+      <div class="card"><div style="font-family:Montserrat;font-weight:800;font-size:15px;letter-spacing:.06em;color:var(--red)">ФАЗА 2</div><h3 style="font-size:22px;margin-top:6px">Средние приборы</h3><ul class="b" style="margin-top:12px">
+        <li>OpenLab: ГХ, ВЭЖХ</li><li>ИСП-МС 7900, титратор 905</li><li>оборудование, реактивы</li></ul></div>
+      <div class="card"><div style="font-family:Montserrat;font-weight:800;font-size:15px;letter-spacing:.06em;color:var(--red)">ФАЗА 3</div><h3 style="font-size:22px;margin-top:6px">XRD + качество</h3><ul class="b" style="margin-top:12px">
+        <li>XRD Aeris</li><li>обучение/допуски, среда</li><li>дашборды, инциденты</li></ul></div>
+    </div>
+  </div>
+  <div class="pageno">08</div>
+</section>
+
+<!-- 9. TIMELINE -->
+<section class="slide">
+  <div class="pad">
+    <div class="toprow"><div class="kick">Сроки · ориентир</div><div class="logo-wrap" style="position:static"><div class="logo"><span class="txt">Pro Lab Support</span><span class="bars"><i></i><i></i><i></i><i></i></span></div><div class="rule"></div></div></div>
+    <h2 class="h-title">Календарь ~5–5,5 месяца (работа своими силами)</h2>
+    <p class="sub">Оценка при разработке параллельно с ЦУП. MVP (Фаза 0) — примерно через месяц.</p>
+    <div class="tl" style="margin-top:30px">
+      <div class="tlrow"><div class="tlname">Фаза 0 · Фундамент (MVP)</div><div class="tltrack"><div class="tlbar" style="left:0%;width:18%">4 нед</div></div></div>
+      <div class="tlrow"><div class="tlname">Фаза 1 · 8 лёгких приборов</div><div class="tltrack"><div class="tlbar" style="left:18%;width:27%">6 нед</div></div></div>
+      <div class="tlrow"><div class="tlname">Фаза 2 · Средние приборы</div><div class="tltrack"><div class="tlbar" style="left:45%;width:32%">7 нед</div></div></div>
+      <div class="tlrow"><div class="tlname">Фаза 3 · XRD + качество</div><div class="tltrack"><div class="tlbar soft" style="left:77%;width:23%">5 нед</div></div></div>
+      <div class="tlaxis"><span>1 нед</span><span>4</span><span>8</span><span>12</span><span>16</span><span>22</span></div>
+    </div>
+    <div class="two" style="margin-top:30px">
+      <div class="card pink"><div class="cardhead"><div class="badge">◔</div><h3>Контрольная точка — месяц 1</h3></div><p>Работает MVP: регистрация проб, штрихкоды, ручной ввод, протокол. Можно вести контроль сразу.</p></div>
+      <div class="card"><div class="cardhead"><div class="badge">◑</div><h3>Контрольная точка — месяц 2–2,5</h3></div><p>Автоввод с 8 лёгких приборов, пределы и уведомления.</p></div>
+    </div>
+  </div>
+  <div class="pageno">09</div>
+</section>
+
+<!-- 10. EFFORT -->
+<section class="slide">
+  <div class="pad">
+    <div class="toprow"><div class="kick">Трудозатраты · ориентир</div><div class="logo-wrap" style="position:static"><div class="logo"><span class="txt">Pro Lab Support</span><span class="bars"><i></i><i></i><i></i><i></i></span></div><div class="rule"></div></div></div>
+    <h2 class="h-title">Оценка трудозатрат по фазам</h2>
+    <table style="margin-top:26px">
+      <thead><tr><th style="width:24%">Фаза</th><th>Что делаем</th><th style="width:20%">Оценка</th><th style="width:16%">Кто</th></tr></thead>
+      <tbody>
+        <tr><td class="b">Фаза 0 · Фундамент</td><td>регистрация, штрихкод, статусы, ручной ввод, протокол, роли, аудит</td><td>~15–20 чел-дней · 4 нед</td><td>ты</td></tr>
+        <tr><td class="b">Фаза 1 · 8 лёгких приборов</td><td>8 парсеров (ИСП-ОЭС, ААС, МП-АЭС, РФА, ИХ, 2 весов, pH-метр), пределы, уведомления</td><td>~25–30 чел-дней · 6 нед</td><td>ты</td></tr>
+        <tr><td class="b">Фаза 2 · Средние приборы</td><td>OpenLab (ГХ/ВЭЖХ), MassHunter, tiamo; оборудование/поверка, реактивы</td><td>~25–35 чел-дней · 7 нед</td><td>ты + IT по OpenLab</td></tr>
+        <tr><td class="b">Фаза 3 · XRD + качество</td><td>XRD Aeris, обучение/допуски, условия среды, дашборды, инциденты</td><td>~20–25 чел-дней · 5 нед</td><td>ты</td></tr>
+      </tbody>
+    </table>
+    <div class="banner red" style="margin-top:24px">Итого ~85–110 человеко-дней. MVP (Фаза 0) — около месяца. Главный ресурс — твоё время, разработка своими силами.</div>
+  </div>
+  <div class="pageno">10</div>
+</section>
+
+<!-- 11. RESOURCES -->
+<section class="slide">
+  <div class="pad">
+    <div class="toprow"><div class="kick">Ресурсы для запуска</div><div class="logo-wrap" style="position:static"><div class="logo"><span class="txt">Pro Lab Support</span><span class="bars"><i></i><i></i><i></i><i></i></span></div><div class="rule"></div></div></div>
+    <h2 class="h-title">Что нужно, чтобы запуститься</h2>
+    <div class="four" style="margin-top:34px">
+      <div class="card"><div class="cardhead"><div class="badge">▣</div><h3>Железо</h3></div><p>Мини-ПК-сборщик (или имеющийся ПК), термопринтер этикеток, сканер штрихкодов.</p></div>
+      <div class="card"><div class="cardhead"><div class="badge">☁</div><h3>Хостинг</h3></div><p>Railway (бэкенд) + Supabase (БД). Домен — по желанию.</p></div>
+      <div class="card"><div class="cardhead"><div class="badge">⚙</div><h3>Настройки</h3></div><p>Экспорт результатов в папку в каждом софте, общая папка, NTP, доступ к OpenLab.</p></div>
+      <div class="card"><div class="cardhead"><div class="badge">◎</div><h3>Данные</h3></div><p>По одному файлу-экспорту с каждого прибора — под них пишутся парсеры.</p></div>
+    </div>
+    <div class="two" style="margin-top:22px">
+      <div class="card red"><h3>Люди</h3><p>Разработка — своими силами. Точечно: помощь IT/вендора по настройке экспорта OpenLab и владелец данных/бэкапов.</p></div>
+      <div class="card pink"><h3 style="color:var(--red)">Что уже есть</h3><p>Приборы и их ПО, парк, стек и опыт ЦУП, доступы в Bitrix/Supabase. Строим на готовом фундаменте.</p></div>
+    </div>
+  </div>
+  <div class="pageno">11</div>
+</section>
+
+<!-- 12. BUDGET -->
+<section class="slide">
+  <div class="pad">
+    <div class="toprow"><div class="kick">Бюджет · ориентир</div><div class="logo-wrap" style="position:static"><div class="logo"><span class="txt">Pro Lab Support</span><span class="bars"><i></i><i></i><i></i><i></i></span></div><div class="rule"></div></div></div>
+    <h2 class="h-title">Ориентировочный бюджет запуска</h2>
+    <div class="banner red" style="margin-top:22px;display:flex;justify-content:space-between;align-items:center">
+      <span>Разработка — своими силами</span><span>Прямые денежные затраты минимальны</span></div>
+    <div class="three" style="margin-top:24px">
+      <div class="card"><h3>Разово · железо</h3>
+        <p style="margin-top:14px">Мини-ПК-сборщик<br><b style="color:var(--ink);font-family:Montserrat">150–250 тыс ₸</b></p>
+        <p style="margin-top:10px">Принтер этикеток + сканер<br><b style="color:var(--ink);font-family:Montserrat">120–200 тыс ₸</b></p></div>
+      <div class="card"><h3>Ежемесячно · хостинг</h3>
+        <p style="margin-top:14px">Railway + Supabase<br><b style="color:var(--ink);font-family:Montserrat">~10–25 тыс ₸ / мес</b></p>
+        <p style="margin-top:10px">Домен (опц.)<br><b style="color:var(--ink);font-family:Montserrat">~5–8 тыс ₸ / год</b></p></div>
+      <div class="card"><h3>Разработка</h3>
+        <p style="margin-top:14px">Своими силами (вайб-кодинг)<br><b style="color:var(--ink);font-family:Montserrat">0 ₸ прямых затрат</b></p>
+        <p style="margin-top:10px">Ресурс — время: ~85–110 чел-дней</p></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr;gap:0;margin-top:24px">
+      <div class="banner black" style="display:flex;justify-content:space-between;gap:20px;font-size:20px">
+        <span>Запуск (железо): <span style="color:#ff8b93">~270–450 тыс ₸</span></span>
+        <span>В месяц: <span style="color:#ff8b93">~10–25 тыс ₸</span></span>
+        <span>Разработка: <span style="color:#ff8b93">своими силами</span></span>
+      </div>
+    </div>
+    <p style="font-size:14px;color:var(--muted);margin-top:14px">Цифры ориентировочные, для планирования; уточняются по факту закупки и тарифам.</p>
+  </div>
+  <div class="pageno">12</div>
+</section>
+
+<!-- 13. RISKS -->
+<section class="slide">
+  <div class="pad">
+    <div class="toprow"><div class="kick">Риски и важное</div><div class="logo-wrap" style="position:static"><div class="logo"><span class="txt">Pro Lab Support</span><span class="bars"><i></i><i></i><i></i><i></i></span></div><div class="rule"></div></div></div>
+    <h2 class="h-title">Что учесть заранее</h2>
+    <div class="two" style="margin-top:34px">
+      <div class="card pink"><div class="cardhead"><div class="badge">!</div><h3>Доступ к OpenLab</h3></div><p>ПК приборов могут быть заблокированы. Решение — экспорт в папку; на старте допустим ручной экспорт аналитиком.</p></div>
+      <div class="card"><div class="cardhead"><div class="badge">✓</div><h3>Аудит и утверждение</h3></div><p>С 1-го дня: журнал «кто/когда/что», запрет правки утверждённых результатов.</p></div>
+      <div class="card"><div class="cardhead"><div class="badge">⤓</div><h3>Бэкапы БД</h3></div><p>Ежедневный бэкап базы — обязательно, чтобы данные контроля не терялись.</p></div>
+      <div class="card pink"><div class="cardhead"><div class="badge">◇</div><h3>Bus-factor</h3></div><p>Систему ведёт один человек — нужна документация парсеров и процессов.</p></div>
+    </div>
+    <div class="banner red" style="margin-top:26px">Формат файлов приборов финализируется по реальным образцам экспорта — это снимает главный технический риск парсеров.</div>
+  </div>
+  <div class="pageno">13</div>
+</section>
+
+<!-- 14. OUTCOMES -->
+<section class="slide">
+  <div class="pad">
+    <div class="toprow"><div class="kick">Результат</div><div class="logo-wrap" style="position:static"><div class="logo"><span class="txt">Pro Lab Support</span><span class="bars"><i></i><i></i><i></i><i></i></span></div><div class="rule"></div></div></div>
+    <h2 class="h-title">Что получит тренинг-центр</h2>
+    <div class="three" style="margin-top:40px">
+      <div class="card stat"><div class="n">1</div><div class="l">единая история по каждой пробе</div></div>
+      <div class="card stat"><div class="n">14</div><div class="l">приборов на автоввод результатов</div></div>
+      <div class="card stat"><div class="n">100%</div><div class="l">прослеживаемость: прибор, реактив, оператор</div></div>
+      <div class="card stat"><div class="n">1 клик</div><div class="l">формирование протокола испытаний</div></div>
+      <div class="card stat"><div class="n">0</div><div class="l">потерянных результатов и журналов</div></div>
+      <div class="card stat"><div class="n">+</div><div class="l">учёт обучения и допусков слушателей</div></div>
+    </div>
+    <div class="banner black" style="margin-top:34px">Из ручного контроля — в единую систему: пробы, результаты, приборы и качество в одном месте.</div>
+  </div>
+  <div class="pageno">14</div>
+</section>
+
+<!-- 15. DECISIONS / CLOSING -->
+<section class="slide">
+  <div class="pad">
+    <div class="logo" style="margin-bottom:8px"><span class="txt">Pro Lab Support</span><span class="bars"><i></i><i></i><i></i><i></i></span></div>
+    <div class="rule" style="height:3px;background:var(--red);width:200px"></div>
+    <h2 class="h-title" style="font-size:46px;margin-top:34px">РЕШЕНИЯ, КОТОРЫЕ НУЖНО ПРИНЯТЬ</h2>
+    <div class="two" style="margin-top:30px;gap:12px 60px">
+      <div style="display:flex;gap:12px"><span style="font-family:Montserrat;font-weight:800;color:var(--red);font-size:18px">01</span><span style="font-family:Montserrat;font-weight:800;color:var(--ink);font-size:18px">Утвердить вариант А — LIMS-lite для ТЦ (без аккредитации)</span></div>
+      <div style="display:flex;gap:12px"><span style="font-family:Montserrat;font-weight:800;color:var(--red);font-size:18px">04</span><span style="font-family:Montserrat;font-weight:800;color:var(--ink);font-size:18px">Дать доступ к экспорту приборного ПО (особенно OpenLab)</span></div>
+      <div style="display:flex;gap:12px"><span style="font-family:Montserrat;font-weight:800;color:var(--red);font-size:18px">02</span><span style="font-family:Montserrat;font-weight:800;color:var(--ink);font-size:18px">Начать с Фазы 0 — MVP примерно за месяц</span></div>
+      <div style="display:flex;gap:12px"><span style="font-family:Montserrat;font-weight:800;color:var(--red);font-size:18px">05</span><span style="font-family:Montserrat;font-weight:800;color:var(--ink);font-size:18px">Собрать по одному файлу-экспорту с каждого прибора</span></div>
+      <div style="display:flex;gap:12px"><span style="font-family:Montserrat;font-weight:800;color:var(--red);font-size:18px">03</span><span style="font-family:Montserrat;font-weight:800;color:var(--ink);font-size:18px">Выделить мини-ПК-сборщик, принтер этикеток и сканер</span></div>
+      <div style="display:flex;gap:12px"><span style="font-family:Montserrat;font-weight:800;color:var(--red);font-size:18px">06</span><span style="font-family:Montserrat;font-weight:800;color:var(--ink);font-size:18px">Назначить владельца данных и ежедневных бэкапов</span></div>
+    </div>
+    <div class="banner red" style="margin-top:34px;text-align:center">Приборы дают анализы. LIMS превращает их в управляемую систему контроля качества ТЦ.</div>
+    <p style="font-family:'PT Serif',serif;color:var(--muted);margin-top:22px">ProLabSupport — ваш надёжный технологический партнёр лабораторий</p>
+  </div>
+  <div class="pageno">15</div>
+</section>
+
+</div>

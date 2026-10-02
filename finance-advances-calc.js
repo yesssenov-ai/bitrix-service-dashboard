@@ -71,14 +71,15 @@ function mockAdvances() {
 async function fetchAdvancesRaw() {
   if (!onecMod.isConfigured()) return mockAdvances();
   // Отдельные сервисы: fact/advances (счёт 3510) и fact/payments (1210 с корсчётами
-  // 1010/1030). Период — с начала года по сегодня. Ответ: {count, items}.
-  const yr = new Date().getFullYear();
-  const dateFrom = yr + '-01-01', dateTo = new Date().toISOString().slice(0, 10);
-  const [cRaw, crRaw, advRaw, payRaw] = await Promise.all([
-    onecMod.onec('dim/contract'), onecMod.onec('dim/contractor'),
-    onecMod.onec('fact/advances', { dateFrom, dateTo }),
-    onecMod.onec('fact/payments', { dateFrom, dateTo }),
-  ]);
+  // 1010/1030). Для ОСТАТКОВ берём ВСЮ историю (входящее сальдо + движения), иначе
+  // остаток занижен относительно Power BI. Переопределяется env ONEC_BALANCE_FROM.
+  const dateFrom = process.env.ONEC_BALANCE_FROM || '2000-01-01';
+  const dateTo = new Date().toISOString().slice(0, 10);
+  const [cRaw, crRaw] = await Promise.all([onecMod.onec('dim/contract'), onecMod.onec('dim/contractor')]);
+  // Устойчивый забор: сбой одного fact-сервиса не обнуляет весь модуль.
+  const safe = async svc => { try { return await onecMod.onec(svc, { dateFrom, dateTo }); } catch (e) { console.error('1С', svc, 'error:', e.message); return { items: [], _error: e.message }; } };
+  const advRaw = await safe('fact/advances');
+  const payRaw = await safe('fact/payments');
   const asArr = d => Array.isArray(d) ? d : (d && (d.items || d.rows || d.data || d.value)) || [];
   const contracts = asArr(cRaw);
   const nameById = {}; asArr(crRaw).forEach(x => nameById[String(x.contractor_id ?? x.Contractor_id)] = x.Name || '');

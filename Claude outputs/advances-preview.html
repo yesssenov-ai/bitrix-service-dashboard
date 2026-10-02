@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ЦУП · Авансы</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#14171d;--bg2:#20242e;--card:#1b1f27;--border:#2a2f3a;--border2:#363c49;--text:#eef0f3;--text-2:#c3c9d3;--text-3:#8b93a3;--text-4:#616a78;--accent:#e5544a;--brand:#4098e6;--good:#3ddc84;--bad:#ef5a6a;--radius:12px;--font:'Inter',system-ui,sans-serif}
+html[data-theme="light"]{--bg:#f5f6fa;--bg2:#eef0f7;--card:#fff;--border:#e3e6ef;--border2:#d0d4e4;--text:#111827;--text-2:#374151;--text-3:#6b7280;--text-4:#9ca3af;--accent:#C53B2F;--brand:#2563eb;--good:#059669;--bad:#dc2626}
+body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased}
+.header{background:var(--card);border-bottom:1px solid var(--border);height:56px;display:flex;align-items:center;padding:0 20px;gap:12px;position:sticky;top:0;z-index:100}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14px;text-decoration:none;color:inherit}.logo img{height:24px}
+.hbtn{font-size:12.5px;color:var(--text-3);text-decoration:none;border:1px solid var(--border2);padding:6px 12px;border-radius:8px;background:transparent;cursor:pointer;font-family:var(--font)}
+.hbtn:hover{border-color:var(--accent);color:var(--accent)}
+.hsub{font-size:13.5px;color:var(--text-3);font-weight:600}
+.hr{margin-left:auto;display:flex;gap:8px;align-items:center}
+.asof{font-size:12px;color:var(--text-3)}
+.mockbadge{font-size:11px;font-weight:700;color:var(--warn,#e0a940);border:1px solid var(--warn,#e0a940);border-radius:6px;padding:2px 8px}
+.filters{display:flex;gap:10px;flex-wrap:wrap;padding:12px 16px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin:16px 16px 0;align-items:flex-end}
+.fl{display:block;font-size:10.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+select,input[type=text]{background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:7px 10px;font-size:12.5px;color:var(--text);font-family:var(--font);outline:none;min-width:140px}
+select:focus,input:focus{border-color:var(--brand)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin:16px;overflow:hidden}
+.thead,.trow{display:grid;grid-template-columns:1fr 150px 150px 150px 150px;align-items:center}
+.thead{padding:8px 14px;border-bottom:1px solid var(--border);font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);font-weight:700;position:sticky;top:0;background:var(--bg2);z-index:1}
+.thead .num,.trow .num{text-align:right;font-variant-numeric:tabular-nums}
+.scroll{overflow:auto;max-height:calc(100vh - 220px)}
+.trow{padding:4px 14px;border-bottom:1px solid var(--border);font-size:12px;cursor:default}
+.trow.lv0{background:var(--bg2);font-weight:700}
+.trow.lv1{font-weight:600}
+.trow.lv3{color:var(--text-2)}
+.trow:hover{background:var(--bg2)}
+.lbl{display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chev{width:14px;display:inline-block;color:var(--text-3);cursor:pointer;user-select:none;flex:0 0 14px}
+.foot{display:grid;grid-template-columns:1fr 150px 150px 150px 150px;padding:9px 14px;border-top:2px solid var(--border2);font-weight:700;font-size:12.5px;background:var(--card);position:sticky;bottom:0}
+.foot .num{text-align:right;font-variant-numeric:tabular-nums}
+.hint{color:var(--text-3);padding:20px}
+.neg{color:var(--bad)}
+</style>
+</head>
+<body>
+<header class="header">
+  <a href="/" class="logo"><img src="/assets/logo-icon.png" alt="">ProLabSupport</a>
+  <a href="/" class="hbtn">← Все модули</a>
+  <span class="hsub">Авансы</span>
+  <div class="hr">
+    <span class="asof" id="asof"></span>
+    <span class="mockbadge" id="mockBadge" style="display:none">демо-данные</span>
+    <button class="hbtn" onclick="expandAll(true)">Развернуть</button>
+    <button class="hbtn" onclick="expandAll(false)">Свернуть</button>
+    <button class="hbtn" id="refreshBtn" onclick="refresh()">↻ Обновить</button>
+    <button class="hbtn" onclick="logout()">Выйти</button>
+  </div>
+</header>
+
+<div class="filters">
+  <div><label class="fl">Год</label><select id="fYear" onchange="render()"><option value="">Все</option></select></div>
+  <div><label class="fl">Отдел</label><select id="fDept" onchange="render()"><option value="">Все</option></select></div>
+  <div><label class="fl">Контрагент</label><select id="fContractor" onchange="render()"><option value="">Все</option></select></div>
+  <div style="flex:1;min-width:200px"><label class="fl">Поиск по договору</label><input type="text" id="fSearch" placeholder="Поиск…" oninput="render()" style="width:100%"></div>
+</div>
+
+<div class="card">
+  <div class="thead"><span>Год · Отдел · Контрагент · Договор</span><span class="num">Сумма договора</span><span class="num">Авансы</span><span class="num">Оплаты</span><span class="num">Остаток</span></div>
+  <div class="scroll" id="tree"></div>
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+let DATA={rows:[]}, EXP=new Set();
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const fmt=n=>{n=Math.round(Number(n)||0);const s=Math.abs(n).toLocaleString('ru-RU').replace(/,/g,' ');return n<0?'<span class="neg">-'+s+'</span>':s;};
+async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.href='/login.html';return{ok:false,d:{}}}let d={};try{d=await r.json()}catch(e){}return{ok:r.ok,d}}
+async function boot(){const r=await fetch('/auth/me');if(!r.ok){location.href='/login.html';return;}await load();}
+async function load(){
+  const {ok,d}=await api('/api/finance/advances');
+  if(!ok){document.getElementById('tree').innerHTML='<div class="hint">Ошибка загрузки</div>';return;}
+  DATA=d;
+  document.getElementById('asof').textContent=d.asOf?('По состоянию на '+new Date(d.asOf).toLocaleString('ru-RU')):'';
+  document.getElementById('mockBadge').style.display=d.mock?'inline-block':'none';
+  const opt=a=>'<option value="">Все</option>'+(a||[]).map(x=>`<option>${esc(x)}</option>`).join('');
+  document.getElementById('fYear').innerHTML=opt(d.filters.years);
+  document.getElementById('fDept').innerHTML=opt(d.filters.departments);
+  document.getElementById('fContractor').innerHTML=opt(d.filters.contractors);
+  (d.filters.years||[]).forEach(y=>EXP.add('y:'+y)); // годы раскрыты по умолчанию
+  render();
+}
+function filtered(){
+  const y=document.getElementById('fYear').value,dep=document.getElementById('fDept').value,con=document.getElementById('fContractor').value;
+  const q=(document.getElementById('fSearch').value||'').toLowerCase();
+  return (DATA.rows||[]).filter(r=>(!y||String(r.year)===y)&&(!dep||r.department===dep)&&(!con||r.contractor===con)&&(!q||(r.contract||'').toLowerCase().includes(q)));
+}
+function agg(list){const a={contract_sum:0,advances:0,payments:0,balance:0};list.forEach(r=>{a.contract_sum+=r.contract_sum;a.advances+=r.advances;a.payments+=r.payments;a.balance+=r.balance;});return a;}
+function nums(a){return `<span class="num">${fmt(a.contract_sum)}</span><span class="num">${fmt(a.advances)}</span><span class="num">${fmt(a.payments)}</span><span class="num">${fmt(a.balance)}</span>`;}
+function toggle(k){if(EXP.has(k))EXP.delete(k);else EXP.add(k);render();}
+function expandAll(on){EXP=new Set();if(on){const rows=filtered();rows.forEach(r=>{EXP.add('y:'+r.year);EXP.add('y:'+r.year+'|d:'+r.department);EXP.add('y:'+r.year+'|d:'+r.department+'|c:'+r.contractor);});}else{(DATA.filters.years||[]).forEach(y=>EXP.add('y:'+y));}render();}
+function render(){
+  const rows=filtered();
+  const box=document.getElementById('tree');
+  if(!rows.length){box.innerHTML='<div class="hint">Нет данных по фильтру.</div>';document.getElementById('foot').innerHTML='';return;}
+  // группировка
+  const byYear={};rows.forEach(r=>{(byYear[r.year]=byYear[r.year]||[]).push(r);});
+  const years=Object.keys(byYear).sort((a,b)=>b-a);
+  let html='';
+  const chev=(k)=>`<span class="chev" onclick="toggle('${k.replace(/'/g,"\\'")}')">${EXP.has(k)?'▾':'▸'}</span>`;
+  years.forEach(y=>{
+    const yk='y:'+y, yl=byYear[y];
+    html+=`<div class="trow lv0"><span class="lbl">${chev(yk)}${esc(y)}</span>${nums(agg(yl))}</div>`;
+    if(!EXP.has(yk))return;
+    const byDept={};yl.forEach(r=>{(byDept[r.department||'—']=byDept[r.department||'—']||[]).push(r);});
+    Object.keys(byDept).sort().forEach(dep=>{
+      const dk=yk+'|d:'+dep, dl=byDept[dep];
+      html+=`<div class="trow lv1"><span class="lbl" style="padding-left:16px">${chev(dk)}${esc(dep)}</span>${nums(agg(dl))}</div>`;
+      if(!EXP.has(dk))return;
+      const byCon={};dl.forEach(r=>{(byCon[r.contractor||'—']=byCon[r.contractor||'—']||[]).push(r);});
+      Object.keys(byCon).sort().forEach(con=>{
+        const ck=dk+'|c:'+con, cl=byCon[con];
+        html+=`<div class="trow lv2"><span class="lbl" style="padding-left:32px">${chev(ck)}${esc(con)}</span>${nums(agg(cl))}</div>`;
+        if(!EXP.has(ck))return;
+        cl.forEach(r=>{
+          const deal=r.bitrix_deal_id?` <a href="https://crm.prolabsupport.kz/crm/deal/details/${esc(r.bitrix_deal_id)}/" target="_blank" style="color:var(--brand);text-decoration:none;font-size:11px">🔗</a>`:'';
+          html+=`<div class="trow lv3"><span class="lbl" style="padding-left:52px" title="${esc(r.contract)}">${esc(r.contract)}${deal}</span>${nums(r)}</div>`;
+        });
+      });
+    });
+  });
+  box.innerHTML=html;
+  document.getElementById('foot').innerHTML=`<span>Итого</span>${nums(agg(rows))}`;
+}
+async function refresh(){const b=document.getElementById('refreshBtn');b.disabled=true;b.textContent='Обновляю…';await api('/api/finance/advances/refresh',{method:'POST'});await load();b.disabled=false;b.textContent='↻ Обновить';}
+async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
+window.__D={"rows":[{"id":"A202400","year":2024,"department":"Элементный","contractor":"NFC Kazakhstan ТОО","contract":"ДОГОВОР №2024/1000","contract_sum":139528800,"advances":22389600,"payments":57207700,"balance":59931500,"bitrix_deal_id":"2000"},{"id":"A202420","year":2024,"department":"Электрохимия","contractor":"ИЯФ РГП на ПХВ","contract":"ДОГОВОР №2024/1020","contract_sum":68968200,"advances":7833200,"payments":7589200,"balance":53545800,"bitrix_deal_id":"2006"},{"id":"A202430","year":2024,"department":"Service","contractor":"BMT Holding Limited","contract":"ДОГОВОР №2024/1030","contract_sum":50104700,"advances":7448200,"payments":18193700,"balance":24462800,"bitrix_deal_id":"2009"},{"id":"A202431","year":2024,"department":"Service","contractor":"BMT Holding Limited","contract":"ДОГОВОР №2024/1031","contract_sum":28627000,"advances":1128600,"payments":2502600,"balance":24995800,"bitrix_deal_id":"2010"},{"id":"A202440","year":2024,"department":"Training","contractor":"ЖАНАЛАБ ТОО","contract":"ДОГОВОР №2024/1040","contract_sum":14537100,"advances":209100,"payments":8272800,"balance":6055200,"bitrix_deal_id":"2012"},{"id":"A202450","year":2024,"department":"Элементный","contractor":"БОЗШАКОЛЬ","contract":"ДОГОВОР №2024/1050","contract_sum":12363100,"advances":491400,"payments":6434200,"balance":5437500,"bitrix_deal_id":"2015"},{"id":"A202451","year":2024,"department":"Элементный","contractor":"БОЗШАКОЛЬ","contract":"ДОГОВОР №2024/1051","contract_sum":139627000,"advances":6971900,"payments":46748100,"balance":85907000,"bitrix_deal_id":"2016"},{"id":"A202460","year":2024,"department":"Хроматография","contractor":"НИЦ Уголь","contract":"ДОГОВОР №2024/1060","contract_sum":84391500,"advances":32426400,"payments":22242900,"balance":29722200,"bitrix_deal_id":"2018"},{"id":"A202461","year":2024,"department":"Хроматография","contractor":"НИЦ Уголь","contract":"ДОГОВОР №2024/1061","contract_sum":30027800,"advances":4681700,"payments":9735100,"balance":15611000,"bitrix_deal_id":"2019"},{"id":"A202470","year":2024,"department":"Электрохимия","contractor":"ALAYGYR GOLD ТОО","contract":"ДОГОВОР №2024/1070","contract_sum":59336800,"advances":10592600,"payments":21591800,"balance":27152400,"bitrix_deal_id":"2021"},{"id":"A202471","year":2024,"department":"Электрохимия","contractor":"ALAYGYR GOLD ТОО","contract":"ДОГОВОР №2024/1071","contract_sum":118629700,"advances":31158100,"payments":1086400,"balance":86385200,"bitrix_deal_id":"2022"},{"id":"A202490","year":2024,"department":"Training","contractor":"STS-Astana NS","contract":"ДОГОВОР №2024/1090","contract_sum":71443000,"advances":22028100,"payments":20449200,"balance":28965700,"bitrix_deal_id":"2027"},{"id":"A202500","year":2025,"department":"Элементный","contractor":"NFC Kazakhstan ТОО","contract":"ДОГОВОР №2025/1000","contract_sum":136333900,"advances":36958300,"payments":39480500,"balance":59895100,"bitrix_deal_id":"2000"},{"id":"A202501","year":2025,"department":"Элементный","contractor":"NFC Kazakhstan ТОО","contract":"ДОГОВОР №2025/1001","contract_sum":120199400,"advances":30016500,"payments":16426200,"balance":73756700,"bitrix_deal_id":"2001"},{"id":"A202530","year":2025,"department":"Service","contractor":"BMT Holding Limited","contract":"ДОГОВОР №2025/1030","contract_sum":38815300,"advances":8955900,"payments":9736900,"balance":20122500,"bitrix_deal_id":"2009"},{"id":"A202531","year":2025,"department":"Service","contractor":"BMT Holding Limited","contract":"ДОГОВОР №2025/1031","contract_sum":139270100,"advances":35251200,"payments":35886400,"balance":68132500,"bitrix_deal_id":"2010"},{"id":"A202540","year":2025,"department":"Training","contractor":"ЖАНАЛАБ ТОО","contract":"ДОГОВОР №2025/1040","contract_sum":98171900,"advances":8152500,"payments":22560800,"balance":67458600,"bitrix_deal_id":"2012"},{"id":"A202550","year":2025,"department":"Элементный","contractor":"БОЗШАКОЛЬ","contract":"ДОГОВОР №2025/1050","contract_sum":69968900,"advances":32628600,"payments":1993200,"balance":35347100,"bitrix_deal_id":"2015"},{"id":"A202570","year":2025,"department":"Электрохимия","contractor":"ALAYGYR GOLD ТОО","contract":"ДОГОВОР №2025/1070","contract_sum":125342200,"advances":23614600,"payments":55617700,"balance":46109900,"bitrix_deal_id":"2021"},{"id":"A202580","year":2025,"department":"Service","contractor":"KOPA GOLD Limited ЧК","contract":"ДОГОВОР №2025/1080","contract_sum":57608200,"advances":22503800,"payments":6743700,"balance":28360700,"bitrix_deal_id":"2024"},{"id":"A202581","year":2025,"department":"Service","contractor":"KOPA GOLD Limited ЧК","contract":"ДОГОВОР №2025/1081","contract_sum":106829100,"advances":24522700,"payments":10556500,"balance":71749900,"bitrix_deal_id":"2025"},{"id":"A202590","year":2025,"department":"Training","contractor":"STS-Astana NS","contract":"ДОГОВОР №2025/1090","contract_sum":134255000,"advances":62276900,"payments":10117600,"balance":61860500,"bitrix_deal_id":"2027"},{"id":"A202620","year":2026,"department":"Электрохимия","contractor":"ИЯФ РГП на ПХВ","contract":"ДОГОВОР №2026/1020","contract_sum":97177900,"advances":31458300,"payments":887300,"balance":64832300,"bitrix_deal_id":"2006"},{"id":"A202621","year":2026,"department":"Электрохимия","contractor":"ИЯФ РГП на ПХВ","contract":"ДОГОВОР №2026/1021","contract_sum":109923800,"advances":50254100,"payments":3695900,"balance":55973800,"bitrix_deal_id":"2007"},{"id":"A202630","year":2026,"department":"Service","contractor":"BMT Holding Limited","contract":"ДОГОВОР №2026/1030","contract_sum":71202800,"advances":10492400,"payments":9098600,"balance":51611800,"bitrix_deal_id":"2009"},{"id":"A202631","year":2026,"department":"Service","contractor":"BMT Holding Limited","contract":"ДОГОВОР №2026/1031","contract_sum":41602900,"advances":112500,"payments":1660300,"balance":39830100,"bitrix_deal_id":"2010"},{"id":"A202650","year":2026,"department":"Элементный","contractor":"БОЗШАКОЛЬ","contract":"ДОГОВОР №2026/1050","contract_sum":152047600,"advances":22828100,"payments":76433200,"balance":52786300,"bitrix_deal_id":"2015"},{"id":"A202651","year":2026,"department":"Элементный","contractor":"БОЗШАКОЛЬ","contract":"ДОГОВОР №2026/1051","contract_sum":43664500,"advances":15380100,"payments":8749900,"balance":19534500,"bitrix_deal_id":"2016"},{"id":"A202670","year":2026,"department":"Электрохимия","contractor":"ALAYGYR GOLD ТОО","contract":"ДОГОВОР №2026/1070","contract_sum":144618800,"advances":45772900,"payments":37615900,"balance":61230000,"bitrix_deal_id":"2021"},{"id":"A202680","year":2026,"department":"Service","contractor":"KOPA GOLD Limited ЧК","contract":"ДОГОВОР №2026/1080","contract_sum":69274600,"advances":1355200,"payments":39769700,"balance":28149700,"bitrix_deal_id":"2024"},{"id":"A202681","year":2026,"department":"Service","contractor":"KOPA GOLD Limited ЧК","contract":"ДОГОВОР №2026/1081","contract_sum":75469700,"advances":6138800,"payments":35268800,"balance":34062100,"bitrix_deal_id":"2025"},{"id":"A202690","year":2026,"department":"Training","contractor":"STS-Astana NS","contract":"ДОГОВОР №2026/1090","contract_sum":5020600,"advances":207900,"payments":1463600,"balance":3349100,"bitrix_deal_id":"2027"},{"id":"A202710","year":2027,"department":"Хроматография","contractor":"Qazaq Kaolin ТОО","contract":"ДОГОВОР №2027/1010","contract_sum":146296000,"advances":68293200,"payments":43824200,"balance":34178600,"bitrix_deal_id":"2003"},{"id":"A202720","year":2027,"department":"Электрохимия","contractor":"ИЯФ РГП на ПХВ","contract":"ДОГОВОР №2027/1020","contract_sum":154316600,"advances":74311100,"payments":3657200,"balance":76348300,"bitrix_deal_id":"2006"},{"id":"A202721","year":2027,"department":"Электрохимия","contractor":"ИЯФ РГП на ПХВ","contract":"ДОГОВОР №2027/1021","contract_sum":7680600,"advances":2340200,"payments":549400,"balance":4791000,"bitrix_deal_id":"2007"},{"id":"A202740","year":2027,"department":"Training","contractor":"ЖАНАЛАБ ТОО","contract":"ДОГОВОР №2027/1040","contract_sum":34431900,"advances":4566100,"payments":14444100,"balance":15421700,"bitrix_deal_id":"2012"},{"id":"A202741","year":2027,"department":"Training","contractor":"ЖАНАЛАБ ТОО","contract":"ДОГОВОР №2027/1041","contract_sum":102400200,"advances":47316000,"payments":24405700,"balance":30678500,"bitrix_deal_id":"2013"},{"id":"A202750","year":2027,"department":"Элементный","contractor":"БОЗШАКОЛЬ","contract":"ДОГОВОР №2027/1050","contract_sum":21729000,"advances":7242300,"payments":461900,"balance":14024800,"bitrix_deal_id":"2015"},{"id":"A202760","year":2027,"department":"Хроматография","contractor":"НИЦ Уголь","contract":"ДОГОВОР №2027/1060","contract_sum":131808600,"advances":28772400,"payments":2480200,"balance":100556000,"bitrix_deal_id":"2018"},{"id":"A202770","year":2027,"department":"Электрохимия","contractor":"ALAYGYR GOLD ТОО","contract":"ДОГОВОР №2027/1070","contract_sum":41667800,"advances":19641500,"payments":3977100,"balance":18049200,"bitrix_deal_id":"2021"},{"id":"A202790","year":2027,"department":"Training","contractor":"STS-Astana NS","contract":"ДОГОВОР №2027/1090","contract_sum":55131100,"advances":24097600,"payments":2304900,"balance":28728600,"bitrix_deal_id":"2027"}],"asOf":"2026-09-08T17:06:57.623Z","mock":true,"filters":{"years":[2024,2025,2026,2027],"departments":["Service","Training","Хроматография","Электрохимия","Элементный"],"contractors":["ALAYGYR GOLD ТОО","BMT Holding Limited","KOPA GOLD Limited ЧК","NFC Kazakhstan ТОО","Qazaq Kaolin ТОО","STS-Astana NS","БОЗШАКОЛЬ","ЖАНАЛАБ ТОО","ИЯФ РГП на ПХВ","НИЦ Уголь"]}};(function(){DATA=window.__D;document.getElementById("asof").textContent="По состоянию на "+new Date(DATA.asOf).toLocaleString("ru-RU");document.getElementById("mockBadge").style.display="inline-block";var o=function(a){return "<option value=\"\">Все</option>"+a.map(function(x){return "<option>"+x+"</option>"}).join("")};document.getElementById("fYear").innerHTML=o(DATA.filters.years);document.getElementById("fDept").innerHTML=o(DATA.filters.departments);document.getElementById("fContractor").innerHTML=o(DATA.filters.contractors);(DATA.filters.years||[]).forEach(function(y){EXP.add("y:"+y)});render();})();
+</script>
+</body>
+</html>

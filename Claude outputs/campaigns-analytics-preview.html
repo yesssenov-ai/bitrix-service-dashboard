@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProLabSupport - Рассылки</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#14171d;--bg2:#20242e;--card:#1b1f27;--border:#2a2f3a;--border2:#363c49;
+  --text:#eef0f3;--text-2:#c3c9d3;--text-3:#8b93a3;--text-4:#616a78;
+  --accent:#e5544a;--accent-h:#d94737;--brand:#4098e6;--brand-l:rgba(64,152,230,.15);
+  --good:#3ddc84;--good-l:rgba(61,220,132,.14);--warn:#e0a940;--bad:#ef5a6a;--bad-l:rgba(239,90,106,.14);
+  --signal:#35d0c0;--radius:12px;--font:'Inter',system-ui,sans-serif;
+  --shadow:0 4px 16px rgba(0,0,0,.5);
+}
+html[data-theme="light"]{
+  --bg:#f5f6fa;--bg2:#eef0f7;--card:#fff;--border:#e3e6ef;--border2:#d0d4e4;
+  --text:#111827;--text-2:#374151;--text-3:#6b7280;--text-4:#9ca3af;
+  --accent:#C53B2F;--accent-h:#a83226;--brand:#2563eb;--brand-l:rgba(37,99,235,.08);
+  --good:#059669;--good-l:rgba(5,150,105,.08);--warn:#d97706;--bad:#dc2626;--bad-l:rgba(220,38,38,.08);
+  --signal:#0f766e;--shadow:0 4px 16px rgba(0,0,0,.08);
+}
+body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased}
+#cBody{font-family:'Montserrat',Arial,sans-serif}
+.etoolbar select{background:var(--bg);border:1px solid var(--border2);border-radius:7px;padding:4px 6px;font-size:12.5px;color:var(--text);font-family:var(--font);cursor:pointer;width:auto}
+/* Аналитика */
+.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:6px 0 14px}
+.stat{background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:12px 14px}
+.stat .v{font-size:24px;font-weight:800;line-height:1.1;letter-spacing:-.5px}
+.stat .l{font-size:11.5px;color:var(--text-3);margin-top:3px;text-transform:uppercase;letter-spacing:.4px}
+.stat .p{font-size:12px;color:var(--text-3);margin-top:2px}
+.stat.good .v{color:var(--good)} .stat.brand .v{color:var(--brand)} .stat.warn .v{color:var(--warn)} .stat.bad .v{color:var(--bad)}
+.fun{display:flex;flex-direction:column;gap:7px;margin:4px 0 14px}
+.fun-row{display:grid;grid-template-columns:120px 1fr 96px;align-items:center;gap:10px;font-size:12.5px}
+.fun-bar{height:22px;border-radius:6px;background:var(--bg2);overflow:hidden}
+.fun-bar>i{display:block;height:100%;border-radius:6px}
+.fun-val{text-align:right;font-variant-numeric:tabular-nums;color:var(--text-2)}
+.atable{width:100%;border-collapse:collapse;font-size:12.5px}
+.atable th{position:sticky;top:0;background:var(--card);text-align:left;color:var(--text-3);font-weight:600;padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+.atable td{padding:6px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+.atable tr:hover td{background:var(--bg2)}
+.stbadge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.st-clicked{background:var(--brand-l);color:var(--brand)} .st-opened{background:var(--good-l);color:var(--good)}
+.st-delivered{background:rgba(120,130,150,.15);color:var(--text-2)} .st-sent{background:rgba(120,130,150,.1);color:var(--text-3)}
+.st-unsub{background:var(--warn);color:#3a2a00} .st-bounced{background:var(--bad-l);color:var(--bad)} .st-failed{background:var(--bad-l);color:var(--bad)}
+.chip-f{cursor:pointer;border:1px solid var(--border2);background:var(--bg);border-radius:20px;padding:4px 11px;font-size:12px;color:var(--text-2)}
+.chip-f.on{background:var(--brand-l);border-color:var(--brand);color:var(--brand)}
+.acard{background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:14px 16px;cursor:pointer;margin-bottom:8px}
+.acard:hover{border-color:var(--brand)}
+.mini{display:inline-flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--text-3);margin-top:5px}
+.mini b{color:var(--text-2);font-variant-numeric:tabular-nums}
+.header{background:var(--card);border-bottom:1px solid var(--border);height:56px;display:flex;align-items:center;padding:0 20px;position:sticky;top:0;z-index:100;gap:12px}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14px}
+.logo img{height:24px}
+.hbtn{font-size:12.5px;color:var(--text-3);text-decoration:none;border:1px solid var(--border2);padding:6px 12px;border-radius:8px;background:transparent;cursor:pointer;font-family:var(--font)}
+.hbtn:hover{border-color:var(--accent);color:var(--accent)}
+.hsub{font-size:13.5px;color:var(--text-3);font-weight:500}
+.hr{margin-left:auto;display:flex;gap:8px;align-items:center}
+.wrap{display:grid;grid-template-columns:230px minmax(300px,1fr) 580px;gap:16px;padding:16px;height:calc(100vh - 56px)}
+@media(max-width:1400px){.wrap{grid-template-columns:220px 1fr 520px}}
+@media(max-width:1100px){.wrap{grid-template-columns:1fr;height:auto}}
+.col{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.col-h{padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.col-b{overflow:auto;flex:1;min-height:0}
+.ind{padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.ind:hover{background:var(--bg2)}
+.ind.on{background:var(--brand-l);color:var(--brand)}
+.ind .n{font-weight:600;font-size:13px}
+.ind .c{font-size:11px;color:var(--text-3);white-space:nowrap}
+.comp{border-bottom:1px solid var(--border)}
+.comp-h{padding:9px 14px;display:flex;align-items:center;gap:8px;cursor:pointer}
+.comp-h:hover{background:var(--bg2)}
+.comp-t{font-weight:600;font-size:13px;flex:1}
+.comp-cnt{font-size:11px;color:var(--text-3)}
+.emails{padding:2px 14px 8px 34px;display:none}
+.emails.open{display:block}
+.em{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px}
+.em label{cursor:pointer;color:var(--text-2);word-break:break-all}
+.em .src{font-size:10px;color:var(--text-4);border:1px solid var(--border2);border-radius:4px;padding:0 5px}
+input[type=checkbox]{width:15px;height:15px;accent-color:var(--brand);cursor:pointer}
+.fl{display:block;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 5px}
+input[type=text],textarea,select{width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);font-family:var(--font);outline:none}
+textarea{min-height:180px;resize:vertical;line-height:1.5}
+.etoolbar{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px}
+.tb{border:1px solid var(--border2);background:var(--bg);color:var(--text-2);border-radius:7px;padding:5px 10px;font-size:12.5px;cursor:pointer;font-family:var(--font);line-height:1}
+.tb:hover{border-color:var(--brand);color:var(--brand)}
+.editor{min-height:210px;max-height:440px;overflow:auto;background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:12px 14px;font-size:14px;color:var(--text);line-height:1.6;outline:none}
+.editor:focus{border-color:var(--brand)}
+.editor:empty:before{content:attr(data-ph);color:var(--text-4)}
+.editor p{margin:0 0 12px}
+.editor a{color:var(--brand)}
+.ph{display:inline-block;background:var(--brand-l);color:var(--brand);border:1px solid var(--brand);border-radius:5px;padding:0 7px;font-size:12.5px;font-weight:600;line-height:1.5;user-select:all}
+.emeta{font-size:10px;color:var(--text-4);border:1px solid var(--border2);border-radius:4px;padding:0 5px;margin-left:6px}
+input:focus,textarea:focus,select:focus{border-color:var(--brand)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--text-2);font-family:var(--font)}
+.btn:hover{background:var(--bg2)}
+.btn-p{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-p:hover{background:var(--accent-h)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.pad{padding:14px}
+.msg{font-size:12.5px;margin-top:8px}
+.msg.ok{color:var(--good)}.msg.err{color:var(--bad)}
+.hint{font-size:12px;color:var(--text-3);line-height:1.5}
+.selbar{padding:8px 14px;border-top:1px solid var(--border);font-size:12.5px;color:var(--text-2);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.pill{font-size:11px;font-weight:700;border-radius:6px;padding:2px 8px}
+.pill.draft{background:var(--bg2);color:var(--text-3)}
+.pill.sending{background:var(--brand-l);color:var(--brand)}
+.pill.sent{background:var(--good-l);color:var(--good)}
+.pill.failed{background:var(--bad-l);color:var(--bad)}
+.camp{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;align-items:center;cursor:pointer}
+.camp:hover{background:var(--bg2)}
+.tabbar{display:flex;gap:4px;padding:8px 14px;border-bottom:1px solid var(--border)}
+.tab{padding:6px 12px;border-radius:7px;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--text-3);border:none;background:transparent;font-family:var(--font)}
+.tab.on{background:var(--brand-l);color:var(--brand)}
+.searchbox{padding:8px 14px;border-bottom:1px solid var(--border)}
+.warnbar{margin:0 14px 12px;padding:9px 12px;border:1px solid var(--warn);background:rgba(224,169,64,.12);border-radius:8px;font-size:12px;color:var(--warn)}
+</style>
+</head>
+<body>
+<header class="header">
+  <a href="/" class="logo" style="text-decoration:none;color:inherit"><img src="/assets/logo-icon.png" alt="">ProLabSupport</a>
+  <a href="/" class="hbtn">← Все модули</a>
+  <span class="hsub">Рассылки</span>
+  <div class="hr">
+    <button class="hbtn" onclick="syncAudience()" id="syncBtn">⟳ Синхронизировать базу</button>
+    <button class="hbtn" onclick="logout()">Выйти</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- Industries -->
+  <div class="col">
+    <div class="col-h">Сферы <span id="lastSync" class="hint"></span></div>
+    <div class="col-b" id="indList"><div class="pad hint">Загрузка…</div></div>
+  </div>
+
+  <!-- Companies + emails -->
+  <div class="col">
+    <div class="col-h"><span id="compTitle">Компании</span>
+      <span><button class="btn" style="padding:5px 9px" onclick="selectAllVisible(true)">Выбрать все</button>
+      <button class="btn" style="padding:5px 9px" onclick="selectAllVisible(false)">Снять</button></span></div>
+    <div class="searchbox"><input type="text" id="compSearch" placeholder="Поиск по всем компаниям…" oninput="onCompSearch(this.value)"></div>
+    <div class="col-b" id="compList"><div class="pad hint">Выбери сферу слева.</div></div>
+    <div class="selbar" style="flex-wrap:wrap;gap:6px"><span>Выбрано адресов: <b id="selCount">0</b></span><button class="btn" style="padding:5px 9px" onclick="showSelected()">📋 Показать список</button>
+      <span style="display:inline-flex;gap:5px;flex:1;min-width:200px">
+        <input type="text" id="manualEmail" placeholder="Добавить адрес вручную…" style="flex:1;padding:5px 9px;font-size:12.5px" onkeydown="if(event.key==='Enter'){event.preventDefault();addManual()}">
+        <button class="btn" style="padding:5px 9px;white-space:nowrap" onclick="addManual()">+ Добавить</button>
+      </span></div>
+  </div>
+
+  <!-- Editor + history -->
+  <div class="col">
+    <div class="tabbar"><button class="tab on" id="tabEdit" onclick="showTab('edit')">✍ Письмо</button><button class="tab" id="tabDraft" onclick="showTab('draft')">📝 Черновики</button><button class="tab" id="tabStats" onclick="showTab('stats')">📊 Аналитика</button><button class="tab" id="tabHist" onclick="showTab('hist')">📜 История</button></div>
+    <div class="col-b">
+      <div id="paneEdit" class="pad">
+        <div class="warnbar" id="domWarn" style="display:none"></div>
+        <label class="fl">Название кампании (для себя)</label>
+        <input type="text" id="cName" placeholder="Напр.: Выставка LABTEST 2026">
+        <label class="fl">Тема письма</label>
+        <input type="text" id="cSubject" placeholder="Напр.: Приглашаем на стенд ProLabSupport">
+        <label class="fl">От кого (имя отправителя)</label>
+        <input type="text" id="cFrom" placeholder="ProLabSupport">
+        <label class="fl">Шаблон</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn" onclick="loadTemplate('simple')">✉ Простое письмо</button>
+          <button class="btn" onclick="loadTemplate('news')">📰 Новости / анонс</button>
+          <button class="btn" onclick="loadTemplate('event')">🎟 Приглашение</button>
+        </div>
+        <label class="fl">Текст письма</label>
+        <div class="etoolbar">
+          <button type="button" class="tb" onmousedown="event.preventDefault()" onclick="fmt('bold')" title="Жирный"><b>Ж</b></button>
+          <button type="button" class="tb" onmousedown="event.preventDefault()" onclick="fmt('italic')" title="Курсив"><i>К</i></button>
+          <button type="button" class="tb" onmousedown="event.preventDefault()" onclick="fmt('insertUnorderedList')" title="Маркированный список">• Список</button>
+          <button type="button" class="tb" onmousedown="event.preventDefault()" onclick="insLink()" title="Сделать выделенный текст ссылкой">🔗 Ссылка</button>
+          <button type="button" class="tb" onmousedown="event.preventDefault()" onclick="insButton()" title="Вставить кнопку со ссылкой">🔘 Кнопка</button>
+          <button type="button" class="tb" onmousedown="event.preventDefault()" onclick="insCompany()" title="Подставит название компании получателя">Компания</button>
+          <select onmousedown="saveSel()" onchange="setFont(this.value)" title="Шрифт">
+            <option value="Montserrat">Montserrat</option>
+            <option value="Arial">Arial</option>
+            <option value="Georgia">Georgia</option>
+            <option value="Times New Roman">Times New Roman</option>
+            <option value="Tahoma">Tahoma</option>
+            <option value="Verdana">Verdana</option>
+            <option value="Courier New">Courier New</option>
+          </select>
+          <select onmousedown="saveSel()" onchange="setFontSize(this.value)" title="Размер шрифта">
+            <option value="">Размер</option>
+            <option value="12px">12</option>
+            <option value="14px">14</option>
+            <option value="15px">15 (обычный)</option>
+            <option value="17px">17</option>
+            <option value="20px">20</option>
+            <option value="24px">24</option>
+            <option value="28px">28</option>
+          </select>
+        </div>
+        <div id="cBody" class="editor" contenteditable="true" data-ph="Здравствуйте, {{Компания}}! Напишите текст письма…" oninput="preview()"></div>
+        <div class="hint" style="margin-top:4px;line-height:1.5">Пишите как обычный текст, выделяйте важное кнопкой <b>Ж</b>. Логотип, фирменный блок с партнёрами и футер с отпиской добавляются автоматически.<br>
+        Кнопка «<b>Компания</b>» вставляет метку <span style="color:var(--brand)">Компания получателя</span> — при отправке каждому подставится его название компании (проверь в «Предпросмотре»). «<b>🔘 Кнопка</b>» добавляет кнопку-ссылку в конец письма.</div>
+
+        <!-- Вложения -->
+        <label class="fl">Файлы (каталоги, прайсы, приглашения)</label>
+        <div id="fileList" class="hint" style="margin:2px 0 8px">Файлов нет.</div>
+        <label class="btn" style="cursor:pointer;display:inline-flex">📎 Добавить файл
+          <input type="file" id="fileInput" style="display:none" onchange="uploadFile(this)">
+        </label>
+        <div class="hint" style="margin-top:6px;line-height:1.5">
+          <b>Ссылкой</b> — в письме кнопка «Скачать» (лёгкое письмо, видно кто скачал; рекомендуется для массовых).<br>
+          <b>Вложением</b> — файл прикреплён прямо к письму (до 7 МБ, тяжелее, чуть выше риск спама).
+        </div>
+
+        <!-- Логотип письма (заменяемый; только admin/маркетолог) -->
+        <div id="logoBox" style="display:none;margin-top:14px;padding:12px 14px;border:1px solid var(--border2);border-radius:10px">
+          <label class="fl" style="margin-top:0">Логотип письма (футер)</label>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <img id="logoPrev" src="/api/campaigns/logo" alt="логотип" style="height:46px;max-width:280px;width:auto;background:#fff;border:1px solid var(--border);border-radius:6px;padding:4px">
+            <label class="btn" style="cursor:pointer;display:inline-flex">🖼 Заменить логотип
+              <input type="file" id="logoInput" accept="image/*" style="display:none" onchange="uploadLogo(this)">
+            </label>
+            <button class="btn" onclick="resetLogo()">↺ Сбросить</button>
+            <span class="hint" id="logoStatus"></span>
+          </div>
+          <div class="hint" style="margin-top:6px;line-height:1.5">PNG/JPG/SVG до 6 МБ. Размер и поля подгоняются автоматически (ширина по блоку письма) — лучше широкий логотип на прозрачном фоне.</div>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn" onclick="preview()">👁 Предпросмотр</button>
+          <button class="btn" onclick="saveDraftBtn()">💾 Черновик</button>
+          <button class="btn btn-p" style="white-space:nowrap" onclick="sendNow()">📨 Отправить&nbsp;·&nbsp;<span id="sendN">0</span></button>
+        </div>
+        <div class="msg" id="editMsg"></div>
+        <div id="previewBox" style="margin-top:14px"></div>
+      </div>
+      <div id="paneDraft" style="display:none"></div>
+      <div id="paneStats" class="pad" style="display:none"></div>
+      <div id="paneHist" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let ME=null, INDUSTRIES=[], CUR_IND=null, COMPANIES=[], SELECTED=new Set(), CUR_CAMP=null;
+let LOGO_TS=Date.now();   // кэш-бастер для превью логотипа
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+async function api(u,o){const r=await fetch(u,o);let d={};try{d=await r.json()}catch(e){}return{ok:r.ok,d}}
+
+async function boot(){
+  const r=await fetch('/auth/me'); if(!r.ok){location.href='/login.html';return;}
+  ME=(await r.json()).user;
+  if(ME && ['admin','marketolog'].includes(ME.role)){ const lb=document.getElementById('logoBox'); if(lb) lb.style.display=''; }
+  await loadIndustries(); loadHistory();
+  try{document.execCommand('styleWithCSS',false,false);}catch(e){}   // жирный как <b>, не span-стили
+  const ed=document.getElementById('cBody');
+  if(ed){
+    ed.addEventListener('paste',e=>{e.preventDefault();const t=(e.clipboardData||window.clipboardData).getData('text/plain');document.execCommand('insertText',false,t);});
+    ed.addEventListener('keyup',saveSel); ed.addEventListener('mouseup',saveSel);
+  }
+}
+async function loadIndustries(){
+  const {ok,d}=await api('/api/campaigns/industries');
+  const box=document.getElementById('indList');
+  if(!ok){box.innerHTML='<div class="pad hint">Ошибка загрузки</div>';return;}
+  INDUSTRIES=d.industries||[];
+  document.getElementById('lastSync').textContent=d.lastSync?('обновлено '+new Date(d.lastSync).toLocaleDateString('ru')):(d.syncing?'синхронизация…':'не синхронизировано');
+  if(!INDUSTRIES.length){ box.innerHTML='<div class="pad hint">База пуста. Нажми «Синхронизировать базу» вверху — подтянем компании и e-mail из Битрикса.</div>'; return; }
+  box.innerHTML=INDUSTRIES.map(i=>`<div class="ind ${CUR_IND===i.id?'on':''}" onclick="pickIndustry('${esc(i.id)}')"><div><div class="n">${esc(i.name)}</div><div class="c">${i.companies} компаний</div></div><div class="c">${i.emails} e-mail</div></div>`).join('');
+}
+let SEARCH_MODE=false;
+async function pickIndustry(id){
+  CUR_IND=id; SEARCH_MODE=false;
+  const s=document.getElementById('compSearch'); if(s) s.value='';
+  loadIndustries();
+  const {ok,d}=await api('/api/campaigns/companies?industry='+encodeURIComponent(id));
+  COMPANIES=(ok&&d.companies)||[];
+  document.getElementById('compTitle').textContent=(INDUSTRIES.find(x=>x.id===id)||{}).name||'Компании';
+  renderCompanies();
+}
+// Сквозной поиск по ВСЕЙ базе (не только по выбранной сфере). Пусто — вернуть сферу.
+let _searchT=null;
+function onCompSearch(v){
+  clearTimeout(_searchT);
+  const q=(v||'').trim();
+  if(q.length<2){
+    SEARCH_MODE=false;
+    if(CUR_IND){ document.getElementById('compTitle').textContent=(INDUSTRIES.find(x=>x.id===CUR_IND)||{}).name||'Компании'; api('/api/campaigns/companies?industry='+encodeURIComponent(CUR_IND)).then(({ok,d})=>{COMPANIES=(ok&&d.companies)||[];renderCompanies();}); }
+    else { COMPANIES=[]; document.getElementById('compList').innerHTML='<div class="pad hint">Начни вводить название компании (от 2 букв) — искать буду по всей базе.</div>'; }
+    return;
+  }
+  _searchT=setTimeout(async()=>{
+    document.getElementById('compTitle').textContent='Поиск по всей базе';
+    const {ok,d}=await api('/api/campaigns/companies?q='+encodeURIComponent(q));
+    COMPANIES=(ok&&d.companies)||[]; SEARCH_MODE=true; renderCompanies();
+  },250);
+}
+function renderCompanies(){
+  const box=document.getElementById('compList');
+  const list=COMPANIES;
+  if(!list.length){box.innerHTML='<div class="pad hint">'+(SEARCH_MODE?'Ничего не найдено.':'Нет компаний.')+'</div>';updateSel();return;}
+  box.innerHTML=list.map((c,idx)=>{
+    const emails=(c.emails||[]);
+    const indTag=(SEARCH_MODE&&c.industry)?` <span class="emeta">${esc(c.industry)}</span>`:'';
+    const rows=emails.map(e=>`<div class="em"><input type="checkbox" ${SELECTED.has(e.email)?'checked':''} onchange="toggleEmail('${esc(e.email)}',this.checked)"><label>${esc(e.email)}${e.name?` <span class="src">${esc(e.name)}</span>`:''} <span class="src">${e.source==='contact'?'контакт':'компания'}</span></label></div>`).join('');
+    return `<div class="comp"><div class="comp-h" onclick="toggleComp(${idx})"><input type="checkbox" onclick="event.stopPropagation()" ${emails.every(e=>SELECTED.has(e.email))&&emails.length?'checked':''} onchange="toggleCompany(${idx},this.checked)"><div class="comp-t">${esc(c.name)}${indTag}</div><span class="comp-cnt">${emails.length} e-mail</span></div><div class="emails" id="em-${idx}">${rows||'<div class="hint">нет адресов</div>'}</div></div>`;
+  }).join('');
+  updateSel();
+}
+function toggleComp(idx){const el=document.getElementById('em-'+idx);if(el)el.classList.toggle('open');}
+function toggleEmail(email,on){if(on)SELECTED.add(email);else SELECTED.delete(email);updateSel();}
+function toggleCompany(idx,on){const c=COMPANIES[idx];if(!c)return;(c.emails||[]).forEach(e=>{if(on)SELECTED.add(e.email);else SELECTED.delete(e.email)});renderCompanies();}
+function selectAllVisible(on){COMPANIES.forEach(c=>(c.emails||[]).forEach(e=>{if(on)SELECTED.add(e.email);else SELECTED.delete(e.email)}));renderCompanies();}
+function updateSel(){document.getElementById('selCount').textContent=SELECTED.size;document.getElementById('sendN').textContent=SELECTED.size;if(document.getElementById('selOverlay'))renderSelectedList();}
+// Список уже выбранных адресатов — для перепроверки перед отправкой.
+function showSelected(){
+  let ov=document.getElementById('selOverlay');
+  if(ov){ov.remove();return;}
+  ov=document.createElement('div');ov.id='selOverlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+  ov.innerHTML='<div style="max-width:560px;width:100%;max-height:80vh;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--border2);border-radius:14px;overflow:hidden">'
+    +'<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px">'
+    +'<b style="font-size:15px">Выбранные адресаты · <span id="selModalCount">0</span></b>'
+    +'<span><button class="btn" style="padding:5px 9px" onclick="clearSelected()">Очистить все</button> <button class="btn" style="padding:5px 9px" onclick="showSelected()">Закрыть</button></span></div>'
+    +'<div id="selModalBody" style="overflow:auto;padding:8px 20px 16px"></div></div>';
+  ov.addEventListener('click',e=>{if(e.target===ov)showSelected();});
+  document.body.appendChild(ov);renderSelectedList();
+}
+function renderSelectedList(){
+  const body=document.getElementById('selModalBody');const cnt=document.getElementById('selModalCount');if(!body)return;
+  const arr=[...SELECTED].sort();if(cnt)cnt.textContent=arr.length;
+  if(!arr.length){body.innerHTML='<div class="pad hint">Пока никто не выбран. Отметь адреса галочками в списке компаний.</div>';return;}
+  body.innerHTML=arr.map(em=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)"><span style="flex:1;word-break:break-all">${esc(em)}</span><button class="btn" style="padding:3px 8px" onclick="removeSelected('${esc(em)}')" title="Убрать из рассылки">✕</button></div>`).join('');
+}
+function removeSelected(em){SELECTED.delete(em);renderCompanies();renderSelectedList();}
+// Ручной ввод адреса — можно добавлять адреса, которых нет в базе сфер.
+function addManual(){
+  const inp=document.getElementById('manualEmail'); if(!inp)return;
+  const raw=(inp.value||'').trim().toLowerCase();
+  if(!raw){return;}
+  // поддержка нескольких адресов через запятую/пробел/точку с запятой
+  const parts=raw.split(/[\s,;]+/).filter(Boolean);
+  const re=/^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+  let added=0,bad=[];
+  parts.forEach(e=>{ if(re.test(e)){ if(!SELECTED.has(e)){SELECTED.add(e);added++;} } else bad.push(e); });
+  inp.value='';
+  renderCompanies(); renderSelectedList(); updateSel();
+  if(bad.length) msg('Не похоже на адрес: '+bad.join(', '), 'err');
+  else if(added) msg('Добавлено адресов: '+added, 'ok');
+}
+function clearSelected(){if(!SELECTED.size)return;if(!confirm('Убрать всех выбранных адресатов?'))return;SELECTED.clear();renderCompanies();renderSelectedList();}
+
+async function syncAudience(){
+  const b=document.getElementById('syncBtn'); b.disabled=true; b.textContent='Синхронизирую…';
+  await api('/api/campaigns/sync',{method:'POST'});
+  setTimeout(async()=>{ await loadIndustries(); b.disabled=false; b.textContent='⟳ Синхронизировать базу'; alert('Синхронизация запущена. Это может занять минуту-две — обнови сферы позже кнопкой ещё раз.'); },1500);
+}
+
+const ACCENT='#C53B2F';
+const P='margin:0 0 16px;line-height:1.7';        // абзац как в примерах
+const SIGN=`<p style="${P}">С уважением,<br><b>Команда ProLabSupport</b></p>`;
+// Шаблоны — уже оформленный текст (в редакторе виден как обычный текст, не код).
+// Кнопку со ссылкой добавляй через «🔘 Кнопка» — сам зададишь текст и адрес.
+const TEMPLATES={
+  simple:
+`<p style="${P}">Уважаемые коллеги!</p>
+<p style="${P}">[Основной текст письма — расскажите о новости, продукте или предложении. Ключевые фразы можно выделить <b>жирным</b>.]</p>
+<p style="${P}">Если вам требуется консультация, помощь в подборе оборудования или коммерческое предложение — ответьте на это письмо или напишите нам: <a href="mailto:sales@prolabsupport.kz" style="color:${ACCENT}">sales@prolabsupport.kz</a>.</p>
+${SIGN}`,
+  news:
+`<p style="${P}">Уважаемые коллеги!</p>
+<p style="${P}">Рады сообщить о <b>[новость: новое направление, партнёрство, пополнение ассортимента]</b>.</p>
+<p style="${P}">[Пара предложений о том, чем это полезно клиенту — какие задачи закрывает, что нового доступно в портфеле ProLabSupport.]</p>
+<p style="${P}">Подробности — на нашем сайте <a href="https://prolabsupport.kz" style="color:${ACCENT}">prolabsupport.kz</a> или ответным письмом.</p>
+${SIGN}`,
+  event:
+`<p style="${P}"><b>[00–00 месяца]</b> компания ProLabSupport примет участие в <b>[Название мероприятия]</b> — [короткое описание выставки/семинара].</p>
+<p style="${P}">📍 [Город, площадка, адрес]<br>
+🗓️ [Даты проведения]<br>
+📌 [Павильон / стенд №]</p>
+<p style="${P}">На нашем стенде мы представим <b>[ключевые решения и оборудование]</b> — [1–2 предложения о том, что увидят посетители].</p>
+<p style="${P}">Будем рады встрече! Для участия нужна регистрация — добавь кнопку со ссылкой на форму через «🔘 Кнопка».</p>
+${SIGN}`,
+};
+// ── Редактор письма (WYSIWYG, без HTML-кода) ────────────────────────────────
+// «Компания получателя» показывается в редакторе как наглядная фишка, а в письме
+// заменяется на реальное название компании каждого получателя ({{Компания}}).
+function chipHTML(){return '<span class="ph" contenteditable="false" data-ph="company">Компания получателя</span>';}
+function getBody(){
+  const ed=document.getElementById('cBody').cloneNode(true);
+  ed.querySelectorAll('[data-ph="company"]').forEach(el=>el.replaceWith(document.createTextNode('{{Компания}}')));
+  return ed.innerHTML;
+}
+function setBody(html){
+  const withChips=(html||'').replace(/\{\{\s*Компания\s*\}\}/gi,chipHTML());
+  document.getElementById('cBody').innerHTML=withChips;preview();
+}
+let _savedRange=null;
+function saveSel(){const s=window.getSelection();const ed=document.getElementById('cBody');if(s&&s.rangeCount&&ed.contains(s.anchorNode))_savedRange=s.getRangeAt(0).cloneRange();}
+function restoreSel(){const ed=document.getElementById('cBody');ed.focus();if(_savedRange){const s=window.getSelection();s.removeAllRanges();s.addRange(_savedRange);}}
+function fmt(cmd){document.execCommand(cmd,false,null);preview();}
+// Шрифт и размер применяем к выделению как inline-стиль (styleWithCSS включаем
+// только на время операции, потом возвращаем false — чтобы «Ж» оставался <b>).
+function setFont(family){
+  if(!family)return; restoreSel();
+  try{document.execCommand('styleWithCSS',true,true);document.execCommand('fontName',false,family);}catch(e){}
+  try{document.execCommand('styleWithCSS',false,false);}catch(e){}
+  preview();
+}
+function setFontSize(px){
+  if(!px)return; restoreSel();
+  try{
+    document.execCommand('styleWithCSS',true,true);
+    document.execCommand('fontSize',false,'7');                 // маркер, заменим на px
+    document.getElementById('cBody').querySelectorAll('font[size="7"],span[style*="xxx-large"]').forEach(f=>{
+      const s=document.createElement('span'); s.style.fontSize=px; s.innerHTML=f.innerHTML; f.replaceWith(s);
+    });
+    document.execCommand('styleWithCSS',false,false);
+  }catch(e){}
+  preview();
+}
+function insLink(){saveSel();const u=prompt('Адрес ссылки (URL):','https://');if(!u)return;restoreSel();const sel=window.getSelection();if(sel&&sel.toString())document.execCommand('createLink',false,u);else document.execCommand('insertHTML',false,'<a href="'+u.replace(/"/g,'%22')+'" style="color:'+ACCENT+'">'+esc(u)+'</a>');preview();}
+// Кнопку добавляем ОТДЕЛЬНЫМ блоком в конец письма (чтобы не втыкалась посреди слова).
+function insButton(){
+  const t=prompt('Текст кнопки:','Подробнее');if(t==null)return;
+  const u=prompt('Адрес кнопки (URL):','https://');if(!u)return;
+  const p=document.createElement('p');p.setAttribute('style',P+';text-align:center');
+  p.innerHTML='<a href="'+u.replace(/"/g,'%22')+'" style="display:inline-block;background:'+ACCENT+';color:#fff;text-decoration:none;padding:13px 26px;border-radius:8px;font-weight:700">'+esc(t)+'</a>';
+  document.getElementById('cBody').appendChild(p);preview();
+}
+function insCompany(){restoreSel();document.execCommand('insertHTML',false,chipHTML()+'&nbsp;');preview();}
+function loadTemplate(kind){
+  const tpl=TEMPLATES[kind]||TEMPLATES.simple;
+  const ed=document.getElementById('cBody');
+  if((ed.textContent||'').trim() && !confirm('Заменить текущий текст письма шаблоном?'))return;
+  setBody(tpl);
+}
+
+// Предпросмотр — показываем письмо ровно так, как его увидит получатель:
+// фирменная шапка с логотипом, тело, файлы-ссылки, единая подпись, футер.
+function previewWrap(bodyHtml){
+  const links=FILES.filter(f=>f.kind==='link');
+  const linkBlock=links.length?`<div style="margin-top:20px"><div style="font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:4px">Материалы для скачивания</div>${links.map(f=>`<div style="margin:5px 0"><span style="display:inline-block;background:#f5f6fa;border:1px solid #e3e6ef;border-radius:8px;padding:10px 16px;color:#1a1e27;font-size:14px;font-weight:600">📎 ${esc(f.filename)} <span style="color:#9ca3af;font-weight:400">· ${fmtSize(f.size_bytes)}</span></span></div>`).join('')}</div>`:'';
+  return `<div style="background:#eef0f5;padding:20px;border-radius:12px">
+    <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(20,25,40,.08)">
+      <div style="padding:30px 32px 8px;font-family:'Montserrat',Arial,sans-serif;color:#2a2f3a;font-size:15px;line-height:1.7">${bodyHtml}${linkBlock}</div>
+      <div style="padding:22px 32px 6px;text-align:center"><img src="/api/campaigns/logo?ts=${LOGO_TS}" alt="ProLabSupport" style="width:100%;max-width:480px;height:auto;display:block;margin:0 auto"></div>
+      <div style="padding:14px 32px 22px;font-family:Arial,sans-serif"><div style="border-top:1px solid #eef0f5;padding-top:14px;font-size:12px;color:#9ca3af;line-height:1.6">ProLabSupport · Казахстан · prolabsupport.kz<br>Вы получили это письмо как клиент ProLabSupport. <span style="text-decoration:underline">Отписаться</span></div></div>
+    </div></div>`;
+}
+function preview(){
+  const html=(getBody()||'').replace(/\{\{\s*Компания\s*\}\}/gi,'<b>Название компании</b>');
+  document.getElementById('previewBox').innerHTML=`<div class="fl">Предпросмотр (как увидит получатель)</div>${previewWrap(html)}`;
+}
+
+// ── Файлы ───────────────────────────────────────────────────────────────────
+let FILES=[];
+function fmtSize(b){b=Number(b)||0;if(b<1024)return b+' Б';if(b<1048576)return (b/1024).toFixed(0)+' КБ';return (b/1048576).toFixed(1)+' МБ';}
+async function loadFiles(){
+  if(!CUR_CAMP){FILES=[];renderFiles();return;}
+  const {ok,d}=await api('/api/campaigns/'+CUR_CAMP+'/files');
+  FILES=(ok&&d.files)||[]; renderFiles();
+}
+function renderFiles(){
+  const box=document.getElementById('fileList');
+  if(!FILES.length){box.innerHTML='Файлов нет.';return;}
+  box.innerHTML=FILES.map(f=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+    <span style="flex:1;color:var(--text-2);word-break:break-all">📎 ${esc(f.filename)} <span style="color:var(--text-4)">· ${fmtSize(f.size_bytes)}</span></span>
+    <select onchange="setKind(${f.id},this.value)" style="width:auto;padding:4px 8px;font-size:12px">
+      <option value="link" ${f.kind==='link'?'selected':''}>Ссылкой</option>
+      <option value="attach" ${f.kind==='attach'?'selected':''}>Вложением</option>
+    </select>
+    <button class="btn" style="padding:4px 9px" onclick="delFile(${f.id})">✕</button>
+  </div>`).join('');
+}
+async function uploadFile(input){
+  const file=input.files&&input.files[0]; if(!file)return;
+  input.value='';
+  if(file.size>7*1048576){msg('Файл больше 7 МБ — используйте вариант «ссылкой» с меньшим файлом или сожмите PDF','err');return;}
+  if(!CUR_CAMP){const id=await saveDraft();if(!id)return;}
+  msg('Загружаю «'+file.name+'»…','');
+  const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
+  const {ok,d}=await api('/api/campaigns/'+CUR_CAMP+'/files',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:file.name,mime:file.type||'application/octet-stream',dataBase64:b64,kind:'link'})});
+  if(!ok){msg(d.error||'Ошибка загрузки','err');return;}
+  msg('Файл добавлен','ok'); await loadFiles(); preview();
+}
+async function setKind(id,kind){
+  await api('/api/campaigns/'+CUR_CAMP+'/files/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind})});
+  const f=FILES.find(x=>x.id===id); if(f)f.kind=kind; preview();
+}
+async function delFile(id){
+  await api('/api/campaigns/'+CUR_CAMP+'/files/'+id,{method:'DELETE'});
+  await loadFiles(); preview();
+}
+// ── Логотип письма ──────────────────────────────────────────────────────────
+function refreshLogo(){
+  LOGO_TS=Date.now();
+  const p=document.getElementById('logoPrev'); if(p) p.src='/api/campaigns/logo?ts='+LOGO_TS;
+  preview();
+}
+async function uploadLogo(input){
+  const file=input.files&&input.files[0]; if(!file)return; input.value='';
+  const st=document.getElementById('logoStatus');
+  if(file.size>6*1048576){ if(st){st.textContent='Файл больше 6 МБ';} return; }
+  if(st) st.textContent='Загружаю…';
+  const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
+  const {ok,d}=await api('/api/campaigns/logo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dataBase64:b64,mime:file.type||'image/png'})});
+  if(!ok){ if(st) st.textContent=(d&&d.error)||'Ошибка'; return; }
+  if(st) st.textContent='Логотип обновлён'; refreshLogo();
+}
+async function resetLogo(){
+  if(!confirm('Вернуть логотип по умолчанию?'))return;
+  const st=document.getElementById('logoStatus');
+  const {ok,d}=await api('/api/campaigns/logo',{method:'DELETE'});
+  if(!ok){ if(st) st.textContent=(d&&d.error)||'Ошибка'; return; }
+  if(st) st.textContent='Сброшено к дефолтному'; refreshLogo();
+}
+async function saveDraft(){
+  const payload={name:val('cName'),subject:val('cSubject'),fromName:val('cFrom'),bodyHtml:getBody()};
+  if(!payload.subject||!payload.bodyHtml){msg('Заполни тему и текст письма','err');return null;}
+  let id=CUR_CAMP;
+  if(id){ await api('/api/campaigns/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); }
+  else { const {ok,d}=await api('/api/campaigns',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); if(!ok){msg(d.error||'Ошибка','err');return null;} id=d.id; CUR_CAMP=id; }
+  msg('Черновик сохранён','ok'); loadHistory(); return id;
+}
+// Кнопка «Черновик»: сохранить и показать вкладку Черновики.
+async function saveDraftBtn(){ const id=await saveDraft(); if(id) showTab('draft'); }
+async function sendNow(){
+  if(!SELECTED.size){msg('Не выбраны получатели','err');return;}
+  if(!confirm('Отправить рассылку на '+SELECTED.size+' адресов?\nПеред массовой отправкой убедись, что поддомен для рассылок настроен (SPF/DKIM/DMARC).'))return;
+  const id=await saveDraft(); if(!id)return;
+  const r1=await api('/api/campaigns/'+id+'/recipients',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({emails:[...SELECTED]})});
+  if(!r1.ok){msg(r1.d.error||'Ошибка получателей','err');return;}
+  const r2=await api('/api/campaigns/'+id+'/send',{method:'POST'});
+  if(!r2.ok){msg(r2.d.error||'Ошибка отправки','err');return;}
+  msg('Рассылка запущена — статус в «Истории».','ok'); showTab('hist'); loadHistory();
+}
+
+const fmtDT=v=>{ if(!v)return''; const d=new Date(v); return isNaN(d)?'':d.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); };
+function campCard(c){
+  const when = c.status==='draft'
+    ? (c.created_at?('создан '+fmtDT(c.created_at)):'')
+    : (c.sent_at?('отправлено '+fmtDT(c.sent_at)):(c.created_at?('создан '+fmtDT(c.created_at)):''));
+  const stat = c.status==='draft' ? '' : `<div class="hint">${c.sent||0}/${c.total||0} отправлено${c.failed?(' · ошибок '+c.failed):''}</div>`;
+  return `<div class="camp" onclick="openCamp(${c.id})"><div><div style="font-weight:600;font-size:13px">${esc(c.name||('#'+c.id))}</div><div class="hint">${esc(c.subject||'')}</div>${stat}${when?`<div class="hint">🕒 ${when}</div>`:''}</div><span class="pill ${c.status}">${c.status}</span></div>`;
+}
+async function loadHistory(){
+  const {ok,d}=await api('/api/campaigns');
+  const hbox=document.getElementById('paneHist'), dbox=document.getElementById('paneDraft');
+  if(!ok){ if(hbox)hbox.innerHTML='<div class="pad hint">Ошибка</div>'; return; }
+  const cs=d.campaigns||[];
+  const drafts=cs.filter(c=>c.status==='draft');
+  const sent=cs.filter(c=>c.status!=='draft');
+  if(dbox) dbox.innerHTML=drafts.length?drafts.map(campCard).join(''):'<div class="pad hint">Черновиков пока нет. Нажми «💾 Черновик» в письме — сохранённое письмо появится здесь.</div>';
+  if(hbox) hbox.innerHTML=sent.length?sent.map(campCard).join(''):'<div class="pad hint">Отправленных кампаний пока нет.</div>';
+  const td=document.getElementById('tabDraft'); if(td) td.textContent='📝 Черновики'+(drafts.length?' ('+drafts.length+')':'');
+}
+async function openCamp(id){
+  const {ok,d}=await api('/api/campaigns/'+id); if(!ok)return;
+  CUR_CAMP=id; showTab('edit');
+  document.getElementById('cName').value=d.name||''; document.getElementById('cSubject').value=d.subject||'';
+  document.getElementById('cFrom').value=d.from_name||''; setBody(d.body_html||'');
+  await loadFiles(); preview();
+  msg('Загружена кампания #'+id+' ('+d.status+'). Отправлено '+(d.sent||0)+'/'+(d.total||0),'ok');
+}
+function showTab(t){
+  document.getElementById('tabEdit').classList.toggle('on',t==='edit');
+  document.getElementById('tabDraft').classList.toggle('on',t==='draft');
+  document.getElementById('tabStats').classList.toggle('on',t==='stats');
+  document.getElementById('tabHist').classList.toggle('on',t==='hist');
+  document.getElementById('paneEdit').style.display=t==='edit'?'block':'none';
+  document.getElementById('paneDraft').style.display=t==='draft'?'block':'none';
+  document.getElementById('paneStats').style.display=t==='stats'?'block':'none';
+  document.getElementById('paneHist').style.display=t==='hist'?'block':'none';
+  if(t==='hist'||t==='draft')loadHistory();
+  if(t==='stats')loadOverall();
+}
+function val(id){const e=document.getElementById(id);return e?e.value.trim():'';}
+function msg(t,c){const e=document.getElementById('editMsg');e.className='msg '+(c||'');e.textContent=t;}
+// ── Аналитика рассылок ──────────────────────────────────────────────────────
+let STATS_CAMP=null, STATS_FILTER='';
+function pct(n,d){ n=Number(n)||0; d=Number(d)||0; return d? Math.round(n/d*100) : 0; }
+function statOf(r){
+  if(r.bounced_at) return {k:'bounced',t:'Отказ'};
+  if(r.unsub_at)   return {k:'unsub',t:'Отписался'};
+  if(r.clicked_at) return {k:'clicked',t:'Кликнул'};
+  if(r.opened_at)  return {k:'opened',t:'Открыл'};
+  if(r.delivered_at) return {k:'delivered',t:'Доставлено'};
+  if(r.status==='failed') return {k:'failed',t:'Ошибка отправки'};
+  if(r.status==='sent') return {k:'sent',t:'Отправлено'};
+  return {k:'sent',t:'Ожидает'};
+}
+function funnelRow(label,val,base,color){
+  const w=base? Math.max(2,Math.round(val/base*100)):0;
+  return `<div class="fun-row"><div>${label}</div><div class="fun-bar"><i style="width:${w}%;background:${color}"></i></div><div class="fun-val">${val} · ${w}%</div></div>`;
+}
+function tilesHTML(a){
+  const sent=a.sent||0;
+  return `<div class="stat-row">
+    <div class="stat"><div class="v">${sent}</div><div class="l">Отправлено</div></div>
+    <div class="stat brand"><div class="v">${a.delivered||0}</div><div class="l">Доставлено</div><div class="p">${pct(a.delivered,sent)}% от отправленных</div></div>
+    <div class="stat good"><div class="v">${a.opened||0}</div><div class="l">Открыто</div><div class="p">${pct(a.opened,a.delivered)}% от доставленных</div></div>
+    <div class="stat good"><div class="v">${a.clicked||0}</div><div class="l">Клики</div><div class="p">${pct(a.clicked,a.delivered)}% от доставленных</div></div>
+    <div class="stat warn"><div class="v">${a.unsub||0}</div><div class="l">Отписки</div><div class="p">${pct(a.unsub,a.delivered)}% от доставленных</div></div>
+    <div class="stat bad"><div class="v">${a.bounced||0}</div><div class="l">Отказы</div><div class="p">${pct(a.bounced,sent)}% от отправленных</div></div>
+  </div>`;
+}
+function funnelHTML(a){
+  const base=a.sent||a.total||1;
+  return `<div class="fun">
+    ${funnelRow('Отправлено',a.sent||0,base,'var(--text-4)')}
+    ${funnelRow('Доставлено',a.delivered||0,base,'var(--brand)')}
+    ${funnelRow('Открыто',a.opened||0,base,'var(--good)')}
+    ${funnelRow('Кликнули',a.clicked||0,base,'#8b5cf6')}
+  </div>`;
+}
+async function loadOverall(){
+  const box=document.getElementById('paneStats');
+  box.innerHTML='<div class="hint">Загрузка аналитики…</div>';
+  const {ok,d}=await api('/api/campaigns/analytics/overall');
+  if(!ok){box.innerHTML='<div class="hint">Ошибка загрузки аналитики</div>';return;}
+  const t=d.totals||{}; const cs=d.campaigns||[];
+  STATS_CAMP=null;
+  let html=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+      <b style="font-size:15px">Сводная аналитика · ${t.campaigns||0} рассылок</b>
+      <span class="hint">Статусы подтягиваются из Selzy. Открой рассылку и нажми «Обновить», чтобы подтянуть свежие.</span>
+    </div>`;
+  html+=tilesHTML(t);
+  html+=`<div class="fl" style="margin-top:4px">Воронка по всем рассылкам</div>`+funnelHTML(t);
+  html+=`<div class="fl" style="margin-top:10px">Рассылки (нажми, чтобы открыть детально)</div>`;
+  if(!cs.length){ html+='<div class="hint">Отправленных рассылок пока нет.</div>'; }
+  else html+=cs.map(c=>`<div class="acard" onclick="openCampStats(${c.id})">
+      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <div style="font-weight:600;font-size:13px">${esc(c.name||('#'+c.id))}</div>
+        <div class="hint">${c.sent_at?('🕒 '+fmtDT(c.sent_at)):''}</div>
+      </div>
+      <div class="hint">${esc(c.subject||'')}</div>
+      <div class="mini">
+        <span>Отпр.: <b>${c.sent}</b></span>
+        <span>Дост.: <b>${c.delivered}</b> (${pct(c.delivered,c.sent)}%)</span>
+        <span>Откр.: <b>${c.opened}</b> (${pct(c.opened,c.delivered)}%)</span>
+        <span>Клики: <b>${c.clicked}</b></span>
+        <span>Отписки: <b>${c.unsub}</b></span>
+        <span>Отказы: <b>${c.bounced}</b></span>
+      </div>
+    </div>`).join('');
+  box.innerHTML=html;
+}
+async function openCampStats(id){
+  const box=document.getElementById('paneStats');
+  box.innerHTML='<div class="hint">Загрузка…</div>';
+  const {ok,d}=await api('/api/campaigns/'+id+'/analytics');
+  if(!ok||!d.ok){box.innerHTML='<div class="hint">Ошибка</div>';return;}
+  STATS_CAMP=d; STATS_FILTER=''; renderCampStats();
+}
+async function refreshCampStats(){
+  if(!STATS_CAMP||!STATS_CAMP.campaign)return;
+  const id=STATS_CAMP.campaign.id;
+  const btn=document.getElementById('stRefBtn'); if(btn){btn.disabled=true;btn.textContent='Обновляю из Selzy…';}
+  const {ok,d}=await api('/api/campaigns/'+id+'/analytics/refresh',{method:'POST'});
+  if(ok&&d.ok){ STATS_CAMP=d; renderCampStats(); }
+  else { if(btn){btn.disabled=false;btn.textContent='🔄 Обновить из Selzy';} alert((d&&d.error)||'Не удалось обновить'); }
+}
+function setStatsFilter(f){ STATS_FILTER=(STATS_FILTER===f?'':f); renderCampStats(); }
+function renderCampStats(){
+  const box=document.getElementById('paneStats'); const D=STATS_CAMP; if(!D)return;
+  const a=D.agg||{}; const c=D.campaign||{};
+  const recs=(D.recipients||[]).map(r=>({r,s:statOf(r)}));
+  const counts={};recs.forEach(x=>counts[x.s.k]=(counts[x.s.k]||0)+1);
+  const shown=STATS_FILTER?recs.filter(x=>x.s.k===STATS_FILTER):recs;
+  const chip=(k,label)=>`<span class="chip-f ${STATS_FILTER===k?'on':''}" onclick="setStatsFilter('${k}')">${label}${counts[k]?(' · '+counts[k]):''}</span>`;
+  let html=`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      <button class="btn" onclick="loadOverall()">← Все рассылки</button>
+      <b style="font-size:15px">${esc(c.name||('#'+c.id))}</b>
+      <span class="hint">${c.sent_at?('🕒 '+fmtDT(c.sent_at)):''}</span>
+      <button class="btn" id="stRefBtn" style="margin-left:auto" onclick="refreshCampStats()">🔄 Обновить из Selzy</button>
+    </div>
+    <div class="hint" style="margin:-2px 0 8px">${esc(c.subject||'')}</div>`;
+  html+=tilesHTML(a);
+  html+=`<div class="fl">Воронка</div>`+funnelHTML(a);
+  html+=`<div class="fl" style="margin-top:8px">Детализация по адресатам</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 10px">
+      <span class="chip-f ${STATS_FILTER===''?'on':''}" onclick="setStatsFilter('')">Все · ${recs.length}</span>
+      ${chip('delivered','Доставлено')}
+      ${chip('opened','Открыли')}
+      ${chip('clicked','Кликнули')}
+      ${chip('unsub','Отписались')}
+      ${chip('bounced','Отказы')}
+      ${chip('sent','Без статуса')}
+      ${chip('failed','Ошибка')}
+    </div>`;
+  html+=`<div style="max-height:52vh;overflow:auto;border:1px solid var(--border);border-radius:10px">
+    <table class="atable"><thead><tr><th>E-mail</th><th>Компания</th><th>Статус</th><th>Открыто</th><th>Клик</th><th>Отписка/Отказ</th></tr></thead><tbody>`;
+  if(!shown.length) html+=`<tr><td colspan="6" class="hint" style="padding:14px">Нет адресатов в этом фильтре.</td></tr>`;
+  else html+=shown.map(({r,s})=>`<tr>
+      <td style="word-break:break-all">${esc(r.email)}</td>
+      <td>${esc(r.company_name||'')}</td>
+      <td><span class="stbadge st-${s.k}">${s.t}</span></td>
+      <td class="hint">${r.opened_at?fmtDT(r.opened_at):'—'}</td>
+      <td class="hint">${r.clicked_at?fmtDT(r.clicked_at):'—'}</td>
+      <td class="hint">${r.unsub_at?('отписка '+fmtDT(r.unsub_at)):(r.bounced_at?('отказ'+(r.track_status?(' · '+esc(r.track_status)):'')):'—')}</td>
+    </tr>`).join('');
+  html+=`</tbody></table></div>
+    <div class="hint" style="margin-top:8px;line-height:1.5">Открытия/клики считаются трекингом Selzy — из-за защиты почты (Apple Mail, блокировка картинок) числа приблизительные. <b>Пересылку письма отследить нельзя</b> — этой метрики нет ни у кого.</div>`;
+  box.innerHTML=html;
+}
+async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
+
+function _mkRows(){
+  const co=['ТОО КазХим','Институт Гео','НЦ Биотех','ТОО ЛабСервис','АО Недра','Университет','ТОО Аналитика','КБТУ','ТОО ФармТест','НИИ Экологии'];
+  const out=[]; const now=Date.parse('2026-09-08T10:00:00Z'); const t=x=>new Date(now+x*3600000).toISOString();
+  function row(i,st){ const e='client'+i+'@example.kz'; const c=co[i%co.length];
+    const b={email:e,company_name:c,status:'sent',message_id:'m'+i,at:t(0),delivered_at:null,opened_at:null,clicked_at:null,unsub_at:null,bounced_at:null,track_status:null,error:null};
+    if(st==='clicked'){b.delivered_at=t(1);b.opened_at=t(2);b.clicked_at=t(3);b.track_status='ok_link_visited';}
+    else if(st==='opened'){b.delivered_at=t(1);b.opened_at=t(2);b.track_status='ok_read';}
+    else if(st==='delivered'){b.delivered_at=t(1);b.track_status='ok_delivered';}
+    else if(st==='unsub'){b.delivered_at=t(1);b.opened_at=t(2);b.unsub_at=t(4);b.track_status='ok_unsubscribed';}
+    else if(st==='bounced'){b.bounced_at=t(1);b.track_status='err_user_unknown';}
+    else {b.track_status='ok_sent';}
+    return b; }
+  let i=0;
+  for(let k=0;k<63;k++)out.push(row(i++,'clicked'));
+  for(let k=0;k<142;k++)out.push(row(i++,'opened'));
+  for(let k=0;k<187;k++)out.push(row(i++,'delivered'));
+  for(let k=0;k<7;k++)out.push(row(i++,'unsub'));
+  for(let k=0;k<26;k++)out.push(row(i++,'bounced'));
+  for(let k=0;k<15;k++)out.push(row(i++,'sent'));
+  return out;
+}
+STATS_CAMP={ok:true,campaign:{id:7,name:'Приглашение на LABTEST 2026',subject:'Ждём вас на стенде ProLabSupport — павильон 3, стенд B12',sent_at:'2026-09-08T10:12:00Z'},
+  agg:{total:440,sent:425,delivered:392,opened:205,clicked:63,unsub:7,bounced:26,failed:2,pending:0},
+  recipients:_mkRows()};
+document.getElementById('paneEdit').style.display='none';
+document.getElementById('paneStats').style.display='block';
+document.getElementById('tabEdit').classList.remove('on');
+document.getElementById('tabStats').classList.add('on');
+renderCampStats();
+
+</script>
+</body>
+</html>
