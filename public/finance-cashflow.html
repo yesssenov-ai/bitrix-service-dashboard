@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ЦУП · Cash Flow</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#14171d;--bg2:#20242e;--card:#1b1f27;--border:#2a2f3a;--border2:#363c49;--text:#eef0f3;--text-2:#c3c9d3;--text-3:#8b93a3;--text-4:#616a78;--accent:#e5544a;--brand:#4098e6;--brand-l:rgba(64,152,230,.15);--good:#3ddc84;--warn:#e0a940;--bad:#ef5a6a;--bad-l:rgba(239,90,106,.14);--radius:12px;--font:'Inter',system-ui,sans-serif}
+html[data-theme="light"]{--bg:#f5f6fa;--bg2:#eef0f7;--card:#fff;--border:#e3e6ef;--border2:#d0d4e4;--text:#111827;--text-2:#374151;--text-3:#6b7280;--text-4:#9ca3af;--accent:#C53B2F;--brand:#2563eb;--brand-l:rgba(37,99,235,.08);--good:#059669;--warn:#d97706;--bad:#dc2626;--bad-l:rgba(220,38,38,.08)}
+body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased}
+.header{background:var(--card);border-bottom:1px solid var(--border);height:56px;display:flex;align-items:center;padding:0 20px;gap:12px;position:sticky;top:0;z-index:100}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14px;text-decoration:none;color:inherit}.logo img{height:24px}
+.hbtn{font-size:12.5px;color:var(--text-3);text-decoration:none;border:1px solid var(--border2);padding:6px 12px;border-radius:8px;background:transparent;cursor:pointer;font-family:var(--font)}
+.hbtn:hover{border-color:var(--accent);color:var(--accent)}
+.hsub{font-size:13.5px;color:var(--text-3);font-weight:600}
+.hr{margin-left:auto;display:flex;gap:8px;align-items:center}
+.asof{font-size:12px;color:var(--text-3)}
+.mockbadge{font-size:11px;font-weight:700;color:var(--warn);border:1px solid var(--warn);border-radius:6px;padding:2px 8px}
+.wrap{padding:16px;display:flex;flex-direction:column;gap:16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.card-h{padding:11px 16px;border-bottom:1px solid var(--border);font-weight:700;font-size:13.5px;display:flex;align-items:center;gap:8px}
+.card-h .sub{font-weight:500;color:var(--text-3);font-size:12px}
+.note{padding:10px 16px;font-size:12.5px;color:var(--text-3);border-bottom:1px solid var(--border);line-height:1.5}
+.note b{color:var(--text-2)}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+@media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+.kpi .l{font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px}
+.kpi .v{font-size:24px;font-weight:800;margin-top:6px;font-variant-numeric:tabular-nums;line-height:1.1}
+.kpi .s{font-size:11.5px;color:var(--text-4);margin-top:4px}
+.v.bad{color:var(--bad)}.v.good{color:var(--good)}
+.controls{display:flex;gap:16px;flex-wrap:wrap;padding:12px 16px;align-items:flex-end}
+.ctl{display:flex;flex-direction:column;gap:3px}
+.ctl label{font-size:10.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px}
+.ctl input{background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text);font-family:var(--font);outline:none;width:150px;text-align:right;font-variant-numeric:tabular-nums}
+.ctl input:focus{border-color:var(--brand)}
+.ctl.pend label::after{content:' • из 1С позже';color:var(--warn);font-weight:600}
+#chartWrap{padding:8px 8px 4px;position:relative}
+svg{display:block;width:100%;height:auto;font-family:var(--font)}
+.tip{position:absolute;pointer-events:none;background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;font-size:12px;box-shadow:0 6px 20px rgba(0,0,0,.3);min-width:170px;z-index:5;opacity:0;transition:opacity .08s}
+.tip .r{display:flex;justify-content:space-between;gap:14px;line-height:1.5}
+.tip .r b{font-variant-numeric:tabular-nums}
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th,.tbl td{padding:6px 10px;border-bottom:1px solid var(--border);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tbl th{color:var(--text-3);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;position:sticky;top:0;background:var(--card)}
+.tbl td:first-child,.tbl th:first-child{text-align:left}
+.neg{color:var(--bad)}
+.hint{color:var(--text-3);font-size:12.5px;padding:14px 18px}
+.chip{font-size:11px;border:1px solid var(--border2);border-radius:999px;padding:2px 9px;color:var(--text-3)}
+.legend{display:flex;gap:16px;padding:4px 16px 12px;font-size:12px;color:var(--text-3);flex-wrap:wrap}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+</style>
+</head>
+<body>
+<header class="header">
+  <a href="/" class="logo"><img src="/assets/logo-icon.png" alt="">ProLabSupport</a>
+  <a href="/" class="hbtn">← Все модули</a>
+  <span class="hsub">Cash Flow · 13 недель</span>
+  <div class="hr">
+    <span class="asof" id="asof"></span>
+    <span class="mockbadge" id="mockBadge" style="display:none">демо-данные</span>
+    <button class="hbtn" id="refreshBtn" onclick="refresh()">↻ Обновить</button>
+    <button class="hbtn" onclick="logout()">Выйти</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="kpis">
+    <div class="kpi"><div class="l">Приток за 13 недель</div><div class="v" id="kInflow">—</div><div class="s" id="kInflowS">ожидаемые поступления</div></div>
+    <div class="kpi"><div class="l">Мин. остаток</div><div class="v" id="kMin">—</div><div class="s" id="kMinS">нижняя точка ликвидности</div></div>
+    <div class="kpi"><div class="l">Кассовые разрывы</div><div class="v" id="kGaps">—</div><div class="s" id="kGapsS">недель с отрицательным остатком</div></div>
+    <div class="kpi"><div class="l">Остаток на конец</div><div class="v" id="kEnd">—</div><div class="s">прогноз через 13 недель</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-h">Прогноз остатка денежных средств <span class="sub" id="srcLbl"></span></div>
+    <div class="note">
+      <b>Приток</b> — реальные данные из модуля «Дебет» (счёт 1210) по срокам оплаты договоров.
+      <b>Отток</b> пока задаётся вручную ниже — подключим автоматически из 1С (кредиторка <b>fact/payables</b>, ОСВ),
+      см. запрос к 1С в проекте. Просроченная дебиторка свёрнута в первую неделю как ожидаемое поступление.
+    </div>
+    <div class="controls">
+      <div class="ctl"><label>Остаток денег сейчас</label><input id="iOpening" type="text" inputmode="numeric" oninput="recompute()"></div>
+      <div class="ctl pend"><label>Поставщики / нед.</label><input id="o_payables" type="text" inputmode="numeric" value="0" oninput="recompute()"></div>
+      <div class="ctl pend"><label>Зарплата / нед.</label><input id="o_payroll" type="text" inputmode="numeric" value="0" oninput="recompute()"></div>
+      <div class="ctl pend"><label>Налоги / нед.</label><input id="o_taxes" type="text" inputmode="numeric" value="0" oninput="recompute()"></div>
+      <div class="ctl pend"><label>Прочее / нед.</label><input id="o_other" type="text" inputmode="numeric" value="0" oninput="recompute()"></div>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--brand)"></i>Остаток денег (прогноз)</span>
+      <span><i style="background:var(--brand-l);border:1px solid var(--brand)"></i>Приток за неделю</span>
+      <span><i style="background:var(--bad)"></i>Кассовый разрыв (остаток &lt; 0)</span>
+    </div>
+    <div id="chartWrap"><svg id="chart" viewBox="0 0 960 360" preserveAspectRatio="xMidYMid meet"></svg><div class="tip" id="tip"></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-h">По неделям <span class="sub">приток / отток / чистый поток / остаток</span></div>
+    <div style="overflow:auto;max-height:46vh">
+      <table class="tbl"><thead><tr><th>Неделя</th><th>Приток</th><th>Отток</th><th>Чистый</th><th>Остаток</th></tr></thead><tbody id="tblBody"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<script>
+let DATA={weeks:[],outflowCategories:[]}; let CALC=null;
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const fmt=n=>Math.round(Number(n)||0).toLocaleString('ru-RU').replace(/,/g,' ');
+const parseNum=s=>Number(String(s==null?'':s).replace(/[^\d.-]/g,''))||0;
+async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.href='/login.html';return{ok:false,d:{}}}let d={};try{d=await r.json()}catch(e){}return{ok:r.ok,d}}
+
+async function boot(){const r=await fetch('/auth/me');if(!r.ok){location.href='/login.html';return;}await load();}
+async function load(){
+  const {ok,d}=await api('/api/finance/cashflow');
+  if(!ok){document.getElementById('tblBody').innerHTML='<tr><td class="hint" colspan="5">Ошибка загрузки</td></tr>';return;}
+  DATA=d;
+  document.getElementById('asof').textContent=d.asOf?('Дебет на '+new Date(d.asOf).toLocaleString('ru-RU')):'';
+  document.getElementById('mockBadge').style.display=d.mock?'inline-block':'none';
+  document.getElementById('srcLbl').textContent='· источник: '+(d.source||'');
+  document.getElementById('iOpening').value=fmt(d.openingCash||0);
+  recompute();
+}
+// Пересчёт прогноза остатка: остаток[w] = остаток[w-1] + приток[w] − отток(неделя).
+function recompute(){
+  const weeks=DATA.weeks||[]; if(!weeks.length)return;
+  const opening=parseNum(document.getElementById('iOpening').value);
+  const outWk=['o_payables','o_payroll','o_taxes','o_other'].reduce((s,id)=>s+parseNum(document.getElementById(id).value),0);
+  let bal=opening; const pts=[];
+  for(const w of weeks){const net=w.inflow-outWk;bal+=net;pts.push({...w,outflow:outWk,net,bal});}
+  CALC={opening,outWk,pts};
+  renderKpis();renderChart();renderTable();
+}
+function renderKpis(){
+  const pts=CALC.pts;
+  const inflow13=pts.reduce((s,p)=>s+p.inflow,0);
+  const minP=pts.reduce((m,p)=>p.bal<m.bal?p:m,pts[0]);
+  const gaps=pts.filter(p=>p.bal<0).length;
+  const end=pts[pts.length-1].bal;
+  document.getElementById('kInflow').textContent=fmt(inflow13);
+  const ov=DATA.overdue||{};document.getElementById('kInflowS').textContent=ov.amount?('в т.ч. просрочка '+fmt(ov.amount)+' ₸'):'ожидаемые поступления';
+  const km=document.getElementById('kMin');km.textContent=fmt(minP.bal);km.className='v'+(minP.bal<0?' bad':' good');
+  document.getElementById('kMinS').textContent='неделя '+minP.label;
+  const kg=document.getElementById('kGaps');kg.textContent=gaps;kg.className='v'+(gaps?' bad':' good');
+  document.getElementById('kGapsS').textContent=gaps?'есть риск разрыва':'разрывов нет';
+  const ke=document.getElementById('kEnd');ke.textContent=fmt(end);ke.className='v'+(end<0?' bad':'');
+}
+function renderTable(){
+  document.getElementById('tblBody').innerHTML=CALC.pts.map(p=>`<tr><td>${esc(p.label)}</td><td>${fmt(p.inflow)}</td><td>${p.outflow?('−'+fmt(p.outflow)):'0'}</td><td class="${p.net<0?'neg':''}">${p.net<0?'−':''}${fmt(Math.abs(p.net))}</td><td class="${p.bal<0?'neg':''}"><b>${fmt(p.bal)}</b></td></tr>`).join('');
+}
+// SVG-график: столбики притока + линия остатка денег; зона остатка<0 красным.
+function renderChart(){
+  const pts=CALC.pts, n=pts.length;
+  const W=960,H=360,padL=64,padR=16,padT=18,padB=40;
+  const iw=W-padL-padR, ih=H-padT-padB;
+  const bals=pts.map(p=>p.bal), infs=pts.map(p=>p.inflow);
+  let lo=Math.min(0,...bals), hi=Math.max(0,...bals,...infs);
+  if(hi===lo)hi=lo+1; const pad=(hi-lo)*0.08;hi+=pad;lo-=pad;
+  const X=i=>padL+(n<=1?iw/2:iw*i/(n-1));
+  const bw=Math.max(6,Math.min(26,iw/n*0.5));
+  const Y=v=>padT+ih*(1-(v-lo)/(hi-lo));
+  const y0=Y(0);
+  const grid=`<line x1="${padL}" y1="${y0}" x2="${W-padR}" y2="${y0}" stroke="var(--border2)" stroke-width="1"/>`;
+  // горизонтальные подписи оси Y (0 и hi и lo)
+  const ticks=[hi,(hi+lo)/2,lo,0].filter((v,i,a)=>a.indexOf(v)===i);
+  const yaxis=ticks.map(v=>`<text x="${padL-8}" y="${Y(v)+4}" text-anchor="end" font-size="10" fill="var(--text-4)">${fmt(v)}</text>`).join('');
+  // столбики притока
+  const bars=pts.map((p,i)=>`<rect x="${X(i)-bw/2}" y="${Y(p.inflow)}" width="${bw}" height="${Math.max(0,y0-Y(p.inflow))}" rx="3" fill="var(--brand-l)" stroke="var(--brand)" stroke-width="1"/>`).join('');
+  // линия остатка: по сегментам, красим красным где любой конец <0
+  let line='';
+  for(let i=1;i<n;i++){const neg=pts[i].bal<0||pts[i-1].bal<0;line+=`<line x1="${X(i-1)}" y1="${Y(pts[i-1].bal)}" x2="${X(i)}" y2="${Y(pts[i].bal)}" stroke="${neg?'var(--bad)':'var(--brand)'}" stroke-width="2.5" stroke-linecap="round"/>`;}
+  const dots=pts.map((p,i)=>`<circle cx="${X(i)}" cy="${Y(p.bal)}" r="${p.bal<0?5:3.5}" fill="${p.bal<0?'var(--bad)':'var(--brand)'}" stroke="var(--card)" stroke-width="1.5"/>`+(p.bal<0?`<text x="${X(i)}" y="${Y(p.bal)-10}" text-anchor="middle" font-size="10" font-weight="700" fill="var(--bad)">разрыв</text>`:'')).join('');
+  // подписи X (через одну, чтобы не сливались)
+  const xlab=pts.map((p,i)=>(i%2===0||i===n-1)?`<text x="${X(i)}" y="${H-padB+16}" text-anchor="middle" font-size="9.5" fill="var(--text-4)">${esc(p.label.split('–')[0])}</text>`:'').join('');
+  // прозрачные зоны наведения
+  const hot=pts.map((p,i)=>`<rect x="${X(i)-iw/n/2}" y="${padT}" width="${iw/n}" height="${ih}" fill="transparent" data-i="${i}" class="hot"/>`).join('');
+  document.getElementById('chart').innerHTML=grid+yaxis+bars+line+dots+xlab+hot;
+  bindHover();
+}
+function bindHover(){
+  const svg=document.getElementById('chart'),tip=document.getElementById('tip'),wrap=document.getElementById('chartWrap');
+  svg.querySelectorAll('.hot').forEach(el=>{
+    el.addEventListener('mousemove',ev=>{
+      const p=CALC.pts[+el.dataset.i];const rb=wrap.getBoundingClientRect();
+      tip.innerHTML=`<div style="font-weight:700;margin-bottom:4px">${esc(p.label)}</div>`+
+        `<div class="r"><span style="color:var(--text-3)">Приток</span><b style="color:var(--brand)">${fmt(p.inflow)}</b></div>`+
+        `<div class="r"><span style="color:var(--text-3)">Отток</span><b>${p.outflow?('−'+fmt(p.outflow)):'0'}</b></div>`+
+        `<div class="r"><span style="color:var(--text-3)">Чистый</span><b class="${p.net<0?'neg':''}">${p.net<0?'−':''}${fmt(Math.abs(p.net))}</b></div>`+
+        `<div class="r" style="border-top:1px solid var(--border);margin-top:3px;padding-top:3px"><span style="color:var(--text-3)">Остаток</span><b class="${p.bal<0?'neg':''}">${fmt(p.bal)}</b></div>`+
+        (p.items&&p.items.length?`<div style="margin-top:5px;color:var(--text-4);font-size:11px">Крупнейшие: ${esc(p.items.slice(0,3).map(x=>x.contractor+' '+fmt(x.amount)).join('; '))}</div>`:'');
+      tip.style.opacity='1';
+      let x=ev.clientX-rb.left+14;if(x>rb.width-190)x=ev.clientX-rb.left-190;
+      tip.style.left=x+'px';tip.style.top=(ev.clientY-rb.top-10)+'px';
+    });
+    el.addEventListener('mouseleave',()=>tip.style.opacity='0');
+  });
+}
+async function refresh(){const b=document.getElementById('refreshBtn');b.disabled=true;b.textContent='Обновляю…';await api('/api/finance/cashflow/refresh',{method:'POST'});await load();b.disabled=false;b.textContent='↻ Обновить';}
+async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
+boot();
+</script>
+</body>
+</html>

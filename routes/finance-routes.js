@@ -38,6 +38,16 @@ router.post('/advances/refresh', requireAuth(VIEW), async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Cash Flow (13-недельный прогноз ликвидности; приток из Дебета 1210) ──────
+router.get('/cashflow', requireAuth(VIEW), async (req, res) => {
+  try { res.json(await require('../finance-cashflow-calc').getCashflowBoard()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.post('/cashflow/refresh', requireAuth(VIEW), async (req, res) => {
+  try { res.json(await require('../finance-cashflow-calc').syncCashflow()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Качество (сверка контрактов 1С ↔ сделок Битрикса) ───────────────────────
 router.get('/quality', requireAuth(VIEW), async (req, res) => {
   try { res.json(await require('../finance-quality-calc').getQualityBoard()); }

@@ -141,7 +141,12 @@ async function fetchDebtRaw() {
     let due = null, overdue = 0;
     if (base) {
       const d = new Date(base);
-      if (!isNaN(d)) { d.setDate(d.getDate() + termDays); due = d.toISOString().slice(0, 10); overdue = Math.round((today - d) / 86400000); }
+      // Отсекаем «битые» даты 1С (напр. 0204-09-13 — опечатка ввода): иначе
+      // просрочка уходит в десятки тысяч дней. Валиден год [2000 .. нынешний+6].
+      const yr = d.getFullYear(), nowY = today.getFullYear();
+      if (!isNaN(d) && yr >= 2000 && yr <= nowY + 6) {
+        d.setDate(d.getDate() + termDays); due = d.toISOString().slice(0, 10); overdue = Math.round((today - d) / 86400000);
+      }
     }
     rows.push({
       id: cid || (String(c.contractor_id) + '|' + (c.Name || '')),
