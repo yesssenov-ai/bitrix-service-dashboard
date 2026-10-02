@@ -6,10 +6,16 @@
 //   ONEC_PASS      — пароль
 // Пока ONEC_BASE_URL не задан — модули работают на мок-данных (isConfigured()=false).
 const fetch = require('node-fetch');
+const https = require('https');
 
 const BASE = process.env.ONEC_BASE_URL || '';
 const USER = process.env.ONEC_USER || '';
 const PASS = process.env.ONEC_PASS || '';
+// Внутренняя публикация 1С часто с самоподписанным сертификатом (в инструкции 1С
+// просят отключить проверку SSL). Включаем ослабленную проверку ТОЛЬКО для запросов
+// к 1С (через env ONEC_INSECURE_TLS=1) — глобальный TLS и прокси не трогаем.
+const INSECURE = /^(1|true|yes)$/i.test(process.env.ONEC_INSECURE_TLS || '');
+const insecureAgent = INSECURE ? new https.Agent({ rejectUnauthorized: false }) : null;
 
 function isConfigured() { return !!BASE; }
 
@@ -33,7 +39,7 @@ async function onec(service, params = {}, opts = {}) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { method, headers, body, signal: ctrl.signal });
+    const res = await fetch(url, { method, headers, body, signal: ctrl.signal, agent: insecureAgent || undefined });
     clearTimeout(t);
     const txt = await res.text();
     if (!res.ok) throw new Error('1С HTTP ' + res.status + (txt ? ': ' + txt.slice(0, 300) : ''));

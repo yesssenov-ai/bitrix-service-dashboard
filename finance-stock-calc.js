@@ -89,8 +89,10 @@ function mockStock() {
 // 1С опубликует сервис.
 async function fetchStockRaw() {
   if (!onecMod.isConfigured()) return mockStock();
-  const data = await onecMod.onec('fact_stock');
-  const arr = Array.isArray(data) ? data : (data.rows || data.data || data.value || []);
+  // Сервис fact/stock?date=YYYY-MM-DD — остаток на дату (по умолчанию сегодня). Ответ {count, items}.
+  const date = new Date().toISOString().slice(0, 10);
+  const data = await onecMod.onec('fact/stock', { date });
+  const arr = Array.isArray(data) ? data : (data.items || data.rows || data.data || data.value || []);
   return arr.map((r, idx) => {
     const qty = Number(r.Количество ?? r.qty ?? 0);
     const price = Number(r.Цена ?? r.price ?? 0);

@@ -70,20 +70,27 @@ function mockAdvances() {
 // корсчётами 1010/1030; год — из ДатаДоговора.
 async function fetchAdvancesRaw() {
   if (!onecMod.isConfigured()) return mockAdvances();
-  const [cRaw, crRaw, lRaw] = await Promise.all([
-    onecMod.onec('dim_contract'), onecMod.onec('dim_contractor'), onecMod.onec('12_33_MS'),
+  // Отдельные сервисы: fact/advances (счёт 3510) и fact/payments (1210 с корсчётами
+  // 1010/1030). Период — с начала года по сегодня. Ответ: {count, items}.
+  const yr = new Date().getFullYear();
+  const dateFrom = yr + '-01-01', dateTo = new Date().toISOString().slice(0, 10);
+  const [cRaw, crRaw, advRaw, payRaw] = await Promise.all([
+    onecMod.onec('dim/contract'), onecMod.onec('dim/contractor'),
+    onecMod.onec('fact/advances', { dateFrom, dateTo }),
+    onecMod.onec('fact/payments', { dateFrom, dateTo }),
   ]);
-  const asArr = d => Array.isArray(d) ? d : (d && (d.rows || d.data || d.value)) || [];
-  const contracts = asArr(cRaw), ledger = asArr(lRaw);
+  const asArr = d => Array.isArray(d) ? d : (d && (d.items || d.rows || d.data || d.value)) || [];
+  const contracts = asArr(cRaw);
   const nameById = {}; asArr(crRaw).forEach(x => nameById[String(x.contractor_id ?? x.Contractor_id)] = x.Name || '');
 
   const adv = {}, pay = {};
-  for (const e of ledger) {
+  for (const e of asArr(advRaw)) {
     const cid = String(e.Contract_id ?? e.contract_id ?? ''); if (!cid) continue;
-    const acc = String(e.Account ?? e.account); const corr = String(e.CorrAccount ?? e.corr ?? '');
-    const dt = Number(e.AmountDt ?? 0), kt = Number(e.AmountKt ?? 0);
-    if (ADV_ACCOUNTS.includes(acc)) adv[cid] = (adv[cid] || 0) + (kt - dt);
-    if (acc === PAY_ACCOUNT && PAY_CORR.includes(corr)) pay[cid] = (pay[cid] || 0) + kt;
+    adv[cid] = (adv[cid] || 0) + (Number(e.AmountKt ?? 0) - Number(e.AmountDt ?? 0)); // 3510
+  }
+  for (const e of asArr(payRaw)) {
+    const cid = String(e.Contract_id ?? e.contract_id ?? ''); if (!cid) continue;
+    pay[cid] = (pay[cid] || 0) + Number(e.AmountKt ?? 0); // поступления по 1210 (касса/банк)
   }
   return contracts.map(c => {
     const cid = String(c.contract_id ?? c.id ?? '');

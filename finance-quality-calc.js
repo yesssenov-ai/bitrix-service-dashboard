@@ -69,8 +69,8 @@ function mockB24() {
 // TODO(1С/Б24): заменить на реальные источники.
 async function fetch1CContracts() {
   if (!onecMod.isConfigured()) return mock1C();
-  const [c, cr] = await Promise.all([onecMod.onec('dim_contract'), onecMod.onec('dim_contractor')]);
-  const asArr = d => Array.isArray(d) ? d : (d && (d.rows || d.data || d.value)) || [];
+  const [c, cr] = await Promise.all([onecMod.onec('dim/contract'), onecMod.onec('dim/contractor')]);
+  const asArr = d => Array.isArray(d) ? d : (d && (d.items || d.rows || d.data || d.value)) || [];
   const nameById = {}; asArr(cr).forEach(x => nameById[String(x.contractor_id ?? x.Contractor_id)] = x.Name || '');
   return asArr(c).map(x => ({
     deal_id: String(x.IDСделки ?? x.БитриксСделка ?? x.bitrix_deal_id ?? (process.env.ONEC_CONTRACT_DEAL_FIELD ? x[process.env.ONEC_CONTRACT_DEAL_FIELD] : '') ?? '').trim(),

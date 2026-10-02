@@ -91,12 +91,17 @@ function dealIdOf(c) {
 async function fetchDebtRaw() {
   if (!onecMod.isConfigured()) return mockDebt();
 
+  // Период для проводок (с начала года по сегодня). Сервисы: dim/contract,
+  // dim/contractor, fact/receivables?dateFrom&dateTo (счёт 1210). Ответ: {count, items}.
+  const yr = new Date().getFullYear();
+  const dateFrom = yr + '-01-01';
+  const dateTo = new Date().toISOString().slice(0, 10);
   const [contractsRaw, contractorsRaw, ledgerRaw] = await Promise.all([
-    onecMod.onec('dim_contract'),
-    onecMod.onec('dim_contractor'),
-    onecMod.onec('12_33_MS'),
+    onecMod.onec('dim/contract'),
+    onecMod.onec('dim/contractor'),
+    onecMod.onec('fact/receivables', { dateFrom, dateTo }),
   ]);
-  const asArr = d => Array.isArray(d) ? d : (d && (d.rows || d.data || d.value)) || [];
+  const asArr = d => Array.isArray(d) ? d : (d && (d.items || d.rows || d.data || d.value)) || [];
   const contracts = asArr(contractsRaw);
   const contractors = asArr(contractorsRaw);
   const ledger = asArr(ledgerRaw);
@@ -104,13 +109,20 @@ async function fetchDebtRaw() {
   const contractorName = {};
   for (const c of contractors) contractorName[String(c.contractor_id ?? c.Contractor_id ?? c.id)] = c.Name || c.name || '';
 
-  // Остаток по каждому договору из проводок (только счета дебиторки).
+  // Остаток по договору = Σ(AmountDt − AmountKt) по счёту 1210; попутно запоминаем
+  // дату последней дебетовой проводки (от неё считаем срок оплаты).
   const balByContract = {};
+  const lastDtByContract = {};
   for (const e of ledger) {
     if (DEBT_ACCOUNTS.length && !DEBT_ACCOUNTS.includes(String(e.Account ?? e.account))) continue;
     const cid = String(e.Contract_id ?? e.contract_id ?? '');
     if (!cid) continue;
-    balByContract[cid] = (balByContract[cid] || 0) + (Number(e.AmountDt ?? 0) - Number(e.AmountKt ?? 0));
+    const dt = Number(e.AmountDt ?? 0), kt = Number(e.AmountKt ?? 0);
+    balByContract[cid] = (balByContract[cid] || 0) + (dt - kt);
+    if (dt > 0) {
+      const d = e.Date || e.date; const ds = d ? String(d).slice(0, 10) : null;
+      if (ds && (!lastDtByContract[cid] || ds > lastDtByContract[cid])) lastDtByContract[cid] = ds;
+    }
   }
 
   const today = new Date();
@@ -119,9 +131,15 @@ async function fetchDebtRaw() {
     const cid = String(c.contract_id ?? c.id ?? '');
     const debt = Math.round((balByContract[cid] || 0));
     if (!debt) continue; // показываем только договоры с ненулевым долгом
-    const due = c.СрокОплаты || c.due_date || null;
-    let overdue = 0;
-    if (due) { const d = new Date(due); if (!isNaN(d)) overdue = Math.round((today - d) / 86400000); }
+    // СрокОплаты в 1С — это ЧИСЛО ДНЕЙ на оплату, а не дата. Дата платежа =
+    // дата последней отгрузки/дебета (иначе дата договора) + N дней.
+    const termDays = Number(c.СрокОплаты ?? c.term_days ?? 0) || 0;
+    const base = lastDtByContract[cid] || (c.ДатаДоговора ? String(c.ДатаДоговора).slice(0, 10) : null);
+    let due = null, overdue = 0;
+    if (base) {
+      const d = new Date(base);
+      if (!isNaN(d)) { d.setDate(d.getDate() + termDays); due = d.toISOString().slice(0, 10); overdue = Math.round((today - d) / 86400000); }
+    }
     rows.push({
       id: cid || (String(c.contractor_id) + '|' + (c.Name || '')),
       contractor: contractorName[String(c.contractor_id ?? c.Contractor_id)] || '',
@@ -130,6 +148,7 @@ async function fetchDebtRaw() {
       debt,
       overdue_days: debt > 0 ? overdue : 0,
       due_date: due,
+      term_days: termDays || null,
       bitrix_deal_id: dealIdOf(c),
       contract_sum: Number(c.СуммаДоговора ?? c.contract_sum ?? 0) || null,
     });
