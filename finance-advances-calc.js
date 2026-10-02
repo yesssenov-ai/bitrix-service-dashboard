@@ -101,7 +101,7 @@ async function fetchAdvancesRaw() {
     return {
       id: cid, year, department: c.ОтветственныйОтдел || '', contractor: nameById[String(c.contractor_id ?? c.Contractor_id)] || '',
       contract: c.Name || ('Договор #' + cid), contract_sum: sum, advances, payments, balance: sum - advances - payments,
-      bitrix_deal_id: String(c.IDСделки ?? c.БитриксСделка ?? c.bitrix_deal_id ?? (process.env.ONEC_CONTRACT_DEAL_FIELD ? c[process.env.ONEC_CONTRACT_DEAL_FIELD] : '') ?? '').trim() || null,
+      bitrix_deal_id: String(c.bitrix_id ?? c.Bitrix_id ?? c.IDСделки ?? c.БитриксСделка ?? c.bitrix_deal_id ?? (process.env.ONEC_CONTRACT_DEAL_FIELD ? c[process.env.ONEC_CONTRACT_DEAL_FIELD] : '') ?? '').trim() || null,
     };
   });
 }

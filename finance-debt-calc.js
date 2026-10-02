@@ -75,7 +75,7 @@ const DEBT_ACCOUNTS = (process.env.ONEC_DEBT_ACCOUNTS || '1210').split(',').map(
 function dealIdOf(c) {
   const key = process.env.ONEC_CONTRACT_DEAL_FIELD;
   const v = (key && c[key] != null) ? c[key]
-    : (c.IDСделки ?? c.БитриксСделка ?? c.BitrixDealId ?? c.bitrix_deal_id ?? c.deal_id ?? null);
+    : (c.bitrix_id ?? c.Bitrix_id ?? c.IDСделки ?? c.БитриксСделка ?? c.BitrixDealId ?? c.bitrix_deal_id ?? c.deal_id ?? null);
   return v == null || v === '' ? null : String(v).trim();
 }
 

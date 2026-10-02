@@ -73,7 +73,7 @@ async function fetch1CContracts() {
   const asArr = d => Array.isArray(d) ? d : (d && (d.items || d.rows || d.data || d.value)) || [];
   const nameById = {}; asArr(cr).forEach(x => nameById[String(x.contractor_id ?? x.Contractor_id)] = x.Name || '');
   return asArr(c).map(x => ({
-    deal_id: String(x.IDСделки ?? x.БитриксСделка ?? x.bitrix_deal_id ?? (process.env.ONEC_CONTRACT_DEAL_FIELD ? x[process.env.ONEC_CONTRACT_DEAL_FIELD] : '') ?? '').trim(),
+    deal_id: String(x.bitrix_id ?? x.Bitrix_id ?? x.IDСделки ?? x.БитриксСделка ?? x.bitrix_deal_id ?? (process.env.ONEC_CONTRACT_DEAL_FIELD ? x[process.env.ONEC_CONTRACT_DEAL_FIELD] : '') ?? '').trim(),
     contractor: nameById[String(x.contractor_id ?? x.Contractor_id)] || '',
     name: x.Name || '',
     sum: Number(x.СуммаДоговора ?? x.contract_sum ?? 0),
