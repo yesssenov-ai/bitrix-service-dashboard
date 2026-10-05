@@ -29,6 +29,19 @@ function ensureSchema() {
         synced_at TIMESTAMPTZ DEFAULT NOW());
       CREATE INDEX IF NOT EXISTS idx_cmp_industry ON ticketsmodule_companies(industry_id);
       CREATE INDEX IF NOT EXISTS idx_cmp_assigned ON ticketsmodule_companies(assigned_bid);
+      ALTER TABLE ticketsmodule_companies ADD COLUMN IF NOT EXISTS merged_into VARCHAR(40);
+      CREATE TABLE IF NOT EXISTS ticketsmodule_company_merges (
+        id SERIAL PRIMARY KEY,
+        canonical_id VARCHAR(40),
+        canonical_title VARCHAR(500),
+        duplicate_id VARCHAR(40),
+        prev_title VARCHAR(500),
+        moved JSONB,              -- { deals:[], contacts:[], items:{ "1058":[] }, copiedFields:{} }
+        by_user VARCHAR(120),
+        undone BOOLEAN DEFAULT FALSE,
+        undone_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW());
+      CREATE INDEX IF NOT EXISTS idx_cmp_merge_dup ON ticketsmodule_company_merges(duplicate_id);
     `);
   })().catch(e => { _schema = null; throw e; });
   return _schema;
@@ -60,9 +73,13 @@ async function binFieldCode() {
   let code = '';
   try {
     const { result } = await b24('crm.company.fields', {});
+    // ВАЖНО: токенами, а не \b — в JS \b не распознаёт кириллицу, поэтому \bбин\b
+    // по-русски не срабатывает (отсюда «без БИН» у всех). Бьём заголовок на слова.
+    const WANT = ['бин', 'иин', 'bin', 'iin'];
     for (const [k, f] of Object.entries(result || {})) {
-      const title = String((f && (f.title || f.formLabel || f.listLabel)) || '').toLowerCase();
-      if (/\bбин\b|\bиин\b|\bбин\/иин\b|\biin\b|\bbin\b/.test(title)) { code = k; break; }
+      const title = String((f && (f.title || f.formLabel || f.listLabel)) || '').toLowerCase().replace(/ё/g, 'е');
+      const toks = title.split(/[^a-zа-я0-9]+/).filter(Boolean);
+      if (toks.some(t => WANT.includes(t))) { code = k; break; }
     }
   } catch (e) { console.error('companies binFieldCode:', e.message); }
   _binCode = code; _binAt = Date.now();
@@ -160,6 +177,13 @@ function normName(s) {
     .filter(w => w && !ORG_FORMS.has(w))
     .join(' ');
 }
+// Имена-заглушки — не сигнал дубля (разные реальные компании с шаблонной подписью).
+const GENERIC_NAMES = new Set([
+  'юридическое лицо', 'физическое лицо', 'новый клиент', 'новая компания', 'клиент',
+  'компания', 'контакт', 'без названия', 'организация', 'покупатель', 'заказчик',
+  'new client', 'new company', 'company', 'client', 'contact', 'customer',
+  'тест', 'test', 'проверка',
+]);
 function problemsOf(r, dupNames) {
   const p = [];
   if (!r.industry_id) p.push('без сферы');
@@ -182,6 +206,7 @@ async function getCompaniesBoard() {
 
   const inds = await industryMap();
   const asOf = rows.length ? rows.reduce((m, r) => (r.synced_at > m ? r.synced_at : m), rows[0].synced_at) : null;
+  const base = portalBase();
   const out = rows.map(r => {
     const problems = problemsOf(r, dupNames);
     return {
@@ -189,6 +214,8 @@ async function getCompaniesBoard() {
       bin: r.bin || '', email: r.email || '', phone: r.phone || '',
       owner: uname(r.assigned_bid), city: r.city || '', createdAt: r.created_at,
       dealCount: Number(r.deal_count || 0), problems,
+      mergedInto: r.merged_into || '',
+      url: base ? `${base}/crm/company/details/${r.id}/` : '',
     };
   });
   const uniq = f => [...new Set(out.map(x => x[f]).filter(Boolean))].sort();
@@ -214,7 +241,22 @@ async function updateCompany(id, { industryId, title }) {
   if (industryId !== undefined) fields.INDUSTRY = industryId || ''; // '' — очистить сферу
   if (title !== undefined && String(title).trim() !== '') fields.TITLE = String(title).trim();
   if (!Object.keys(fields).length) return { ok: false, error: 'Нет изменений' };
-  await b24('crm.company.update', { id, fields });
+  // Bitrix на ошибку прав/валидации отвечает HTTP 200 с {error} в теле — обёртка
+  // b24 бросает только на 4xx/5xx, поэтому логическую ошибку ловим здесь явно,
+  // иначе «сохранилось» в ЦУП, а в Битриксе нет.
+  const resp = await b24('crm.company.update', { id, fields });
+  if (resp && resp.error) throw new Error('Bitrix: ' + (resp.error_description || resp.error));
+  if (resp && resp.result === false) throw new Error('Битрикс отклонил обновление (возможно, нет прав на эту компанию)');
+  // Контрольное чтение: убеждаемся, что Битрикс реально применил значения.
+  try {
+    const { result: chk } = await b24('crm.company.get', { id });
+    if (chk) {
+      if (fields.TITLE !== undefined && String(chk.TITLE || '') !== fields.TITLE)
+        throw new Error('Битрикс не применил новое название (нет прав на компанию?). В Б24 сейчас: «' + (chk.TITLE || '') + '»');
+      if (fields.INDUSTRY !== undefined && String(chk.INDUSTRY || '') !== String(fields.INDUSTRY || ''))
+        throw new Error('Битрикс не применил сферу деятельности (нет прав на компанию?)');
+    }
+  } catch (e) { if (/Битрикс не применил/.test(e.message)) throw e; /* чтение-проверку не считаем фатальной иначе */ }
   // Обновляем зеркало
   const inds = await industryMap();
   const set = [], vals = []; let i = 1;
@@ -247,23 +289,32 @@ async function getDuplicateGroups() {
   await ensureSchema();
   let { rows } = await pool.query('SELECT * FROM ticketsmodule_companies ORDER BY id');
   if (!rows.length) { await syncCompanies(); ({ rows } = await pool.query('SELECT * FROM ticketsmodule_companies ORDER BY id')); }
+  // Уже слитые дубли из поиска исключаем — они разрешены.
+  rows = rows.filter(r => !r.merged_into);
   const inds = await industryMap();
+  const base = portalBase();
 
   const n = rows.length;
   const key = { bin: [], name: [], email: [], phone: [] };
-  const freqEmail = {}, freqPhone = {};
+  const freqEmail = {}, freqPhone = {}, freqName = {};
   for (let i = 0; i < n; i++) {
     const r = rows[i];
     key.bin[i] = String(r.bin || '').replace(/\D+/g, '');
-    const nm = normName(r.title); key.name[i] = nm.length >= 3 ? nm : '';
+    const nm = normName(r.title);
+    // Имена-заглушки («юридическое лицо», «новый клиент» и т.п.) — НЕ ключ дедупа:
+    // это шаблонные подписи разных реальных компаний, их нельзя сливать по названию.
+    key.name[i] = (nm.length >= 3 && !GENERIC_NAMES.has(nm)) ? nm : '';
     key.email[i] = normEmail(r.email);
     key.phone[i] = normPhone(r.phone);
+    if (key.name[i]) freqName[key.name[i]] = (freqName[key.name[i]] || 0) + 1;
     if (key.email[i]) freqEmail[key.email[i]] = (freqEmail[key.email[i]] || 0) + 1;
     if (key.phone[i]) freqPhone[key.phone[i]] = (freqPhone[key.phone[i]] || 0) + 1;
   }
-  // «Шумные» контакты — встречаются у >4 компаний → не используем для склейки.
-  const NOISE = 4;
+  // «Шумные» значения — встречаются у многих компаний → не используем для склейки:
+  // общий e-mail/телефон приёмной, а также слишком частое название (тоже заглушка).
+  const NOISE = 4, NAME_NOISE = 5;
   for (let i = 0; i < n; i++) {
+    if (key.name[i] && freqName[key.name[i]] > NAME_NOISE) key.name[i] = '';
     if (key.email[i] && freqEmail[key.email[i]] > NOISE) key.email[i] = '';
     if (key.phone[i] && freqPhone[key.phone[i]] > NOISE) key.phone[i] = '';
   }
@@ -300,6 +351,7 @@ async function getDuplicateGroups() {
         bin: r.bin || '', email: r.email || '', phone: r.phone || '',
         owner: uname(r.assigned_bid), city: r.city || '', createdAt: r.created_at,
         dealCount: Number(r.deal_count || 0), _filled: filledCount(r),
+        url: base ? `${base}/crm/company/details/${r.id}/` : '',
       };
     });
     // эталон: больше всего сделок → больше заполненных полей → старше (раньше создан) → меньший ID
@@ -323,4 +375,263 @@ async function getDuplicateGroups() {
   };
 }
 
-module.exports = { ensureSchema, syncCompanies, getCompaniesBoard, updateCompany, industryOptions, getDuplicateGroups };
+// ── Базовый URL портала Bitrix (из вебхука, без токена) ────────────────────────
+// Вебхук вида https://xxx.bitrix24.kz/rest/<uid>/<token>/ — наружу отдаём только origin,
+// сами строим ссылки на карточки. Токен клиенту НИКОГДА не уходит.
+let _portal = null;
+function portalBase() {
+  if (_portal !== null) return _portal;
+  try { _portal = new URL(process.env.BITRIX_WEBHOOK).origin; }
+  catch (e) { _portal = ''; }
+  return _portal;
+}
+
+// Смарт-процессы, привязанные к компании (companyId). По умолчанию — главный 1058
+// («Заявки»). Можно расширить через env CMP_MERGE_SP_TYPES="1058,1036,...".
+function spTypes() {
+  return String(process.env.CMP_MERGE_SP_TYPES || '1058')
+    .split(',').map(s => parseInt(s.trim(), 10)).filter(Boolean);
+}
+
+// ── Сделки компании (для «провалиться в сделки» из ЦУП) ────────────────────────
+async function getCompanyDeals(companyId) {
+  companyId = String(companyId);
+  const base = portalBase();
+  const deals = [];
+  let start = 0, guard = 0;
+  while (guard++ < 200) {
+    const res = await b24('crm.deal.list', {
+      filter: { COMPANY_ID: companyId },
+      select: ['ID', 'TITLE', 'STAGE_ID', 'OPPORTUNITY', 'CURRENCY_ID', 'DATE_CREATE', 'ASSIGNED_BY_ID'],
+      order: { ID: 'DESC' }, start,
+    });
+    for (const d of (res.result || [])) {
+      deals.push({
+        id: d.ID, title: d.TITLE || ('Сделка #' + d.ID),
+        stageId: d.STAGE_ID || '', amount: Number(d.OPPORTUNITY || 0), currency: d.CURRENCY_ID || '',
+        owner: uname(d.ASSIGNED_BY_ID ? Number(d.ASSIGNED_BY_ID) : null), createdAt: d.DATE_CREATE || null,
+        url: base ? `${base}/crm/deal/details/${d.ID}/` : '',
+      });
+    }
+    if (res.next == null) break;
+    start = res.next; await sleep(80);
+  }
+  return { deals, portal: base, companyUrl: base ? `${base}/crm/company/details/${companyId}/` : '' };
+}
+
+// ── Дети компании (для слияния/удаления): id сделок, контактов, SP-элементов ────
+async function listDealIds(companyId) {
+  const ids = []; let start = 0, guard = 0;
+  while (guard++ < 500) {
+    const res = await b24('crm.deal.list', { filter: { COMPANY_ID: String(companyId) }, select: ['ID'], order: { ID: 'ASC' }, start });
+    for (const d of (res.result || [])) ids.push(d.ID);
+    if (res.next == null) break; start = res.next; await sleep(60);
+  }
+  return ids;
+}
+async function listContactIds(companyId) {
+  const ids = []; let start = 0, guard = 0;
+  while (guard++ < 500) {
+    const res = await b24('crm.contact.list', { filter: { COMPANY_ID: String(companyId) }, select: ['ID'], order: { ID: 'ASC' }, start });
+    for (const c of (res.result || [])) ids.push(c.ID);
+    if (res.next == null) break; start = res.next; await sleep(60);
+  }
+  return ids;
+}
+async function listItemIds(entityTypeId, companyId) {
+  const ids = []; let start = 0, guard = 0;
+  while (guard++ < 500) {
+    const res = await b24('crm.item.list', { entityTypeId, filter: { companyId: Number(companyId) }, select: ['id'], order: { id: 'ASC' }, start });
+    const items = (res.result && res.result.items) || [];
+    for (const it of items) ids.push(it.id);
+    if (res.next == null) break; start = res.next; await sleep(60);
+  }
+  return ids;
+}
+async function childrenOf(companyId) {
+  const deals = await listDealIds(companyId);
+  const contacts = await listContactIds(companyId);
+  const items = {};
+  for (const t of spTypes()) { try { items[t] = await listItemIds(t, companyId); } catch (e) { items[t] = []; } }
+  const itemsTotal = Object.values(items).reduce((s, a) => s + a.length, 0);
+  return { deals, contacts, items, counts: { deals: deals.length, contacts: contacts.length, items: itemsTotal } };
+}
+
+// Поля, которые безопасно копировать в эталон (только скаляры; мультиполя не трогаем).
+const COPY_FIELDS = ['INDUSTRY', 'ADDRESS_CITY', 'ADDRESS', 'ADDRESS_REGION', 'COMMENTS', 'BANKING_DETAILS'];
+async function companyRaw(id) {
+  const binCode = await binFieldCode();
+  const sel = ['ID', 'TITLE', 'INDUSTRY', 'ADDRESS_CITY', 'ADDRESS', 'ADDRESS_REGION'];
+  if (binCode) sel.push(binCode);
+  const { result } = await b24('crm.company.get', { id: String(id) });
+  return result || {};
+}
+
+// ── Предпросмотр слияния: что переедет и какие поля скопируются ────────────────
+async function previewMerge(canonicalId, duplicateIds) {
+  await ensureSchema();
+  canonicalId = String(canonicalId);
+  duplicateIds = [...new Set((duplicateIds || []).map(String))].filter(d => d && d !== canonicalId);
+  if (!duplicateIds.length) return { ok: false, error: 'Не выбраны дубли для слияния' };
+  const base = portalBase();
+  const canon = await companyRaw(canonicalId);
+  const binCode = await binFieldCode();
+  const canonBin = binCode ? firstVal(canon[binCode]) : '';
+  const dups = [];
+  for (const dupId of duplicateIds) {
+    const raw = await companyRaw(dupId);
+    const ch = await childrenOf(dupId);
+    // какие поля эталона пусты, а у дубля заполнены → предложим скопировать
+    const copy = [];
+    for (const f of COPY_FIELDS) {
+      const cv = String(canon[f] || '').trim(), dv = String(raw[f] || '').trim();
+      if (!cv && dv) copy.push({ field: f, value: dv });
+    }
+    if (binCode && !canonBin && binCode in raw && firstVal(raw[binCode])) copy.push({ field: binCode, value: firstVal(raw[binCode]), isBin: true });
+    dups.push({
+      id: dupId, title: raw.TITLE || ('#' + dupId),
+      url: base ? `${base}/crm/company/details/${dupId}/` : '',
+      counts: ch.counts, copyFields: copy,
+    });
+  }
+  return {
+    ok: true,
+    canonical: { id: canonicalId, title: canon.TITLE || ('#' + canonicalId), url: base ? `${base}/crm/company/details/${canonicalId}/` : '' },
+    duplicates: dups,
+    spTypes: spTypes(),
+  };
+}
+
+// ── Применение слияния: перенос детей на эталон + копирование полей + пометка ───
+async function applyMerge({ canonicalId, duplicateIds, copyFields = true, byUser = '' }) {
+  await ensureSchema();
+  canonicalId = String(canonicalId);
+  duplicateIds = [...new Set((duplicateIds || []).map(String))].filter(d => d && d !== canonicalId);
+  if (!duplicateIds.length) return { ok: false, error: 'Не выбраны дубли для слияния' };
+
+  const results = [], mergeIds = [];
+  const inds = await industryMap();
+  const binCode = await binFieldCode();
+
+  for (const dupId of duplicateIds) {
+    try {
+      const raw = await companyRaw(dupId);
+      const prevTitle = raw.TITLE || ('#' + dupId);
+      const canon = await companyRaw(canonicalId);
+      const ch = await childrenOf(dupId);
+
+      // 1) перенос сделок
+      for (const id of ch.deals) { try { await b24('crm.deal.update', { id, fields: { COMPANY_ID: canonicalId } }); } catch (e) { /* best-effort */ } await sleep(40); }
+      // 2) перенос контактов (основная компания)
+      for (const id of ch.contacts) { try { await b24('crm.contact.update', { id, fields: { COMPANY_ID: canonicalId } }); } catch (e) { /* best-effort */ } await sleep(40); }
+      // 3) перенос SP-элементов (companyId)
+      for (const [t, ids] of Object.entries(ch.items)) {
+        for (const id of ids) { try { await b24('crm.item.update', { entityTypeId: Number(t), id, fields: { companyId: Number(canonicalId) } }); } catch (e) { /* best-effort */ } await sleep(40); }
+      }
+
+      // 4) копирование недостающих полей в эталон
+      const copiedFields = {};
+      if (copyFields) {
+        const fields = {};
+        for (const f of COPY_FIELDS) {
+          const cv = String(canon[f] || '').trim(), dv = String(raw[f] || '').trim();
+          if (!cv && dv) { fields[f] = dv; copiedFields[f] = ''; } // prev эталона был пуст
+        }
+        if (binCode && !firstVal(canon[binCode]) && binCode in raw && firstVal(raw[binCode])) { fields[binCode] = firstVal(raw[binCode]); copiedFields[binCode] = ''; }
+        if (Object.keys(fields).length) { try { await b24('crm.company.update', { id: canonicalId, fields }); } catch (e) { /* best-effort */ } }
+      }
+
+      // 5) пометка дубля (переименование) — без удаления
+      const newTitle = `[ДУБЛЬ → #${canonicalId}] ${prevTitle}`.slice(0, 500);
+      await b24('crm.company.update', { id: dupId, fields: { TITLE: newTitle } });
+
+      // 6) журнал
+      const moved = { deals: ch.deals, contacts: ch.contacts, items: ch.items, copiedFields };
+      const ins = await pool.query(
+        `INSERT INTO ticketsmodule_company_merges (canonical_id, canonical_title, duplicate_id, prev_title, moved, by_user)
+         VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+        [canonicalId, canon.TITLE || ('#' + canonicalId), dupId, prevTitle, JSON.stringify(moved), byUser || '']);
+      const mergeId = ins.rows[0].id; mergeIds.push(mergeId);
+
+      // 7) зеркало: помечаем дубль + при копировании обновляем поля эталона
+      await pool.query('UPDATE ticketsmodule_companies SET merged_into=$1, title=$2, synced_at=NOW() WHERE id=$3', [canonicalId, newTitle, dupId]);
+      if (copyFields && copiedFields.INDUSTRY !== undefined) {
+        const nv = raw.INDUSTRY || '';
+        await pool.query('UPDATE ticketsmodule_companies SET industry_id=$1, industry_name=$2 WHERE id=$3 AND (industry_id IS NULL OR industry_id=\'\')', [nv, inds[nv] || '', canonicalId]);
+      }
+
+      results.push({ dupId, ok: true, mergeId, moved: ch.counts, copied: Object.keys(copiedFields) });
+    } catch (e) {
+      results.push({ dupId, ok: false, error: String(e && e.message || e) });
+    }
+  }
+  return { ok: results.some(r => r.ok), canonicalId, results, mergeIds };
+}
+
+// ── Откат слияния по журналу ───────────────────────────────────────────────────
+async function undoMerge(mergeId, byUser = '') {
+  await ensureSchema();
+  const { rows } = await pool.query('SELECT * FROM ticketsmodule_company_merges WHERE id=$1', [mergeId]);
+  const m = rows[0];
+  if (!m) return { ok: false, error: 'Запись слияния не найдена' };
+  if (m.undone) return { ok: false, error: 'Уже откатано' };
+  const moved = m.moved || {};
+  const dupId = m.duplicate_id, canonId = m.canonical_id;
+
+  // возвращаем детей дублю
+  for (const id of (moved.deals || [])) { try { await b24('crm.deal.update', { id, fields: { COMPANY_ID: dupId } }); } catch (e) { /* */ } await sleep(40); }
+  for (const id of (moved.contacts || [])) { try { await b24('crm.contact.update', { id, fields: { COMPANY_ID: dupId } }); } catch (e) { /* */ } await sleep(40); }
+  for (const [t, ids] of Object.entries(moved.items || {})) {
+    for (const id of ids) { try { await b24('crm.item.update', { entityTypeId: Number(t), id, fields: { companyId: Number(dupId) } }); } catch (e) { /* */ } await sleep(40); }
+  }
+  // откатываем скопированные в эталон поля (они были пусты)
+  const cf = moved.copiedFields || {};
+  if (Object.keys(cf).length) {
+    const fields = {}; for (const f of Object.keys(cf)) fields[f] = '';
+    try { await b24('crm.company.update', { id: canonId, fields }); } catch (e) { /* */ }
+  }
+  // возвращаем имя дубля
+  try { await b24('crm.company.update', { id: dupId, fields: { TITLE: m.prev_title } }); } catch (e) { /* */ }
+
+  await pool.query('UPDATE ticketsmodule_companies SET merged_into=NULL, title=$1, synced_at=NOW() WHERE id=$2', [m.prev_title, dupId]);
+  await pool.query('UPDATE ticketsmodule_company_merges SET undone=TRUE, undone_at=NOW() WHERE id=$1', [mergeId]);
+  return { ok: true, mergeId, duplicateId: dupId, restoredTitle: m.prev_title };
+}
+
+async function listMerges(limit = 100) {
+  await ensureSchema();
+  const base = portalBase();
+  const { rows } = await pool.query('SELECT * FROM ticketsmodule_company_merges ORDER BY id DESC LIMIT $1', [Math.min(500, Number(limit) || 100)]);
+  return {
+    merges: rows.map(m => {
+      const moved = m.moved || {};
+      const itemsN = Object.values(moved.items || {}).reduce((s, a) => s + (a ? a.length : 0), 0);
+      return {
+        id: m.id, canonicalId: m.canonical_id, canonicalTitle: m.canonical_title,
+        duplicateId: m.duplicate_id, prevTitle: m.prev_title,
+        moved: { deals: (moved.deals || []).length, contacts: (moved.contacts || []).length, items: itemsN },
+        byUser: m.by_user || '', undone: m.undone, createdAt: m.created_at, undoneAt: m.undone_at,
+        canonicalUrl: base ? `${base}/crm/company/details/${m.canonical_id}/` : '',
+        duplicateUrl: base ? `${base}/crm/company/details/${m.duplicate_id}/` : '',
+      };
+    }),
+  };
+}
+
+// ── Удаление компании из Б24 (необратимо) — только если нет привязанных детей ───
+async function deleteCompany(id) {
+  await ensureSchema();
+  id = String(id);
+  const ch = await childrenOf(id);
+  if (ch.counts.deals || ch.counts.contacts || ch.counts.items) {
+    return { ok: false, error: 'Нельзя удалить: есть привязанные объекты', counts: ch.counts, suggestMerge: true };
+  }
+  await b24('crm.company.delete', { id });
+  await pool.query('DELETE FROM ticketsmodule_companies WHERE id=$1', [id]);
+  return { ok: true, id };
+}
+
+module.exports = {
+  ensureSchema, syncCompanies, getCompaniesBoard, updateCompany, industryOptions,
+  getDuplicateGroups, getCompanyDeals, previewMerge, applyMerge, undoMerge, listMerges, deleteCompany,
+};

@@ -65,6 +65,35 @@ select:focus,input:focus{border-color:var(--brand)}
 .dtbl tr.canon td{background:rgba(61,220,132,.07)}
 .etag{display:inline-block;font-size:9.5px;font-weight:800;background:rgba(61,220,132,.16);color:var(--good);border-radius:5px;padding:1px 6px;margin-left:6px;vertical-align:middle;text-transform:uppercase;letter-spacing:.4px}
 .dnote{font-size:11.5px;color:var(--text-4);padding:10px 14px}
+.lnk{color:var(--brand);text-decoration:none}.lnk:hover{text-decoration:underline}
+.ext{font-size:10px;color:var(--text-4);text-decoration:none;margin-left:4px}.ext:hover{color:var(--brand)}
+.dealn{color:var(--brand);cursor:pointer;font-weight:700;border-bottom:1px dashed var(--brand)}
+.dealn:hover{color:var(--accent);border-color:var(--accent)}
+.act{cursor:pointer;color:var(--text-4);font-size:13px;padding:2px 5px;border-radius:6px;border:1px solid transparent;background:transparent}
+.act:hover{border-color:var(--border2)}
+.act.del:hover{color:var(--bad);border-color:var(--bad)}
+.rbtn{font-size:11.5px;font-weight:600;color:#fff;background:var(--brand);border:none;border-radius:7px;padding:6px 12px;cursor:pointer;font-family:var(--font)}
+.rbtn:hover{filter:brightness(1.08)}.rbtn.danger{background:var(--bad)}.rbtn.ghost{background:transparent;color:var(--text-3);border:1px solid var(--border2)}
+.rbtn:disabled{opacity:.5;cursor:default}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:500;padding:20px}
+.modal.on{display:flex}
+.mbox{background:var(--card);border:1px solid var(--border2);border-radius:14px;max-width:760px;width:100%;max-height:85vh;display:flex;flex-direction:column;overflow:hidden}
+.mhd{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);font-weight:700}
+.mhd .x{margin-left:auto;cursor:pointer;color:var(--text-3);font-size:18px;background:none;border:none}
+.mbd{padding:14px 18px;overflow:auto}
+.mft{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.plan{font-size:13px;line-height:1.6}
+.plan b{color:var(--text)}
+.pmove{background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin:8px 0;font-size:12.5px}
+.warnbox{background:var(--bad-l);border:1px solid var(--bad);border-radius:9px;padding:10px 12px;font-size:12.5px;color:var(--text-2)}
+.mradio{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3)}
+.jtbl{width:100%;border-collapse:collapse;font-size:12px}
+.jtbl th{text-align:left;font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;padding:6px 10px;border-bottom:1px solid var(--border2)}
+.jtbl td{padding:6px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.jtbl tr.undone td{opacity:.5;text-decoration:line-through}
+.accord{cursor:pointer;user-select:none}
+details>summary{cursor:pointer;padding:10px 14px;font-weight:600;color:var(--text-2);font-size:13px;list-style:none}
+details>summary::-webkit-details-marker{display:none}
 </style>
 </head>
 <body>
@@ -102,10 +131,10 @@ select:focus,input:focus{border-color:var(--brand)}
   </div>
 
   <div class="card">
-    <div class="hint" style="padding:9px 14px;border-bottom:1px solid var(--border)">Показано: <b id="shown" style="color:var(--text-2)">0</b>. Клик по сфере — изменить (список значений из Б24); правка названия — по ✎. Изменения сразу пишутся в Битрикс.</div>
+    <div class="hint" style="padding:9px 14px;border-bottom:1px solid var(--border)">Показано: <b id="shown" style="color:var(--text-2)">0</b>. Клик по сфере — изменить; ✎ — переименовать; ↗ — открыть компанию в Битрикс; число в «Сделок» — открыть список сделок; 🗑 — удалить (только без привязанных объектов). Изменения сразу пишутся в Битрикс.</div>
     <div style="overflow:auto;max-height:calc(100vh - 290px)">
       <table class="tbl"><thead><tr>
-        <th>Название</th><th>Сфера деятельности</th><th>БИН</th><th>Ответственный</th><th>Город</th><th class="num">Сделок</th><th>Проблемы</th>
+        <th>Название</th><th>Сфера деятельности</th><th>БИН</th><th>Ответственный</th><th>Город</th><th class="num">Сделок</th><th>Проблемы</th><th></th>
       </tr></thead><tbody id="body"></tbody></table>
     </div>
   </div>
@@ -113,11 +142,18 @@ select:focus,input:focus{border-color:var(--brand)}
 
   <div id="viewDup" style="display:none">
     <div class="card" style="margin-bottom:12px"><div class="hint" style="padding:10px 14px">
-      Группы-кандидаты на дубль. Ключи склейки: <b>БИН</b> (точное совпадение — самый надёжный), нормализованное <b>название</b>, <b>e-mail</b>, <b>телефон</b>. Строка с меткой <span class="etag">эталон</span> — предлагаемая основная карточка (больше всего сделок / заполненных полей / старше). Пока это только обнаружение — автоматического слияния нет; правьте карточки во вкладке «Реестр». Слияние с переносом сделок появится в следующей фазе.
+      Группы-кандидаты на дубль. Ключи склейки: <b>БИН</b> (самый надёжный), нормализованное <b>название</b>, <b>e-mail</b>, <b>телефон</b>. Выберите <span class="etag">эталон</span> (основную карточку) и отметьте дубли → «Предпросмотр слияния». При слиянии сделки, контакты и элементы смарт-процессов переносятся на эталон, недостающие поля копируются, дубль помечается «[ДУБЛЬ → #эталон]» <b>без удаления</b>. Любое слияние можно откатить в журнале ниже.
     </div></div>
+    <div class="card" style="margin-bottom:12px"><details id="jDetails"><summary>📒 Журнал слияний <span id="jCount" class="cnt"></span></summary><div id="jBody" style="padding:0 6px 10px"></div></details></div>
     <div id="dupBody"><div class="dnote">Загрузка…</div></div>
   </div>
 </div>
+
+<div class="modal" id="modal"><div class="mbox">
+  <div class="mhd"><span id="mTitle">—</span><button class="x" onclick="closeModal()">✕</button></div>
+  <div class="mbd" id="mBody"></div>
+  <div class="mft" id="mFoot"></div>
+</div></div>
 
 <script>
 let DATA={rows:[],industries:[],filters:{},summary:{}}; let INDOPTS='';
@@ -128,7 +164,7 @@ async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.hre
 async function boot(){const r=await fetch('/auth/me');if(!r.ok){location.href='/login.html';return;}await load();}
 async function load(){
   const {ok,d}=await api('/api/companies');
-  if(!ok){document.getElementById('body').innerHTML='<tr><td class="hint" colspan="7">Ошибка загрузки</td></tr>';return;}
+  if(!ok){document.getElementById('body').innerHTML='<tr><td class="hint" colspan="8">Ошибка загрузки</td></tr>';return;}
   DATA=d;
   INDOPTS='<option value="">— без сферы —</option>'+(d.industries||[]).map(i=>`<option value="${esc(i.id)}">${esc(i.name)}</option>`).join('');
   document.getElementById('asof').textContent=d.asOf?('Синхр.: '+new Date(d.asOf).toLocaleString('ru-RU')):'';
@@ -159,23 +195,28 @@ function filtered(){
     return true;
   });
 }
+// Общие помощники: ссылка в Б24, кликабельные сделки.
+function b24link(url){return url?`<a class="ext" href="${esc(url)}" target="_blank" rel="noopener" title="Открыть компанию в Битрикс">↗</a>`:'';}
+function dealsCell(id,title,n){n=Number(n||0);return n?`<span class="dealn" onclick="openDeals('${esc(id)}',${JSON.stringify(title||'').replace(/"/g,'&quot;')})">${n}</span>`:'<span class="muted">—</span>';}
 function render(){
   const rows=filtered();
   const body=document.getElementById('body');
   body.innerHTML=rows.length?rows.slice(0,3000).map(r=>{
-    const badges=r.problems.map(p=>`<span class="badge ${p==='возможный дубль'?'':'warn'}">${esc(p)}</span>`).join('')||'<span class="muted">—</span>';
+    const merged=r.mergedInto?`<span class="badge warn" title="Слит в #${esc(r.mergedInto)}">слит → #${esc(r.mergedInto)}</span>`:'';
+    const badges=(r.problems.map(p=>`<span class="badge ${p==='возможный дубль'?'':'warn'}">${esc(p)}</span>`).join('')+merged)||'<span class="muted">—</span>';
     const sph=r.industryId?`<span class="sph" onclick="editSphere('${esc(r.id)}',this)">${esc(r.industryName||r.industryId)}</span>`
                           :`<span class="sph empty" onclick="editSphere('${esc(r.id)}',this)">— без сферы —</span>`;
     return `<tr id="row-${esc(r.id)}">
-      <td><span class="ttl">${esc(r.title)||'<span class=muted>без названия</span>'}</span><span class="ed" title="Переименовать" onclick="editTitle('${esc(r.id)}',this)">✎</span><span class="savemsg" id="msg-${esc(r.id)}"></span></td>
+      <td><span class="ttl">${esc(r.title)||'<span class=muted>без названия</span>'}</span>${b24link(r.url)}<span class="ed" title="Переименовать" onclick="editTitle('${esc(r.id)}',this)">✎</span><span class="savemsg" id="msg-${esc(r.id)}"></span></td>
       <td>${sph}</td>
       <td>${r.bin?esc(r.bin):'<span class="muted">—</span>'}</td>
       <td>${esc(r.owner)||'<span class="muted">—</span>'}</td>
       <td>${esc(r.city)||'<span class="muted">—</span>'}</td>
-      <td class="num">${r.dealCount||''}</td>
+      <td class="num">${dealsCell(r.id,r.title,r.dealCount)}</td>
       <td>${badges}</td>
+      <td class="num"><span class="act del" title="Удалить компанию" onclick="delCompany('${esc(r.id)}',${JSON.stringify(r.title||'').replace(/"/g,'&quot;')})">🗑</span></td>
     </tr>`;
-  }).join(''):'<tr><td class="hint" colspan="7">Нет компаний по фильтру.</td></tr>';
+  }).join(''):'<tr><td class="hint" colspan="8">Нет компаний по фильтру.</td></tr>';
   document.getElementById('shown').textContent=rows.length+(rows.length>3000?' (показаны первые 3000 — уточните фильтр)':'');
 }
 // Инлайн-правка сферы: подменяем ячейку на <select>, сохраняем при выборе.
@@ -230,30 +271,162 @@ async function loadDup(){
   DUP=d; DUPLOADED=true; renderDup();
 }
 function dcell(v){return v?esc(v):'<span class="muted">—</span>';}
+const jq=s=>JSON.stringify(s||'').replace(/"/g,'&quot;');
 function renderDup(){
   const host=document.getElementById('dupBody'); const groups=(DUP&&DUP.groups)||[];
   const tn=document.getElementById('tabDupN');
   if(tn){ if(groups.length){tn.style.display='';tn.textContent=groups.length;} else tn.style.display='none'; }
-  if(!groups.length){host.innerHTML='<div class="card"><div class="dnote">Групп-кандидатов на дубль не найдено. 🎉</div></div>';return;}
-  host.innerHTML=groups.map(g=>{
+  if(!groups.length){host.innerHTML='<div class="card"><div class="dnote">Групп-кандидатов на дубль не найдено. 🎉</div></div>';loadMerges();return;}
+  host.innerHTML=groups.map((g,gi)=>{
     const strong=g.reasons.includes('БИН');
     const chips=g.reasons.map(r=>{const k=r==='БИН'?'k0':(r==='название'?'k1':'k2');return `<span class="dmatch ${k}">${esc(r)}</span>`;}).join(' ');
-    const rows=g.members.map(m=>`<tr class="${m.isCanonical?'canon':''}">
+    const rows=g.members.map(m=>{
+      const sel=`<label class="mradio"><input type="radio" name="canon-${gi}" value="${esc(m.id)}" ${m.isCanonical?'checked':''} onchange="onCanon(${gi})"> эталон</label>
+                 <label class="mradio"><input type="checkbox" class="mg-${gi}" value="${esc(m.id)}" ${m.isCanonical?'disabled':'checked'}> слить</label>`;
+      const acts=`${b24link(m.url)}<span class="act" title="Редактировать" onclick="openEdit('${esc(m.id)}')">✎</span><span class="act del" title="Удалить" onclick="delCompany('${esc(m.id)}',${jq(m.title)})">🗑</span>`;
+      return `<tr class="${m.isCanonical?'canon':''}" id="dm-${gi}-${esc(m.id)}">
+      <td style="white-space:nowrap">${sel}</td>
       <td><b>${esc(m.title)||'<span class=muted>без названия</span>'}</b>${m.isCanonical?'<span class="etag">эталон</span>':''}</td>
       <td>${dcell(m.industryName)}</td>
       <td>${dcell(m.bin)}</td>
       <td>${dcell(m.email)}</td>
       <td>${dcell(m.phone)}</td>
       <td>${dcell(m.owner)}</td>
-      <td>${dcell(m.city)}</td>
-      <td class="num">${m.dealCount||''}</td>
-    </tr>`).join('');
+      <td class="num">${dealsCell(m.id,m.title,m.dealCount)}</td>
+      <td class="num" style="white-space:nowrap">${acts}</td>
+    </tr>`;}).join('');
     return `<div class="dgrp ${strong?'strong':''}">
-      <div class="dhead"><span class="rc">Совпадение по:</span>${chips}<span class="rc" style="margin-left:auto">${g.size} карточки · сделок всего: ${fmt(g.totalDeals)}</span></div>
-      <table class="dtbl"><thead><tr><th>Название</th><th>Сфера</th><th>БИН</th><th>E-mail</th><th>Телефон</th><th>Ответственный</th><th>Город</th><th class="num">Сделок</th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="dhead"><span class="rc">Совпадение по:</span>${chips}<span class="rc">${g.size} карточки · сделок всего: ${fmt(g.totalDeals)}</span><button class="rbtn" style="margin-left:auto" onclick="previewMerge(${gi})">Предпросмотр слияния</button></div>
+      <table class="dtbl"><thead><tr><th>Слияние</th><th>Название</th><th>Сфера</th><th>БИН</th><th>E-mail</th><th>Телефон</th><th>Ответственный</th><th class="num">Сделок</th><th></th></tr></thead><tbody>${rows}</tbody></table>
     </div>`;
   }).join('');
+  loadMerges();
 }
+// При смене эталона — его галочку «слить» снимаем/блокируем, остальным включаем.
+function onCanon(gi){
+  const canon=document.querySelector(`input[name="canon-${gi}"]:checked`); const cv=canon?canon.value:'';
+  document.querySelectorAll(`.mg-${gi}`).forEach(ch=>{ if(ch.value===cv){ch.checked=false;ch.disabled=true;} else ch.disabled=false; });
+}
+
+// ── Модалка ────────────────────────────────────────────────────────────────
+function openModal(title,body,foot){document.getElementById('mTitle').innerHTML=title;document.getElementById('mBody').innerHTML=body;document.getElementById('mFoot').innerHTML=foot||'';document.getElementById('modal').classList.add('on');}
+function closeModal(){document.getElementById('modal').classList.remove('on');}
+
+// ── Провалиться в сделки компании ───────────────────────────────────────────
+async function openDeals(id,title){
+  openModal('Сделки: '+esc(title||('#'+id)),'<div class="dnote">Загрузка…</div>','<button class="rbtn ghost" onclick="closeModal()">Закрыть</button>');
+  const {ok,d}=await api('/api/companies/'+encodeURIComponent(id)+'/deals');
+  if(!ok){document.getElementById('mBody').innerHTML='<div class="warnbox">Не удалось загрузить сделки</div>';return;}
+  const deals=d.deals||[];
+  const body=deals.length?`<table class="jtbl"><thead><tr><th>#</th><th>Сделка</th><th>Ответственный</th><th class="num">Сумма</th><th></th></tr></thead><tbody>${
+    deals.map(x=>`<tr><td>${esc(x.id)}</td><td>${esc(x.title)}</td><td>${esc(x.owner)||'—'}</td><td class="num">${x.amount?fmt(x.amount)+' '+esc(x.currency):'—'}</td><td>${x.url?`<a class="lnk" href="${esc(x.url)}" target="_blank" rel="noopener">открыть ↗</a>`:''}</td></tr>`).join('')
+  }</tbody></table>`:'<div class="dnote">Сделок нет.</div>';
+  const foot=(d.companyUrl?`<a class="rbtn ghost" href="${esc(d.companyUrl)}" target="_blank" rel="noopener">Компания в Битрикс ↗</a>`:'')+'<button class="rbtn ghost" onclick="closeModal()">Закрыть</button>';
+  openModal('Сделки: '+esc(title||('#'+id))+' · '+deals.length,body,foot);
+}
+
+// ── Редактирование (сфера + название) из любой вкладки ──────────────────────
+function findCompany(id){ let r=(DATA.rows||[]).find(x=>x.id===id); if(r)return{id,title:r.title,industryId:r.industryId};
+  for(const g of ((DUP&&DUP.groups)||[])){const m=g.members.find(x=>x.id===id); if(m)return{id,title:m.title,industryId:m.industryId};} return{id,title:'',industryId:''}; }
+function openEdit(id){
+  const c=findCompany(id);
+  const body=`<div class="plan"><label class="fl">Название</label><input type="text" id="edTitle" value="${esc(c.title)}" style="width:100%;margin-bottom:10px">
+    <label class="fl">Сфера деятельности</label><select id="edInd" style="width:100%">${INDOPTS}</select></div>`;
+  openModal('Редактировать компанию',body,`<button class="rbtn ghost" onclick="closeModal()">Отмена</button><button class="rbtn" id="edSave" onclick="saveEdit('${esc(id)}')">Сохранить</button>`);
+  const sel=document.getElementById('edInd'); if(sel)sel.value=c.industryId||'';
+}
+async function saveEdit(id){
+  const title=(document.getElementById('edTitle').value||'').trim();
+  const industryId=document.getElementById('edInd').value;
+  const b=document.getElementById('edSave'); if(b){b.disabled=true;b.textContent='Сохраняю…';}
+  const r=await fetch('/api/companies/'+encodeURIComponent(id),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,industryId})});
+  const d=await r.json();
+  if(!r.ok){alert(d.error||'Ошибка сохранения');if(b){b.disabled=false;b.textContent='Сохранить';}return;}
+  const row=(DATA.rows||[]).find(x=>x.id===id); if(row){row.title=title;row.industryId=d.industryId||'';row.industryName=d.industryName||'';}
+  for(const g of ((DUP&&DUP.groups)||[])){const m=g.members.find(x=>x.id===id); if(m){m.title=title;m.industryId=d.industryId||'';m.industryName=d.industryName||'';}}
+  closeModal(); render(); if(DUP)renderDup();
+}
+
+// ── Удаление компании (с защитой) ───────────────────────────────────────────
+async function delCompany(id,title){
+  if(!confirm('Удалить компанию «'+(title||('#'+id))+'» из Битрикс?\nЭто необратимо. Удаление возможно только если нет привязанных сделок/контактов/элементов.'))return;
+  const r=await fetch('/api/companies/'+encodeURIComponent(id)+'/delete',{method:'POST'});
+  const d=await r.json();
+  if(!r.ok||!d.ok){
+    if(d&&d.suggestMerge&&d.counts){alert('Нельзя удалить: есть привязанные объекты — сделок '+d.counts.deals+', контактов '+d.counts.contacts+', элементов '+d.counts.items+'.\nСначала перенесите их через слияние (вкладка «Дубли»).');}
+    else alert((d&&d.error)||'Ошибка удаления');
+    return;
+  }
+  DATA.rows=(DATA.rows||[]).filter(x=>x.id!==id);
+  if(DATA.summary)DATA.summary.total=Math.max(0,(DATA.summary.total||1)-1);
+  document.getElementById('kTotal').textContent=fmt(DATA.summary?DATA.summary.total:'');
+  if(DUP&&DUP.groups){DUP.groups.forEach(g=>{g.members=g.members.filter(x=>x.id!==id);g.size=g.members.length;});DUP.groups=DUP.groups.filter(g=>g.size>=2);}
+  render(); if(DUP)renderDup();
+}
+
+// ── Слияние: предпросмотр → применить ───────────────────────────────────────
+function groupSelection(gi){
+  const canon=document.querySelector(`input[name="canon-${gi}"]:checked`); const canonicalId=canon?canon.value:'';
+  const dupIds=[...document.querySelectorAll(`.mg-${gi}:checked`)].map(c=>c.value).filter(v=>v!==canonicalId);
+  return {canonicalId,dupIds};
+}
+async function previewMerge(gi){
+  const {canonicalId,dupIds}=groupSelection(gi);
+  if(!canonicalId){alert('Выберите эталон');return;}
+  if(!dupIds.length){alert('Отметьте хотя бы один дубль для слияния');return;}
+  openModal('Предпросмотр слияния','<div class="dnote">Считаю, что переедет…</div>','');
+  const r=await fetch('/api/companies/merge/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({canonicalId,duplicateIds:dupIds})});
+  const d=await r.json();
+  if(!r.ok||!d.ok){document.getElementById('mBody').innerHTML='<div class="warnbox">'+esc((d&&d.error)||'Ошибка предпросмотра')+'</div>';document.getElementById('mFoot').innerHTML='<button class="rbtn ghost" onclick="closeModal()">Закрыть</button>';return;}
+  let tot={deals:0,contacts:0,items:0};
+  const blocks=d.duplicates.map(dp=>{tot.deals+=dp.counts.deals;tot.contacts+=dp.counts.contacts;tot.items+=dp.counts.items;
+    const cp=dp.copyFields.length?('Скопируется в эталон: '+dp.copyFields.map(f=>esc(f.field)).join(', ')):'Поля для копирования не найдены';
+    return `<div class="pmove"><b>${esc(dp.title)}</b> (#${esc(dp.id)}) → сделок ${dp.counts.deals}, контактов ${dp.counts.contacts}, элементов ${dp.counts.items}.<br><span class="muted">${cp}</span></div>`;}).join('');
+  const body=`<div class="plan">Эталон: <b>${esc(d.canonical.title)}</b> (#${esc(d.canonical.id)}) ${d.canonical.url?`<a class="ext" href="${esc(d.canonical.url)}" target="_blank" rel="noopener">↗</a>`:''}<br>
+    Будет перенесено на эталон: <b>${tot.deals}</b> сделок, <b>${tot.contacts}</b> контактов, <b>${tot.items}</b> элементов смарт-процессов.</div>
+    ${blocks}
+    <div class="warnbox" style="margin-top:8px">Дубли будут помечены «[ДУБЛЬ → #${esc(d.canonical.id)}]» и исключены из поиска, <b>без удаления</b>. Слияние можно откатить в журнале.</div>
+    <label class="mradio" style="margin-top:10px"><input type="checkbox" id="cpFields" checked> копировать недостающие поля в эталон</label>`;
+  const foot=`<button class="rbtn ghost" onclick="closeModal()">Отмена</button><button class="rbtn" id="doMergeBtn" onclick="doMerge('${esc(canonicalId)}',${jq(dupIds.join(','))})">Применить слияние</button>`;
+  openModal('Предпросмотр слияния',body,foot);
+}
+async function doMerge(canonicalId,dupCsv){
+  const duplicateIds=String(dupCsv).split(',').filter(Boolean);
+  const copyFields=document.getElementById('cpFields')?document.getElementById('cpFields').checked:true;
+  const b=document.getElementById('doMergeBtn'); if(b){b.disabled=true;b.textContent='Сливаю…';}
+  const r=await fetch('/api/companies/merge/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({canonicalId,duplicateIds,copyFields})});
+  const d=await r.json();
+  if(!r.ok){alert((d&&d.error)||'Ошибка слияния');if(b){b.disabled=false;b.textContent='Применить слияние';}return;}
+  const okN=(d.results||[]).filter(x=>x.ok).length, badN=(d.results||[]).filter(x=>!x.ok).length;
+  closeModal();
+  alert('Слияние выполнено: '+okN+' дубл.'+(badN?(' , ошибок: '+badN):'')+'. Обновляю список…');
+  DUPLOADED=false; await load(); await loadDup();
+}
+
+// ── Журнал слияний ───────────────────────────────────────────────────────────
+async function loadMerges(){
+  const host=document.getElementById('jBody'); if(!host)return;
+  const {ok,d}=await api('/api/companies/merges');
+  if(!ok){host.innerHTML='<div class="dnote err">Ошибка загрузки журнала</div>';return;}
+  const ms=(d&&d.merges)||[]; const active=ms.filter(m=>!m.undone).length;
+  const jc=document.getElementById('jCount'); if(jc)jc.textContent=ms.length?('— записей: '+ms.length+(active?(', активных: '+active):'')):'— пусто';
+  host.innerHTML=ms.length?`<table class="jtbl"><thead><tr><th>Когда</th><th>Эталон</th><th>Дубль</th><th>Перенесено</th><th>Кто</th><th></th></tr></thead><tbody>${
+    ms.map(m=>`<tr class="${m.undone?'undone':''}"><td>${new Date(m.createdAt).toLocaleString('ru-RU')}</td>
+      <td>${esc(m.canonicalTitle||('#'+m.canonicalId))} ${m.canonicalUrl?`<a class="ext" href="${esc(m.canonicalUrl)}" target="_blank" rel="noopener">↗</a>`:''}</td>
+      <td>${esc(m.prevTitle||('#'+m.duplicateId))}</td>
+      <td>сд ${m.moved.deals}, конт ${m.moved.contacts}, эл ${m.moved.items}</td>
+      <td>${esc(m.byUser)||'—'}</td>
+      <td>${m.undone?'<span class="muted">откатано</span>':`<button class="rbtn ghost" onclick="undoMerge(${m.id})">Откатить</button>`}</td></tr>`).join('')
+  }</tbody></table>`:'<div class="dnote">Слияний ещё не было.</div>';
+}
+async function undoMerge(mergeId){
+  if(!confirm('Откатить слияние? Перенесённые объекты вернутся дублю, имя восстановится.'))return;
+  const r=await fetch('/api/companies/merge/undo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mergeId})});
+  const d=await r.json();
+  if(!r.ok||!d.ok){alert((d&&d.error)||'Ошибка отката');return;}
+  DUPLOADED=false; await load(); await loadDup();
+}
+
 async function refresh(){const b=document.getElementById('refreshBtn');b.disabled=true;b.textContent='Синхронизирую…';await api('/api/companies/refresh',{method:'POST'});DUPLOADED=false;await load();if(document.getElementById('viewDup').style.display!=='none')loadDup();b.disabled=false;b.textContent='↻ Синхронизировать';}
 async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
 boot();
