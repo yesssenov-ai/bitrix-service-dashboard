@@ -99,6 +99,23 @@ function firstVal(v) {
   return String(v).trim();
 }
 
+// Полный подсчёт сделок по компаниям — все стадии и воронки (crm.deal.list без
+// фильтра возвращает и открытые, и завершённые). Берём минимум полей ради скорости.
+async function allDealCounts() {
+  const dc = {};
+  let start = 0, guard = 0;
+  while (guard++ < 20000) {
+    const res = await b24('crm.deal.list', { select: ['ID', 'COMPANY_ID'], order: { ID: 'ASC' }, start });
+    for (const d of (res.result || [])) {
+      const c = d.COMPANY_ID;
+      if (c && String(c) !== '0') dc[String(c)] = (dc[String(c)] || 0) + 1;
+    }
+    if (res.next == null) break;
+    start = res.next; await sleep(50);
+  }
+  return dc;
+}
+
 // ── Синхронизация всех компаний из Bitrix в зеркало ────────────────────────────
 let _syncing = false;
 async function syncCompanies() {
@@ -108,12 +125,20 @@ async function syncCompanies() {
     await ensureSchema();
     const inds = await industryMap();
     const binCode = await binFieldCode();
-    // число сделок на компанию — из зеркала сделок статистики.
-    const dc = {};
+    // Число сделок на компанию — ПОЛНЫМ сканом всех сделок (любая стадия, любая
+    // воронка, включая завершённые/проигранные). Раньше брали из зеркала статистики
+    // (ticketsmodule_stat_deals) — оно охватывает только часть сделок, поэтому у
+    // компаний с закрытыми сделками показывался 0. Если скан не удался — откат на зеркало.
+    let dc = {};
     try {
-      const r = await pool.query("SELECT company_id, COUNT(*)::int AS n FROM ticketsmodule_stat_deals WHERE company_id IS NOT NULL GROUP BY company_id");
-      r.rows.forEach(x => { dc[String(x.company_id)] = x.n; });
-    } catch (e) { /* зеркала сделок может не быть — не критично */ }
+      dc = await allDealCounts();
+    } catch (e) {
+      console.error('companies allDealCounts failed, fallback to stat mirror:', e.message);
+      try {
+        const r = await pool.query("SELECT company_id, COUNT(*)::int AS n FROM ticketsmodule_stat_deals WHERE company_id IS NOT NULL GROUP BY company_id");
+        r.rows.forEach(x => { dc[String(x.company_id)] = x.n; });
+      } catch (e2) { /* зеркала может не быть — не критично */ }
+    }
 
     const select = ['ID', 'TITLE', 'INDUSTRY', 'ASSIGNED_BY_ID', 'DATE_CREATE', 'ADDRESS_CITY', 'EMAIL', 'PHONE'];
     if (binCode) select.push(binCode);
