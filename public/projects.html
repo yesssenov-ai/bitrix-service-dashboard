@@ -247,7 +247,10 @@ function tog(set,k){ if(set.has(k))set.delete(k); else set.add(k); }
 
 /* ── KAM-вид (матрёшка: KAM → клиент-группы → компании → направления × стадии) ── */
 const PH={pre:{c:'var(--warn)',l:'Доконтракт'},contract:{c:'var(--accent)',l:'Контракт'},done:{c:'var(--good)',l:'Завершена'},other:{c:'var(--dim2)',l:'—'}};
-const KSCOPE_OK=ph=>KSCOPE==='all'||(KSCOPE==='pre'?ph==='pre':ph!=='pre');
+// Все стадии — всё (вкл. проигранные/замороженные). В работе — только доконтракт
+// P10–P80 (pre). Контракт+ — от контракта до завершённых (contract/done); LOST и
+// прочие (other) сюда НЕ попадают — они видны только в «Все стадии».
+const KSCOPE_OK=ph=>KSCOPE==='all'||(KSCOPE==='pre'?ph==='pre':(ph==='contract'||ph==='done'));
 function clientDealCards(c){
   const out=[];
   (c.projects||[]).forEach(p=>{ if(p.children&&p.children.length)out.push(...p.children); else out.push(p); });
