@@ -12,6 +12,12 @@ router.get('/', requireAuth([]), async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Группы-кандидаты на дубль (Фаза 2 — только обнаружение)
+router.get('/duplicates', requireAuth([]), async (req, res) => {
+  try { res.json(await require('../companies-calc').getDuplicateGroups()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Пересинхронизировать компании из Б24
 router.post('/refresh', requireAuth(EDIT), async (req, res) => {
   try { res.json(await require('../companies-calc').syncCompanies()); }

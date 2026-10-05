@@ -46,6 +46,25 @@ select:focus,input:focus{border-color:var(--brand)}
 .savemsg{font-size:11px;margin-left:6px}
 .ok{color:var(--good)}.err{color:var(--bad)}
 .cnt{color:var(--text-3)}
+.tabs{display:flex;gap:8px}
+.tab{font-size:13px;font-weight:600;color:var(--text-3);background:var(--card);border:1px solid var(--border);border-radius:9px;padding:8px 16px;cursor:pointer;font-family:var(--font)}
+.tab:hover{border-color:var(--brand2,var(--border2));color:var(--text-2)}
+.tab.on{color:var(--brand);border-color:var(--brand);background:var(--brand-l)}
+.tcnt{display:inline-block;font-size:11px;font-weight:800;background:var(--bad-l);color:var(--bad);border-radius:6px;padding:0 6px;margin-left:4px;vertical-align:middle}
+.dgrp{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden}
+.dgrp.strong{border-color:var(--bad)}
+.dhead{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg2);flex-wrap:wrap}
+.dhead .rc{font-size:11px;font-weight:700;color:var(--text-3)}
+.dmatch{font-size:10.5px;font-weight:800;border-radius:5px;padding:1px 7px;text-transform:uppercase;letter-spacing:.4px}
+.dmatch.k0{background:var(--bad-l);color:var(--bad)}
+.dmatch.k1{background:var(--brand-l);color:var(--brand)}
+.dmatch.k2{background:rgba(224,169,64,.14);color:var(--warn)}
+.dtbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.dtbl th{text-align:left;font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;padding:6px 12px;border-bottom:1px solid var(--border2)}
+.dtbl td{padding:7px 12px;border-bottom:1px solid var(--border);vertical-align:top;line-height:1.35}
+.dtbl tr.canon td{background:rgba(61,220,132,.07)}
+.etag{display:inline-block;font-size:9.5px;font-weight:800;background:rgba(61,220,132,.16);color:var(--good);border-radius:5px;padding:1px 6px;margin-left:6px;vertical-align:middle;text-transform:uppercase;letter-spacing:.4px}
+.dnote{font-size:11.5px;color:var(--text-4);padding:10px 14px}
 </style>
 </head>
 <body>
@@ -61,6 +80,12 @@ select:focus,input:focus{border-color:var(--brand)}
 </header>
 
 <div class="wrap">
+  <div class="tabs">
+    <button class="tab on" id="tabList" onclick="switchView('list')">Реестр компаний</button>
+    <button class="tab" id="tabDup" onclick="switchView('dup')">Дубли<span class="tcnt" id="tabDupN" style="display:none"></span></button>
+  </div>
+
+  <div id="viewList">
   <div class="kpis">
     <div class="kpi" data-f="" onclick="setQuick('')"><div class="l">Всего компаний</div><div class="v" id="kTotal">—</div></div>
     <div class="kpi" data-f="noind" onclick="setQuick('noind')"><div class="l">Без сферы</div><div class="v warn" id="kNoInd">—</div></div>
@@ -83,6 +108,14 @@ select:focus,input:focus{border-color:var(--brand)}
         <th>Название</th><th>Сфера деятельности</th><th>БИН</th><th>Ответственный</th><th>Город</th><th class="num">Сделок</th><th>Проблемы</th>
       </tr></thead><tbody id="body"></tbody></table>
     </div>
+  </div>
+  </div><!-- /viewList -->
+
+  <div id="viewDup" style="display:none">
+    <div class="card" style="margin-bottom:12px"><div class="hint" style="padding:10px 14px">
+      Группы-кандидаты на дубль. Ключи склейки: <b>БИН</b> (точное совпадение — самый надёжный), нормализованное <b>название</b>, <b>e-mail</b>, <b>телефон</b>. Строка с меткой <span class="etag">эталон</span> — предлагаемая основная карточка (больше всего сделок / заполненных полей / старше). Пока это только обнаружение — автоматического слияния нет; правьте карточки во вкладке «Реестр». Слияние с переносом сделок появится в следующей фазе.
+    </div></div>
+    <div id="dupBody"><div class="dnote">Загрузка…</div></div>
   </div>
 </div>
 
@@ -180,7 +213,48 @@ async function saveTitle(id){
   const row=(DATA.rows||[]).find(x=>x.id===id); if(row)row.title=title;
   render();
 }
-async function refresh(){const b=document.getElementById('refreshBtn');b.disabled=true;b.textContent='Синхронизирую…';await api('/api/companies/refresh',{method:'POST'});await load();b.disabled=false;b.textContent='↻ Синхронизировать';}
+// ── Вкладки: Реестр / Дубли ────────────────────────────────────────────────
+let DUP=null, DUPLOADED=false;
+function switchView(v){
+  const list=v==='list';
+  document.getElementById('viewList').style.display=list?'':'none';
+  document.getElementById('viewDup').style.display=list?'none':'';
+  document.getElementById('tabList').classList.toggle('on',list);
+  document.getElementById('tabDup').classList.toggle('on',!list);
+  if(!list && !DUPLOADED) loadDup();
+}
+async function loadDup(){
+  const host=document.getElementById('dupBody'); host.innerHTML='<div class="dnote">Ищу дубли…</div>';
+  const {ok,d}=await api('/api/companies/duplicates');
+  if(!ok){host.innerHTML='<div class="dnote err">Ошибка загрузки дублей</div>';return;}
+  DUP=d; DUPLOADED=true; renderDup();
+}
+function dcell(v){return v?esc(v):'<span class="muted">—</span>';}
+function renderDup(){
+  const host=document.getElementById('dupBody'); const groups=(DUP&&DUP.groups)||[];
+  const tn=document.getElementById('tabDupN');
+  if(tn){ if(groups.length){tn.style.display='';tn.textContent=groups.length;} else tn.style.display='none'; }
+  if(!groups.length){host.innerHTML='<div class="card"><div class="dnote">Групп-кандидатов на дубль не найдено. 🎉</div></div>';return;}
+  host.innerHTML=groups.map(g=>{
+    const strong=g.reasons.includes('БИН');
+    const chips=g.reasons.map(r=>{const k=r==='БИН'?'k0':(r==='название'?'k1':'k2');return `<span class="dmatch ${k}">${esc(r)}</span>`;}).join(' ');
+    const rows=g.members.map(m=>`<tr class="${m.isCanonical?'canon':''}">
+      <td><b>${esc(m.title)||'<span class=muted>без названия</span>'}</b>${m.isCanonical?'<span class="etag">эталон</span>':''}</td>
+      <td>${dcell(m.industryName)}</td>
+      <td>${dcell(m.bin)}</td>
+      <td>${dcell(m.email)}</td>
+      <td>${dcell(m.phone)}</td>
+      <td>${dcell(m.owner)}</td>
+      <td>${dcell(m.city)}</td>
+      <td class="num">${m.dealCount||''}</td>
+    </tr>`).join('');
+    return `<div class="dgrp ${strong?'strong':''}">
+      <div class="dhead"><span class="rc">Совпадение по:</span>${chips}<span class="rc" style="margin-left:auto">${g.size} карточки · сделок всего: ${fmt(g.totalDeals)}</span></div>
+      <table class="dtbl"><thead><tr><th>Название</th><th>Сфера</th><th>БИН</th><th>E-mail</th><th>Телефон</th><th>Ответственный</th><th>Город</th><th class="num">Сделок</th></tr></thead><tbody>${rows}</tbody></table>
+    </div>`;
+  }).join('');
+}
+async function refresh(){const b=document.getElementById('refreshBtn');b.disabled=true;b.textContent='Синхронизирую…';await api('/api/companies/refresh',{method:'POST'});DUPLOADED=false;await load();if(document.getElementById('viewDup').style.display!=='none')loadDup();b.disabled=false;b.textContent='↻ Синхронизировать';}
 async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
 boot();
 </script>

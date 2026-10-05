@@ -147,13 +147,18 @@ async function syncCompanies() {
   } finally { _syncing = false; }
 }
 
-// Нормализованное имя — для детектора «возможных дублей» (только чтение, Фаза 1).
+// Нормализованное имя — для детектора «возможных дублей».
+// ВАЖНО: организационные формы (ТОО/ООО/…) вырезаем ПОТОКЕННО, а не через \b —
+// в JS \b не распознаёт кириллицу (\w = [A-Za-z0-9_]), поэтому \bтоо\b по-русски
+// не срабатывает. Поэтому сначала чистим пунктуацию до пробелов, потом фильтруем слова.
+const ORG_FORMS = new Set(['тоо', 'ооо', 'оао', 'зао', 'ао', 'ип', 'тов', 'llp', 'llc', 'ltd',
+  'inc', 'gmbh', 'ргп', 'гу', 'кгп', 'нао', 'ксхп', 'пхв', 'на', 'ркп', 'чк', 'фк', 'кх', 'тоо']);
 function normName(s) {
-  return String(s || '').toLowerCase()
-    .replace(/[«»"'`“”]/g, '')
-    .replace(/\b(тоо|ооо|оао|зао|ао|ип|тов|llp|llc|ltd|inc|gmbh|ргп|гу|кгп|нао|ксхп|пхв|на|ркп|чк|фк|кх)\b/g, ' ')
-    .replace(/[^a-zа-яё0-9]+/gi, ' ')
-    .replace(/\s+/g, ' ').trim();
+  return String(s || '').toLowerCase().replace(/ё/g, 'е')
+    .replace(/[^a-zа-я0-9]+/g, ' ')
+    .trim().split(/\s+/)
+    .filter(w => w && !ORG_FORMS.has(w))
+    .join(' ');
 }
 function problemsOf(r, dupNames) {
   const p = [];
@@ -221,4 +226,101 @@ async function updateCompany(id, { industryId, title }) {
   return { ok: true, id, industryId: fields.INDUSTRY, industryName: fields.INDUSTRY !== undefined ? (inds[fields.INDUSTRY] || '') : undefined, title: fields.TITLE };
 }
 
-module.exports = { ensureSchema, syncCompanies, getCompaniesBoard, updateCompany, industryOptions };
+// ── Фаза 2: детектор дублей ────────────────────────────────────────────────────
+// Нормализация e-mail и телефона для ключей дедупа.
+function normEmail(s) { return String(s || '').trim().toLowerCase(); }
+function normPhone(s) {
+  let d = String(s || '').replace(/\D+/g, '');
+  if (d.length === 11 && (d[0] === '8' || d[0] === '7')) d = d.slice(1); // 8/7XXXXXXXXXX → XXXXXXXXXX
+  return d.length >= 10 ? d.slice(-10) : '';
+}
+function filledCount(r) {
+  return ['industry_id', 'bin', 'email', 'phone', 'city'].reduce((n, k) => n + (r[k] ? 1 : 0), 0);
+}
+
+// Кластеризация компаний в группы-кандидаты на дубль по сильным ключам:
+// БИН (точное совпадение — самый надёжный), нормализованное название, e-mail, телефон.
+// Слишком частые e-mail/телефон (общая приёмная/инфо-адрес) исключаем, чтобы не
+// склеивать десятки разных компаний в один ложный кластер. Только обнаружение —
+// слияние и запись в Б24 будут в Фазе 3.
+async function getDuplicateGroups() {
+  await ensureSchema();
+  let { rows } = await pool.query('SELECT * FROM ticketsmodule_companies ORDER BY id');
+  if (!rows.length) { await syncCompanies(); ({ rows } = await pool.query('SELECT * FROM ticketsmodule_companies ORDER BY id')); }
+  const inds = await industryMap();
+
+  const n = rows.length;
+  const key = { bin: [], name: [], email: [], phone: [] };
+  const freqEmail = {}, freqPhone = {};
+  for (let i = 0; i < n; i++) {
+    const r = rows[i];
+    key.bin[i] = String(r.bin || '').replace(/\D+/g, '');
+    const nm = normName(r.title); key.name[i] = nm.length >= 3 ? nm : '';
+    key.email[i] = normEmail(r.email);
+    key.phone[i] = normPhone(r.phone);
+    if (key.email[i]) freqEmail[key.email[i]] = (freqEmail[key.email[i]] || 0) + 1;
+    if (key.phone[i]) freqPhone[key.phone[i]] = (freqPhone[key.phone[i]] || 0) + 1;
+  }
+  // «Шумные» контакты — встречаются у >4 компаний → не используем для склейки.
+  const NOISE = 4;
+  for (let i = 0; i < n; i++) {
+    if (key.email[i] && freqEmail[key.email[i]] > NOISE) key.email[i] = '';
+    if (key.phone[i] && freqPhone[key.phone[i]] > NOISE) key.phone[i] = '';
+  }
+
+  // Union-Find по индексам
+  const parent = Array.from({ length: n }, (_, i) => i);
+  const find = x => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+  const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; };
+  for (const field of ['bin', 'name', 'email', 'phone']) {
+    const buckets = {};
+    for (let i = 0; i < n; i++) { const v = key[field][i]; if (v) (buckets[v] || (buckets[v] = [])).push(i); }
+    for (const ids of Object.values(buckets)) for (let j = 1; j < ids.length; j++) union(ids[0], ids[j]);
+  }
+
+  // Собираем кластеры размером ≥2
+  const clusters = {};
+  for (let i = 0; i < n; i++) { const root = find(i); (clusters[root] || (clusters[root] = [])).push(i); }
+  const reasonLabel = { bin: 'БИН', name: 'название', email: 'e-mail', phone: 'телефон' };
+  const groups = [];
+  for (const idxs of Object.values(clusters)) {
+    if (idxs.length < 2) continue;
+    // какие ключи реально сшили группу (значение встречается у 2+ членов)
+    const reasons = [];
+    for (const field of ['bin', 'name', 'email', 'phone']) {
+      const c = {}; let shared = false;
+      for (const i of idxs) { const v = key[field][i]; if (!v) continue; if (c[v]) { shared = true; break; } c[v] = 1; }
+      if (shared) reasons.push(reasonLabel[field]);
+    }
+    const members = idxs.map(i => {
+      const r = rows[i];
+      return {
+        id: r.id, title: r.title || '', industryId: r.industry_id || '',
+        industryName: r.industry_name || (r.industry_id ? (inds[r.industry_id] || r.industry_id) : ''),
+        bin: r.bin || '', email: r.email || '', phone: r.phone || '',
+        owner: uname(r.assigned_bid), city: r.city || '', createdAt: r.created_at,
+        dealCount: Number(r.deal_count || 0), _filled: filledCount(r),
+      };
+    });
+    // эталон: больше всего сделок → больше заполненных полей → старше (раньше создан) → меньший ID
+    members.sort((a, b) => b.dealCount - a.dealCount || b._filled - a._filled
+      || (new Date(a.createdAt || 0) - new Date(b.createdAt || 0)) || (Number(a.id) - Number(b.id)));
+    const canonicalId = members[0].id;
+    members.forEach(m => { m.isCanonical = m.id === canonicalId; delete m._filled; });
+    const totalDeals = members.reduce((s, m) => s + m.dealCount, 0);
+    const strong = reasons.includes('БИН') ? 3 : reasons.includes('название') ? 2 : 1;
+    groups.push({ canonicalId, reasons, size: members.length, totalDeals, members, _strong: strong });
+  }
+  // сортировка: сильный ключ (БИН) первыми, крупные группы выше, больше сделок выше
+  groups.sort((a, b) => b._strong - a._strong || b.size - a.size || b.totalDeals - a.totalDeals);
+  groups.forEach(g => delete g._strong);
+
+  const asOf = rows.length ? rows.reduce((m, r) => (r.synced_at > m ? r.synced_at : m), rows[0].synced_at) : null;
+  return {
+    groups,
+    summary: { groups: groups.length, companies: groups.reduce((s, g) => s + g.size, 0) },
+    asOf,
+  };
+}
+
+module.exports = { ensureSchema, syncCompanies, getCompaniesBoard, updateCompany, industryOptions, getDuplicateGroups };
