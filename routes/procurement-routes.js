@@ -443,6 +443,19 @@ router.post('/:id/poa-setup', requireAuth(EDIT_ROLES), express.json(), async (re
   }
 });
 
+// POST /api/procurement/:id/warranty-setup { required } — галочка «Гарантийный сертификат» (приёмка)
+router.post('/:id/warranty-setup', requireAuth(EDIT_ROLES), express.json(), async (req, res) => {
+  try {
+    const { setWarrantySetup } = require('../procurement-calc');
+    if (!(await canEditReq(req.user, parseInt(req.params.id, 10)))) return res.status(403).json(DENY_OWN);
+    const { required } = req.body || {};
+    res.json(await setWarrantySetup(parseInt(req.params.id, 10), !!required));
+  } catch (e) {
+    console.error('POST /api/procurement/:id/warranty-setup error:', e.message);
+    res.status(e.userFacing ? 400 : 500).json({ error: e.message });
+  }
+});
+
 // POST /api/procurement/:id/request-approval { approverId } — отправить на согласование
 router.post('/:id/request-approval', requireAuth(EDIT_ROLES), express.json(), async (req, res) => {
   try {

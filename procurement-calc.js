@@ -253,7 +253,10 @@ const REQUIREMENTS = {
   contract: { kind: 'file', slot: 'invoice', label: 'счёт (Invoice)' },
   payment:  { kind: 'approval', label: 'согласование закупки' },
   waiting:  { kind: 'file', slot: 'pay', label: 'подтверждение оплаты' },
-  received: { kind: 'files', slots: ['contract', 'warranty'], label: 'накладная и гарантийный сертификат' },
+  // «Товар принят»: накладная нужна всегда; гарантийный сертификат — только если на
+  // этапе приёмки отмечена галочка «Гарантийный сертификат» (pl.warrantyRequired).
+  // Поэтому шлюз 'received' — динамический (ниже), статическое правило не используется.
+  received: { kind: 'file', slot: 'contract', label: 'накладная' },
 };
 const fileNonEmpty = v => !!(v && (Array.isArray(v) ? v.length : true));
 
@@ -706,6 +709,17 @@ async function setPoaSetup(localId, required, accountantBid) {
   return { ok: true, poaRequired: pl.poaRequired, poaAccountantBid: pl.poaAccountantBid || null };
 }
 
+// Галочка «Гарантийный сертификат» на этапе приёмки. Когда отмечена — на странице
+// появляется файл-слот гарантийного и он становится обязательным для перехода на
+// «Товар принят». Снята — слот не показывается и не требуется.
+async function setWarrantySetup(localId, required) {
+  const { rows } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
+  const pl = (rows[0] && rows[0].payload) || {};
+  pl.warrantyRequired = !!required;
+  await pool.query('UPDATE ticketsmodule_procurement SET payload=$1, updated_at=NOW() WHERE id=$2', [pl, localId]);
+  return { ok: true, warrantyRequired: pl.warrantyRequired };
+}
+
 // Редактирование заявки: базовые поля (название, источник, ответственный, вид закупки).
 async function updateRequest(localId, payload) {
   const itemId = await itemIdOf(localId);
@@ -870,8 +884,18 @@ async function moveStage(localId, stageKey, opts = {}) {
     if (!has('pay')) throw userFacing(`Нельзя перейти на «${step.label}»: не приложено подтверждение оплаты.`);
     if (poaRequired && !has('poa')) throw userFacing(`Нельзя перейти на «${step.label}»: нужна доверенность (была отмечена на этапе счёта).`);
   }
+  // «Товар принят»: динамический шлюз. Накладная нужна всегда; гарантийный сертификат —
+  // только если отмечена галочка «Гарантийный сертификат» (pl.warrantyRequired).
+  if (!isBackward && !force && stageKey === 'received') {
+    const files = await filesFor(localId);
+    const has = sl => (files[sl] || []).length > 0;
+    const { rows: pr } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
+    const warrantyRequired = !!(((pr[0] && pr[0].payload) || {}).warrantyRequired);
+    if (!has('contract')) throw userFacing(`Нельзя перейти на «${step.label}»: нужна хотя бы одна накладная.`);
+    if (warrantyRequired && !has('warranty')) throw userFacing(`Нельзя перейти на «${step.label}»: отмечен гарантийный сертификат — приложите файл сертификата.`);
+  }
   // Проверка прочих условий — только при движении ВПЕРЁД и без force (админ).
-  const reqmt = (isBackward || force || stageKey === 'waiting') ? null : REQUIREMENTS[stageKey];
+  const reqmt = (isBackward || force || stageKey === 'waiting' || stageKey === 'received') ? null : REQUIREMENTS[stageKey];
   if (reqmt) {
     if (reqmt.kind === 'file' || reqmt.kind === 'files') {
       const files = await filesFor(localId);
@@ -994,6 +1018,7 @@ async function getItemDetail(localId) {
     fullyReceivedAt: pl.fullyReceivedAt || null,
     fullyReceivedBy: pl.fullyReceivedBy || null,
     poaRequired: !!pl.poaRequired,
+    warrantyRequired: !!pl.warrantyRequired,
     poaAccountantBid: pl.poaAccountantBid || null,
     poaAccountantName: pl.poaAccountantBid ? (USERS[pl.poaAccountantBid] || ('#' + pl.poaAccountantBid)) : null,
     rollbacks: Array.isArray(pl.rollbacks) ? pl.rollbacks : [],
@@ -1967,4 +1992,4 @@ async function backfillServiceParent() {
   return { ok, fail, total: rows.length };
 }
 
-module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, listDeletions, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, resolveDocFields, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, setAmount, setPayComment, setPoaSetup, currentStepKey, autoCreateFromService, scanServiceForAutoCreate, backfillServiceParent, pendingActionsFor, statusBoard, itemUrl, dealUrl, ownsRequest, resolveUserBid };
+module.exports = { ENTITY, CATEGORY, TAG_PREFIX, F, DOCS, FLOW, SLOT_KEYS, SLOT_LABELS, getMeta, searchDeals, searchCompanies, resolveBin, listRequests, listByDeal, createRequest, updateRequest, deleteRequest, listDeletions, moveStage, getItemDetail, uploadDoc, addFile, addFilesBatch, filesFor, resolveDocFields, getFileBytes, removeFile, setFullyReceived, getDealShipment, closeDealShipment, reopenDealShipment, addShipFile, getShipFileBytes, removeShipFile, setApproval, requestApproval, setAccountant, setAmount, setPayComment, setPoaSetup, setWarrantySetup, currentStepKey, autoCreateFromService, scanServiceForAutoCreate, backfillServiceParent, pendingActionsFor, statusBoard, itemUrl, dealUrl, ownsRequest, resolveUserBid };

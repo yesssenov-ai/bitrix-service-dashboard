@@ -829,8 +829,18 @@ function goodsBlockHtml(id,d){
   // Доверенность — сквозной документ: показываем ТОЛЬКО если на этапе счёта была
   // отмечена галочка «Требуется доверенность». Без неё слот не выводим.
   const poaBlock=d.poaRequired?filesSlotHtml(id,d,'poa',true):'';
-  return waybillsHtml(id,d)+filesSlotHtml(id,d,'warranty')+poaBlock+chk
-    +`<div class="hint" style="margin-top:8px">Товар может приходить частями с разными накладными. Отметь «Полностью принят», когда получено всё — тогда шаг «Товар принят» станет зелёным.${(!nakl||!warr)?' Для перехода на «Товар принят» нужны хотя бы одна накладная и гарантийный сертификат.':''}</div>`;
+  // Галочка «Гарантийный сертификат»: файл-слот появляется ТОЛЬКО когда отмечено,
+  // и тогда он обязателен для перехода на «Товар принят». Снята — слота нет и файл не нужен.
+  const warrReq=!!d.warrantyRequired;
+  const warrToggle=`<div class="fullybar ${warrReq?'on':''}" style="margin-top:10px">
+    <input type="checkbox" id="warr-chk-${id}" ${warrReq?'checked':''} onchange="onWarrantyToggle(${id},this.checked)">
+    <div><div class="ft" style="${warrReq?'color:var(--good)':''}">Гарантийный сертификат</div>
+      <div class="fs">${warrReq?'Требуется — приложите файл сертификата ниже (обязателен для «Товар принят»).':'Отметьте, если по этой закупке нужен гарантийный сертификат — тогда появится поле для файла.'}</div>
+    </div></div>`;
+  const warrSlot=warrReq?filesSlotHtml(id,d,'warranty'):'';
+  const needWarr=warrReq&&!warr;
+  return waybillsHtml(id,d)+warrToggle+warrSlot+poaBlock+chk
+    +`<div class="hint" style="margin-top:8px">Товар может приходить частями с разными накладными. Отметь «Полностью принят», когда получено всё — тогда шаг «Товар принят» станет зелёным.${(!nakl||needWarr)?` Для перехода на «Товар принят» нужна хотя бы одна накладная${warrReq?' и гарантийный сертификат':''}.`:''}</div>`;
 }
 function approvalHtml(id,d){
   const ap=d.approval||{};
@@ -1173,6 +1183,15 @@ async function decide(id,status){
 function onPoaToggle(id){
   const chk=document.getElementById('poa-chk-'+id), box=document.getElementById('poa-acc-'+id);
   if(box) box.style.display=(chk&&chk.checked)?'block':'none';
+}
+// Галочка «Гарантийный сертификат» на приёмке: сохраняем сразу и перерисовываем
+// деталь — при включении появляется обязательный файл-слот, при снятии исчезает.
+async function onWarrantyToggle(id,checked){
+  try{
+    const r=await fetch('/api/procurement/'+id+'/warranty-setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({required:!!checked})});
+    if(!r.ok){ const d=await r.json().catch(()=>({})); alert(d.error||'Не удалось сохранить'); }
+  }catch(e){ alert('Ошибка сети'); }
+  loadDetail(id);
 }
 // Комментарий бухгалтера на этапе оплаты (виден в списке заявок и в поиске).
 function payCommentBlock(id){
