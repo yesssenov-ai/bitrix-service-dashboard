@@ -961,14 +961,30 @@ function renderDetail(id,d){
     const curSum=(rr.opportunity!=null?rr.opportunity:'');
     const curCur=(rr.currency||'KZT');
     const curOptsInv=(META.currencies||[{id:'KZT'}]).map(c=>`<option value="${esc(c.id)}" ${String(c.id)===String(curCur)?'selected':''}>${esc(c.id)}</option>`).join('');
+    // Счета на оплату: можно приложить несколько, у каждого своя сумма. Итог =
+    // сумма всех счетов (уходит в Битрикс). Авто-перехода нет — «Далее» вручную.
+    const invList=(d.files&&d.files.invoice)||[];
+    const invTotal=invList.reduce((s,f)=>s+(Number(f.amount)||0),0);
+    const invRows=invList.map(f=>`<div class="fitem" style="flex-wrap:wrap">
+        <a class="lnk fn" href="${esc(f.url||'#')}" target="_blank" title="${esc(f.name||'')}">${esc(f.name||'файл')}</a>
+        <span class="dsum tabular" style="margin-left:auto">${f.amount!=null?('<b>'+F(f.amount)+'</b> '+esc(curCur)):'<span style="color:var(--text-4)">сумма —</span>'}</span>
+        <span class="fx" title="Удалить счёт" onclick="delFile(${id},${f.id})">✕</span>
+      </div>`).join('')||'<div class="hint" style="padding:2px 0 6px">счета ещё не приложены</div>';
     const amountBlock=`<div style="margin-bottom:12px;padding:12px;border:1px solid var(--border2);border-radius:12px;background:var(--bg)">
-      <label class="fl">Сумма закупки <span class="req">*</span></label>
-      <div class="row2">
-        <input id="inv-amt-${id}" type="number" min="0" step="any" inputmode="decimal" placeholder="0" value="${esc(curSum)}">
-        <select id="inv-cur-${id}">${curOptsInv}</select>
+      <div class="dh" style="display:flex;align-items:center">Счета на оплату <span class="cnt">${invList.length||''}</span>${invList.length?`<span class="dsum tabular" style="margin-left:auto">Итого: <b>${F(invTotal)}</b> ${esc(curCur)}</span>`:''}</div>
+      ${invRows}
+      <div class="wbform" style="margin-top:10px">
+        <label class="fl">Файл счёта</label>
+        <input type="file" id="inv-file-${id}">
+        <div class="row2" style="margin-top:6px">
+          <input id="inv-amt-${id}" type="number" min="0" step="any" inputmode="decimal" placeholder="Сумма по счёту">
+          <select id="inv-cur-${id}">${curOptsInv}</select>
+        </div>
+        <span class="msg" id="inv-amt-msg-${id}"></span>
+        <button class="btn btn-p" style="margin-top:10px;width:100%;justify-content:center" onclick="addInvoice(${id})">＋ Добавить счёт</button>
       </div>
-      <span class="msg" id="inv-amt-msg-${id}"></span>
-      <div class="hint" style="margin-top:6px">Впиши сумму по счёту — она сохранится сама, когда приложишь счёт (Invoice), и заявка уйдёт на «Договор».</div>
+      <div class="hint" style="margin-top:8px">Можно приложить несколько счетов — у каждого своя сумма. Итог складывается и уходит в Битрикс как общая сумма закупки. Когда все счета приложены — жмите «Далее → Договор».</div>
+      ${invList.length?`<button class="btn btn-p" style="margin-top:10px;width:100%;justify-content:center" onclick="moveStep(${id},'contract')">Далее → Договор</button>`:''}
     </div>`;
     const poaAccs=META.poaAccountants||[];
     const poaBlock=`<div style="margin-bottom:12px;padding:12px;border:1px solid var(--border2);border-radius:12px;background:var(--bg)">
@@ -988,7 +1004,7 @@ function renderDetail(id,d){
       ${filesSlotHtml(id,d,'purchase',true)}
       <div class="hint" style="margin-top:4px">Файлы от инициатора закупки — по ним запрашивается счёт на оплату.</div>
     </div>`;
-    html=purchaseBlock+amountBlock+poaBlock+filesSlotHtml(id,d,'invoice');
+    html=purchaseBlock+amountBlock+poaBlock;
   }
   else if(curKey==='contract'){ hdr='Договор'; html='<div class="hint">Договор — по необходимости. Двигай на «Согласование закупки».</div>'; }
   else if(curKey==='approve'){ hdr='Согласование закупки'; html=approvalHtml(id,d); }
@@ -1115,6 +1131,21 @@ async function addWaybill(id){
   const meta={ warehouse:(document.getElementById('wb-wh-'+id)||{}).value||'', acceptDate:(document.getElementById('wb-dt-'+id)||{}).value||'', comment:(document.getElementById('wb-cm-'+id)||{}).value||'' };
   try{ const d=await postFile(id,'contract',file,meta); if(d) loadDetail(id); }
   catch(e){alert('Ошибка: '+e.message);}
+}
+// Добавить счёт на оплату: файл + сумма ПО ЭТОМУ счёту (валюта — одна на заявку).
+// БЕЗ авто-перехода: заявка остаётся на «Запрос счёта», чтобы можно было приложить
+// несколько счетов; переход на «Договор» — вручную кнопкой «Далее → Договор».
+async function addInvoice(id){
+  const fi=document.getElementById('inv-file-'+id); const file=fi&&fi.files&&fi.files[0];
+  const amtEl=document.getElementById('inv-amt-'+id), curEl=document.getElementById('inv-cur-'+id);
+  const msg=document.getElementById('inv-amt-msg-'+id);
+  const amount=amtEl?Number(amtEl.value):NaN;
+  if(!file){ if(msg){msg.className='msg err';msg.textContent='Выберите файл счёта';} return; }
+  if(!(amount>0)){ if(msg){msg.className='msg err';msg.textContent='Укажите сумму по счёту';} if(amtEl)amtEl.focus(); return; }
+  try{
+    const d=await postFile(id,'invoice',file,{amount,currency:curEl?curEl.value:undefined});
+    if(d) loadDetail(id); // перерисовать список счетов и итог; стадия не меняется
+  }catch(e){ if(msg){msg.className='msg err';msg.textContent='Ошибка: '+e.message;} }
 }
 // «Доверенность не требуется» → сразу переходим на «Ожидание товара».
 async function skipPoa(id){ await moveStep(id,'waiting'); }

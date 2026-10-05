@@ -233,9 +233,9 @@ router.post('/:id/files', requireAuth(VIEW_ROLES), express.json({ limit: '45mb' 
     const { addFile } = require('../procurement-calc');
     const id = parseInt(req.params.id, 10);
     if (!(await ownScopedOk(req.user, id))) return res.status(403).json(DENY_OWN);
-    const { slot, filename, base64, mime, warehouse, acceptDate, comment } = req.body || {};
+    const { slot, filename, base64, mime, warehouse, acceptDate, comment, amount, currency } = req.body || {};
     if (!slot || !base64) return res.status(400).json({ error: 'Нужны slot и base64' });
-    const out = await addFile(id, slot, { filename: filename || 'file', base64, mime, warehouse, acceptDate, comment }, req.user.bitrix_user_id || null);
+    const out = await addFile(id, slot, { filename: filename || 'file', base64, mime, warehouse, acceptDate, comment, amount, currency }, req.user.bitrix_user_id || null);
     res.json({ ok: true, ...out });
   } catch (e) {
     console.error('POST /api/procurement/:id/files error:', e.message);

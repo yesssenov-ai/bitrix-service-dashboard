@@ -107,6 +107,7 @@ function ensureSchema() {
         uploaded_by INTEGER,
         uploaded_at TIMESTAMPTZ DEFAULT NOW());
       ALTER TABLE ticketsmodule_procurement_files ADD COLUMN IF NOT EXISTS bitrix_file_id INTEGER;
+      ALTER TABLE ticketsmodule_procurement_files ADD COLUMN IF NOT EXISTS amount NUMERIC; -- сумма по счёту (для слота invoice)
       CREATE INDEX IF NOT EXISTS idx_proc_files_req ON ticketsmodule_procurement_files(request_id);
       -- Отгрузка по сделке: менеджер склада фиксирует «всё отправлено клиенту».
       CREATE TABLE IF NOT EXISTS ticketsmodule_procurement_deal_ship (
@@ -678,6 +679,28 @@ async function setAmount(localId, opportunity, currency) {
     await pool.query('UPDATE ticketsmodule_procurement SET payload=$1, updated_at=NOW() WHERE id=$2', [pl, localId]);
   } catch (e) { /* снимок необязателен */ }
   return { ok: true };
+}
+
+// Пересчёт ОБЩЕЙ суммы закупки = сумма по всем приложенным счетам (слот invoice).
+// Вызывается при добавлении/удалении счёта. Итог пишется в Битрикс (opportunity) и
+// в снимок payload — так одна заявка может иметь несколько счетов с разными суммами,
+// а наружу уходит их сумма. currency (одна на заявку) обновляется, если передана.
+async function recalcInvoiceTotal(localId, currency) {
+  const { rows } = await pool.query(
+    "SELECT COALESCE(SUM(amount),0) AS t FROM ticketsmodule_procurement_files WHERE request_id=$1 AND slot='invoice'", [localId]);
+  const total = Math.round((Number(rows[0].t) || 0) * 100) / 100;
+  const itemId = await itemIdOf(localId);
+  const fields = { [F.opportunity]: total };
+  if (currency) fields[F.currency] = currency;
+  try { await b24('crm.item.update', { entityTypeId: ENTITY, id: itemId, fields }); } catch (e) { /* best-effort */ }
+  try {
+    const { rows: pr } = await pool.query('SELECT payload FROM ticketsmodule_procurement WHERE id=$1', [localId]);
+    const pl = (pr[0] && pr[0].payload) || {};
+    pl.opportunity = total;
+    if (currency) pl.currency = currency;
+    await pool.query('UPDATE ticketsmodule_procurement SET payload=$1, updated_at=NOW() WHERE id=$2', [pl, localId]);
+  } catch (e) { /* снимок необязателен */ }
+  return total;
 }
 
 // Комментарий бухгалтера на этапе оплаты (хранится в payload, показывается в
@@ -1509,7 +1532,7 @@ async function pushSlotFull(localId, slot) {
 
 // Добавить файл в слот: в ЦУПе — метаданные + временные байты; поле Битрикса
 // пересобираем ВСЕМ набором (дописать по id Битрикс не умеет). Возвращает { id, first }.
-async function addFile(localId, slot, { filename, mime, base64, warehouse, acceptDate, comment } = {}, uploadedBy) {
+async function addFile(localId, slot, { filename, mime, base64, warehouse, acceptDate, comment, amount, currency } = {}, uploadedBy) {
   await ensureSchema();
   if (!SLOT_KEYS.includes(slot)) throw new Error('Недопустимый слот файла');
   if (!base64) throw userFacing('Не приложен файл');
@@ -1520,9 +1543,10 @@ async function addFile(localId, slot, { filename, mime, base64, warehouse, accep
   // Байты кладём во ВРЕМЕННОЕ поле content_b64 — чтобы письма прикладывали файл
   // надёжно и чтобы пересобирать набор без обращения к Битриксу. Через 3 дня чистятся.
   const ins = await pool.query(
-    `INSERT INTO ticketsmodule_procurement_files (request_id, slot, filename, mime, content_b64, warehouse, accept_date, comment, uploaded_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-    [localId, slot, filename || 'file', mime || null, base64 || null, warehouse || null, acceptDate || null, comment || null, uploadedBy || null]);
+    `INSERT INTO ticketsmodule_procurement_files (request_id, slot, filename, mime, content_b64, warehouse, accept_date, comment, amount, uploaded_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+    [localId, slot, filename || 'file', mime || null, base64 || null, warehouse || null, acceptDate || null, comment || null,
+     (amount != null && amount !== '') ? Number(amount) : null, uploadedBy || null]);
   // Пересобираем поле Битрикса всем набором (формат B), если поле найдено.
   if (code) await pushSlotFull(localId, slot);
   // Уведомление об оплате шлём НЕ при загрузке платёжки, а при переходе на
@@ -1531,6 +1555,8 @@ async function addFile(localId, slot, { filename, mime, base64, warehouse, accep
   // Добавили/изменили документ (не первый файл слота) → досылаем его повторно
   // с уведомлением. Первый файл покрывают уведомления смены стадии.
   if (!first) notifyFileChanged(localId, slot, filename || 'file', base64, uploadedBy).catch(() => {});
+  // Счёт добавлен → пересчитываем общую сумму закупки (= сумма всех счетов).
+  if (slot === 'invoice') await recalcInvoiceTotal(localId, currency).catch(() => {});
   return { id: ins.rows[0].id, first };
 }
 
@@ -1634,12 +1660,12 @@ async function notifyPaymentDone(localId, byBid) {
 async function filesFor(localId) {
   await ensureSchema();
   const { rows } = await pool.query(
-    `SELECT id, slot, filename, mime, warehouse, accept_date, comment, uploaded_by, uploaded_at
+    `SELECT id, slot, filename, mime, warehouse, accept_date, comment, amount, uploaded_by, uploaded_at
        FROM ticketsmodule_procurement_files WHERE request_id=$1 ORDER BY id`, [localId]);
   const bySlot = { invoice: [], pay: [], poa: [], contract: [], warranty: [] };
   for (const r of rows) {
     (bySlot[r.slot] = bySlot[r.slot] || []).push({
-      id: r.id, name: r.filename, mime: r.mime,
+      id: r.id, name: r.filename, mime: r.mime, amount: r.amount != null ? Number(r.amount) : null,
       warehouse: r.warehouse || '', acceptDate: r.accept_date ? String(r.accept_date).slice(0, 10) : '', comment: r.comment || '',
       uploadedByName: r.uploaded_by ? (USERS[r.uploaded_by] || ('#' + r.uploaded_by)) : null,
       uploadedAt: r.uploaded_at,
@@ -1707,7 +1733,9 @@ async function removeFile(localId, fileId) {
   await pool.query('DELETE FROM ticketsmodule_procurement_files WHERE id=$1 AND request_id=$2', [fileId, localId]);
   // Пересобираем поле Битрикса оставшимся набором (формат B).
   if (rows.length) await pushSlotFull(localId, rows[0].slot);
-  return { ok: true };
+  // Удалён счёт → пересчитываем общую сумму закупки по оставшимся счетам.
+  if (rows.length && rows[0].slot === 'invoice') await recalcInvoiceTotal(localId).catch(() => {});
+  return { ok: true, slot: rows.length ? rows[0].slot : null };
 }
 
 // Отметка «Полностью принят» (управляет зелёным цветом финального шага).
