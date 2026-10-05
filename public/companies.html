@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ЦУП · Компании</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#14171d;--bg2:#20242e;--card:#1b1f27;--border:#2a2f3a;--border2:#363c49;--text:#eef0f3;--text-2:#c3c9d3;--text-3:#8b93a3;--text-4:#616a78;--accent:#e5544a;--brand:#4098e6;--brand-l:rgba(64,152,230,.15);--good:#3ddc84;--warn:#e0a940;--bad:#ef5a6a;--bad-l:rgba(239,90,106,.14);--radius:12px;--font:'Inter',system-ui,sans-serif}
+html[data-theme="light"]{--bg:#f5f6fa;--bg2:#eef0f7;--card:#fff;--border:#e3e6ef;--border2:#d0d4e4;--text:#111827;--text-2:#374151;--text-3:#6b7280;--text-4:#9ca3af;--accent:#C53B2F;--brand:#2563eb;--brand-l:rgba(37,99,235,.08);--good:#059669;--warn:#d97706;--bad:#dc2626;--bad-l:rgba(220,38,38,.08)}
+body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased}
+.header{background:var(--card);border-bottom:1px solid var(--border);height:56px;display:flex;align-items:center;padding:0 20px;gap:12px;position:sticky;top:0;z-index:100}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14px;text-decoration:none;color:inherit}.logo img{height:24px}
+.hbtn{font-size:12.5px;color:var(--text-3);text-decoration:none;border:1px solid var(--border2);padding:6px 12px;border-radius:8px;background:transparent;cursor:pointer;font-family:var(--font)}
+.hbtn:hover{border-color:var(--accent);color:var(--accent)}
+.hsub{font-size:13.5px;color:var(--text-3);font-weight:600}
+.hr{margin-left:auto;display:flex;gap:8px;align-items:center}
+.asof{font-size:12px;color:var(--text-3)}
+.wrap{padding:16px;display:flex;flex-direction:column;gap:14px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+@media(max-width:800px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;cursor:pointer}
+.kpi.on{border-color:var(--brand)}
+.kpi .l{font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px}
+.kpi .v{font-size:22px;font-weight:800;margin-top:5px;font-variant-numeric:tabular-nums}
+.kpi .v.warn{color:var(--warn)}.kpi .v.bad{color:var(--bad)}
+.filters{display:flex;gap:10px;flex-wrap:wrap;padding:12px 14px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);align-items:flex-end}
+.fl{display:block;font-size:10.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+select,input[type=text]{background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text);font-family:var(--font);outline:none;min-width:150px}
+select:focus,input:focus{border-color:var(--brand)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.tbl th{position:sticky;top:0;background:var(--card);text-align:left;font-size:10.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;padding:8px 10px;border-bottom:1px solid var(--border2)}
+.tbl td{padding:6px 10px;border-bottom:1px solid var(--border);line-height:1.35;vertical-align:top}
+.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sph{border-bottom:1px dashed var(--border2);cursor:pointer}
+.sph:hover{color:var(--brand);border-color:var(--brand)}
+.sph.empty{color:var(--text-4)}
+.ed{cursor:pointer;color:var(--text-4);margin-left:6px;font-size:11px}
+.ed:hover{color:var(--brand)}
+.badge{display:inline-block;font-size:10.5px;font-weight:700;border-radius:5px;padding:1px 6px;margin:1px 2px 1px 0;background:var(--bad-l);color:var(--bad);white-space:nowrap}
+.badge.warn{background:rgba(224,169,64,.14);color:var(--warn)}
+.muted{color:var(--text-4)}
+.hint{color:var(--text-3);font-size:12.5px;padding:14px 18px}
+.savemsg{font-size:11px;margin-left:6px}
+.ok{color:var(--good)}.err{color:var(--bad)}
+.cnt{color:var(--text-3)}
+</style>
+</head>
+<body>
+<header class="header">
+  <a href="/" class="logo"><img src="/assets/logo-icon.png" alt="">ProLabSupport</a>
+  <a href="/" class="hbtn">← Все модули</a>
+  <span class="hsub">Компании</span>
+  <div class="hr">
+    <span class="asof" id="asof"></span>
+    <button class="hbtn" id="refreshBtn" onclick="refresh()">↻ Синхронизировать</button>
+    <button class="hbtn" onclick="logout()">Выйти</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="kpis">
+    <div class="kpi" data-f="" onclick="setQuick('')"><div class="l">Всего компаний</div><div class="v" id="kTotal">—</div></div>
+    <div class="kpi" data-f="noind" onclick="setQuick('noind')"><div class="l">Без сферы</div><div class="v warn" id="kNoInd">—</div></div>
+    <div class="kpi" data-f="nobin" onclick="setQuick('nobin')"><div class="l">Без БИН</div><div class="v warn" id="kNoBin">—</div></div>
+    <div class="kpi" data-f="dup" onclick="setQuick('dup')"><div class="l">Возможные дубли</div><div class="v bad" id="kDup">—</div></div>
+  </div>
+
+  <div class="filters">
+    <div><label class="fl">Сфера</label><select id="fInd" onchange="render()"><option value="">Все</option></select></div>
+    <div><label class="fl">Ответственный</label><select id="fOwner" onchange="render()"><option value="">Все</option></select></div>
+    <div><label class="fl">Город</label><select id="fCity" onchange="render()"><option value="">Все</option></select></div>
+    <div><label class="fl">Проблемные</label><select id="fProb" onchange="render()"><option value="">Все</option><option value="any">Только с проблемами</option><option value="noind">Без сферы</option><option value="nobin">Без БИН</option><option value="dup">Возможные дубли</option></select></div>
+    <div style="flex:1;min-width:200px"><label class="fl">Поиск (название / БИН)</label><input type="text" id="fSearch" placeholder="Поиск…" oninput="render()" style="width:100%"></div>
+  </div>
+
+  <div class="card">
+    <div class="hint" style="padding:9px 14px;border-bottom:1px solid var(--border)">Показано: <b id="shown" style="color:var(--text-2)">0</b>. Клик по сфере — изменить (список значений из Б24); правка названия — по ✎. Изменения сразу пишутся в Битрикс.</div>
+    <div style="overflow:auto;max-height:calc(100vh - 290px)">
+      <table class="tbl"><thead><tr>
+        <th>Название</th><th>Сфера деятельности</th><th>БИН</th><th>Ответственный</th><th>Город</th><th class="num">Сделок</th><th>Проблемы</th>
+      </tr></thead><tbody id="body"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<script>
+let DATA={rows:[],industries:[],filters:{},summary:{}}; let INDOPTS='';
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const fmt=n=>Math.round(Number(n)||0).toLocaleString('ru-RU').replace(/,/g,' ');
+async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.href='/login.html';return{ok:false,d:{}}}let d={};try{d=await r.json()}catch(e){}return{ok:r.ok,d}}
+
+async function boot(){const r=await fetch('/auth/me');if(!r.ok){location.href='/login.html';return;}await load();}
+async function load(){
+  const {ok,d}=await api('/api/companies');
+  if(!ok){document.getElementById('body').innerHTML='<tr><td class="hint" colspan="7">Ошибка загрузки</td></tr>';return;}
+  DATA=d;
+  INDOPTS='<option value="">— без сферы —</option>'+(d.industries||[]).map(i=>`<option value="${esc(i.id)}">${esc(i.name)}</option>`).join('');
+  document.getElementById('asof').textContent=d.asOf?('Синхр.: '+new Date(d.asOf).toLocaleString('ru-RU')):'';
+  document.getElementById('kTotal').textContent=fmt(d.summary.total);
+  document.getElementById('kNoInd').textContent=fmt(d.summary.noIndustry);
+  document.getElementById('kNoBin').textContent=fmt(d.summary.noBin);
+  document.getElementById('kDup').textContent=fmt(d.summary.dup);
+  fill('fInd',(d.filters.industries||[]));
+  fill('fOwner',(d.filters.owners||[]));
+  fill('fCity',(d.filters.cities||[]));
+  render();
+}
+function fill(id,arr){const el=document.getElementById(id);el.innerHTML='<option value="">Все</option>'+arr.map(x=>`<option>${esc(x)}</option>`).join('');}
+function setQuick(f){document.getElementById('fProb').value=(f==='noind'||f==='nobin'||f==='dup')?f:'';render();
+  document.querySelectorAll('.kpi').forEach(k=>k.classList.toggle('on',k.dataset.f===f&&f!==''));}
+function filtered(){
+  const ind=document.getElementById('fInd').value, own=document.getElementById('fOwner').value, city=document.getElementById('fCity').value;
+  const prob=document.getElementById('fProb').value, q=(document.getElementById('fSearch').value||'').toLowerCase().trim();
+  return (DATA.rows||[]).filter(r=>{
+    if(ind && r.industryName!==ind) return false;
+    if(own && r.owner!==own) return false;
+    if(city && r.city!==city) return false;
+    if(prob==='any' && !r.problems.length) return false;
+    if(prob==='noind' && r.industryId) return false;
+    if(prob==='nobin' && r.bin) return false;
+    if(prob==='dup' && !r.problems.includes('возможный дубль')) return false;
+    if(q && !((r.title||'')+' '+(r.bin||'')).toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+function render(){
+  const rows=filtered();
+  const body=document.getElementById('body');
+  body.innerHTML=rows.length?rows.slice(0,3000).map(r=>{
+    const badges=r.problems.map(p=>`<span class="badge ${p==='возможный дубль'?'':'warn'}">${esc(p)}</span>`).join('')||'<span class="muted">—</span>';
+    const sph=r.industryId?`<span class="sph" onclick="editSphere('${esc(r.id)}',this)">${esc(r.industryName||r.industryId)}</span>`
+                          :`<span class="sph empty" onclick="editSphere('${esc(r.id)}',this)">— без сферы —</span>`;
+    return `<tr id="row-${esc(r.id)}">
+      <td><span class="ttl">${esc(r.title)||'<span class=muted>без названия</span>'}</span><span class="ed" title="Переименовать" onclick="editTitle('${esc(r.id)}',this)">✎</span><span class="savemsg" id="msg-${esc(r.id)}"></span></td>
+      <td>${sph}</td>
+      <td>${r.bin?esc(r.bin):'<span class="muted">—</span>'}</td>
+      <td>${esc(r.owner)||'<span class="muted">—</span>'}</td>
+      <td>${esc(r.city)||'<span class="muted">—</span>'}</td>
+      <td class="num">${r.dealCount||''}</td>
+      <td>${badges}</td>
+    </tr>`;
+  }).join(''):'<tr><td class="hint" colspan="7">Нет компаний по фильтру.</td></tr>';
+  document.getElementById('shown').textContent=rows.length+(rows.length>3000?' (показаны первые 3000 — уточните фильтр)':'');
+}
+// Инлайн-правка сферы: подменяем ячейку на <select>, сохраняем при выборе.
+function editSphere(id,el){
+  const row=(DATA.rows||[]).find(r=>r.id===id); if(!row)return;
+  const sel=document.createElement('select');
+  sel.innerHTML=INDOPTS; sel.value=row.industryId||'';
+  el.replaceWith(sel); sel.focus();
+  const restore=()=>{const sp=document.createElement('span');sp.className='sph'+(row.industryId?'':' empty');sp.textContent=row.industryId?(row.industryName||row.industryId):'— без сферы —';sp.setAttribute('onclick',`editSphere('${id}',this)`);sel.replaceWith(sp);};
+  sel.onchange=async()=>{ const newId=sel.value; await saveSphere(id,newId); };
+  sel.onblur=()=>{ setTimeout(()=>{ if(document.body.contains(sel)) restore(); },150); };
+}
+async function saveSphere(id,industryId){
+  const msg=document.getElementById('msg-'+id);
+  const r=await fetch('/api/companies/'+encodeURIComponent(id),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({industryId})});
+  const d=await r.json();
+  if(!r.ok){ if(msg){msg.className='savemsg err';msg.textContent=(d.error||'Ошибка');} return; }
+  const row=(DATA.rows||[]).find(x=>x.id===id); if(row){ row.industryId=d.industryId||''; row.industryName=d.industryName||''; if(row.problems){row.problems=row.problems.filter(p=>p!=='без сферы'); if(!row.industryId&&!row.problems.includes('без сферы'))row.problems.push('без сферы');} }
+  render();
+  const m2=document.getElementById('msg-'+id); if(m2){m2.className='savemsg ok';m2.textContent='✓ сохранено';setTimeout(()=>{m2.textContent='';},2000);}
+}
+// Инлайн-правка названия.
+function editTitle(id,el){
+  const row=(DATA.rows||[]).find(r=>r.id===id); if(!row)return;
+  const td=el.closest('td'); if(!td)return;
+  td.innerHTML=`<input type="text" id="ti-${id}" value="${esc(row.title)}" style="width:70%"> <button class="hbtn" onclick="saveTitle('${id}')">✓</button> <button class="hbtn" onclick="render()">✕</button>`;
+  const inp=document.getElementById('ti-'+id); if(inp){inp.focus();inp.select();}
+}
+async function saveTitle(id){
+  const inp=document.getElementById('ti-'+id); const title=inp?inp.value.trim():'';
+  if(!title){alert('Название не может быть пустым');return;}
+  const r=await fetch('/api/companies/'+encodeURIComponent(id),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title})});
+  const d=await r.json();
+  if(!r.ok){alert(d.error||'Ошибка сохранения');return;}
+  const row=(DATA.rows||[]).find(x=>x.id===id); if(row)row.title=title;
+  render();
+}
+async function refresh(){const b=document.getElementById('refreshBtn');b.disabled=true;b.textContent='Синхронизирую…';await api('/api/companies/refresh',{method:'POST'});await load();b.disabled=false;b.textContent='↻ Синхронизировать';}
+async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
+boot();
+</script>
+</body>
+</html>

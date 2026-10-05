@@ -142,6 +142,7 @@ app.get('/finance-stock.html', requireModule('STOCK'), (_, res) => res.sendFile(
 app.get('/finance-quality.html', requireModule('QUALITY'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'finance-quality.html')));
 app.get('/finance-advances.html', requireModule('ADV'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'finance-advances.html')));
 app.get('/finance-cashflow.html', requireModule('CASHFLOW'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'finance-cashflow.html')));
+app.get('/companies.html', requireModule('CMP'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'companies.html')));
 app.get('/cup-admin.html', requirePageAuth(['admin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'cup-admin.html')));
 app.get('/account.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'account.html')));
 // `index:false` — without this, static would auto-serve public/index.html
@@ -170,6 +171,7 @@ app.use('/api/operational', require('./routes/operational-routes').router);
 app.use('/api/procurement', require('./routes/procurement-routes').router);
 app.use('/api/campaigns', require('./routes/campaigns-routes').router);
 app.use('/api/finance', require('./routes/finance-routes').router);
+app.use('/api/companies', require('./routes/companies-routes').router);
 app.use('/api/notify', require('./routes/notify-routes').router);
 const { router: relationsRouter, handleBitrixWebhook } = require('./routes/relations-routes');
 app.use('/relations', relationsRouter);
