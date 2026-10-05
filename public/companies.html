@@ -130,11 +130,17 @@ details>summary::-webkit-details-marker{display:none}
     <div style="flex:1;min-width:200px"><label class="fl">Поиск (название / БИН)</label><input type="text" id="fSearch" placeholder="Поиск…" oninput="render()" style="width:100%"></div>
   </div>
 
+  <div id="mergeBar" style="display:none;align-items:center;gap:12px;padding:10px 14px;background:var(--brand-l);border:1px solid var(--brand);border-radius:var(--radius)">
+    <b id="mbCount" style="color:var(--brand)">Выбрано: 0</b>
+    <span class="muted">— отметьте 2+ компании для ручного слияния</span>
+    <button class="rbtn" id="mbMerge" style="margin-left:auto" onclick="openManualMerge()">Слить выбранные</button>
+    <button class="rbtn ghost" onclick="clearSel()">Снять выделение</button>
+  </div>
   <div class="card">
-    <div class="hint" style="padding:9px 14px;border-bottom:1px solid var(--border)">Показано: <b id="shown" style="color:var(--text-2)">0</b>. Клик по сфере — изменить; ✎ — переименовать; ↗ — открыть компанию в Битрикс; число в «Сделок» — открыть список сделок; 🗑 — удалить (только без привязанных объектов). Изменения сразу пишутся в Битрикс.</div>
-    <div style="overflow:auto;max-height:calc(100vh - 290px)">
+    <div class="hint" style="padding:9px 14px;border-bottom:1px solid var(--border)">Показано: <b id="shown" style="color:var(--text-2)">0</b>. ☑ — отметить для ручного слияния; клик по сфере — изменить; ✎ — переименовать; ↗ — открыть в Битрикс; число «Сделок» — список сделок; 🗑 — удалить. Изменения сразу пишутся в Битрикс.</div>
+    <div style="overflow:auto;max-height:calc(100vh - 330px)">
       <table class="tbl"><thead><tr>
-        <th>Название</th><th>Сфера деятельности</th><th>БИН</th><th>Ответственный</th><th>Город</th><th class="num">Сделок</th><th>Проблемы</th><th></th>
+        <th style="width:26px"></th><th>Название</th><th>Сфера деятельности</th><th>БИН</th><th>Ответственный</th><th>Город</th><th class="num">Сделок</th><th>Проблемы</th><th></th>
       </tr></thead><tbody id="body"></tbody></table>
     </div>
   </div>
@@ -156,7 +162,7 @@ details>summary::-webkit-details-marker{display:none}
 </div></div>
 
 <script>
-let DATA={rows:[],industries:[],filters:{},summary:{}}; let INDOPTS='';
+let DATA={rows:[],industries:[],filters:{},summary:{}}; let INDOPTS=''; const SEL=new Set();
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const fmt=n=>Math.round(Number(n)||0).toLocaleString('ru-RU').replace(/,/g,' ');
 async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.href='/login.html';return{ok:false,d:{}}}let d={};try{d=await r.json()}catch(e){}return{ok:r.ok,d}}
@@ -164,7 +170,7 @@ async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.hre
 async function boot(){const r=await fetch('/auth/me');if(!r.ok){location.href='/login.html';return;}await load();}
 async function load(){
   const {ok,d}=await api('/api/companies');
-  if(!ok){document.getElementById('body').innerHTML='<tr><td class="hint" colspan="8">Ошибка загрузки</td></tr>';return;}
+  if(!ok){document.getElementById('body').innerHTML='<tr><td class="hint" colspan="9">Ошибка загрузки</td></tr>';return;}
   DATA=d;
   INDOPTS='<option value="">— без сферы —</option>'+(d.industries||[]).map(i=>`<option value="${esc(i.id)}">${esc(i.name)}</option>`).join('');
   document.getElementById('asof').textContent=d.asOf?('Синхр.: '+new Date(d.asOf).toLocaleString('ru-RU')):'';
@@ -207,6 +213,7 @@ function render(){
     const sph=r.industryId?`<span class="sph" onclick="editSphere('${esc(r.id)}',this)">${esc(r.industryName||r.industryId)}</span>`
                           :`<span class="sph empty" onclick="editSphere('${esc(r.id)}',this)">— без сферы —</span>`;
     return `<tr id="row-${esc(r.id)}">
+      <td><input type="checkbox" class="regchk" value="${esc(r.id)}" ${SEL.has(r.id)?'checked':''} onchange="toggleSel('${esc(r.id)}',this.checked)"></td>
       <td><span class="ttl">${esc(r.title)||'<span class=muted>без названия</span>'}</span>${b24link(r.url)}<span class="ed" title="Переименовать" onclick="editTitle('${esc(r.id)}',this)">✎</span><span class="savemsg" id="msg-${esc(r.id)}"></span></td>
       <td>${sph}</td>
       <td>${r.bin?esc(r.bin):'<span class="muted">—</span>'}</td>
@@ -216,7 +223,8 @@ function render(){
       <td>${badges}</td>
       <td class="num"><span class="act del" title="Удалить компанию" onclick="delCompany('${esc(r.id)}',${JSON.stringify(r.title||'').replace(/"/g,'&quot;')})">🗑</span></td>
     </tr>`;
-  }).join(''):'<tr><td class="hint" colspan="8">Нет компаний по фильтру.</td></tr>';
+  }).join(''):'<tr><td class="hint" colspan="9">Нет компаний по фильтру.</td></tr>';
+  updateMergeBar();
   document.getElementById('shown').textContent=rows.length+(rows.length>3000?' (показаны первые 3000 — уточните фильтр)':'');
 }
 // Инлайн-правка сферы: подменяем ячейку на <select>, сохраняем при выборе.
@@ -254,6 +262,32 @@ async function saveTitle(id){
   const row=(DATA.rows||[]).find(x=>x.id===id); if(row)row.title=title;
   render();
 }
+// ── Ручное слияние: выбор компаний галочками в реестре ──────────────────────
+function toggleSel(id,on){ if(on)SEL.add(id); else SEL.delete(id); updateMergeBar(); }
+function clearSel(){ SEL.clear(); document.querySelectorAll('.regchk').forEach(c=>c.checked=false); updateMergeBar(); }
+function updateMergeBar(){
+  const bar=document.getElementById('mergeBar'); if(!bar)return;
+  bar.style.display=SEL.size?'flex':'none';
+  const c=document.getElementById('mbCount'); if(c)c.textContent='Выбрано: '+SEL.size;
+  const b=document.getElementById('mbMerge'); if(b)b.disabled=SEL.size<2;
+}
+function openManualMerge(){
+  const ids=[...SEL]; if(ids.length<2){alert('Отметьте минимум 2 компании');return;}
+  const list=ids.map(id=>(DATA.rows||[]).find(r=>r.id===id)).filter(Boolean);
+  // эталон по умолчанию — больше всего сделок
+  let best=list[0]; list.forEach(r=>{ if((r.dealCount||0)>(best.dealCount||0))best=r; });
+  const body=`<div class="plan">Выберите <b>эталон</b> (основную карточку), остальные станут дублями и будут слиты в неё:</div>
+    <div style="margin-top:8px">${list.map(r=>`<label class="mradio" style="display:flex;gap:8px;padding:6px 0;font-size:13px;color:var(--text-2)">
+      <input type="radio" name="mman" value="${esc(r.id)}" ${r.id===best.id?'checked':''}>
+      <span><b>${esc(r.title)||('#'+esc(r.id))}</b> — сделок ${r.dealCount||0}${r.industryName?(' · '+esc(r.industryName)):''}${r.bin?(' · БИН '+esc(r.bin)):''}</span></label>`).join('')}</div>`;
+  openModal('Ручное слияние — выбор эталона',body,`<button class="rbtn ghost" onclick="closeModal()">Отмена</button><button class="rbtn" onclick="manualPreview()">Предпросмотр слияния</button>`);
+}
+function manualPreview(){
+  const canon=document.querySelector('input[name="mman"]:checked'); if(!canon){alert('Выберите эталон');return;}
+  const canonicalId=canon.value; const dupIds=[...SEL].filter(v=>v!==canonicalId);
+  doPreview(canonicalId,dupIds);
+}
+
 // ── Вкладки: Реестр / Дубли ────────────────────────────────────────────────
 let DUP=null, DUPLOADED=false;
 function switchView(v){
@@ -370,23 +404,30 @@ function groupSelection(gi){
   const dupIds=[...document.querySelectorAll(`.mg-${gi}:checked`)].map(c=>c.value).filter(v=>v!==canonicalId);
   return {canonicalId,dupIds};
 }
-async function previewMerge(gi){
+function previewMerge(gi){
   const {canonicalId,dupIds}=groupSelection(gi);
   if(!canonicalId){alert('Выберите эталон');return;}
   if(!dupIds.length){alert('Отметьте хотя бы один дубль для слияния');return;}
+  doPreview(canonicalId,dupIds);
+}
+function mfLabel(f){ // человекочитаемо: контактные мультиполя показываем как «E-mail (+2)»
+  const names={EMAIL:'E-mail',PHONE:'Телефон',WEB:'Сайт'};
+  return f.isMf?(`${names[f.field]||f.field} (${esc(f.value)})`):esc(f.field);
+}
+async function doPreview(canonicalId,dupIds){
   openModal('Предпросмотр слияния','<div class="dnote">Считаю, что переедет…</div>','');
   const r=await fetch('/api/companies/merge/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({canonicalId,duplicateIds:dupIds})});
   const d=await r.json();
   if(!r.ok||!d.ok){document.getElementById('mBody').innerHTML='<div class="warnbox">'+esc((d&&d.error)||'Ошибка предпросмотра')+'</div>';document.getElementById('mFoot').innerHTML='<button class="rbtn ghost" onclick="closeModal()">Закрыть</button>';return;}
   let tot={deals:0,contacts:0,items:0};
   const blocks=d.duplicates.map(dp=>{tot.deals+=dp.counts.deals;tot.contacts+=dp.counts.contacts;tot.items+=dp.counts.items;
-    const cp=dp.copyFields.length?('Скопируется в эталон: '+dp.copyFields.map(f=>esc(f.field)).join(', ')):'Поля для копирования не найдены';
+    const cp=dp.copyFields.length?('Скопируется/дообогатит эталон: '+dp.copyFields.map(mfLabel).join(', ')):'Новых полей для копирования нет';
     return `<div class="pmove"><b>${esc(dp.title)}</b> (#${esc(dp.id)}) → сделок ${dp.counts.deals}, контактов ${dp.counts.contacts}, элементов ${dp.counts.items}.<br><span class="muted">${cp}</span></div>`;}).join('');
   const body=`<div class="plan">Эталон: <b>${esc(d.canonical.title)}</b> (#${esc(d.canonical.id)}) ${d.canonical.url?`<a class="ext" href="${esc(d.canonical.url)}" target="_blank" rel="noopener">↗</a>`:''}<br>
     Будет перенесено на эталон: <b>${tot.deals}</b> сделок, <b>${tot.contacts}</b> контактов, <b>${tot.items}</b> элементов смарт-процессов.</div>
     ${blocks}
-    <div class="warnbox" style="margin-top:8px">Дубли будут помечены «[ДУБЛЬ → #${esc(d.canonical.id)}]» и исключены из поиска, <b>без удаления</b>. Слияние можно откатить в журнале.</div>
-    <label class="mradio" style="margin-top:10px"><input type="checkbox" id="cpFields" checked> копировать недостающие поля в эталон</label>`;
+    <div class="warnbox" style="margin-top:8px">Контакты и сделки <b>не удаляются</b> — переносятся на эталон. Дубли помечаются «[ДУБЛЬ → #${esc(d.canonical.id)}]» и исключаются из поиска, но тоже не удаляются. Слияние можно откатить в журнале.</div>
+    <label class="mradio" style="margin-top:10px"><input type="checkbox" id="cpFields" checked> копировать недостающие поля и дообогащать e-mail/телефон эталона</label>`;
   const foot=`<button class="rbtn ghost" onclick="closeModal()">Отмена</button><button class="rbtn" id="doMergeBtn" onclick="doMerge('${esc(canonicalId)}',${jq(dupIds.join(','))})">Применить слияние</button>`;
   openModal('Предпросмотр слияния',body,foot);
 }
@@ -398,8 +439,9 @@ async function doMerge(canonicalId,dupCsv){
   const d=await r.json();
   if(!r.ok){alert((d&&d.error)||'Ошибка слияния');if(b){b.disabled=false;b.textContent='Применить слияние';}return;}
   const okN=(d.results||[]).filter(x=>x.ok).length, badN=(d.results||[]).filter(x=>!x.ok).length;
-  closeModal();
-  alert('Слияние выполнено: '+okN+' дубл.'+(badN?(' , ошибок: '+badN):'')+'. Обновляю список…');
+  const enr=(d.results||[]).reduce((s,x)=>s+(x.enriched||0),0);
+  closeModal(); SEL.clear();
+  alert('Слияние выполнено: '+okN+' дубл.'+(badN?(', ошибок: '+badN):'')+(enr?(', дообогащено контактов: '+enr):'')+'. Обновляю список…');
   DUPLOADED=false; await load(); await loadDup();
 }
 

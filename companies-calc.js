@@ -513,6 +513,14 @@ async function previewMerge(canonicalId, duplicateIds) {
       if (!cv && dv) copy.push({ field: f, value: dv });
     }
     if (binCode && !canonBin && binCode in raw && firstVal(raw[binCode])) copy.push({ field: binCode, value: firstVal(raw[binCode]), isBin: true });
+    // дообогащение контактных мультиполей — показываем, сколько значений добавится
+    for (const mf of ['EMAIL', 'PHONE', 'WEB']) {
+      const canonArr = Array.isArray(canon[mf]) ? canon[mf] : (canon[mf] ? [canon[mf]] : []);
+      const dupArr = Array.isArray(raw[mf]) ? raw[mf] : (raw[mf] ? [raw[mf]] : []);
+      const have = new Set(canonArr.map(x => String((x && x.VALUE) || x).trim().toLowerCase()).filter(Boolean));
+      const addN = dupArr.filter(x => { const v = String((x && x.VALUE) || x).trim().toLowerCase(); return v && !have.has(v); }).length;
+      if (addN) copy.push({ field: mf, value: '+' + addN, isMf: true });
+    }
     dups.push({
       id: dupId, title: raw.TITLE || ('#' + dupId),
       url: base ? `${base}/crm/company/details/${dupId}/` : '',
@@ -566,12 +574,36 @@ async function applyMerge({ canonicalId, duplicateIds, copyFields = true, byUser
         if (Object.keys(fields).length) { try { await b24('crm.company.update', { id: canonicalId, fields }); } catch (e) { /* best-effort */ } }
       }
 
+      // 4.5) дообогащение контактных мультиполей эталона (EMAIL/PHONE/WEB): добавляем
+      //      недостающие значения дубля, НЕ затирая уже имеющиеся у эталона.
+      const enrichedMf = {};
+      if (copyFields) {
+        const upd = {};
+        for (const mf of ['EMAIL', 'PHONE', 'WEB']) {
+          const canonArr = Array.isArray(canon[mf]) ? canon[mf] : (canon[mf] ? [canon[mf]] : []);
+          const dupArr = Array.isArray(raw[mf]) ? raw[mf] : (raw[mf] ? [raw[mf]] : []);
+          const have = new Set(canonArr.map(x => String((x && x.VALUE) || x).trim().toLowerCase()).filter(Boolean));
+          const add = [], addedVals = [];
+          for (const x of dupArr) {
+            const v = String((x && x.VALUE) || x).trim();
+            if (v && !have.has(v.toLowerCase())) { add.push({ VALUE: v, VALUE_TYPE: (x && x.VALUE_TYPE) || 'WORK' }); have.add(v.toLowerCase()); addedVals.push(v); }
+          }
+          if (add.length) {
+            // чтобы добавить, НЕ затерев существующие — шлём существующие (с ID) + новые
+            const existing = canonArr.map(x => ({ ID: x.ID, VALUE: x.VALUE, VALUE_TYPE: x.VALUE_TYPE }));
+            upd[mf] = existing.concat(add);
+            enrichedMf[mf] = addedVals;
+          }
+        }
+        if (Object.keys(upd).length) { try { await b24('crm.company.update', { id: canonicalId, fields: upd }); } catch (e) { /* best-effort */ } }
+      }
+
       // 5) пометка дубля (переименование) — без удаления
       const newTitle = `[ДУБЛЬ → #${canonicalId}] ${prevTitle}`.slice(0, 500);
       await b24('crm.company.update', { id: dupId, fields: { TITLE: newTitle } });
 
       // 6) журнал
-      const moved = { deals: ch.deals, contacts: ch.contacts, items: ch.items, copiedFields };
+      const moved = { deals: ch.deals, contacts: ch.contacts, items: ch.items, copiedFields, enrichedMf };
       const ins = await pool.query(
         `INSERT INTO ticketsmodule_company_merges (canonical_id, canonical_title, duplicate_id, prev_title, moved, by_user)
          VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
@@ -585,7 +617,8 @@ async function applyMerge({ canonicalId, duplicateIds, copyFields = true, byUser
         await pool.query('UPDATE ticketsmodule_companies SET industry_id=$1, industry_name=$2 WHERE id=$3 AND (industry_id IS NULL OR industry_id=\'\')', [nv, inds[nv] || '', canonicalId]);
       }
 
-      results.push({ dupId, ok: true, mergeId, moved: ch.counts, copied: Object.keys(copiedFields) });
+      const enrichedCount = Object.values(enrichedMf).reduce((s, a) => s + a.length, 0);
+      results.push({ dupId, ok: true, mergeId, moved: ch.counts, copied: Object.keys(copiedFields), enriched: enrichedCount });
     } catch (e) {
       results.push({ dupId, ok: false, error: String(e && e.message || e) });
     }
@@ -614,6 +647,19 @@ async function undoMerge(mergeId, byUser = '') {
   if (Object.keys(cf).length) {
     const fields = {}; for (const f of Object.keys(cf)) fields[f] = '';
     try { await b24('crm.company.update', { id: canonId, fields }); } catch (e) { /* */ }
+  }
+  // убираем значения, которыми дообогащали эталон (EMAIL/PHONE/WEB) — только добавленные
+  const enriched = moved.enrichedMf || {};
+  for (const mf of Object.keys(enriched)) {
+    const vals = new Set((enriched[mf] || []).map(v => String(v).trim().toLowerCase()));
+    if (!vals.size) continue;
+    try {
+      const { result: cur } = await b24('crm.company.get', { id: canonId });
+      const arr = Array.isArray(cur[mf]) ? cur[mf] : (cur[mf] ? [cur[mf]] : []);
+      const list = arr.map(x => vals.has(String(x.VALUE || '').trim().toLowerCase())
+        ? { ID: x.ID, DELETE: 'Y' } : { ID: x.ID, VALUE: x.VALUE, VALUE_TYPE: x.VALUE_TYPE });
+      if (list.some(e => e.DELETE)) await b24('crm.company.update', { id: canonId, fields: { [mf]: list } });
+    } catch (e) { /* */ }
   }
   // возвращаем имя дубля
   try { await b24('crm.company.update', { id: dupId, fields: { TITLE: m.prev_title } }); } catch (e) { /* */ }
