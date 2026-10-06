@@ -751,10 +751,17 @@ async function writeSelfTest(id, { keep = false } = {}) {
   const titleApplied = String(mid.TITLE || '') === titleTry;
   const commApplied = String(mid.COMMENTS || '').includes(tag);
 
-  // Тест 3 — запись в СДЕЛКУ (от этого зависит слияние): COMMENTS первой сделки компании
+  // Тест 3 — запись в СДЕЛКУ (от этого зависит слияние): COMMENTS сделки этой компании,
+  // а если у компании сделок нет — берём ЛЮБУЮ сделку портала (нам важен сам факт записи).
   let deal = null;
   try {
-    const dealIds = await listDealIds(id);
+    let dealIds = await listDealIds(id);
+    let source = 'компания';
+    if (!dealIds.length) {
+      const any = await b24('crm.deal.list', { select: ['ID'], order: { ID: 'DESC' }, start: 0 });
+      dealIds = (any.result || []).slice(0, 1).map(d => d.ID);
+      source = 'любая сделка портала';
+    }
     if (dealIds.length) {
       const did = dealIds[0];
       const dg = await b24('crm.deal.get', { id: did });
@@ -764,9 +771,9 @@ async function writeSelfTest(id, { keep = false } = {}) {
       await sleep(800);
       const dg2 = await b24('crm.deal.get', { id: did });
       const dApplied = String((dg2.result && dg2.result.COMMENTS) || '').includes(tag);
-      deal = { dealId: did, updateResult: rDeal && rDeal.result, applied: dApplied };
+      deal = { dealId: did, source, updateResult: rDeal && rDeal.result, applied: dApplied };
       if (!keep) { try { await b24('crm.deal.update', { id: did, fields: { COMMENTS: dOrig } }); } catch (e) { } }
-    } else { deal = { note: 'у компании нет сделок для теста' }; }
+    } else { deal = { note: 'сделок на портале не нашлось' }; }
   } catch (e) { deal = { error: String(e && e.message || e) }; }
 
   if (!keep) { try { await b24('crm.company.update', { id, fields: { TITLE: origTitle, COMMENTS: origComm } }); } catch (e) { } }
