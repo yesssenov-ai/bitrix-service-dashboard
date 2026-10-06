@@ -438,10 +438,17 @@ async function doMerge(canonicalId,dupCsv){
   const r=await fetch('/api/companies/merge/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({canonicalId,duplicateIds,copyFields})});
   const d=await r.json();
   if(!r.ok){alert((d&&d.error)||'Ошибка слияния');if(b){b.disabled=false;b.textContent='Применить слияние';}return;}
+  if(!d.ok&&d.error){alert('Слияние не выполнено: '+d.error);if(b){b.disabled=false;b.textContent='Применить слияние';}return;}
   const okN=(d.results||[]).filter(x=>x.ok).length, badN=(d.results||[]).filter(x=>!x.ok).length;
   const enr=(d.results||[]).reduce((s,x)=>s+(x.enriched||0),0);
+  const failMoves=(d.results||[]).reduce((s,x)=>s+((x.failed&&(x.failed.deals+x.failed.contacts+x.failed.items))||0),0);
+  const movedN=(d.results||[]).reduce((s,x)=>s+((x.moved&&(x.moved.deals+x.moved.contacts+x.moved.items))||0),0);
+  const errs=(d.results||[]).filter(x=>!x.ok).map(x=>x.error).filter(Boolean);
   closeModal(); SEL.clear();
-  alert('Слияние выполнено: '+okN+' дубл.'+(badN?(', ошибок: '+badN):'')+(enr?(', дообогащено контактов: '+enr):'')+'. Обновляю список…');
+  alert('Слияние: эталонов-дублей обработано '+okN+(badN?(', не удалось '+badN):'')
+    +'. Перенесено объектов: '+movedN+(failMoves?(', не перенеслось (нет прав?): '+failMoves):'')
+    +(enr?(', дообогащено контактов: '+enr):'')
+    +(errs.length?('\nОшибки: '+errs.join('; ')):'')+'\nОбновляю список…');
   DUPLOADED=false; await load(); await loadDup();
 }
 

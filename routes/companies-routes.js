@@ -24,6 +24,12 @@ router.get('/merges', requireAuth([]), async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Диагностика записи в Б24: GET /api/companies/selftest?id=123
+router.get('/selftest', requireAuth(EDIT), async (req, res) => {
+  try { res.json(await require('../companies-calc').writeSelfTest(req.query.id)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Сделки компании (провалиться в сделки из ЦУП)
 router.get('/:id/deals', requireAuth([]), async (req, res) => {
   try { res.json(await require('../companies-calc').getCompanyDeals(req.params.id)); }

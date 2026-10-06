@@ -535,12 +535,30 @@ async function previewMerge(canonicalId, duplicateIds) {
   };
 }
 
+// Обёртка с проверкой: Bitrix на отказ прав отвечает HTTP 200 с {error} в теле,
+// а b24 бросает только на 4xx/5xx. Здесь ловим логическую ошибку явно.
+async function b24w(method, params) {
+  const r = await b24(method, params);
+  if (r && r.error) throw new Error('Bitrix: ' + (r.error_description || r.error));
+  if (r && r.result === false) throw new Error('Bitrix отклонил операцию (нет прав?)');
+  return r;
+}
+
 // ── Применение слияния: перенос детей на эталон + копирование полей + пометка ───
 async function applyMerge({ canonicalId, duplicateIds, copyFields = true, byUser = '' }) {
   await ensureSchema();
   canonicalId = String(canonicalId);
   duplicateIds = [...new Set((duplicateIds || []).map(String))].filter(d => d && d !== canonicalId);
   if (!duplicateIds.length) return { ok: false, error: 'Не выбраны дубли для слияния' };
+
+  // Проба прав на запись в Bitrix: no-op апдейт эталона его же названием. Если нет
+  // прав — выходим сразу, НИЧЕГО не пишем и не отмечаем, с понятной ошибкой.
+  try {
+    const c0 = await companyRaw(canonicalId);
+    await b24w('crm.company.update', { id: canonicalId, fields: { TITLE: c0.TITLE || ('#' + canonicalId) } });
+  } catch (e) {
+    return { ok: false, error: 'Нет прав на запись в Bitrix — слияние не выполнено. Проверьте права пользователя/вебхука на редактирование компаний в CRM. (' + (e.message || e) + ')' };
+  }
 
   const results = [], mergeIds = [];
   const inds = await industryMap();
@@ -553,13 +571,18 @@ async function applyMerge({ canonicalId, duplicateIds, copyFields = true, byUser
       const canon = await companyRaw(canonicalId);
       const ch = await childrenOf(dupId);
 
+      // Переносим детей с ПРОВЕРКОЙ результата и считаем только реально перенесённые
+      // (чтобы журнал/откат соответствовали факту, а не намерению).
+      const movedDeals = [], movedContacts = [], movedItems = {};
+      const failed = { deals: 0, contacts: 0, items: 0 };
       // 1) перенос сделок
-      for (const id of ch.deals) { try { await b24('crm.deal.update', { id, fields: { COMPANY_ID: canonicalId } }); } catch (e) { /* best-effort */ } await sleep(40); }
+      for (const id of ch.deals) { try { await b24w('crm.deal.update', { id, fields: { COMPANY_ID: canonicalId } }); movedDeals.push(id); } catch (e) { failed.deals++; } await sleep(40); }
       // 2) перенос контактов (основная компания)
-      for (const id of ch.contacts) { try { await b24('crm.contact.update', { id, fields: { COMPANY_ID: canonicalId } }); } catch (e) { /* best-effort */ } await sleep(40); }
+      for (const id of ch.contacts) { try { await b24w('crm.contact.update', { id, fields: { COMPANY_ID: canonicalId } }); movedContacts.push(id); } catch (e) { failed.contacts++; } await sleep(40); }
       // 3) перенос SP-элементов (companyId)
       for (const [t, ids] of Object.entries(ch.items)) {
-        for (const id of ids) { try { await b24('crm.item.update', { entityTypeId: Number(t), id, fields: { companyId: Number(canonicalId) } }); } catch (e) { /* best-effort */ } await sleep(40); }
+        movedItems[t] = [];
+        for (const id of ids) { try { await b24w('crm.item.update', { entityTypeId: Number(t), id, fields: { companyId: Number(canonicalId) } }); movedItems[t].push(id); } catch (e) { failed.items++; } await sleep(40); }
       }
 
       // 4) копирование недостающих полей в эталон
@@ -598,12 +621,13 @@ async function applyMerge({ canonicalId, duplicateIds, copyFields = true, byUser
         if (Object.keys(upd).length) { try { await b24('crm.company.update', { id: canonicalId, fields: upd }); } catch (e) { /* best-effort */ } }
       }
 
-      // 5) пометка дубля (переименование) — без удаления
+      // 5) пометка дубля (переименование) — без удаления. С проверкой: если не
+      //    применилось (нет прав) — считаем слияние НЕ выполненным для этого дубля.
       const newTitle = `[ДУБЛЬ → #${canonicalId}] ${prevTitle}`.slice(0, 500);
-      await b24('crm.company.update', { id: dupId, fields: { TITLE: newTitle } });
+      await b24w('crm.company.update', { id: dupId, fields: { TITLE: newTitle } });
 
-      // 6) журнал
-      const moved = { deals: ch.deals, contacts: ch.contacts, items: ch.items, copiedFields, enrichedMf };
+      // 6) журнал (храним РЕАЛЬНО перенесённые id — под откат)
+      const moved = { deals: movedDeals, contacts: movedContacts, items: movedItems, copiedFields, enrichedMf };
       const ins = await pool.query(
         `INSERT INTO ticketsmodule_company_merges (canonical_id, canonical_title, duplicate_id, prev_title, moved, by_user)
          VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
@@ -618,7 +642,8 @@ async function applyMerge({ canonicalId, duplicateIds, copyFields = true, byUser
       }
 
       const enrichedCount = Object.values(enrichedMf).reduce((s, a) => s + a.length, 0);
-      results.push({ dupId, ok: true, mergeId, moved: ch.counts, copied: Object.keys(copiedFields), enriched: enrichedCount });
+      const movedCounts = { deals: movedDeals.length, contacts: movedContacts.length, items: Object.values(movedItems).reduce((s, a) => s + a.length, 0) };
+      results.push({ dupId, ok: true, mergeId, moved: movedCounts, failed, copied: Object.keys(copiedFields), enriched: enrichedCount });
     } catch (e) {
       results.push({ dupId, ok: false, error: String(e && e.message || e) });
     }
@@ -702,7 +727,38 @@ async function deleteCompany(id) {
   return { ok: true, id };
 }
 
+// ── Диагностика записи в Б24: пишем метку в название, читаем, откатываем ───────
+// Возвращает СЫРОЙ ответ Bitrix на update — чтобы точно увидеть, применяется ли запись.
+async function writeSelfTest(id) {
+  id = String(id || '');
+  if (!id) return { ok: false, error: 'Укажите ?id=<id компании>' };
+  const base = portalBase();
+  const before = await companyRaw(id);
+  if (!before || !before.ID) return { ok: false, error: 'Компания не найдена: ' + id };
+  const orig = before.TITLE || ('#' + id);
+  const test = (orig + ' ✓тест').slice(0, 250);
+  const updateRaw = await b24('crm.company.update', { id, fields: { TITLE: test } });
+  const mid = await companyRaw(id);
+  const applied = String(mid.TITLE || '') === test;
+  // откат к исходному названию
+  let revertRaw = null;
+  try { revertRaw = await b24('crm.company.update', { id, fields: { TITLE: orig } }); } catch (e) { revertRaw = { error: String(e && e.message || e) }; }
+  const after = await companyRaw(id);
+  return {
+    ok: true,
+    id,
+    portal: base,
+    webhookUser: (process.env.BITRIX_WEBHOOK || '').replace(/^(https?:\/\/[^/]+\/rest\/)(\d+)\/.*/, '$2') || '(не определить)',
+    titleBefore: orig,
+    titleAfterWrite: mid.TITLE,
+    writeApplied: applied,
+    updateResponse: updateRaw,
+    revertResponse: revertRaw,
+    titleAfterRevert: after.TITLE,
+  };
+}
+
 module.exports = {
   ensureSchema, syncCompanies, getCompaniesBoard, updateCompany, industryOptions,
-  getDuplicateGroups, getCompanyDeals, previewMerge, applyMerge, undoMerge, listMerges, deleteCompany,
+  getDuplicateGroups, getCompanyDeals, previewMerge, applyMerge, undoMerge, listMerges, deleteCompany, writeSelfTest,
 };
