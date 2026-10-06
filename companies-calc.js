@@ -776,6 +776,23 @@ async function writeSelfTest(id, { keep = false } = {}) {
     } else { deal = { note: 'сделок на портале не нашлось' }; }
   } catch (e) { deal = { error: String(e && e.message || e) }; }
 
+  // Тест 4 — та же запись названия, но ПРЯМЫМ JSON-телом (минуя наш form-encoding).
+  // Если так применяется, а через b24 нет — проблема в кодировании тела запроса.
+  let jsonWay = null;
+  try {
+    const fetch = require('node-fetch');
+    const wh = process.env.BITRIX_WEBHOOK;
+    const jTry = (origTitle + ' ' + tag + 'J').slice(0, 250);
+    const resp = await fetch(wh + 'crm.company.update.json', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, fields: { TITLE: jTry } }),
+    });
+    const jRaw = await resp.json();
+    await sleep(1000);
+    const m3 = await companyRaw(id);
+    jsonWay = { applied: String(m3.TITLE || '') === jTry, httpStatus: resp.status, raw: jRaw };
+  } catch (e) { jsonWay = { error: String(e && e.message || e) }; }
+
   if (!keep) { try { await b24('crm.company.update', { id, fields: { TITLE: origTitle, COMMENTS: origComm } }); } catch (e) { } }
 
   return {
@@ -783,7 +800,8 @@ async function writeSelfTest(id, { keep = false } = {}) {
     companyTitle: { applied: titleApplied, tried: titleTry, after: mid.TITLE, updateResult: rTitle && rTitle.result },
     companyComments: { applied: commApplied, updateResult: rComm && rComm.result },
     deal,
-    verdict: (titleApplied || commApplied || (deal && deal.applied)) ? 'запись где-то применяется' : 'НИ ОДНА запись не применилась',
+    companyTitleJson: jsonWay,
+    verdict: (titleApplied || commApplied || (deal && deal.applied) || (jsonWay && jsonWay.applied)) ? 'запись где-то применяется' : 'НИ ОДНА запись не применилась',
   };
 }
 
