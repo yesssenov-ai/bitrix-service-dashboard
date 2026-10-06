@@ -734,30 +734,49 @@ async function writeSelfTest(id, { keep = false } = {}) {
   if (!id) return { ok: false, error: 'Укажите ?id=<id компании>' };
   const base = portalBase();
   const webhookUser = (process.env.BITRIX_WEBHOOK || '').replace(/^(https?:\/\/[^/]+\/rest\/)(\d+)\/.*/, '$2') || '(не определить)';
+  const tag = '[diag' + (Date.now() % 100000) + ']';
   const before = await companyRaw(id);
   if (!before || !before.ID) return { ok: false, error: 'Компания не найдена: ' + id };
-  const orig = before.TITLE || ('#' + id);
-  const marker = ' [test' + (Date.now() % 100000) + ']'; // простой ASCII-маркер, без спецсимволов
-  const test = (orig + marker).slice(0, 250);
-  const updateRaw = await b24('crm.company.update', { id, fields: { TITLE: test } });
-  await sleep(1500);                      // даём Битриксу «устаканиться» (на случай кэша чтения)
+
+  // Тест 1 — название компании (TITLE)
+  const origTitle = before.TITLE || ('#' + id);
+  const titleTry = (origTitle + ' ' + tag).slice(0, 250);
+  const rTitle = await b24('crm.company.update', { id, fields: { TITLE: titleTry } });
+  // Тест 2 — комментарий компании (COMMENTS) — отдельное поле
+  const origComm = before.COMMENTS || '';
+  const commTry = (origComm + ' ' + tag).trim();
+  const rComm = await b24('crm.company.update', { id, fields: { COMMENTS: commTry } });
+  await sleep(1200);
   const mid = await companyRaw(id);
-  const applied = String(mid.TITLE || '') === test;
-  let revertRaw = null, after = mid;
-  if (!keep) {
-    try { revertRaw = await b24('crm.company.update', { id, fields: { TITLE: orig } }); } catch (e) { revertRaw = { error: String(e && e.message || e) }; }
-    await sleep(500); after = await companyRaw(id);
-  }
+  const titleApplied = String(mid.TITLE || '') === titleTry;
+  const commApplied = String(mid.COMMENTS || '').includes(tag);
+
+  // Тест 3 — запись в СДЕЛКУ (от этого зависит слияние): COMMENTS первой сделки компании
+  let deal = null;
+  try {
+    const dealIds = await listDealIds(id);
+    if (dealIds.length) {
+      const did = dealIds[0];
+      const dg = await b24('crm.deal.get', { id: did });
+      const dOrig = (dg.result && dg.result.COMMENTS) || '';
+      const dTry = (dOrig + ' ' + tag).trim();
+      const rDeal = await b24('crm.deal.update', { id: did, fields: { COMMENTS: dTry } });
+      await sleep(800);
+      const dg2 = await b24('crm.deal.get', { id: did });
+      const dApplied = String((dg2.result && dg2.result.COMMENTS) || '').includes(tag);
+      deal = { dealId: did, updateResult: rDeal && rDeal.result, applied: dApplied };
+      if (!keep) { try { await b24('crm.deal.update', { id: did, fields: { COMMENTS: dOrig } }); } catch (e) { } }
+    } else { deal = { note: 'у компании нет сделок для теста' }; }
+  } catch (e) { deal = { error: String(e && e.message || e) }; }
+
+  if (!keep) { try { await b24('crm.company.update', { id, fields: { TITLE: origTitle, COMMENTS: origComm } }); } catch (e) { } }
+
   return {
-    ok: true, id, portal: base, webhookUser,
-    titleBefore: orig,
-    titleTried: test,
-    titleAfterWrite: mid.TITLE,
-    writeApplied: applied,                // true только если название реально поменялось
-    updateResponse: updateRaw,            // сырой ответ Bitrix на запись
-    kept: keep,                           // при keep=1 метка оставлена — проверь в карточке Б24
-    revertResponse: revertRaw,
-    titleAfterRevert: after.TITLE,
+    ok: true, id, portal: base, webhookUser, kept: keep,
+    companyTitle: { applied: titleApplied, tried: titleTry, after: mid.TITLE, updateResult: rTitle && rTitle.result },
+    companyComments: { applied: commApplied, updateResult: rComm && rComm.result },
+    deal,
+    verdict: (titleApplied || commApplied || (deal && deal.applied)) ? 'запись где-то применяется' : 'НИ ОДНА запись не применилась',
   };
 }
 
