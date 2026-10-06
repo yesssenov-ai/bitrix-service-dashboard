@@ -729,30 +729,33 @@ async function deleteCompany(id) {
 
 // ── Диагностика записи в Б24: пишем метку в название, читаем, откатываем ───────
 // Возвращает СЫРОЙ ответ Bitrix на update — чтобы точно увидеть, применяется ли запись.
-async function writeSelfTest(id) {
+async function writeSelfTest(id, { keep = false } = {}) {
   id = String(id || '');
   if (!id) return { ok: false, error: 'Укажите ?id=<id компании>' };
   const base = portalBase();
+  const webhookUser = (process.env.BITRIX_WEBHOOK || '').replace(/^(https?:\/\/[^/]+\/rest\/)(\d+)\/.*/, '$2') || '(не определить)';
   const before = await companyRaw(id);
   if (!before || !before.ID) return { ok: false, error: 'Компания не найдена: ' + id };
   const orig = before.TITLE || ('#' + id);
-  const test = (orig + ' ✓тест').slice(0, 250);
+  const marker = ' [test' + (Date.now() % 100000) + ']'; // простой ASCII-маркер, без спецсимволов
+  const test = (orig + marker).slice(0, 250);
   const updateRaw = await b24('crm.company.update', { id, fields: { TITLE: test } });
+  await sleep(1500);                      // даём Битриксу «устаканиться» (на случай кэша чтения)
   const mid = await companyRaw(id);
   const applied = String(mid.TITLE || '') === test;
-  // откат к исходному названию
-  let revertRaw = null;
-  try { revertRaw = await b24('crm.company.update', { id, fields: { TITLE: orig } }); } catch (e) { revertRaw = { error: String(e && e.message || e) }; }
-  const after = await companyRaw(id);
+  let revertRaw = null, after = mid;
+  if (!keep) {
+    try { revertRaw = await b24('crm.company.update', { id, fields: { TITLE: orig } }); } catch (e) { revertRaw = { error: String(e && e.message || e) }; }
+    await sleep(500); after = await companyRaw(id);
+  }
   return {
-    ok: true,
-    id,
-    portal: base,
-    webhookUser: (process.env.BITRIX_WEBHOOK || '').replace(/^(https?:\/\/[^/]+\/rest\/)(\d+)\/.*/, '$2') || '(не определить)',
+    ok: true, id, portal: base, webhookUser,
     titleBefore: orig,
+    titleTried: test,
     titleAfterWrite: mid.TITLE,
-    writeApplied: applied,
-    updateResponse: updateRaw,
+    writeApplied: applied,                // true только если название реально поменялось
+    updateResponse: updateRaw,            // сырой ответ Bitrix на запись
+    kept: keep,                           // при keep=1 метка оставлена — проверь в карточке Б24
     revertResponse: revertRaw,
     titleAfterRevert: after.TITLE,
   };

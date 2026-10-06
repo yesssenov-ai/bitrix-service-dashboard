@@ -26,7 +26,7 @@ router.get('/merges', requireAuth([]), async (req, res) => {
 
 // Диагностика записи в Б24: GET /api/companies/selftest?id=123
 router.get('/selftest', requireAuth(EDIT), async (req, res) => {
-  try { res.json(await require('../companies-calc').writeSelfTest(req.query.id)); }
+  try { res.json(await require('../companies-calc').writeSelfTest(req.query.id, { keep: req.query.keep === '1' })); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
