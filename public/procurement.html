@@ -89,6 +89,10 @@ tbody tr:hover td{background:var(--panel-h)}
 .slabel{color:var(--text-2);width:150px;flex:none}
 .sval{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sval a{white-space:nowrap}
+.slot.top{align-items:flex-start}
+.sval.multi{white-space:normal;overflow:visible;text-overflow:clip}
+.sval.multi a{white-space:normal;word-break:break-word}
+.svline{padding:2px 0}.svline:not(:last-child){border-bottom:1px dotted var(--border)}
 .upl{cursor:pointer;font-size:12px;color:var(--signal);border:1px solid var(--border2);border-radius:8px;padding:5px 10px;white-space:nowrap;flex:none}
 .upl:hover{background:var(--panel-h)}
 .selrow td{background:var(--panel-h)!important}
@@ -943,8 +947,10 @@ function renderDetail(id,d){
   // Компактная сводка приложенных документов (все слоты, со счётчиками) + история откатов.
   const summ=['purchase','invoice','pay','poa','contract','warranty'].map(k=>{
     const list=(d.files&&d.files[k])||[]; if(!list.length) return '';
-    const links=list.map(f=>`<a class="lnk" href="${esc(f.url||'#')}" target="_blank" title="${esc(f.name||'')}">${esc(f.name||'файл')}</a>`).join(', ');
-    return `<div class="slot"><div class="slabel">${esc(DOC_LABELS[k])} ${list.length>1?`(${list.length})`:''}</div><div class="sval">${links}</div></div>`;
+    const multi=list.length>1;
+    const links=list.map(f=>`<a class="lnk" href="${esc(f.url||'#')}" target="_blank" title="${esc(f.name||'')}">${esc(f.name||'файл')}</a>`);
+    const val=multi?links.map(a=>`<div class="svline">${a}</div>`).join(''):links[0];
+    return `<div class="slot${multi?' top':''}"><div class="slabel">${esc(DOC_LABELS[k])} ${multi?`(${list.length})`:''}</div><div class="sval${multi?' multi':''}">${val}</div></div>`;
   }).join('');
   const rb=(d.rollbacks||[]).map(x=>`<div class="ri"><div class="rt"><b>${esc(x.fromLabel||'')}</b> → <b>${esc(x.toLabel||'')}</b>${x.at?` · ${fmtDateTime(x.at)}`:''}${x.byName?` · ${esc(x.byName)}`:''}</div><div class="rm">Причина: ${esc(x.reason||'—')}</div></div>`).join('');
   const rbBlock=rb?`<div class="rbhist"><div class="rh">↩ Откаты стадий</div>${rb}</div>`:'';
