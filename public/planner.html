@@ -5,41 +5,22 @@
 <!-- v2.0 -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ProLabSupport — Планировщик</title>
+<meta name="theme-color" content="#f6f7f9">
+<script>(function(){try{var m=localStorage.getItem('pls-theme');document.documentElement.setAttribute('data-theme',m==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
+<link rel="stylesheet" href="/assets/cup-ui.css">
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="apple-touch-icon" href="/favicon-180.png">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 /* Тёмная тема ЦУП — по умолчанию. Светлая — через html[data-theme="light"]. */
 :root{
-  --bg:#14171d;
-  --card:#1b1f27;
-  --stroke:#2a2f3a;
-  --stroke-2:#363c49;
-  --text:#eef0f3;
-  --text-2:#c3c9d3;
-  --text-3:#8b93a3;
-  --text-4:#616a78;
-  --brand:#C53B2F;
-  --blue:#4098e6;
-  --head-h:52px;
-  --sb-w:248px;
-  --row-h:46px;
-  --font:'Inter',system-ui,sans-serif;
+  --card:var(--surface); --stroke:var(--line); --stroke-2:var(--line-2);
+  --text-4:var(--text-faint); --brand:var(--accent); --blue:var(--info);
+  --head-h:52px; --sb-w:248px; --row-h:46px; --font:var(--f-ui);
 }
-html[data-theme="light"]{
-  --bg:#f0eeec;
-  --card:#fff;
-  --stroke:#dddbd8;
-  --stroke-2:#c8c5c1;
-  --text:#1c1b19;
-  --text-2:#706d6a;
-  --text-3:#a09d9a;
-  --text-4:#c0bdb9;
-  --brand:#C53B2F;
-  --blue:#3b7dd8;
-}
+.hdr::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 35%,transparent));z-index:1}
+
 html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;overflow:hidden;}
 .right-col{background:var(--card);}
 
@@ -2544,5 +2525,6 @@ window.addEventListener('resize', ()=>{ clearTimeout(window._resizeT); window._r
     </div>
   </div>
 </div>
+<script src="/assets/cup-theme.js" defer></script>
 </body>
 </html>
