@@ -86,6 +86,43 @@ async function binFieldCode() {
   return code;
 }
 
+// ── Поле «короткого названия», из которого бизнес-процесс ведёт Название ────────
+// БП на сущности «Компания» при любом изменении ставит Название = значение поля
+// «ID компании (сокращённое название компании)» — это КАСТОМНОЕ поле компании
+// (UF_CRM_…), НЕ реквизит. Прямой TITLE через REST откатывается этим БП. Поэтому
+// переименование = запись в это поле (БП сам перенесёт его в Название). Код поля
+// определяем динамически (кэш), с возможностью зафиксировать через env.
+let _snCode = null, _snAt = 0;
+async function shortNameFieldCode(companyId) {
+  const env = process.env.CMP_SHORTNAME_FIELD;
+  if (env) return env;
+  if (_snCode !== null && Date.now() - _snAt < 6 * 3600 * 1000) return _snCode;
+  let code = '';
+  try {
+    const { result } = await b24('crm.company.fields', {});
+    const entries = Object.entries(result || {});
+    // 1) по заголовку: «сокращ…» / «кратк…» (но НЕ БИН/реквизит)
+    for (const [k, f] of entries) {
+      if (!/^UF_/i.test(k)) continue;
+      const title = String((f && (f.title || f.formLabel || f.listLabel || f.editFormLabel)) || '').toLowerCase().replace(/ё/g, 'е');
+      if (/сокращ|кратк/.test(title) && /назван|наимен|компан/.test(title)) { code = k; break; }
+    }
+    // 2) запасной путь: UF-поле, чьё текущее значение совпадает с TITLE компании
+    //    (БП держит их синхронно, поэтому короткое имя == Название прямо сейчас).
+    if (!code && companyId) {
+      try {
+        const { result: cur } = await b24('crm.company.get', { id: String(companyId) });
+        const t = String((cur && cur.TITLE) || '').trim();
+        if (t) for (const [k, v] of Object.entries(cur || {})) {
+          if (/^UF_/i.test(k) && v != null && String(firstMf(v)).trim() === t) { code = k; break; }
+        }
+      } catch (e) { }
+    }
+  } catch (e) { console.error('companies shortNameFieldCode:', e.message); }
+  if (code) { _snCode = code; _snAt = Date.now(); } // не кэшируем пустой результат
+  return code;
+}
+
 // Первое значение мультиполя (EMAIL/PHONE: [{VALUE}]) либо кастомного поля (массив/скаляр).
 function firstMf(mf) {
   if (!mf) return '';
@@ -279,31 +316,50 @@ async function companyRequisite(companyId) {
     return null;
   } catch (e) { return null; }
 }
-async function renameViaRequisite(id, newName) {
+async function renameCompanyName(id, newName) {
   id = String(id); newName = String(newName).trim().slice(0, 255);
-  const req = await companyRequisite(id);
-  let reqField = null;
-  if (req && req.ID) {
-    reqField = ('RQ_COMPANY_NAME' in req) ? 'RQ_COMPANY_NAME' : null;
-    if (!reqField) {
-      // поле короткого имени определяем по совпадению с текущим TITLE
-      try { const { result: cur } = await b24('crm.company.get', { id }); const t = String((cur && cur.TITLE) || '');
-        for (const [k, v] of Object.entries(req)) { if (/^RQ_/.test(k) && t && String(v) === t) { reqField = k; break; } } } catch (e) { }
-      reqField = reqField || 'RQ_COMPANY_NAME';
-    }
-    try { await b24('crm.requisite.update', { id: req.ID, fields: { [reqField]: newName } }); } catch (e) { /* проверим по факту ниже */ }
-  }
-  // триггерим бизнес-процесс обновлением компании — он подхватит имя из реквизита
-  await b24('crm.company.update', { id, fields: { TITLE: newName } });
-  await sleep(1600);
+  const sn = await shortNameFieldCode(id);
+  // Пишем короткое имя (его подхватит БП) + сразу TITLE одним update. Даже если БП
+  // перепишет TITLE — он перепишет его значением короткого имени = newName.
+  const fields = { TITLE: newName };
+  if (sn) fields[sn] = newName;
+  const up = await b24('crm.company.update', { id, fields });
+  if (up && up.error) throw new Error('Bitrix: ' + (up.error_description || up.error));
+  await sleep(1800); // даём бизнес-процессу отработать
   const { result: chk } = await b24('crm.company.get', { id });
   const now = String((chk && chk.TITLE) || '');
   if (now !== newName) {
-    throw new Error('Имя не применилось. В Б24 сейчас: «' + now + '». ' + (req && req.ID
-      ? ('Реквизит #' + req.ID + ' (' + (reqField || 'RQ_COMPANY_NAME') + ') обновлён, но БП не подхватил — сверьте код поля короткого имени через /api/companies/' + id + '/requisite.')
-      : 'У компании нет реквизита — имя ведётся из него; нужно завести реквизит или ослабить бизнес-процесс.'));
+    throw new Error('Имя не применилось. В Б24 сейчас: «' + now + '». '
+      + (sn ? ('Писали в поле короткого имени ' + sn + ', но Название всё равно другое — '
+             + 'проверьте источник в бизнес-процессе (/api/companies/' + id + '/requisite).')
+            : ('Не удалось определить поле «сокращённое название компании», из которого '
+             + 'бизнес-процесс ведёт Название. Задайте его код в переменной CMP_SHORTNAME_FIELD '
+             + 'или сверьте через /api/companies/' + id + '/requisite.')));
   }
   return now;
+}
+// Совместимость со старым именем вызова.
+const renameViaRequisite = renameCompanyName;
+
+// Диагностика переименования: показывает найденное поле короткого имени, его
+// текущее значение, TITLE и реквизит — чтобы сверить, откуда БП берёт Название.
+async function renameDiag(id) {
+  id = String(id);
+  const out = { id };
+  try {
+    const sn = await shortNameFieldCode(id);
+    out.shortNameField = sn || null;
+    const { result: cur } = await b24('crm.company.get', { id });
+    out.title = (cur && cur.TITLE) || null;
+    if (sn) out.shortNameValue = cur ? (firstMf(cur[sn]) ?? null) : null;
+    // перечислим все заполненные UF-поля (код → значение) для ручной сверки источника БП
+    out.ufFilled = {};
+    for (const [k, v] of Object.entries(cur || {})) {
+      if (/^UF_/i.test(k)) { const fv = firstMf(v); if (fv != null && String(fv).trim() !== '') out.ufFilled[k] = fv; }
+    }
+  } catch (e) { out.companyError = e.message; }
+  try { out.requisite = await companyRequisite(id); } catch (e) { out.requisiteError = e.message; }
+  return out;
 }
 
 // ── Правка компании (сфера / название) с записью в Б24 ─────────────────────────
@@ -662,12 +718,13 @@ async function applyMerge({ canonicalId, duplicateIds, copyFields = true, byUser
         if (Object.keys(upd).length) { try { await b24('crm.company.update', { id: canonicalId, fields: upd }); } catch (e) { /* best-effort */ } }
       }
 
-      // 5) пометка дубля (переименование) — BEST-EFFORT. На этом портале имя компании
-      //    ведётся бизнес-процессом из реквизитов, поэтому TITLE через REST откатывается.
-      //    Это НЕ ошибка слияния: сделки/контакты уже перенесены, дубль прячем в ЦУП.
+      // 5) пометка дубля (переименование) — BEST-EFFORT. Имя компании ведётся
+      //    бизнес-процессом из поля «сокращённое название», поэтому пишем через него
+      //    (renameCompanyName), чтобы метка [ДУБЛЬ] реально закрепилась в Б24. Это
+      //    НЕ ошибка слияния: сделки/контакты уже перенесены, дубль прячем в ЦУП.
       const newTitle = `[ДУБЛЬ → #${canonicalId}] ${prevTitle}`.slice(0, 500);
       let renamedInB24 = false;
-      try { const rr = await b24('crm.company.update', { id: dupId, fields: { TITLE: newTitle } }); renamedInB24 = !(rr && rr.error); } catch (e) { /* имя вернёт БП — не критично */ }
+      try { await renameCompanyName(dupId, newTitle); renamedInB24 = true; } catch (e) { /* имя вернёт БП — не критично */ }
 
       // 6) журнал (храним РЕАЛЬНО перенесённые id — под откат)
       const moved = { deals: movedDeals, contacts: movedContacts, items: movedItems, copiedFields, enrichedMf };
@@ -876,5 +933,5 @@ async function writeSelfTest(id, { keep = false } = {}) {
 module.exports = {
   ensureSchema, syncCompanies, getCompaniesBoard, updateCompany, industryOptions,
   getDuplicateGroups, getCompanyDeals, previewMerge, applyMerge, undoMerge, listMerges, deleteCompany, writeSelfTest,
-  companyRequisite,
+  companyRequisite, renameDiag,
 };

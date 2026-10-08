@@ -30,9 +30,10 @@ router.get('/selftest', requireAuth(EDIT), async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Диагностика: реквизит компании (коды полей RQ_* для переименования)
+// Диагностика переименования: поле короткого имени (источник БП), TITLE,
+// заполненные UF-поля и реквизит — чтобы сверить, откуда БП берёт Название.
 router.get('/:id/requisite', requireAuth(EDIT), async (req, res) => {
-  try { res.json(await require('../companies-calc').companyRequisite(req.params.id)); }
+  try { res.json(await require('../companies-calc').renameDiag(req.params.id)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
