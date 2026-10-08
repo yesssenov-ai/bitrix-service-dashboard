@@ -183,6 +183,15 @@ async function syncCompanies() {
            email=EXCLUDED.email,phone=EXCLUDED.phone,assigned_bid=EXCLUDED.assigned_bid,city=EXCLUDED.city,
            created_at=EXCLUDED.created_at,deal_count=EXCLUDED.deal_count,synced_at=NOW()`, vals);
     }
+    // После полного пересоздания зеркала возвращаем пометку слитых дублей из журнала,
+    // иначе слитые компании «всплывали» бы снова после «Обновить».
+    try {
+      await pool.query(`UPDATE ticketsmodule_companies c SET merged_into = s.canonical_id
+        FROM (SELECT DISTINCT ON (duplicate_id) duplicate_id, canonical_id
+              FROM ticketsmodule_company_merges WHERE undone = FALSE
+              ORDER BY duplicate_id, id DESC) s
+        WHERE c.id = s.duplicate_id`);
+    } catch (e) { /* журнала может не быть — не критично */ }
     return { ok: true, count: rows.length };
   } catch (e) {
     return { ok: false, error: String(e && e.message || e) };
@@ -551,14 +560,10 @@ async function applyMerge({ canonicalId, duplicateIds, copyFields = true, byUser
   duplicateIds = [...new Set((duplicateIds || []).map(String))].filter(d => d && d !== canonicalId);
   if (!duplicateIds.length) return { ok: false, error: 'Не выбраны дубли для слияния' };
 
-  // Проба прав на запись в Bitrix: no-op апдейт эталона его же названием. Если нет
-  // прав — выходим сразу, НИЧЕГО не пишем и не отмечаем, с понятной ошибкой.
-  try {
-    const c0 = await companyRaw(canonicalId);
-    await b24w('crm.company.update', { id: canonicalId, fields: { TITLE: c0.TITLE || ('#' + canonicalId) } });
-  } catch (e) {
-    return { ok: false, error: 'Нет прав на запись в Bitrix — слияние не выполнено. Проверьте права пользователя/вебхука на редактирование компаний в CRM. (' + (e.message || e) + ')' };
-  }
+  // Без upfront-пробы записи в компанию: на этом портале имя ведётся бизнес-процессом
+  // из реквизитов (TITLE через REST откатывается), поэтому проба по TITLE бессмысленна и
+  // могла бы случайно сбросить имя эталона из реквизита. Ядро слияния — перенос сделок
+  // (crm.deal.update COMPANY_ID) — работает; переименование дубля делаем best-effort.
 
   const results = [], mergeIds = [];
   const inds = await industryMap();
@@ -621,10 +626,12 @@ async function applyMerge({ canonicalId, duplicateIds, copyFields = true, byUser
         if (Object.keys(upd).length) { try { await b24('crm.company.update', { id: canonicalId, fields: upd }); } catch (e) { /* best-effort */ } }
       }
 
-      // 5) пометка дубля (переименование) — без удаления. С проверкой: если не
-      //    применилось (нет прав) — считаем слияние НЕ выполненным для этого дубля.
+      // 5) пометка дубля (переименование) — BEST-EFFORT. На этом портале имя компании
+      //    ведётся бизнес-процессом из реквизитов, поэтому TITLE через REST откатывается.
+      //    Это НЕ ошибка слияния: сделки/контакты уже перенесены, дубль прячем в ЦУП.
       const newTitle = `[ДУБЛЬ → #${canonicalId}] ${prevTitle}`.slice(0, 500);
-      await b24w('crm.company.update', { id: dupId, fields: { TITLE: newTitle } });
+      let renamedInB24 = false;
+      try { const rr = await b24('crm.company.update', { id: dupId, fields: { TITLE: newTitle } }); renamedInB24 = !(rr && rr.error); } catch (e) { /* имя вернёт БП — не критично */ }
 
       // 6) журнал (храним РЕАЛЬНО перенесённые id — под откат)
       const moved = { deals: movedDeals, contacts: movedContacts, items: movedItems, copiedFields, enrichedMf };
