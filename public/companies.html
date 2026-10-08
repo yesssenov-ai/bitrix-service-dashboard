@@ -459,7 +459,8 @@ async function loadMerges(){
   if(!ok){host.innerHTML='<div class="dnote err">Ошибка загрузки журнала</div>';return;}
   const ms=(d&&d.merges)||[]; const active=ms.filter(m=>!m.undone).length;
   const jc=document.getElementById('jCount'); if(jc)jc.textContent=ms.length?('— записей: '+ms.length+(active?(', активных: '+active):'')):'— пусто';
-  host.innerHTML=ms.length?`<table class="jtbl"><thead><tr><th>Когда</th><th>Эталон</th><th>Дубль</th><th>Перенесено</th><th>Кто</th><th></th></tr></thead><tbody>${
+  const bar=active?`<div style="margin:0 0 8px;display:flex;justify-content:flex-end"><button class="rbtn ghost" onclick="undoAllMerges()" title="Откатить все активные слияния — объекты вернутся дублям, записи снова покажутся как дубли">↩ Откатить все активные (${active})</button></div>`:'';
+  host.innerHTML=ms.length?bar+`<table class="jtbl"><thead><tr><th>Когда</th><th>Эталон</th><th>Дубль</th><th>Перенесено</th><th>Кто</th><th></th></tr></thead><tbody>${
     ms.map(m=>`<tr class="${m.undone?'undone':''}"><td>${new Date(m.createdAt).toLocaleString('ru-RU')}</td>
       <td>${esc(m.canonicalTitle||('#'+m.canonicalId))} ${m.canonicalUrl?`<a class="ext" href="${esc(m.canonicalUrl)}" target="_blank" rel="noopener">↗</a>`:''}</td>
       <td>${esc(m.prevTitle||('#'+m.duplicateId))}</td>
@@ -473,7 +474,15 @@ async function undoMerge(mergeId){
   const r=await fetch('/api/companies/merge/undo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mergeId})});
   const d=await r.json();
   if(!r.ok||!d.ok){alert((d&&d.error)||'Ошибка отката');return;}
-  DUPLOADED=false; await load(); await loadDup();
+  DUPLOADED=false; await load(); await loadDup(); await loadMerges();
+}
+async function undoAllMerges(){
+  if(!confirm('Откатить ВСЕ активные слияния? Перенесённые объекты вернутся дублям, записи снова покажутся как дубли. Операция может занять время.'))return;
+  const r=await fetch('/api/companies/merge/undo-all',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  const d=await r.json();
+  if(!r.ok||!d.ok){alert((d&&d.error)||'Ошибка массового отката');return;}
+  alert('Откатано '+(d.undone||0)+' из '+(d.total||0)+'. Записи вернулись в дубли.');
+  DUPLOADED=false; await load(); await loadDup(); await loadMerges();
 }
 
 async function refresh(){const b=document.getElementById('refreshBtn');b.disabled=true;b.textContent='Синхронизирую…';await api('/api/companies/refresh',{method:'POST'});DUPLOADED=false;await load();if(document.getElementById('viewDup').style.display!=='none')loadDup();b.disabled=false;b.textContent='↻ Синхронизировать';}

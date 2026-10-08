@@ -794,6 +794,31 @@ async function undoMerge(mergeId, byUser = '') {
   return { ok: true, mergeId, duplicateId: dupId, restoredTitle: m.prev_title };
 }
 
+// Массовый откат слияний. Без аргумента — откатывает ВСЕ неоткатанные (newest-first,
+// т.е. в обратном порядке применения). Можно передать список id. Возвращает сводку.
+// Это именно штатный undoMerge по каждому: вернёт детей дублю (где переносили),
+// снимет merged_into и пометит undone=TRUE — записи снова покажутся как дубли и
+// переживут «Синхронизировать» (sync восстанавливает merged_into только по undone=FALSE).
+async function undoAllMerges(byUser = '', ids = null) {
+  await ensureSchema();
+  let list;
+  if (Array.isArray(ids) && ids.length) {
+    const { rows } = await pool.query(
+      'SELECT id FROM ticketsmodule_company_merges WHERE undone=FALSE AND id = ANY($1::int[]) ORDER BY id DESC',
+      [ids.map(Number).filter(Boolean)]);
+    list = rows.map(r => r.id);
+  } else {
+    const { rows } = await pool.query('SELECT id FROM ticketsmodule_company_merges WHERE undone=FALSE ORDER BY id DESC');
+    list = rows.map(r => r.id);
+  }
+  const results = [];
+  for (const id of list) {
+    try { results.push(await undoMerge(id, byUser)); }
+    catch (e) { results.push({ ok: false, mergeId: id, error: e.message }); }
+  }
+  return { ok: true, total: list.length, undone: results.filter(r => r.ok).length, results };
+}
+
 async function listMerges(limit = 100) {
   await ensureSchema();
   const base = portalBase();
@@ -932,6 +957,6 @@ async function writeSelfTest(id, { keep = false } = {}) {
 
 module.exports = {
   ensureSchema, syncCompanies, getCompaniesBoard, updateCompany, industryOptions,
-  getDuplicateGroups, getCompanyDeals, previewMerge, applyMerge, undoMerge, listMerges, deleteCompany, writeSelfTest,
+  getDuplicateGroups, getCompanyDeals, previewMerge, applyMerge, undoMerge, undoAllMerges, listMerges, deleteCompany, writeSelfTest,
   companyRequisite, renameDiag,
 };

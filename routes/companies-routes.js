@@ -69,6 +69,14 @@ router.post('/merge/undo', requireAuth(EDIT), express.json(), async (req, res) =
     res.json(await require('../companies-calc').undoMerge(req.body && req.body.mergeId, byUser));
   } catch (e) { console.error('merge/undo:', e.message); res.status(500).json({ error: e.message }); }
 });
+// Массовый откат: без тела — все неоткатанные; { ids:[...] } — выбранные.
+router.post('/merge/undo-all', requireAuth(EDIT), express.json(), async (req, res) => {
+  try {
+    const byUser = (req.user && (req.user.display_name || req.user.username)) || '';
+    const ids = req.body && Array.isArray(req.body.ids) ? req.body.ids : null;
+    res.json(await require('../companies-calc').undoAllMerges(byUser, ids));
+  } catch (e) { console.error('merge/undo-all:', e.message); res.status(500).json({ error: e.message }); }
+});
 
 // Удаление компании из Б24 (необратимо; отказ при наличии привязанных объектов)
 router.post('/:id/delete', requireAuth(EDIT), async (req, res) => {
