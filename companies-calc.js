@@ -267,39 +267,75 @@ async function getCompaniesBoard() {
   };
 }
 
+// ── Реквизит компании + переименование через реквизит ─────────────────────────
+// Имя компании ведётся бизнес-процессом из реквизитов (сокращённое наименование,
+// обычно RQ_COMPANY_NAME). Прямой TITLE через REST откатывается. Поэтому пишем
+// реквизит, затем «трогаем» компанию — БП подхватывает имя. Read-back подтверждает.
+async function companyRequisite(companyId) {
+  try {
+    const { result } = await b24('crm.requisite.list', { filter: { ENTITY_TYPE_ID: 4, ENTITY_ID: String(companyId) } });
+    const r0 = result && result[0];
+    if (r0 && r0.ID) { try { const g = await b24('crm.requisite.get', { id: r0.ID }); return (g && g.result) || r0; } catch (e) { return r0; } }
+    return null;
+  } catch (e) { return null; }
+}
+async function renameViaRequisite(id, newName) {
+  id = String(id); newName = String(newName).trim().slice(0, 255);
+  const req = await companyRequisite(id);
+  let reqField = null;
+  if (req && req.ID) {
+    reqField = ('RQ_COMPANY_NAME' in req) ? 'RQ_COMPANY_NAME' : null;
+    if (!reqField) {
+      // поле короткого имени определяем по совпадению с текущим TITLE
+      try { const { result: cur } = await b24('crm.company.get', { id }); const t = String((cur && cur.TITLE) || '');
+        for (const [k, v] of Object.entries(req)) { if (/^RQ_/.test(k) && t && String(v) === t) { reqField = k; break; } } } catch (e) { }
+      reqField = reqField || 'RQ_COMPANY_NAME';
+    }
+    try { await b24('crm.requisite.update', { id: req.ID, fields: { [reqField]: newName } }); } catch (e) { /* проверим по факту ниже */ }
+  }
+  // триггерим бизнес-процесс обновлением компании — он подхватит имя из реквизита
+  await b24('crm.company.update', { id, fields: { TITLE: newName } });
+  await sleep(1600);
+  const { result: chk } = await b24('crm.company.get', { id });
+  const now = String((chk && chk.TITLE) || '');
+  if (now !== newName) {
+    throw new Error('Имя не применилось. В Б24 сейчас: «' + now + '». ' + (req && req.ID
+      ? ('Реквизит #' + req.ID + ' (' + (reqField || 'RQ_COMPANY_NAME') + ') обновлён, но БП не подхватил — сверьте код поля короткого имени через /api/companies/' + id + '/requisite.')
+      : 'У компании нет реквизита — имя ведётся из него; нужно завести реквизит или ослабить бизнес-процесс.'));
+  }
+  return now;
+}
+
 // ── Правка компании (сфера / название) с записью в Б24 ─────────────────────────
 async function updateCompany(id, { industryId, title }) {
   await ensureSchema();
   id = String(id);
-  const fields = {};
-  if (industryId !== undefined) fields.INDUSTRY = industryId || ''; // '' — очистить сферу
-  if (title !== undefined && String(title).trim() !== '') fields.TITLE = String(title).trim();
-  if (!Object.keys(fields).length) return { ok: false, error: 'Нет изменений' };
-  // Bitrix на ошибку прав/валидации отвечает HTTP 200 с {error} в теле — обёртка
-  // b24 бросает только на 4xx/5xx, поэтому логическую ошибку ловим здесь явно,
-  // иначе «сохранилось» в ЦУП, а в Битриксе нет.
-  const resp = await b24('crm.company.update', { id, fields });
-  if (resp && resp.error) throw new Error('Bitrix: ' + (resp.error_description || resp.error));
-  if (resp && resp.result === false) throw new Error('Битрикс отклонил обновление (возможно, нет прав на эту компанию)');
-  // Контрольное чтение: убеждаемся, что Битрикс реально применил значения.
-  try {
-    const { result: chk } = await b24('crm.company.get', { id });
-    if (chk) {
-      if (fields.TITLE !== undefined && String(chk.TITLE || '') !== fields.TITLE)
-        throw new Error('Битрикс не применил новое название (нет прав на компанию?). В Б24 сейчас: «' + (chk.TITLE || '') + '»');
-      if (fields.INDUSTRY !== undefined && String(chk.INDUSTRY || '') !== String(fields.INDUSTRY || ''))
-        throw new Error('Битрикс не применил сферу деятельности (нет прав на компанию?)');
-    }
-  } catch (e) { if (/Битрикс не применил/.test(e.message)) throw e; /* чтение-проверку не считаем фатальной иначе */ }
-  // Обновляем зеркало
   const inds = await industryMap();
+  let appliedTitle, appliedIndustry;
+
+  // Сфера — БП не трогает, пишем напрямую + контрольное чтение.
+  if (industryId !== undefined) {
+    const resp = await b24('crm.company.update', { id, fields: { INDUSTRY: industryId || '' } });
+    if (resp && resp.error) throw new Error('Bitrix: ' + (resp.error_description || resp.error));
+    try { const { result: chk } = await b24('crm.company.get', { id });
+      if (chk && String(chk.INDUSTRY || '') !== String(industryId || '')) throw new Error('Битрикс не применил сферу деятельности.'); }
+    catch (e) { if (/не применил сферу/.test(e.message)) throw e; }
+    appliedIndustry = industryId || '';
+  }
+
+  // Название — через реквизит (БП ведёт имя из реквизитов).
+  if (title !== undefined && String(title).trim() !== '') {
+    appliedTitle = await renameViaRequisite(id, String(title).trim());
+  }
+
+  if (appliedTitle === undefined && appliedIndustry === undefined) return { ok: false, error: 'Нет изменений' };
+
   const set = [], vals = []; let i = 1;
-  if (fields.INDUSTRY !== undefined) { set.push(`industry_id=$${i++}`, `industry_name=$${i++}`); vals.push(fields.INDUSTRY || '', inds[fields.INDUSTRY] || ''); }
-  if (fields.TITLE !== undefined) { set.push(`title=$${i++}`); vals.push(fields.TITLE); }
-  set.push('synced_at=NOW()');
-  vals.push(id);
+  if (appliedIndustry !== undefined) { set.push(`industry_id=$${i++}`, `industry_name=$${i++}`); vals.push(appliedIndustry || '', inds[appliedIndustry] || ''); }
+  if (appliedTitle !== undefined) { set.push(`title=$${i++}`); vals.push(appliedTitle); }
+  set.push('synced_at=NOW()'); vals.push(id);
   await pool.query(`UPDATE ticketsmodule_companies SET ${set.join(',')} WHERE id=$${i}`, vals);
-  return { ok: true, id, industryId: fields.INDUSTRY, industryName: fields.INDUSTRY !== undefined ? (inds[fields.INDUSTRY] || '') : undefined, title: fields.TITLE };
+  return { ok: true, id, industryId: appliedIndustry, industryName: appliedIndustry !== undefined ? (inds[appliedIndustry] || '') : undefined, title: appliedTitle };
 }
 
 // ── Фаза 2: детектор дублей ────────────────────────────────────────────────────
@@ -840,4 +876,5 @@ async function writeSelfTest(id, { keep = false } = {}) {
 module.exports = {
   ensureSchema, syncCompanies, getCompaniesBoard, updateCompany, industryOptions,
   getDuplicateGroups, getCompanyDeals, previewMerge, applyMerge, undoMerge, listMerges, deleteCompany, writeSelfTest,
+  companyRequisite,
 };

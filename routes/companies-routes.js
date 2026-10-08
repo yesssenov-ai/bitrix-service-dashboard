@@ -30,6 +30,12 @@ router.get('/selftest', requireAuth(EDIT), async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Диагностика: реквизит компании (коды полей RQ_* для переименования)
+router.get('/:id/requisite', requireAuth(EDIT), async (req, res) => {
+  try { res.json(await require('../companies-calc').companyRequisite(req.params.id)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Сделки компании (провалиться в сделки из ЦУП)
 router.get('/:id/deals', requireAuth([]), async (req, res) => {
   try { res.json(await require('../companies-calc').getCompanyDeals(req.params.id)); }
