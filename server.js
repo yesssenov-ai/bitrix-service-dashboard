@@ -56,22 +56,28 @@ app.use(cookieParser());
 // sendFile после проверки авторизации) автоматически подставлялись манифест,
 // иконки и регистрация service worker. Правим один раз здесь — не 19 файлов.
 const fs = require('fs');
-const PWA_HEAD = [
+// PWA-основа (манифест, иконки, регистрация SW) — подставляется в КАЖДУЮ страницу.
+const PWA_BASE = [
   '<link rel="manifest" href="/manifest.webmanifest">',
-  '<meta name="theme-color" content="#14171d">',
   '<meta name="apple-mobile-web-app-capable" content="yes">',
   '<meta name="mobile-web-app-capable" content="yes">',
   '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">',
   '<meta name="apple-mobile-web-app-title" content="ЦУП">',
   '<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">',
   "<script>if('serviceWorker' in navigator){addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}</script>",
-  // Тема: инлайн-скрипт ставит атрибут ДО отрисовки (без мигания), затем CSS и кнопка-переключатель.
+].join('\n');
+// Легаси-тема (тёмная по умолчанию) — ТОЛЬКО для страниц, ещё не переведённых на новую
+// дизайн-систему. Переведённые страницы подключают /assets/cup-ui.css и cup-theme.js
+// сами (светлая по умолчанию) + свой theme-color, поэтому старую тему им НЕ подставляем,
+// иначе два движка темы конфликтуют (тёмная тема переставала работать).
+const LEGACY_THEME = [
+  '<meta name="theme-color" content="#14171d">',
   "<script>(function(){try{if(localStorage.getItem('pls-theme')==='light')document.documentElement.setAttribute('data-theme','light')}catch(e){}})();</script>",
   '<link rel="stylesheet" href="/assets/theme.css">',
   '<script src="/assets/theme.js" defer></script>',
-  // Бейдж на иконке приложения (число действий пользователя) — см. assets/badge.js.
-  '<script src="/assets/badge.js" defer></script>',
-].join('\n') + '\n';
+].join('\n');
+// Бейдж на иконке приложения (число действий пользователя) — см. assets/badge.js.
+const PWA_BADGE = '<script src="/assets/badge.js" defer></script>';
 app.use((req, res, next) => {
   const orig = res.sendFile.bind(res);
   res.sendFile = (fp, opts, cb) => {
@@ -79,7 +85,11 @@ app.use((req, res, next) => {
       fs.readFile(fp, 'utf8', (err, html) => {
         if (err) return orig(fp, opts, cb);
         let out = html;
-        if (out.includes('</head>') && !out.includes('/manifest.webmanifest')) out = out.replace('</head>', PWA_HEAD + '</head>');
+        if (out.includes('</head>') && !out.includes('/manifest.webmanifest')) {
+          const usesNewUI = out.includes('/assets/cup-ui.css');  // страница на новой дизайн-системе
+          const head = PWA_BASE + '\n' + (usesNewUI ? '' : LEGACY_THEME + '\n') + PWA_BADGE + '\n';
+          out = out.replace('</head>', head + '</head>');
+        }
         res.set('Content-Type', 'text/html; charset=utf-8');
         res.send(out);
       });
