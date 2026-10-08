@@ -5,17 +5,24 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Мой кабинет — ProLabSupport</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#f6f7f9">
+<script>(function(){try{var m=localStorage.getItem('pls-theme');document.documentElement.setAttribute('data-theme',m==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
+<link rel="stylesheet" href="/assets/cup-ui.css">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#14171d;--panel:#1b1f27;--panel-h:#20242e;--line:#2a2f3a;--line-2:#363c49;
-  --text:#eef0f3;--text-dim:#8b93a3;--text-faint:#565d6b;
-  --brand:#C53B2F;--brand-h:#d94737;--signal:#35d0c0;--warn:#e0a940;--good:#3ddc84;--bad:#ff5b6e;
-  --font-display:'Space Grotesk',sans-serif;--font-body:'Inter',system-ui,sans-serif;--font-mono:'IBM Plex Mono',monospace;
-  --radius:14px;
+  --panel:var(--surface);
+  --panel-h:var(--surface-2);
+  --text-dim:var(--text-3);
+  --brand:var(--accent);
+  --brand-h:var(--accent-h);
+  --signal:var(--good);
+  --font-display:var(--f-ui);
+  --font-body:var(--f-ui);
+  --font-mono:var(--f-mono);
+  --radius:var(--r);
 }
+.top::before,.hdr::before,.header::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 35%,transparent));z-index:1}
 html,body{height:100%}
 body{font-family:var(--font-body);background:radial-gradient(ellipse 900px 500px at 15% -10%,rgba(197,59,47,.08),transparent 60%),radial-gradient(ellipse 700px 500px at 100% 0%,rgba(53,208,192,.06),transparent 55%),var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
 .topbar{display:flex;align-items:center;justify-content:space-between;padding:18px 28px;flex-wrap:wrap;gap:12px}
@@ -381,5 +388,6 @@ async function loadNotif(reset){
 async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
 load();
 </script>
+<script src="/assets/cup-theme.js" defer></script>
 </body>
 </html>

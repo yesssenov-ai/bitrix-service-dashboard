@@ -4,24 +4,28 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ProLabSupport - Рассылки</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#f6f7f9">
+<script>(function(){try{var m=localStorage.getItem('pls-theme');document.documentElement.setAttribute('data-theme',m==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
+<link rel="stylesheet" href="/assets/cup-ui.css">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#14171d;--bg2:#20242e;--card:#1b1f27;--border:#2a2f3a;--border2:#363c49;
-  --text:#eef0f3;--text-2:#c3c9d3;--text-3:#8b93a3;--text-4:#616a78;
-  --accent:#e5544a;--accent-h:#d94737;--brand:#4098e6;--brand-l:rgba(64,152,230,.15);
-  --good:#3ddc84;--good-l:rgba(61,220,132,.14);--warn:#e0a940;--bad:#ef5a6a;--bad-l:rgba(239,90,106,.14);
-  --signal:#35d0c0;--radius:12px;--font:'Inter',system-ui,sans-serif;
-  --shadow:0 4px 16px rgba(0,0,0,.5);
+  --bg2:var(--surface-2);
+  --card:var(--surface);
+  --border:var(--line);
+  --border2:var(--line-2);
+  --text-4:var(--text-faint);
+  --brand:var(--accent);
+  --brand-l:var(--accent-weak);
+  --good-l:color-mix(in srgb, var(--good) 12%, var(--surface));
+  --bad-l:color-mix(in srgb, var(--bad) 12%, var(--surface));
+  --signal:var(--good);
+  --radius:var(--r);
+  --font:var(--f-ui);
+  --shadow:0 6px 20px rgba(20,25,35,.12);
 }
-html[data-theme="light"]{
-  --bg:#f5f6fa;--bg2:#eef0f7;--card:#fff;--border:#e3e6ef;--border2:#d0d4e4;
-  --text:#111827;--text-2:#374151;--text-3:#6b7280;--text-4:#9ca3af;
-  --accent:#C53B2F;--accent-h:#a83226;--brand:#2563eb;--brand-l:rgba(37,99,235,.08);
-  --good:#059669;--good-l:rgba(5,150,105,.08);--warn:#d97706;--bad:#dc2626;--bad-l:rgba(220,38,38,.08);
-  --signal:#0f766e;--shadow:0 4px 16px rgba(0,0,0,.08);
-}
+.top::before,.hdr::before,.header::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 35%,transparent));z-index:1}
+
 body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased}
 #cBody{font-family:'Montserrat',Arial,sans-serif}
 .etoolbar select{background:var(--bg);border:1px solid var(--border2);border-radius:7px;padding:4px 6px;font-size:12.5px;color:var(--text);font-family:var(--font);cursor:pointer;width:auto}
@@ -790,5 +794,6 @@ function exportStatsCSV(){
 async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
 boot();
 </script>
+<script src="/assets/cup-theme.js" defer></script>
 </body>
 </html>

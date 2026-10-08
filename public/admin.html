@@ -8,25 +8,30 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ProLabSupport - Администрирование</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#f6f7f9">
+<script>(function(){try{var m=localStorage.getItem('pls-theme');document.documentElement.setAttribute('data-theme',m==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
+<link rel="stylesheet" href="/assets/cup-ui.css">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
-  --white:#1b1f27;--bg:#14171d;--border:#2a2f3a;--border2:#363c49;
-  --text:#eef0f3;--text-2:#c3c9d3;--text-3:#8b93a3;--text-4:#616a78;
-  --accent:#e5544a;--accent-h:#C53B2F;--accent-light:rgba(197,59,47,.16);
-  --blue:#4098e6;--green:#3ddc84;--red:#ef5a6a;--orange:#e0a940;--purple:#a78bfa;
-  --shadow-sm:0 1px 3px rgba(0,0,0,.4);--shadow:0 4px 16px rgba(0,0,0,.5);
-  --shadow-lg:0 20px 60px rgba(0,0,0,.6);--radius:10px;--font:'Inter',system-ui,sans-serif;
+  --white:var(--surface);
+  --border:var(--line);
+  --border2:var(--line-2);
+  --text-4:var(--text-faint);
+  --accent-light:var(--accent-weak);
+  --blue:var(--info);
+  --green:var(--good);
+  --red:var(--bad);
+  --orange:#e0a940;
+  --purple:#a78bfa;
+  --shadow-sm:0 1px 2px rgba(20,25,35,.10);
+  --shadow:0 6px 20px rgba(20,25,35,.12);
+  --shadow-lg:0 20px 50px rgba(20,25,35,.20);
+  --radius:var(--r);
+  --font:var(--f-ui);
 }
-html[data-theme="light"]{
-  --white:#fff;--bg:#f5f6fa;--border:#e3e6ef;--border2:#d0d4e4;
-  --text:#111827;--text-2:#374151;--text-3:#6b7280;--text-4:#9ca3af;
-  --accent:#C53B2F;--accent-h:#a83226;--accent-light:rgba(197,59,47,.08);
-  --blue:#2563eb;--green:#059669;--red:#dc2626;--orange:#d97706;--purple:#7c3aed;
-  --shadow-sm:0 1px 3px rgba(0,0,0,.06);--shadow:0 4px 16px rgba(0,0,0,.07);
-  --shadow-lg:0 20px 60px rgba(0,0,0,.15);
-}
+.top::before,.hdr::before,.header::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 35%,transparent));z-index:1}
+
 body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased;overflow-x:hidden;}
 .header{background:var(--white);border-bottom:1px solid var(--border);height:60px;display:flex;align-items:center;padding:0 28px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.04);}
 .logo{display:flex;align-items:center;gap:11px;font-weight:700;font-size:15px;flex-shrink:0;}
@@ -794,5 +799,6 @@ function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
 
 init();
 </script>
+<script src="/assets/cup-theme.js" defer></script>
 </body>
 </html>

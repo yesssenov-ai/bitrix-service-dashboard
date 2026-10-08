@@ -4,66 +4,39 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ProLabSupport Mail Tracker</title>
+<meta name="theme-color" content="#f6f7f9">
+<script>(function(){try{var m=localStorage.getItem('pls-theme');document.documentElement.setAttribute('data-theme',m==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
+<link rel="stylesheet" href="/assets/cup-ui.css">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
-  --bg:#14171d;
-  --bg2:#1b1f27;
-  --bg3:#20242e;
-  --surface:#1b1f27;
-  --surface2:#20242e;
-  --border:#2a2f3a;
-  --border2:#363c49;
-  --text:#eef0f3;
-  --text2:#c3c9d3;
-  --text3:#8b93a3;
-  --terra:#C53B2F;
-  --terra2:#A32920;
-  --terra-light:rgba(197,59,47,.16);
-  --terra-border:rgba(197,59,47,.35);
-  --green:#3ddc84;
-  --green-bg:rgba(61,220,132,.14);
-  --red:#ef5a6a;
-  --red-bg:rgba(239,90,106,.14);
-  --yellow:#e0a940;
-  --yellow-bg:rgba(224,169,64,.14);
+  --bg2:var(--surface-2);
+  --bg3:var(--surface-3);
+  --surface2:var(--surface-2);
+  --border:var(--line);
+  --border2:var(--line-2);
+  --text2:var(--text-2);
+  --text3:var(--text-3);
+  --terra:var(--accent);
+  --terra2:var(--accent-h);
+  --terra-light:var(--accent-weak);
+  --terra-border:var(--accent-line);
+  --green:var(--good);
+  --green-bg:color-mix(in srgb, var(--good) 14%, var(--surface));
+  --red:var(--bad);
+  --red-bg:color-mix(in srgb, var(--bad) 14%, var(--surface));
+  --yellow:var(--warn);
+  --yellow-bg:color-mix(in srgb, var(--warn) 14%, var(--surface));
   --purple:#a78bfa;
-  --purple-bg:rgba(167,139,250,.18);
-  --cyan:#35d0c0;
-  --cyan-bg:rgba(53,208,192,.14);
-  --shadow:0 1px 3px rgba(0,0,0,.4);
-  --shadow-md:0 4px 16px rgba(0,0,0,.5);
+  --purple-bg:color-mix(in srgb, var(--purple) 16%, var(--surface));
+  --cyan:var(--info);
+  --cyan-bg:color-mix(in srgb, var(--info) 14%, var(--surface));
+  --shadow:0 6px 20px rgba(20,25,35,.12);
+  --shadow-md:0 6px 20px rgba(20,25,35,.14);
 }
-html[data-theme="light"]{
-  --bg:#F5F6FA;
-  --bg2:#FFFFFF;
-  --bg3:#F0F1F6;
-  --surface:#FFFFFF;
-  --surface2:#F5F6FA;
-  --border:#E4E6EF;
-  --border2:#D0D3E2;
-  --text:#111827;
-  --text2:#374151;
-  --text3:#9CA3AF;
-  --terra:#C53B2F;
-  --terra2:#A32920;
-  --terra-light:#FEF2F1;
-  --terra-border:#FECACA;
-  --green:#059669;
-  --green-bg:#ECFDF5;
-  --red:#DC2626;
-  --red-bg:#FEF2F2;
-  --yellow:#D97706;
-  --yellow-bg:#FFFBEB;
-  --purple:#7C3AED;
-  --purple-bg:#F5F3FF;
-  --cyan:#0891B2;
-  --cyan-bg:#ECFEFF;
-  --shadow:0 1px 3px rgba(0,0,0,0.08);
-  --shadow-md:0 4px 16px rgba(0,0,0,0.08);
-}
+.top::before,.hdr::before,.header::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 35%,transparent));z-index:1}
+
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 
 /* Header */
@@ -756,5 +729,6 @@ setInterval(async ()=>{
   }catch(e){/* тихо */}
 },2*60*1000);
 </script>
+<script src="/assets/cup-theme.js" defer></script>
 </body>
 </html>

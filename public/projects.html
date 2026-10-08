@@ -4,12 +4,26 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ЦУП · Проекты</title>
+<meta name="theme-color" content="#f6f7f9">
+<script>(function(){try{var m=localStorage.getItem('pls-theme');document.documentElement.setAttribute('data-theme',m==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
+<link rel="stylesheet" href="/assets/cup-ui.css">
 <link rel="icon" href="/favicon.svg">
 <script src="/assets/theme.js"></script>
 <style>
-  :root{--bg:#070b16;--panel:rgba(20,27,45,.55);--panel2:rgba(30,40,64,.55);--border:rgba(255,255,255,.08);--border2:rgba(255,255,255,.16);
-    --text:#e8edf7;--dim:#8592ad;--dim2:#5c6884;--brand:#ff2d55;--signal:#35d0c0;--accent:#5b8cff;--good:#22c9a3;--warn:#ffb020;--bad:#ff5b6e;--p60:#5b8cff;--p80:#ffb020;}
-  html[data-theme="light"]{--bg:#f5f6fa;--panel:#fff;--panel2:#eef1f7;--border:#e4e7ef;--border2:#d3d8e6;--text:#111827;--dim:#5b6472;--dim2:#8b93a3;--accent:#2563eb;--good:#059669;--warn:#c77700;--bad:#dc2626;}
+  :root{
+  --panel:var(--surface);
+  --panel2:var(--surface-2);
+  --border:var(--line);
+  --border2:var(--line-2);
+  --dim:var(--text-3);
+  --dim2:var(--text-faint);
+  --brand:var(--accent);
+  --signal:var(--good);
+  --p60:#5b8cff;
+  --p80:#ffb020;
+}
+.top::before,.hdr::before,.header::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 35%,transparent));z-index:1}
+  
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--text);font-family:"SF Pro Display","Segoe UI",Inter,system-ui,sans-serif;min-height:100vh;
     background-image:radial-gradient(1000px 500px at 15% -5%,rgba(255,45,85,.08),transparent 60%),radial-gradient(900px 600px at 100% 0%,rgba(91,140,255,.08),transparent 55%);}
@@ -371,5 +385,6 @@ async function doResync(){
 init();
 </script>
   <script src="/assets/pls-ai.js?v=16" defer></script>
+<script src="/assets/cup-theme.js" defer></script>
 </body>
 </html>

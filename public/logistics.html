@@ -4,11 +4,26 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ЦУП · Логистика</title>
+<meta name="theme-color" content="#f6f7f9">
+<script>(function(){try{var m=localStorage.getItem('pls-theme');document.documentElement.setAttribute('data-theme',m==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
+<link rel="stylesheet" href="/assets/cup-ui.css">
 <link rel="icon" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
-  :root{--bg:#070b16;--panel:rgba(20,27,45,0.55);--border:rgba(255,255,255,0.07);--text:#e8edf7;--dim:#8592ad;--dim2:#5c6884;--brand:#ff2d55;--brand2:#ff6b81;--good:#22c9a3;--warn:#ffb020;--bad:#ff5b6e;--purchase:#ffb020;--transit:#5b8cff;--customs:#a56bff;--domestic:#22c9a3}
+  :root{
+  --panel:var(--surface);
+  --border:var(--line);
+  --dim:var(--text-3);
+  --dim2:var(--text-faint);
+  --brand:var(--accent);
+  --brand2:var(--info);
+  --purchase:#ffb020;
+  --transit:#5b8cff;
+  --customs:#a56bff;
+  --domestic:#22c9a3;
+}
+.top::before,.hdr::before,.header::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 35%,transparent));z-index:1}
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{background:var(--bg);color:var(--text);font-family:"SF Pro Display","Segoe UI",Inter,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
   body{min-height:100vh;overflow-x:hidden;background:radial-gradient(1200px 600px at 15% -5%,rgba(255,45,85,.10),transparent 60%),radial-gradient(1000px 700px at 100% 0%,rgba(91,140,255,.12),transparent 55%),radial-gradient(900px 800px at 50% 120%,rgba(34,201,163,.07),transparent 60%),var(--bg)}
@@ -500,5 +515,6 @@ function exportXlsx(){
 
 load();
 </script>
+<script src="/assets/cup-theme.js" defer></script>
 </body>
 </html>
