@@ -5,23 +5,27 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ЦУП — Статистика продаж</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#f6f7f9">
+<script>(function(){try{var m=localStorage.getItem('pls-theme');document.documentElement.setAttribute('data-theme',m==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
+<link rel="stylesheet" href="/assets/cup-ui.css">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+/* Переведено на общую дизайн-систему cup-ui.css: карта токенов страницы → общие токены.
+   Категориальные цвета графиков сохранены как есть (читаемы на светлой и тёмной теме). */
 :root{
-  --bg:#0b0e14;--panel:#141924;--panel-h:#1a2130;--line:#232c3d;--line-2:#2f3a4f;
-  --text:#eef2f8;--dim:#8794ab;--dim2:#5b6884;--faint:#4a5468;
-  --brand:#C53B2F;--brand-h:#e0553f;--signal:#35d0c0;--good:#3ddc84;--warn:#ffb020;--bad:#ff5b6e;
-  --p10:#5b8cff;--p30:#7c6bff;--p60:#c06bff;--p80:#ff6bd6;--contract:#ffb020;--exec:#ff8c42;--won:#3ddc84;
-  --fd:'Space Grotesk',sans-serif;--fb:'Inter',system-ui,sans-serif;--fm:'IBM Plex Mono',monospace;
-  --radius:16px;
+  --panel:var(--surface); --panel-h:var(--surface-2);
+  --dim:var(--text-3); --dim2:var(--text-faint); --faint:var(--text-faint);
+  --brand:var(--accent); --brand-h:var(--accent-h); --signal:var(--good);
+  --p10:#5b8cff; --p30:#7c6bff; --p60:#c06bff; --p80:#ff6bd6;
+  --contract:#ffb020; --exec:#ff8c42; --won:#3ddc84;
+  --fd:var(--f-ui); --fb:var(--f-ui); --fm:var(--f-mono); --radius:var(--r);
 }
+/* Фирменная акцентная линия по верхней кромке шапки */
+.top{position:relative}
+.top::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;
+  background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 35%,transparent))}
 html,body{height:100%}
-body{font-family:var(--fb);background:
-  radial-gradient(1200px 600px at 12% -8%,rgba(197,59,47,.10),transparent 60%),
-  radial-gradient(900px 600px at 100% 0,rgba(53,208,192,.08),transparent 55%),var(--bg);
-  color:var(--text);min-height:100vh}
+body{font-family:var(--fb);background:var(--bg);color:var(--text);min-height:100vh}
 .top{display:flex;align-items:center;gap:10px;padding:16px 26px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:11px}
 .brand img{height:22px}
@@ -1046,5 +1050,6 @@ async function logout(){await fetch('/auth/logout',{method:'POST'});location.hre
 load().then(()=>refreshNow(true)); // при открытии сразу тихо подтягиваем изменения
 </script>
   <script src="/assets/pls-ai.js?v=16" defer></script>
+  <script src="/assets/cup-theme.js" defer></script>
 </body>
 </html>
