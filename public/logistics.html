@@ -70,7 +70,7 @@
   .ms-btn .ms-lab{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ms-btn svg{opacity:.5;flex-shrink:0;transition:transform .2s}.ms.open .ms-btn svg{transform:rotate(180deg)}
   .fsel.act .ms-btn{border-color:rgba(255,45,85,.4);background:rgba(255,45,85,.06)}
-  .ms-panel{position:absolute;top:calc(100% + 6px);left:0;right:0;background:#0f1728;border:1px solid var(--border);border-radius:12px;padding:8px;z-index:30;box-shadow:0 20px 50px -18px rgba(0,0,0,.8);display:none;max-height:340px;overflow:auto}
+  .ms-panel{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:8px;z-index:30;box-shadow:0 20px 50px -18px rgba(0,0,0,.8);display:none;max-height:340px;overflow:auto}
   .ms.open .ms-panel{display:block;animation:msin .18s ease}
   @keyframes msin{from{opacity:0;transform:translateY(-5px)}to{opacity:1}}
   .ms-search{width:100%;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--text);font:inherit;font-size:12.5px;outline:none;margin-bottom:6px}
@@ -94,10 +94,10 @@
   .dimctrl button.on{background:rgba(91,140,255,.15);border-color:rgba(91,140,255,.4);color:#9db8ff}
   .mwrap{overflow:auto;max-height:72vh;background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:10px 12px;backdrop-filter:blur(14px)}
   .mtable{width:100%;border-collapse:separate;border-spacing:3px;font-size:12px}
-  .mtable th{font-size:10px;color:var(--dim2);font-weight:700;padding:6px 6px;position:sticky;top:0;background:#0b1220;z-index:2}
+  .mtable th{font-size:10px;color:var(--dim2);font-weight:700;padding:6px 6px;position:sticky;top:0;background:var(--surface-2);z-index:2}
   .mtable th .ic{display:block;font-size:14px;margin-bottom:2px}
   .mtable td{text-align:center;padding:7px 6px;border-radius:7px;font-weight:700;font-variant-numeric:tabular-nums;color:#fff}
-  .mtable th.grp,.mtable td.grp{text-align:left;position:sticky;left:0;background:#0b1220;z-index:1;min-width:150px;color:var(--text);font-weight:600}
+  .mtable th.grp,.mtable td.grp{text-align:left;position:sticky;left:0;background:var(--surface-2);z-index:1;min-width:150px;color:var(--text);font-weight:600}
   .mtable th.grp{z-index:3}
   .mtable td.muted{color:var(--dim2);background:rgba(255,255,255,.02)}
   .mtable tr.tot td{border-top:2px solid var(--border);background:rgba(255,255,255,.04);font-weight:800}

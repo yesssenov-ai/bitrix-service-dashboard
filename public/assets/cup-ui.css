@@ -34,6 +34,28 @@
 :root[data-accent="blue"]{--accent-base:#2f62d9}
 :root[data-density="compact"]{--pad:14px; --row:32px; --fs:13px}
 
+/* ── Легаси-алиасы ───────────────────────────────────────
+   Страницы ЦУП исторически используют свои имена токенов. Задаём их здесь
+   (через ссылки на основные токены — значит они тема-зависимы автоматически),
+   чтобы любая переведённая страница, которая ссылается на старое имя БЕЗ
+   своего объявления (напр. var(--card,#тёмный)), не падала на тёмный fallback.
+   Если страница объявляет своё значение в своём :root — оно (идёт позже) выигрывает. */
+:root{
+  --card:var(--surface); --panel:var(--surface); --panel-h:var(--surface-2);
+  --panel2:var(--surface-2); --card2:var(--surface-2); --white:var(--surface);
+  --bg2:var(--surface-2); --bg3:var(--surface-3); --surface2:var(--surface-2);
+  --border:var(--line); --border2:var(--line-2); --stroke:var(--line); --stroke-2:var(--line-2); --stroke-strong:var(--line-2);
+  --dim:var(--text-3); --dim2:var(--text-faint); --text-dim:var(--text-3); --text-4:var(--text-faint);
+  --text2:var(--text-2); --text3:var(--text-3); --tx:var(--text); --canvas:var(--surface-2);
+  --brand:var(--accent); --brand-h:var(--accent-h); --brand2:var(--info); --brand-l:var(--accent-weak);
+  --signal:var(--good); --signal-dim:color-mix(in srgb, var(--good) 35%, transparent);
+  --accent-light:var(--accent-weak); --ok:var(--good); --danger:var(--bad); --err:var(--bad);
+  --blue:var(--info); --green:var(--good); --amber:var(--warn); --yellow:var(--warn);
+  --radius:var(--r); --font:var(--f-ui); --font-display:var(--f-ui); --font-body:var(--f-ui); --font-mono:var(--f-mono);
+  --shadow:0 6px 20px rgba(20,25,35,.12); --shadow-sm:0 1px 2px rgba(20,25,35,.10);
+  --shadow-md:0 6px 20px rgba(20,25,35,.14); --shadow-lg:0 20px 50px rgba(20,25,35,.20);
+}
+
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
     --bg:#0e1118; --surface:#161a22; --surface-2:#1b212b; --surface-3:#222a36;
