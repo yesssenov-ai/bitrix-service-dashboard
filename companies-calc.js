@@ -776,6 +776,30 @@ async function writeSelfTest(id, { keep = false } = {}) {
     } else { deal = { note: 'сделок на портале не нашлось' }; }
   } catch (e) { deal = { error: String(e && e.message || e) }; }
 
+  // Тест 3b — ПЕРЕНОС сделки на другую компанию (ровно операция слияния: COMPANY_ID).
+  // Если это держится — слияние реально переносит сделки; если откатывается — нет.
+  let dealReassign = null;
+  try {
+    let dids = await listDealIds(id);
+    if (!dids.length) { const any = await b24('crm.deal.list', { select: ['ID'], order: { ID: 'DESC' }, start: 0 }); dids = (any.result || []).slice(0, 1).map(d => d.ID); }
+    if (dids.length) {
+      const did = dids[0];
+      const dg = await b24('crm.deal.get', { id: did });
+      const origCompany = (dg.result && dg.result.COMPANY_ID) || '0';
+      const cl = await b24('crm.company.list', { select: ['ID'], order: { ID: 'ASC' }, start: 0 });
+      const target = (cl.result || []).map(c => String(c.ID)).filter(x => x !== String(origCompany))[0];
+      if (!target) { dealReassign = { note: 'нет второй компании для теста' }; }
+      else {
+        const r = await b24('crm.deal.update', { id: did, fields: { COMPANY_ID: target } });
+        await sleep(900);
+        const dg2 = await b24('crm.deal.get', { id: did });
+        const now = String((dg2.result && dg2.result.COMPANY_ID) || '0');
+        dealReassign = { dealId: did, origCompany: String(origCompany), target, after: now, applied: now === String(target), updateResult: r && r.result };
+        if (!keep) { try { await b24('crm.deal.update', { id: did, fields: { COMPANY_ID: origCompany } }); } catch (e) { } }
+      }
+    } else dealReassign = { note: 'сделок нет' };
+  } catch (e) { dealReassign = { error: String(e && e.message || e) }; }
+
   // Тест 4 — та же запись названия, но ПРЯМЫМ JSON-телом (минуя наш form-encoding).
   // Если так применяется, а через b24 нет — проблема в кодировании тела запроса.
   let jsonWay = null;
@@ -800,6 +824,7 @@ async function writeSelfTest(id, { keep = false } = {}) {
     companyTitle: { applied: titleApplied, tried: titleTry, after: mid.TITLE, updateResult: rTitle && rTitle.result },
     companyComments: { applied: commApplied, updateResult: rComm && rComm.result },
     deal,
+    dealReassign,
     companyTitleJson: jsonWay,
     verdict: (titleApplied || commApplied || (deal && deal.applied) || (jsonWay && jsonWay.applied)) ? 'запись где-то применяется' : 'НИ ОДНА запись не применилась',
   };
