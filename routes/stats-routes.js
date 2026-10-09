@@ -1,12 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const { requireAuth } = require('../auth');
+const { requireAuth, requireModuleApi } = require('../auth');
 
-// Доступ к данным статистики: admin/coordinator/manager. Кому реально видно
-// модуль — решает «Доступ к модулям» (гейт страницы requireModule('STATS'));
-// здесь лишь ролевой предел на сами данные/действия. Тяжёлые операции
-// (resync/backfill истории) остаются только у admin.
-const PM_ROLES = ['admin', 'coordinator', 'manager'];
+// Доступ к данным статистики ПРИВЯЗАН К ВЫДАЧЕ МОДУЛЯ (как и гейт страницы
+// requireModule('STATS')): кому админ выдал модуль STATS в «Доступ к модулям»,
+// тот видит и данные — через requireModuleApi('STATS'). Роль пользователя
+// (менеджер/инженер/маркетолог/наблюдатель) больше НЕ ограничивает просмотр
+// статистики. Тяжёлые/мутирующие операции (полный пересинк, backfill истории)
+// остаются только у admin.
+const PM_ROLES = ['admin', 'coordinator', 'manager']; // (оставлено для совместимости; не используется для гейта просмотра)
 
 function yearRange(year) {
   return { start: `${year}-01-01`, end: `${year}-12-31` };
@@ -21,7 +23,7 @@ function parseYears(req) {
 
 // GET /api/stats/lead-entry — «Заведение сделок»: кто и на какой стадии впервые
 // завёл сделку, помесячно. Возвращает все годы разом; фильтрация — на фронте.
-router.get('/lead-entry', requireAuth(PM_ROLES), async (req, res) => {
+router.get('/lead-entry', requireModuleApi('STATS'), async (req, res) => {
   try { res.json(await require('../stats-leadentry-calc').getLeadEntry()); }
   catch (e) { console.error('GET /api/stats/lead-entry error:', e.message); res.status(500).json({ error: e.message }); }
 });
@@ -29,7 +31,7 @@ router.get('/lead-entry', requireAuth(PM_ROLES), async (req, res) => {
 // GET /api/stats/cohort?years=2026 — когортный анализ «год контракта → год создания».
 // Кэш в процессе на 10 мин по набору лет (?force=1 сбрасывает).
 const _cohortCache = new Map();
-router.get('/cohort', requireAuth(PM_ROLES), async (req, res) => {
+router.get('/cohort', requireModuleApi('STATS'), async (req, res) => {
   try {
     const years = parseYears(req);
     const key = years.join(',');
@@ -49,7 +51,7 @@ router.get('/cohort', requireAuth(PM_ROLES), async (req, res) => {
 // GET /api/stats/lost?days=7 — «Проигранные сделки за N дней + причины».
 // Живой запрос в Битрикс; кэш в процессе на 5 мин по количеству дней (?force=1 сбрасывает).
 const _lostCache = new Map();
-router.get('/lost', requireAuth(PM_ROLES), async (req, res) => {
+router.get('/lost', requireModuleApi('STATS'), async (req, res) => {
   try {
     const days = Math.max(1, Math.min(90, parseInt(req.query.days, 10) || 7));
     const force = req.query.force === '1';
@@ -67,7 +69,7 @@ router.get('/lost', requireAuth(PM_ROLES), async (req, res) => {
 // GET /api/stats/board?years=2025,2026 — единый борд новой Статистики (все вкладки).
 // Мультивыбор лет: данные суммируются. Кэш в процессе на 10 мин по набору лет.
 const _boardCache = new Map();
-router.get('/board', requireAuth(PM_ROLES), async (req, res) => {
+router.get('/board', requireModuleApi('STATS'), async (req, res) => {
   try {
     const years = parseYears(req);
     const key = years.join(',');
@@ -87,7 +89,7 @@ router.get('/board', requireAuth(PM_ROLES), async (req, res) => {
 // GET /api/stats/sphere-export?years=2025,2026[&sphere=Название] — xlsx-выгрузка
 // по сферам: свод, свод по компаниям (широкий) и детализация сделок
 // (подписанные по воронкам + в работе по воронкам и стадиям).
-router.get('/sphere-export', requireAuth(PM_ROLES), async (req, res) => {
+router.get('/sphere-export', requireModuleApi('STATS'), async (req, res) => {
   try {
     const years = parseYears(req);
     const sphere = (req.query.sphere && String(req.query.sphere).trim()) || null;
@@ -104,7 +106,7 @@ router.get('/sphere-export', requireAuth(PM_ROLES), async (req, res) => {
 });
 
 // GET /api/stats/companies-export — пивот по компаниям (Тотал + годы × категории).
-router.get('/companies-export', requireAuth(PM_ROLES), async (req, res) => {
+router.get('/companies-export', requireModuleApi('STATS'), async (req, res) => {
   try {
     const { buildCompaniesPivotWorkbook } = require('../stats-export');
     const { buffer, fname } = await buildCompaniesPivotWorkbook();
@@ -122,7 +124,7 @@ router.get('/companies-export', requireAuth(PM_ROLES), async (req, res) => {
 // нажатии (reconcile:true) ещё и убрать удалённые. То же зеркало, что у Контрактов.
 // Сбрасывает кэш борда/конверсий, чтобы след. запрос пересчитал свежие цифры.
 let _statsRefreshing = false;
-router.post('/refresh', requireAuth(PM_ROLES), express.json(), async (req, res) => {
+router.post('/refresh', requireModuleApi('STATS'), express.json(), async (req, res) => {
   if (_statsRefreshing) return res.json({ ok: true, running: true, note: 'Обновление уже идёт' });
   _statsRefreshing = true;
   try {
@@ -153,7 +155,7 @@ router.post('/refresh', requireAuth(PM_ROLES), express.json(), async (req, res) 
 // GET /api/stats/conversions?year=2026 — Фаза 2: реальные конверсии и тайминги
 // (кэш 10 мин по году, ?force=1 пересчитывает).
 const _convCache = new Map();
-router.get('/conversions', requireAuth(PM_ROLES), async (req, res) => {
+router.get('/conversions', requireModuleApi('STATS'), async (req, res) => {
   try {
     const year = parseInt(req.query.year, 10) || new Date().getFullYear();
     const force = req.query.force === '1';
@@ -185,13 +187,13 @@ router.post('/backfill-history', requireAuth(['admin']), async (req, res) => {
 });
 
 // GET /api/stats/backfill-status — прогресс сбора истории.
-router.get('/backfill-status', requireAuth(PM_ROLES), (req, res) => {
+router.get('/backfill-status', requireModuleApi('STATS'), (req, res) => {
   const { status } = require('../stagehistory-sync');
   res.json({ ok: true, ...status() });
 });
 
 // GET /api/stats/summary?year=2026
-router.get('/summary', requireAuth(PM_ROLES), async (req, res) => {
+router.get('/summary', requireModuleApi('STATS'), async (req, res) => {
   try {
     const year = parseInt(req.query.year, 10) || new Date().getFullYear();
     const { start, end } = yearRange(year);
@@ -206,7 +208,7 @@ router.get('/summary', requireAuth(PM_ROLES), async (req, res) => {
 });
 
 // GET /api/stats/managers?year=2026
-router.get('/managers', requireAuth(PM_ROLES), async (req, res) => {
+router.get('/managers', requireModuleApi('STATS'), async (req, res) => {
   try {
     const year = parseInt(req.query.year, 10) || new Date().getFullYear();
     const { start, end } = yearRange(year);
@@ -220,7 +222,7 @@ router.get('/managers', requireAuth(PM_ROLES), async (req, res) => {
 });
 
 // GET /api/stats/instruments?year=2026
-router.get('/instruments', requireAuth(PM_ROLES), async (req, res) => {
+router.get('/instruments', requireModuleApi('STATS'), async (req, res) => {
   try {
     const year = parseInt(req.query.year, 10) || new Date().getFullYear();
     const { start, end } = yearRange(year);
