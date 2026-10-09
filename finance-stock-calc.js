@@ -162,7 +162,7 @@ async function getStockBoard() {
       shelf: r.shelf, barcode: r.barcode, gtd: r.gtd, store_id: r.store_id, store: r.store,
     })),
     totals: { qty: rows.reduce((a, r) => a + Number(r.qty || 0), 0), amount: rows.reduce((a, r) => a + Number(r.amount || 0), 0) },
-    asOf: meta.last_sync || null, mock: meta.is_mock !== false, error: meta.last_error || null,
+    asOf: meta.last_ok_at || null, lastTry: meta.last_sync || null, mock: meta.is_mock !== false, error: meta.last_error || null,
     filters: { orders: uniq('order_no'), manufacturers: uniq('manufacturer'), stores: uniq('store') },
   };
 }

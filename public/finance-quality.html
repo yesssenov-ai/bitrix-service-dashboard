@@ -83,7 +83,9 @@ async function load(){
   const {ok,d}=await api('/api/finance/quality');
   if(!ok){document.getElementById('body').innerHTML='<tr><td colspan="9" class="hint">Ошибка загрузки</td></tr>';return;}
   DATA=d;
-  document.getElementById('asof').textContent=d.asOf?('По состоянию на '+new Date(d.asOf).toLocaleString('ru-RU')):'';
+  var _a=document.getElementById('asof');
+  if(d.error){_a.innerHTML='Данные от '+(d.asOf?new Date(d.asOf).toLocaleString('ru-RU'):'—')+' · <span style="color:var(--bad)">⚠ обновить не удалось</span>';_a.title=String(d.error);}
+  else{_a.textContent=d.asOf?('По состоянию на '+new Date(d.asOf).toLocaleString('ru-RU')):'';_a.title='';}
   document.getElementById('mockBadge').style.display=d.mock?'inline-block':'none';
   renderTiles();render();
 }
@@ -117,7 +119,19 @@ function render(){
     </tr>`;
   }).join(''):'<tr><td colspan="9" class="hint">Нет строк по фильтру.</td></tr>';
 }
-async function refresh(){const b=document.getElementById('refreshBtn');b.disabled=true;b.textContent='Обновляю…';await api('/api/finance/quality/refresh',{method:'POST'});await load();b.disabled=false;b.textContent='↻ Обновить';}
+async function refresh(){
+  const b=document.getElementById('refreshBtn');b.disabled=true;b.textContent='Обновляю…';b.style.color='';b.title='';
+  let r;try{r=await api('/api/finance/quality/refresh',{method:'POST'});}catch(e){r={ok:false,d:{error:String(e&&e.message||e)}};}
+  await load();b.disabled=false;
+  let err=null;
+  if(!r||r.ok===false)err=(r&&r.d&&r.d.error)||'сервер недоступен';
+  else if(r.d&&r.d.error)err=r.d.error;
+  else if(r.d&&r.d.ok===false)err='ошибка синхронизации';
+  if(err){b.textContent='⚠ Не удалось';b.style.color='var(--bad)';b.title=String(err);}
+  else if(r.d&&r.d.mock){b.textContent='↻ Обновить';b.title='демо-данные: 1С не подключена';}
+  else{b.textContent='✓ Обновлено';b.style.color='var(--good)';}
+  setTimeout(()=>{if(b.textContent!=='Обновляю…'){b.textContent='↻ Обновить';b.style.color='';b.title='';}},4000);
+}
 async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
 boot();
 </script>

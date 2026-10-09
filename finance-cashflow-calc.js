@@ -83,6 +83,8 @@ async function getCashflowBoard() {
     beyond:  { amount: beyondAmt,  count: beyondCnt },
     horizonWeeks: HORIZON,
     asOf: debt.asOf || null,
+    lastTry: debt.lastTry || null,
+    error: debt.error || null,
     mock: debt.mock !== false,
     source: 'Дебет 1С (счёт 1210), по срокам оплаты',
   };
@@ -91,7 +93,7 @@ async function getCashflowBoard() {
 // «Обновить» = пересобрать зеркало Дебета (источник прогноза), затем вернуть доску.
 async function syncCashflow() {
   const r = await debtMod.syncDebt();
-  return { ok: r.ok !== false, count: (await getCashflowBoard()).weeks.length, mock: r.mock };
+  return { ok: r.ok !== false, error: r.error || null, count: (await getCashflowBoard()).weeks.length, mock: r.mock };
 }
 
 module.exports = { getCashflowBoard, syncCashflow };

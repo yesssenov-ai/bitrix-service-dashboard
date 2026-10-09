@@ -216,7 +216,7 @@ async function getDebtBoard() {
       bitrix_deal_id: r.bitrix_deal_id || null, contract_sum: r.contract_sum != null ? Number(r.contract_sum) : null,
     })),
     depts, totals: { debt: totalDebt, overdue: totalOverdue },
-    asOf: meta.last_sync || null, mock: meta.is_mock !== false, error: meta.last_error || null,
+    asOf: meta.last_ok_at || null, lastTry: meta.last_sync || null, mock: meta.is_mock !== false, error: meta.last_error || null,
     filters: {
       departments: [...new Set(rows.map(r => r.department).filter(Boolean))].sort(),
       contractors: [...new Set(rows.map(r => r.contractor).filter(Boolean))].sort(),

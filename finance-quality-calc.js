@@ -151,7 +151,7 @@ async function getQualityBoard() {
       dept_1c: r.dept_1c, dept_b24: r.dept_b24, diff_fields: r.diff_fields,
     })),
     summary: { total: rows.length, ok: by('ok'), diff: by('diff'), only_1c: by('only_1c'), only_b24: by('only_b24'), no_link: by('no_link') },
-    asOf: meta.last_sync || null, mock: meta.is_mock !== false, error: meta.last_error || null,
+    asOf: meta.last_ok_at || null, lastTry: meta.last_sync || null, mock: meta.is_mock !== false, error: meta.last_error || null,
   };
 }
 

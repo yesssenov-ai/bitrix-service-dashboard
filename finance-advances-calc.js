@@ -145,7 +145,7 @@ async function getAdvancesBoard() {
       contract_sum: Number(r.contract_sum || 0), advances: Number(r.advances || 0),
       payments: Number(r.payments || 0), balance: Number(r.balance || 0), bitrix_deal_id: r.bitrix_deal_id || null,
     })),
-    asOf: meta.last_sync || null, mock: meta.is_mock !== false, error: meta.last_error || null,
+    asOf: meta.last_ok_at || null, lastTry: meta.last_sync || null, mock: meta.is_mock !== false, error: meta.last_error || null,
     filters: { years: uniq('year'), departments: uniq('department'), contractors: uniq('contractor') },
   };
 }
