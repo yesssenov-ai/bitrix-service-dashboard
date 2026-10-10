@@ -110,7 +110,7 @@
   var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
 
   var fab = document.createElement('button'); fab.id = 'pai-fab';
-  fab.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M18 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg><span>ProLab AI</span>';
+  fab.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="3.4"/><path d="M12 8V4.7"/><circle cx="12" cy="3.5" r="1.25" fill="currentColor" stroke="none"/><circle cx="9.2" cy="13.2" r="1.3" fill="currentColor" stroke="none"/><circle cx="14.8" cy="13.2" r="1.3" fill="currentColor" stroke="none"/><path d="M9.4 16.3h5.2"/><path d="M4 12.4H2.5M20 12.4h1.5"/></svg><span>ProLab AI</span>';
   document.body.appendChild(fab);
 
   var panel = document.createElement('div'); panel.id = 'pai-panel';

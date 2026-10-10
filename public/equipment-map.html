@@ -388,21 +388,23 @@ async function init() {
 
 function initMap() {
   map = L.map('map', { center: [48.5, 66.9], zoom: 5 });
-  // Базослой Esri Canvas (без API-ключа, стабильно). Современный минимал: светло-серый
-  // для светлой темы, тёмно-серый для тёмной + слой подписей сверху (детализация).
-  // Переключается автоматически вместе с темой ЦУП (data-theme на <html>).
-  // (OSM раньше блокировал домен, CARTO ушёл под ключ — поэтому проверенный Esri, но Canvas-стили.)
-  var ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/';
-  var tl = function (name) { return L.tileLayer(ESRI + name + '/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 16, maxZoom: 19, attribution: 'Tiles &copy; Esri' }); };
-  var baseLight = L.layerGroup([tl('World_Light_Gray_Base'), tl('World_Light_Gray_Reference')]);
-  var baseDark  = L.layerGroup([tl('World_Dark_Gray_Base'),  tl('World_Dark_Gray_Reference')]);
-  var _curBase = null;
-  function applyBase() {
-    var want = (document.documentElement.getAttribute('data-theme') === 'dark') ? baseDark : baseLight;
-    if (_curBase === want) return;
-    if (_curBase) map.removeLayer(_curBase);
-    _curBase = want; map.addLayer(_curBase);
-  }
+  // Базослой зависит от темы. Светлая — CARTO Voyager (современная ДЕТАЛЬНАЯ карта:
+  // города/посёлки/области, дороги, мягкий цвет), тёмная — CARTO Dark Matter.
+  // Если CARTO недоступен (ключ/блокировка) — автоматический откат на Esri (Топо / тёмно-серый),
+  // чтобы карта никогда не осталась пустой. Переключается по теме ЦУП (data-theme на <html>).
+  var ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
+  function cartoLayer(style) { return L.tileLayer('https://{s}.basemaps.cartocdn.com/' + style + '/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 19, attribution: '&copy; OpenStreetMap, &copy; CARTO' }); }
+  function esriLight() { return L.tileLayer(ESRI + 'World_Topo_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles &copy; Esri' }); }
+  function esriDark() { return L.layerGroup([
+    L.tileLayer(ESRI + 'Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 16, maxZoom: 19, attribution: 'Tiles &copy; Esri' }),
+    L.tileLayer(ESRI + 'Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 16, maxZoom: 19 }) ]); }
+  var baseLight = cartoLayer('rastertiles/voyager');
+  var baseDark  = cartoLayer('dark_all');
+  var _curBase = null, _fellBack = false;
+  function wantDark() { return document.documentElement.getAttribute('data-theme') === 'dark'; }
+  function applyBase() { var want = wantDark() ? baseDark : baseLight; if (_curBase === want) return; if (_curBase) map.removeLayer(_curBase); _curBase = want; map.addLayer(_curBase); }
+  function fallback(layer) { var e = 0; layer.on('tileerror', function () { if (_fellBack) return; if (++e >= 4) { _fellBack = true; baseLight = esriLight(); baseDark = esriDark(); _curBase = null; applyBase(); } }); }
+  fallback(baseLight); fallback(baseDark);
   applyBase();
   try { new MutationObserver(applyBase).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); } catch (e) {}
   clusterGroup = L.markerClusterGroup({
