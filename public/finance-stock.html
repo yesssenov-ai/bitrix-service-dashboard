@@ -61,6 +61,45 @@ tfoot td{position:sticky;bottom:0;background:var(--card);font-weight:700;border-
 .ms-opt input,.ms-all input{accent-color:var(--accent);flex-shrink:0}
 .ms-opt span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ms-empty{color:var(--text-3);font-size:11.5px;padding:8px 6px}
+/* ── Полоса обзора ─────────────────────────────────────── */
+.ovw{padding:16px 16px 0}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:13px 15px}
+.kpi .lab{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3)}
+.kpi .val{font-size:22px;font-weight:600;letter-spacing:-.01em;margin-top:7px;font-variant-numeric:tabular-nums}
+.kpi .val small{font-size:12.5px;font-weight:600;color:var(--text-3);margin-left:2px}
+.kmeter{display:flex;align-items:center;gap:8px;margin-top:9px}
+.kbar{flex:1;height:6px;border-radius:4px;background:var(--bg2);overflow:hidden}
+.kbar i{display:block;height:100%;border-radius:4px}
+.klab{font-size:11px;color:var(--text-3);white-space:nowrap;font-weight:600}
+.ovw2{display:grid;grid-template-columns:1.8fr 1fr;gap:12px;margin-top:12px}
+@media(max-width:1000px){.kpis{grid-template-columns:repeat(2,1fr)}.ovw2{grid-template-columns:1fr}}
+.ovwc{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+.ovwc h3{font-size:13px;font-weight:700;margin:0 0 2px}
+.ovwc .ch{color:var(--text-3);font-size:11.5px;margin-bottom:8px}
+.hbars{display:flex;flex-direction:column;gap:9px;margin-top:2px}
+.hbar .top{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;gap:8px}
+.hbar .nm{color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:62%}
+.hbar .v{font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+.htrack{height:7px;background:var(--bg2);border-radius:4px;overflow:hidden;cursor:pointer}
+.htrack i{display:block;height:100%;border-radius:4px;background:var(--accent)}
+.hbar.clk{cursor:pointer}
+.agbar{display:flex;height:28px;border-radius:8px;overflow:hidden;gap:2px;margin:10px 0 14px}
+.agbar>i{height:100%}
+.agleg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px 20px}
+.agit{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-2)}
+.agit .sw{width:9px;height:9px;border-radius:3px;flex-shrink:0}
+.agit .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.agit .v{font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+.exp{margin-top:14px;border-top:1px solid var(--border);padding-top:12px}
+.exprow{display:flex;align-items:center;gap:10px;font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--border)}
+.exprow:last-child{border-bottom:0}
+.exprow .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-2)}
+.exprow .d{font-weight:700;border-radius:6px;padding:1px 7px;font-size:11px}
+.exprow .v{font-weight:700;color:var(--text);min-width:90px;text-align:right;font-variant-numeric:tabular-nums}
+.ovwempty{color:var(--text-3);font-size:12.5px;text-align:center;padding:24px 10px}
+#ovwTip{position:fixed;pointer-events:none;z-index:200;background:var(--text);color:var(--card);font-size:11.5px;font-weight:600;padding:5px 9px;border-radius:7px;opacity:0;transition:opacity .08s;white-space:nowrap}
+svg.ovsvg{display:block;width:100%}
 </style>
 </head>
 <body>
@@ -75,6 +114,28 @@ tfoot td{position:sticky;bottom:0;background:var(--card);font-weight:700;border-
     <button class="hbtn" onclick="logout()">Выйти</button>
   </div>
 </header>
+
+<!-- Полоса обзора (по области по умолчанию: Основной склад, счёт 1330) -->
+<div class="ovw">
+  <div class="kpis" id="kpis"></div>
+  <div class="ovw2">
+    <div class="ovwc">
+      <h3>Концентрация запаса (ABC / Парето)</h3>
+      <div class="ch">позиции по убыванию суммы · линия — накопленная доля · на «A» сосредоточить контроль и инвентаризацию</div>
+      <div id="pareto"></div>
+    </div>
+    <div class="ovwc">
+      <h3>Деньги по производителям</h3>
+      <div class="ch">сумма остатка, топ‑7 + прочие · клик — фильтр</div>
+      <div class="hbars" id="mfrBars"></div>
+    </div>
+  </div>
+  <div class="ovwc" style="margin-top:12px">
+    <h3>Срок годности — риск списания</h3>
+    <div class="ch" id="expCh">сумма остатка по срокам до истечения · под риском считаем ≤ 90 дней</div>
+    <div id="expBody"></div>
+  </div>
+</div>
 
 <div class="filters">
   <div><label class="fl">Склад</label><div id="fStore"></div></div>
@@ -158,6 +219,7 @@ async function load(){
   mOrder.setItems(d.filters.orders||[]);
   mMfr.setItems(d.filters.manufacturers||[]);
   document.getElementById('stockNote').textContent=d.account?('счёт '+d.account):'';
+  if(d.overview)renderStockOverview(d.overview);
   render();
 }
 function filtered(){
@@ -197,8 +259,70 @@ async function refresh(){
   setTimeout(()=>{if(b.textContent!=='Обновляю…'){b.textContent='↻ Обновить';b.style.color='';b.title='';}},4000);
 }
 async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
+
+/* ── Полоса обзора Склада: KPI + ABC/Парето + производители + срок годности ─ */
+var ovTip=document.getElementById('ovwTip');
+function ovShow(e,h){ovTip.innerHTML=h;ovTip.style.opacity='1';ovMove(e);}
+function ovMove(e){ovTip.style.left=(e.clientX+12)+'px';ovTip.style.top=(e.clientY-10)+'px';}
+function ovHide(){ovTip.style.opacity='0';}
+function mln(v){return fmt(Number(v||0)/1e6);}
+function scrollToTable(){try{document.querySelector('.card').scrollIntoView({behavior:'smooth',block:'start'});}catch(e){}}
+function kmeter(frac,label,color){return '<div class="kmeter"><div class="kbar"><i style="width:'+(Math.max(0,Math.min(1,frac||0))*100).toFixed(0)+'%;background:'+color+'"></i></div><span class="klab">'+esc(label)+'</span></div>';}
+function renderStockOverview(ov){
+  const k=ov.kpis||{};
+  document.getElementById('kpis').innerHTML=[
+    '<div class="kpi"><div class="lab">Позиций</div><div class="val">'+fmt(k.positions)+'</div>'+kmeter(1,ov.scopeLabel||'',"var(--text-faint)")+'</div>',
+    '<div class="kpi"><div class="lab">Сумма остатка</div><div class="val">'+mln(k.amount)+' <small>млн ₸</small></div>'+kmeter(1,'заморожено','var(--accent)')+'</div>',
+    '<div class="kpi"><div class="lab">Количество, ед.</div><div class="val">'+fmt(k.qty)+'</div>'+kmeter(k.doShare,'ДО: '+Math.round((k.doShare||0)*100)+'% позиций','var(--info)')+'</div>',
+    '<div class="kpi"><div class="lab">Под риском ≤90 дн</div><div class="val">'+mln(k.atRisk)+' <small>млн ₸</small></div>'+kmeter(k.atRiskShare,(ov.hasExpiry?(Math.round((k.atRiskShare||0)*100)+'% остатка'):'нет данных по срокам'),'var(--bad)')+'</div>'
+  ].join('');
+  renderPareto(ov.abc);renderMfr(ov.mfr);renderExpiry(ov.aging,ov.soon,ov.hasExpiry);
+}
+function renderPareto(abc){
+  const el=document.getElementById('pareto'),items=(abc&&abc.items)||[];
+  if(!items.length){el.innerHTML='<div class="ovwempty">Нет данных.</div>';return;}
+  const grand=abc.grand||items.reduce((s,x)=>s+x.amount,0)||1;
+  const W=640,H=250,L=42,R=40,T=14,B=16,pw=W-L-R,ph=H-T-B;
+  const mx=Math.max.apply(0,items.map(x=>x.amount))*1.08||1;
+  const n=items.length+(abc.tailCount>0?1:0),gap=pw/n,bw=gap*0.62;
+  let cum=0,cumPts=[],bars='',grid='';
+  [0,0.25,0.5,0.75,1].forEach(f=>{const y=T+ph-f*ph;grid+='<line x1="'+L+'" y1="'+y+'" x2="'+(W-R)+'" y2="'+y+'" stroke="var(--grid)" stroke-width="1"/><text x="'+(W-R+6)+'" y="'+(y+3.5)+'" font-size="9" fill="var(--text-4)">'+Math.round(f*100)+'%</text>';});
+  const y80=T+ph-0.8*ph;grid+='<line x1="'+L+'" y1="'+y80+'" x2="'+(W-R)+'" y2="'+y80+'" stroke="var(--bad)" stroke-width="1" stroke-dasharray="4 3" opacity="0.5"/>';
+  items.forEach((it,i)=>{const x=L+i*gap+(gap-bw)/2,h=it.amount/mx*ph,y=T+ph-h;cum+=it.amount;const cp=cum/grand;const cls=cp<=0.8?'A':(cp<=0.95?'B':'C');const col=cls==='A'?'var(--accent)':(cls==='B'?'color-mix(in srgb,var(--accent) 55%,var(--card))':'color-mix(in srgb,var(--accent) 28%,var(--card))');bars+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+Math.max(0,h).toFixed(1)+'" rx="2.5" fill="'+col+'" class="pb" data-nm="'+esc(it.name)+'" data-v="'+it.amount+'" data-c="'+Math.round(cp*100)+'" data-cl="'+cls+'" style="cursor:pointer"/>';cumPts.push([x+bw/2,T+ph-cp*ph]);});
+  const cumLine=cumPts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+  const cumDots=cumPts.map(p=>'<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="2.4" fill="var(--info)"/>').join('');
+  let tailSeg='',tailLab='';
+  if(abc.tailCount>0){const tailX=L+items.length*gap+gap/2,last=cumPts[cumPts.length-1];tailSeg='<path d="M'+last[0].toFixed(1)+' '+last[1].toFixed(1)+' L'+tailX.toFixed(1)+' '+T.toFixed(1)+'" fill="none" stroke="var(--info)" stroke-width="1.6" stroke-dasharray="3 3" opacity="0.7"/>';tailLab='<text x="'+tailX.toFixed(1)+'" y="'+(T+ph-6)+'" text-anchor="middle" font-size="9" fill="var(--text-4)">+'+abc.tailCount+'</text>';}
+  el.innerHTML='<svg class="ovsvg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet">'+grid+bars+'<path d="'+cumLine+'" fill="none" stroke="var(--info)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'+tailSeg+cumDots+tailLab+'</svg>'+
+    '<div style="display:flex;gap:16px;margin-top:8px;font-size:11.5px;color:var(--text-3);flex-wrap:wrap"><span><b style="color:var(--accent)">A</b> — до 80%</span><span><b style="color:color-mix(in srgb,var(--accent) 55%,var(--text-3))">B</b> — 80–95%</span><span><b>C</b> — хвост</span><span>топ‑'+items.length+' = <b style="color:var(--text-2)">'+(abc.topShare||0)+'%</b></span><span style="margin-left:auto"><b style="color:var(--info)">— </b>накопл.</span></div>';
+  el.querySelectorAll('.pb').forEach(b=>{
+    b.addEventListener('mouseenter',e=>{b.style.opacity='.8';ovShow(e,b.dataset.nm+' · <b>'+mln(b.dataset.v)+'</b> млн · накопл. '+b.dataset.c+'% · '+b.dataset.cl);});
+    b.addEventListener('mousemove',ovMove);b.addEventListener('mouseleave',()=>{b.style.opacity='1';ovHide();});
+    b.addEventListener('click',()=>{mName.setSelected([b.dataset.nm]);render();scrollToTable();});
+  });
+}
+function renderMfr(mfr){
+  const el=document.getElementById('mfrBars'),rows=mfr||[];
+  if(!rows.length){el.innerHTML='<div class="ovwempty">Нет данных.</div>';return;}
+  const mx=Math.max.apply(0,rows.map(r=>r.amount))||1;
+  el.innerHTML=rows.map(r=>'<div class="hbar clk" data-nm="'+esc(r.name)+'"><div class="top"><span class="nm">'+esc(r.name)+'</span><span class="v">'+mln(r.amount)+' млн</span></div><div class="htrack"><i style="width:'+(r.amount/mx*100).toFixed(0)+'%"></i></div></div>').join('');
+  el.querySelectorAll('.hbar.clk').forEach(h=>h.addEventListener('click',()=>{const nm=h.getAttribute('data-nm');mMfr.setSelected(nm==='Прочие'?[]:[nm]);render();scrollToTable();}));
+}
+function renderExpiry(aging,soon,hasExpiry){
+  const body=document.getElementById('expBody');aging=aging||[];
+  if(!hasExpiry){body.innerHTML='<div class="ovwempty">1С пока не отдаёт срок годности по позициям — весь остаток идёт как «без срока». Блок оживёт, как только в выгрузке появится поле срока.</div>';return;}
+  const cols={le30:'var(--bad)',le60:'#e0733a',le90:'var(--warn)',gt90:'var(--good)',none:'var(--text-faint)'};
+  const tot=aging.reduce((s,a)=>s+a.value,0)||1;
+  const bar=aging.map(a=>a.value>0?'<i class="es" data-nm="'+esc(a.label)+'" data-v="'+a.value+'" data-pc="'+Math.round(a.value/tot*100)+'" style="width:'+(a.value/tot*100).toFixed(2)+'%;background:'+(cols[a.key]||'var(--text-faint)')+'"></i>':'').join('');
+  const leg=aging.map(a=>'<div class="agit"><span class="sw" style="background:'+(cols[a.key]||'var(--text-faint)')+'"></span><span class="nm">'+esc(a.label)+'</span><span class="v">'+mln(a.value)+' млн</span></div>').join('');
+  let list='';
+  if(soon&&soon.length){list='<div class="exp"><div style="font-size:11.5px;color:var(--text-3);margin-bottom:6px">Ближайшие к истечению</div>'+soon.map(r=>{const col=r.days<=30?'var(--bad)':(r.days<=60?'#e0733a':'var(--warn)');return '<div class="exprow"><span class="nm">'+esc(r.name)+'</span><span class="d" style="color:'+col+';background:color-mix(in srgb,'+col+' 14%,var(--card))">'+r.days+' дн</span><span class="v">'+fmt(r.amount)+' ₸</span></div>';}).join('')+'</div>';}
+  body.innerHTML='<div class="agbar">'+bar+'</div><div class="agleg">'+leg+'</div>'+list;
+  body.querySelectorAll('.es').forEach(s=>{s.addEventListener('mouseenter',e=>{s.style.opacity='.82';ovShow(e,s.dataset.nm+' · <b>'+mln(s.dataset.v)+'</b> млн · '+s.dataset.pc+'%');});s.addEventListener('mousemove',ovMove);s.addEventListener('mouseleave',()=>{s.style.opacity='1';ovHide();});});
+}
 boot();
 </script>
+<div id="ovwTip"></div>
 <script src="/assets/cup-theme.js" defer></script>
 </body>
 </html>

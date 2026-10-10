@@ -167,6 +167,62 @@ async function syncStock() {
   }
 }
 
+// ── Полоса обзора Склада: ABC/Парето, деньги по производителям, срок годности ──
+function buildStockOverview(scopeRows, account, scopeLabel) {
+  const amt = r => Number(r.amount || 0);
+  const positions = scopeRows.length;
+  const totalAmount = scopeRows.reduce((a, r) => a + amt(r), 0);
+  const totalQty = scopeRows.reduce((a, r) => a + Number(r.qty || 0), 0);
+  const doCount = scopeRows.filter(r => String(r.order_no || '').trim() === 'ДО').length;
+
+  // ABC/Парето: агрегируем сумму по наименованию, топ-14 + хвост.
+  const byName = {};
+  for (const r of scopeRows) { const k = r.name || '—'; byName[k] = (byName[k] || 0) + amt(r); }
+  const sortedN = Object.entries(byName).map(([name, amount]) => ({ name, amount: Math.round(amount) })).sort((a, b) => b.amount - a.amount);
+  const grand = sortedN.reduce((s, x) => s + x.amount, 0) || 1;
+  const topN = sortedN.slice(0, 14);
+  const tail = sortedN.slice(14);
+  const abc = { items: topN, tailCount: tail.length, tailSum: Math.round(tail.reduce((s, x) => s + x.amount, 0)), grand, topShare: Math.round(topN.reduce((s, x) => s + x.amount, 0) / grand * 100) };
+
+  // Деньги по производителям: топ-7 + прочие.
+  const byM = {};
+  for (const r of scopeRows) { const k = r.manufacturer || '—'; byM[k] = (byM[k] || 0) + amt(r); }
+  const sM = Object.entries(byM).map(([name, amount]) => ({ name, amount: Math.round(amount) })).sort((a, b) => b.amount - a.amount);
+  const rest = sM.slice(7).reduce((s, x) => s + x.amount, 0);
+  const mfr = sM.slice(0, 7).concat(rest > 0 ? [{ name: 'Прочие', amount: Math.round(rest) }] : []);
+
+  // Срок годности: разбивка по дням до истечения + ближайшие к списанию.
+  const today = new Date(), DAY = 86400000;
+  const b = { le30: 0, le60: 0, le90: 0, gt90: 0, none: 0 };
+  let hasExpiry = false; const soonArr = [];
+  for (const r of scopeRows) {
+    const v = amt(r); let placed = false;
+    if (r.expiry) { const d = new Date(r.expiry); if (!isNaN(d)) { hasExpiry = true; const days = Math.round((d - today) / DAY);
+      if (days <= 30) b.le30 += v; else if (days <= 60) b.le60 += v; else if (days <= 90) b.le90 += v; else b.gt90 += v;
+      if (days <= 90) soonArr.push({ name: r.name, days, amount: Math.round(v) }); placed = true; } }
+    if (!placed) b.none += v;
+  }
+  const aging = [
+    { key: 'le30', label: '≤ 30 дн', value: Math.round(b.le30) },
+    { key: 'le60', label: '31–60 дн', value: Math.round(b.le60) },
+    { key: 'le90', label: '61–90 дн', value: Math.round(b.le90) },
+    { key: 'gt90', label: '> 90 дн', value: Math.round(b.gt90) },
+    { key: 'none', label: 'без срока', value: Math.round(b.none) },
+  ];
+  const atRisk = Math.round(b.le30 + b.le60 + b.le90);
+  const soon = soonArr.sort((a, b) => a.days - b.days).slice(0, 6);
+
+  return {
+    scopeLabel, account,
+    kpis: {
+      positions, amount: Math.round(totalAmount), qty: totalQty, atRisk,
+      atRiskShare: totalAmount > 0 ? atRisk / totalAmount : 0,
+      doShare: positions > 0 ? doCount / positions : 0,
+    },
+    abc, mfr, aging, hasExpiry, soon,
+  };
+}
+
 async function getStockBoard() {
   await ensureSchema();
   let { rows } = await pool.query('SELECT * FROM ticketsmodule_onec_stock ORDER BY name, order_no');
@@ -191,7 +247,13 @@ async function getStockBoard() {
   const defaultStore = stores.some(s => s.id === STOCK_MAIN_STORE) ? STOCK_MAIN_STORE : '';
   const uniq = f => [...new Set(base.map(r => r[f]).filter(Boolean))].sort();
 
+  // Обзор считаем по области по умолчанию (Основной склад, если есть), иначе по всему счёту.
+  const scopeRows = defaultStore ? base.filter(r => String(r.store_id || '') === defaultStore) : base;
+  const scopeLabel = (defaultStore ? storeLabel(defaultStore, '') : 'все склады') + ', счёт ' + STOCK_ACCOUNTS.join(',');
+  const overview = buildStockOverview(scopeRows, STOCK_ACCOUNTS.join(','), scopeLabel);
+
   return {
+    overview,
     rows: base.map(r => ({
       id: r.id, name: r.name, item_code: r.item_code, part_no: r.part_no, order_no: r.order_no,
       manufacturer: r.manufacturer, made_date: r.made_date, expiry: r.expiry,
