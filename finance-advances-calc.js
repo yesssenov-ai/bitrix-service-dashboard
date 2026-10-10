@@ -147,6 +147,10 @@ async function getAdvancesBoard() {
     })),
     asOf: meta.last_ok_at || null, lastTry: meta.last_sync || null, mock: meta.is_mock !== false, error: meta.last_error || null,
     filters: { years: uniq('year'), departments: uniq('department'), contractors: uniq('contractor') },
+    // Правая панель «Данные Excel» (файл бухгалтера из Битрикса). Источник подключим
+    // по ссылке; пока не настроен — UI показывает заглушку. Контракт на будущее:
+    // excel:{ configured:true, asOf, rows:[{year,department,company,contract_sum,payments,balance}] }.
+    excel: { configured: false },
   };
 }
 

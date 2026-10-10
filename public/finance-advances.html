@@ -35,10 +35,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
 select,input[type=text]{background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:7px 10px;font-size:12.5px;color:var(--text);font-family:var(--font);outline:none;min-width:140px}
 select:focus,input:focus{border-color:var(--brand)}
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin:16px;overflow:hidden}
-.thead,.trow{display:grid;grid-template-columns:1fr 150px 150px 150px 150px;align-items:center}
+.thead,.trow{display:grid;align-items:center}
 .thead{padding:8px 14px;border-bottom:1px solid var(--border);font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);font-weight:700;position:sticky;top:0;background:var(--bg2);z-index:1}
 .thead .num,.trow .num{text-align:right;font-variant-numeric:tabular-nums}
-.scroll{overflow:auto;max-height:calc(100vh - 220px)}
+.scroll{overflow:auto;max-height:calc(100vh - 250px)}
 .trow{padding:4px 14px;border-bottom:1px solid var(--border);font-size:12px;cursor:default}
 .trow.lv0{background:var(--bg2);font-weight:700}
 .trow.lv1{font-weight:600}
@@ -46,10 +46,24 @@ select:focus,input:focus{border-color:var(--brand)}
 .trow:hover{background:var(--bg2)}
 .lbl{display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chev{width:14px;display:inline-block;color:var(--text-3);cursor:pointer;user-select:none;flex:0 0 14px}
-.foot{display:grid;grid-template-columns:1fr 150px 150px 150px 150px;padding:9px 14px;border-top:2px solid var(--border2);font-weight:700;font-size:12.5px;background:var(--card);position:sticky;bottom:0}
+.foot{display:grid;padding:9px 14px;border-top:2px solid var(--border2);font-weight:700;font-size:12.5px;background:var(--card);position:sticky;bottom:0}
 .foot .num{text-align:right;font-variant-numeric:tabular-nums}
 .hint{color:var(--text-3);padding:20px}
 .neg{color:var(--bad)}
+/* две панели: 1С + Excel */
+.panes{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px}
+@media(max-width:1050px){.panes{grid-template-columns:1fr}}
+.pane{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.pane-h{padding:10px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px}
+.pane-h .src{font-size:10px;font-weight:700;border-radius:6px;padding:2px 7px}
+.src.c1{color:var(--info);background:color-mix(in srgb,var(--info) 12%,var(--surface))}
+.src.cx{color:var(--good);background:color-mix(in srgb,var(--good) 12%,var(--surface))}
+.p4 .thead,.p4 .trow,.p4 .foot{grid-template-columns:1fr 108px 88px 88px 102px}
+.p3 .thead,.p3 .trow,.p3 .foot{grid-template-columns:1fr 128px 110px 118px}
+.xplace{padding:44px 24px;text-align:center;color:var(--text-3);font-size:13px;line-height:1.7}
+.xplace b{color:var(--text-2)}
+.reconbar{margin:16px 16px 0;padding:9px 14px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-size:12.5px;color:var(--text-3);display:flex;align-items:center;gap:8px}
+.reconbar .dot{width:7px;height:7px;border-radius:50%;background:var(--warn);flex:0 0 7px}
 </style>
 </head>
 <body>
@@ -74,10 +88,21 @@ select:focus,input:focus{border-color:var(--brand)}
   <div style="flex:1;min-width:200px"><label class="fl">Поиск по договору</label><input type="text" id="fSearch" placeholder="Поиск…" oninput="render()" style="width:100%"></div>
 </div>
 
-<div class="card">
-  <div class="thead"><span>Год · Отдел · Контрагент · Договор</span><span class="num">Сумма договора</span><span class="num">Авансы</span><span class="num">Оплаты</span><span class="num">Остаток</span></div>
-  <div class="scroll" id="tree"></div>
-  <div class="foot" id="foot"></div>
+<div class="reconbar" id="reconbar"><span class="dot"></span>Сверка 1С ↔ Excel появится после подключения файла бухгалтера из Битрикса.</div>
+
+<div class="panes">
+  <div class="pane p4">
+    <div class="pane-h"><span class="src c1">1С</span>Данные 1С</div>
+    <div class="thead"><span>Год · Отдел · Контрагент · Договор</span><span class="num">Сумма дог.</span><span class="num">Авансы</span><span class="num">Оплаты</span><span class="num">Остаток</span></div>
+    <div class="scroll" id="tree"></div>
+    <div class="foot" id="foot"></div>
+  </div>
+  <div class="pane p3">
+    <div class="pane-h"><span class="src cx">Excel</span>Данные Excel · файл бухгалтера из Битрикса</div>
+    <div class="thead"><span>Год · Отдел · Компания</span><span class="num">Сумма дог.</span><span class="num">Оплаты</span><span class="num">Остаток</span></div>
+    <div class="scroll" id="treeX"></div>
+    <div class="foot" id="footX"></div>
+  </div>
 </div>
 
 <script>
@@ -100,6 +125,15 @@ async function load(){
   document.getElementById('fContractor').innerHTML=opt(d.filters.contractors);
   (d.filters.years||[]).forEach(y=>EXP.add('y:'+y)); // годы раскрыты по умолчанию
   render();
+  renderExcel(d.excel);
+}
+function renderExcel(ex){
+  const box=document.getElementById('treeX'),foot=document.getElementById('footX');
+  if(!ex||!ex.configured){
+    box.innerHTML='<div class="xplace">Файл бухгалтера из Битрикса ещё не подключён.<br>Данные появятся здесь после подключения источника — <b>ждём ссылку на файл</b>.<br>Структура: год → отдел → компания · Сумма договора / Оплаты / Остаток.</div>';
+    foot.innerHTML='';return;
+  }
+  // (будущее) рендер дерева год→отдел→компания из ex.rows + сверка с 1С
 }
 function filtered(){
   const y=document.getElementById('fYear').value,dep=document.getElementById('fDept').value,con=document.getElementById('fContractor').value;
