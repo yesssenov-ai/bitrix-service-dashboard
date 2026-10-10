@@ -294,7 +294,12 @@ async function applyBinNow(bin){const b=document.getElementById('binApplyBtn');i
   const head=d.binApplied
     ?`<div class="okbox">✓ БИН записан (${d.appliedCount||0} из ${d.totalCount||0} полей). ${reqNote}${(d.reverted&&d.reverted.length)?'Часть полей откатил бизнес-процесс Б24 — см. ниже.':'Все поля применились.'}</div>`
     :`<div class="warnbox">БИН не записался. ${esc(d.companyError||d.hint||'')} ${reqNote}</div>`;
-  box.innerHTML=head+`<table class="bintbl" style="margin-top:8px"><thead><tr><th>Поле</th><th>Статус</th><th>Сейчас в Б24</th></tr></thead><tbody>${rows}</tbody></table>`;
+  let rqBlock='';
+  const rqv=(d.requisite&&Array.isArray(d.requisite.verify))?d.requisite.verify:[];
+  if(rqv.length){const rqRows=rqv.map(v=>`<tr><td class="bl">${esc(v.label||v.field)}</td><td>${v.ok?'<span style="color:var(--good);font-weight:700">✓ легло</span>':'<span style="color:var(--bad);font-weight:700">✗ откат</span>'}</td><td class="bo">${v.got?esc(v.got):'<span class="muted">—</span>'}</td></tr>`).join('');
+    rqBlock=`<div class="hint" style="margin:12px 0 4px;font-weight:700">Реквизиты (вкладка «подробно»)</div><table class="bintbl"><thead><tr><th>Поле</th><th>Статус</th><th>Сейчас в Б24</th></tr></thead><tbody>${rqRows}</tbody></table>`;}
+  else if(d.requisite&&d.requisite.error){rqBlock='<div class="hint" style="margin-top:8px">Реквизит: '+esc(d.requisite.error)+'</div>';}
+  box.innerHTML=head+`<div class="hint" style="margin:8px 0 4px;font-weight:700">Карточка «Общие»</div><table class="bintbl"><thead><tr><th>Поле</th><th>Статус</th><th>Сейчас в Б24</th></tr></thead><tbody>${rows}</tbody></table>`+rqBlock;
   if(d.binApplied){try{await load();}catch(e){}}}
 function fill(id,arr){const el=document.getElementById(id);el.innerHTML='<option value="">Все</option>'+arr.map(x=>`<option>${esc(x)}</option>`).join('');}
 function setQuick(f){document.getElementById('fProb').value=(f==='noind'||f==='nobin'||f==='dup')?f:'';render();

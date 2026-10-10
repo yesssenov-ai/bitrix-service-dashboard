@@ -1085,28 +1085,45 @@ function companyFieldsFromGbd(g, binCode) {
 
 // Upsert реквизита компании (RQ_BIN и пр.). Найти → обновить, иначе создать.
 async function upsertRequisite(companyId, g) {
+  const fmtDateRu = s => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || '')); return m ? (m[3] + '.' + m[2] + '.' + m[1]) : (s || ''); };
   const rf = {
     RQ_BIN: g.bin,
+    RQ_COMPANY_NAME: g.fullName,         // чтобы реквизит считался заполненным
     RQ_COMPANY_FULL_NAME: g.fullName,
-    RQ_COMPANY_REG_DATE: g.regDate,
+    RQ_COMPANY_REG_DATE: fmtDateRu(g.regDate),
     RQ_OKVED: g.oked,
     RQ_VAT_PAYER: g.isNds ? 'Y' : 'N',
   };
-  if (g.ceoName) { rf.RQ_CEO_NAME = g.ceoName; rf.RQ_DIRECTOR = g.ceoName; }
+  if (g.ceoName) { rf.RQ_CEO_NAME = g.ceoName; rf.RQ_DIRECTOR = g.ceoName; if (g.ceoPosition) rf.RQ_CEO_WORK_POS = g.ceoPosition; }
+  let reqId = null, created = false, error = null;
   try {
     const { result } = await b24('crm.requisite.list', { filter: { ENTITY_TYPE_ID: 4, ENTITY_ID: String(companyId) }, select: ['ID', 'PRESET_ID'] });
     const r0 = result && result[0];
-    if (r0 && r0.ID) { await b24('crm.requisite.update', { id: r0.ID, fields: rf }); return { requisiteId: r0.ID, created: false }; }
-  } catch (e) { return { requisiteId: null, created: false, error: String(e && e.message || e) }; }
-  // не нашли — создаём с пресетом
-  try {
-    const pl = await b24('crm.requisite.preset.list', { select: ['ID', 'COUNTRY_ID'] });
-    const ps = (pl.result || []);
-    const presetId = (ps.find(p => String(p.COUNTRY_ID) === String(KZ_COUNTRY_ID)) || ps[0] || {}).ID;
-    if (!presetId) return { requisiteId: null, created: false, note: 'не найден пресет реквизита — реквизит пропущен' };
-    const add = await b24('crm.requisite.add', { fields: Object.assign({ ENTITY_TYPE_ID: 4, ENTITY_ID: String(companyId), PRESET_ID: presetId, NAME: 'Реквизиты (ГБДЮЛ)' }, rf) });
-    return { requisiteId: (add && add.result) || null, created: true };
-  } catch (e) { return { requisiteId: null, created: false, error: String(e && e.message || e) }; }
+    if (r0 && r0.ID) { reqId = r0.ID; await b24('crm.requisite.update', { id: reqId, fields: rf }); }
+    else {
+      const pl = await b24('crm.requisite.preset.list', { select: ['ID', 'COUNTRY_ID'] });
+      const ps = (pl.result || []);
+      const presetId = (ps.find(p => String(p.COUNTRY_ID) === String(KZ_COUNTRY_ID)) || ps[0] || {}).ID;
+      if (!presetId) return { requisiteId: null, created: false, error: 'не найден пресет реквизита', verify: [] };
+      const add = await b24('crm.requisite.add', { fields: Object.assign({ ENTITY_TYPE_ID: 4, ENTITY_ID: String(companyId), PRESET_ID: presetId, NAME: 'Реквизиты (ГБДЮЛ)' }, rf) });
+      reqId = (add && add.result) || null; created = true;
+    }
+  } catch (e) { error = String(e && e.message || e); }
+  // Контрольное чтение реквизита — какие RQ-поля реально легли.
+  const verify = [];
+  if (reqId) {
+    try {
+      const g2 = await b24('crm.requisite.get', { id: reqId });
+      const cur = (g2 && g2.result) || {};
+      const LBL = { RQ_BIN: 'БИН (реквизит)', RQ_COMPANY_FULL_NAME: 'Полное наим.', RQ_COMPANY_REG_DATE: 'Дата регистрации', RQ_OKVED: 'ОКВЭД', RQ_VAT_PAYER: 'Плательщик НДС', RQ_CEO_NAME: 'Руководитель (ФИО)', RQ_CEO_WORK_POS: 'Должность рук.', RQ_DIRECTOR: 'Ген. директор' };
+      for (const c of Object.keys(rf)) {
+        if (c === 'RQ_COMPANY_NAME') continue;
+        const want = String(rf[c] == null ? '' : rf[c]).trim(), got = String(cur[c] == null ? '' : cur[c]).trim();
+        verify.push({ field: c, label: LBL[c] || c, want: want.slice(0, 70), got: got.slice(0, 70), ok: want !== '' && (got === want || got.includes(want)) });
+      }
+    } catch (e) {}
+  }
+  return { requisiteId: reqId, created, error, verify };
 }
 
 // Предпросмотр: что именно запишем (старое → новое). Ничего не пишет.
