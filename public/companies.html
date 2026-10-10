@@ -286,11 +286,16 @@ async function applyBinNow(bin){const b=document.getElementById('binApplyBtn');i
   const r=await fetch('/api/companies/bin-apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:BINCTX.id,bin})});
   let d={};try{d=await r.json();}catch(e){}
   const box=document.getElementById('binResult');
-  if(!r.ok||!d.ok){if(b){b.disabled=false;b.textContent='✓ Применить и записать';}
-    let vsum='';try{if(d.verify){const bad=Object.keys(d.verify).filter(k=>!d.verify[k].ok);if(bad.length)vsum='<div class="hint" style="margin-top:6px">Б24 не применил поля: '+bad.map(esc).join(', ')+'</div>';}}catch(e){}
-    box.innerHTML='<div class="warnbox">Не записалось в Битрикс: '+esc((d&&(d.companyError||d.hint||d.error))||'неизвестно')+'</div>'+vsum;return;}
-  box.innerHTML='<div class="okbox">✓ Записано в Битрикс'+(d.requisite&&d.requisite.created?' (создан реквизит)':'')+'. Обновляю список…</div>';
-  await load(); setTimeout(closeModal,1100);}
+  if(b){b.disabled=false;b.textContent='✓ Применить и записать';}
+  if(!r.ok||(d&&d.error&&!d.verify)){box.innerHTML='<div class="warnbox">Ошибка: '+esc((d&&(d.error||d.companyError))||'неизвестно')+'</div>';return;}
+  const vr=Array.isArray(d.verify)?d.verify:[];
+  const rows=vr.map(v=>`<tr><td class="bl">${esc(v.label||v.field)}</td><td>${v.ok?'<span style="color:var(--good);font-weight:700">✓ легло</span>':'<span style="color:var(--bad);font-weight:700">✗ откат</span>'}</td><td class="bo">${v.got?esc(v.got):'<span class="muted">—</span>'}</td></tr>`).join('');
+  const reqNote=d.requisite?(d.requisite.requisiteId?'Реквизит обновлён. ':(d.requisite.error?('Реквизит: '+esc(d.requisite.error)+'. '):'')):'';
+  const head=d.binApplied
+    ?`<div class="okbox">✓ БИН записан (${d.appliedCount||0} из ${d.totalCount||0} полей). ${reqNote}${(d.reverted&&d.reverted.length)?'Часть полей откатил бизнес-процесс Б24 — см. ниже.':'Все поля применились.'}</div>`
+    :`<div class="warnbox">БИН не записался. ${esc(d.companyError||d.hint||'')} ${reqNote}</div>`;
+  box.innerHTML=head+`<table class="bintbl" style="margin-top:8px"><thead><tr><th>Поле</th><th>Статус</th><th>Сейчас в Б24</th></tr></thead><tbody>${rows}</tbody></table>`;
+  if(d.binApplied){try{await load();}catch(e){}}}
 function fill(id,arr){const el=document.getElementById(id);el.innerHTML='<option value="">Все</option>'+arr.map(x=>`<option>${esc(x)}</option>`).join('');}
 function setQuick(f){document.getElementById('fProb').value=(f==='noind'||f==='nobin'||f==='dup')?f:'';render();
   document.querySelectorAll('.kpi').forEach(k=>k.classList.toggle('on',k.dataset.f===f&&f!==''));}

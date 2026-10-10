@@ -1147,33 +1147,44 @@ async function applyBin(companyId, bin) {
   if (!binCode) { try { binCode = await binFieldCode(); } catch (e) {} }
   if (!binCode || binCode === 'UF_CRM_SEARCH_BIN') binCode = (CMP_F.bin || 'UF_CRM_1731860381837');
   const compFields = companyFieldsFromGbd(g, binCode);
-  // 1) запись в компанию
-  let rawCompanyResult = null, companyError = null;
-  try {
-    const r = await b24('crm.company.update', { id: companyId, fields: compFields });
-    rawCompanyResult = (r && r.result !== undefined) ? r.result : null;
-    if (r && r.error) companyError = String(r.error_description || r.error);
-  } catch (e) { companyError = String(e && e.message || e); }
-  // 2) контрольное чтение — какие поля реально легли (а какие откатил БП/валидация)
-  let after = {}; try { after = await companyRaw(companyId) || {}; } catch (e) {}
+  const LABEL = {
+    [binCode]: 'БИН', [CMP_F.fullName]: 'Полное название', [CMP_F.address]: 'Адрес',
+    [CMP_F.city]: 'Населенный пункт', [CMP_F.redFlag]: 'Red Flag', [CMP_F.redFlagComment]: 'Red Flag · коммент',
+    ADDRESS: 'Адрес (станд.)', ADDRESS_CITY: 'Город (станд.)', ADDRESS_POSTAL_CODE: 'Индекс', ADDRESS_PROVINCE: 'Регион',
+  };
   const norm = v => String(v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : v)).trim();
-  const verify = {};
-  for (const code of Object.keys(compFields)) {
-    const want = norm(compFields[code]), got = norm(after[code]);
-    verify[code] = { want: want.slice(0, 90), got: got.slice(0, 90), ok: want !== '' && (got === want || got.includes(want)) };
+  const stuck = (want, got) => want !== '' && (got === want || got.includes(want) || want.includes(got) && got !== '');
+  async function writeRead(fields) {
+    let err = null;
+    try { const r = await b24('crm.company.update', { id: companyId, fields }); if (r && r.error) err = String(r.error_description || r.error); }
+    catch (e) { err = String(e && e.message || e); }
+    let after = {}; try { after = await companyRaw(companyId) || {}; } catch (e) {}
+    return { err, after };
   }
-  const companyApplied = Object.values(verify).some(v => v.ok);
-  // 3) реквизит (RQ_BIN и пр.)
+  // 1) первый проход
+  let { err: companyError, after } = await writeRead(compFields);
+  // 2) что не легло → повтор через паузу (БП часто откатывает только на первом сохранении)
+  let notYet = {}; for (const c of Object.keys(compFields)) { if (!stuck(norm(compFields[c]), norm(after[c]))) notYet[c] = compFields[c]; }
+  if (Object.keys(notYet).length) { await sleep(1800); const r2 = await writeRead(notYet); after = r2.after; if (r2.err && !companyError) companyError = r2.err; }
+  // 3) финальная сверка
+  const verify = {};
+  for (const c of Object.keys(compFields)) {
+    const want = norm(compFields[c]), got = norm(after[c]);
+    verify[c] = { field: c, label: LABEL[c] || c, want: want.slice(0, 90), got: got.slice(0, 90), ok: stuck(want, got) };
+  }
+  const applied = Object.keys(verify).filter(c => verify[c].ok);
+  const reverted = Object.keys(verify).filter(c => !verify[c].ok);
+  const binApplied = !!(verify[binCode] && verify[binCode].ok);
+  // 4) реквизит
   const requisite = await upsertRequisite(companyId, g);
-  // 4) локальное зеркало — только если реально применилось
-  if (companyApplied) { try { await pool.query('UPDATE ticketsmodule_companies SET bin=$1 WHERE id=$2', [g.bin, companyId]); } catch (e) {} }
+  // 5) локальное зеркало — только если БИН реально лёг
+  if (binApplied) { try { await pool.query('UPDATE ticketsmodule_companies SET bin=$1 WHERE id=$2', [g.bin, companyId]); } catch (e) {} }
   return {
-    ok: companyApplied,
-    companyApplied, companyError, rawCompanyResult, binField: binCode,
-    requisite, verify,
-    written: { companyFields: Object.keys(compFields) },
+    ok: binApplied, binApplied, companyError, binField: binCode,
+    appliedCount: applied.length, totalCount: Object.keys(compFields).length,
+    verify: Object.values(verify), applied, reverted, requisite,
     bin: g.bin, statusActive: g.statusActive, statusText: g.statusText,
-    hint: companyApplied ? undefined : 'Б24 не применил поля компании — вероятно бизнес-процесс откатывает запись, валидация поля или нет прав вебхука. Детали — в verify (want/got).',
+    hint: reverted.length ? 'Часть полей откатил бизнес-процесс или валидация Б24 (см. список). Эти поля ведутся из другого источника.' : undefined,
   };
 }
 
