@@ -1096,51 +1096,67 @@ async function b24json(method, params) {
     return { httpStatus: resp.status, json: j };
   } catch (e) { return { httpStatus: 0, json: { error: String(e && e.message || e) } }; }
 }
+// Коды полей пресета (что реально можно писать в реквизит этого пресета).
+async function presetFieldCodes(presetId) {
+  for (const call of [
+    () => b24('crm.requisite.preset.field.list', { preset: { ID: presetId } }),
+    () => b24('crm.requisite.preset.field.list', { presetId: presetId }),
+  ]) { try { const pf = await call(); const arr = (pf && pf.result) || []; if (arr.length) return arr.map(x => x.FIELD_NAME || x.fieldName || x.field_name || x); } catch (e) {} }
+  return [];
+}
 async function upsertRequisite(companyId, g) {
   const fmtDateRu = s => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || '')); return m ? (m[3] + '.' + m[2] + '.' + m[1]) : (s || ''); };
-  const rf = {
+  // Полный набор желаемых значений. Реально запишем ТОЛЬКО те, что есть в пресете
+  // реквизита — иначе Битрикс молча отклоняет весь апдейт (result:true, но пусто).
+  const rfAll = {
     RQ_BIN: g.bin,
-    RQ_COMPANY_NAME: g.fullName,         // чтобы реквизит считался заполненным
+    RQ_COMPANY_NAME: g.fullName,
     RQ_COMPANY_FULL_NAME: g.fullName,
     RQ_COMPANY_REG_DATE: fmtDateRu(g.regDate),
     RQ_OKVED: g.oked,
     RQ_VAT_PAYER: g.isNds ? 'Y' : 'N',
+    RQ_RESIDENCE_COUNTRY: 'Казахстан',   // ГБДЮЛ — только РК
+    RQ_CEO_NAME: g.ceoName || '',
+    RQ_CEO_WORK_POS: g.ceoPosition || '',
+    RQ_DIRECTOR: g.ceoName || '',
   };
-  if (g.ceoName) { rf.RQ_CEO_NAME = g.ceoName; rf.RQ_DIRECTOR = g.ceoName; if (g.ceoPosition) rf.RQ_CEO_WORK_POS = g.ceoPosition; }
   let reqId = null, presetId = null, created = false, error = null, rawWrite = null;
   try {
     const { result } = await b24('crm.requisite.list', { filter: { ENTITY_TYPE_ID: 4, ENTITY_ID: String(companyId) }, select: ['ID', 'PRESET_ID'] });
     const r0 = result && result[0];
-    if (r0 && r0.ID) {
-      reqId = r0.ID; presetId = r0.PRESET_ID;
-      const w = await b24json('crm.requisite.update', { id: reqId, fields: rf });
-      rawWrite = w.json; if (w.json && w.json.error) error = String(w.json.error_description || w.json.error);
-    } else {
+    if (r0 && r0.ID) { reqId = r0.ID; presetId = r0.PRESET_ID; }
+    else {
+      // новый реквизит — берём пресет с RQ_BIN (казахстанское юр.лицо)
       const pl = await b24('crm.requisite.preset.list', { select: ['ID', 'COUNTRY_ID'] });
       const ps = (pl.result || []);
-      presetId = (ps.find(p => String(p.COUNTRY_ID) === String(KZ_COUNTRY_ID)) || ps[0] || {}).ID;
-      if (!presetId) return { requisiteId: null, created: false, error: 'не найден пресет реквизита', verify: [] };
-      const w = await b24json('crm.requisite.add', { fields: Object.assign({ ENTITY_TYPE_ID: 4, ENTITY_ID: String(companyId), PRESET_ID: presetId, NAME: 'Реквизиты (ГБДЮЛ)' }, rf) });
-      rawWrite = w.json; reqId = (w.json && w.json.result) || null; created = true;
-      if (w.json && w.json.error) error = String(w.json.error_description || w.json.error);
+      for (const p of ps) { const fc = await presetFieldCodes(p.ID); if (fc.indexOf('RQ_BIN') >= 0) { presetId = p.ID; break; } }
+      if (!presetId) presetId = (ps.find(p => String(p.COUNTRY_ID) === String(KZ_COUNTRY_ID)) || ps[0] || {}).ID;
     }
+    if (!presetId) return { requisiteId: null, created: false, error: 'не найден пресет реквизита', verify: [] };
+    // Фильтруем поля по пресету + только непустые.
+    const allowed = await presetFieldCodes(presetId);
+    const rf = {};
+    for (const k of Object.keys(rfAll)) if (allowed.indexOf(k) >= 0 && String(rfAll[k] || '').trim() !== '') rf[k] = rfAll[k];
+    if (reqId) { const w = await b24json('crm.requisite.update', { id: reqId, fields: rf }); rawWrite = w.json; if (w.json && w.json.error) error = String(w.json.error_description || w.json.error); }
+    else { const w = await b24json('crm.requisite.add', { fields: Object.assign({ ENTITY_TYPE_ID: 4, ENTITY_ID: String(companyId), PRESET_ID: presetId, NAME: 'Реквизиты (ГБДЮЛ)' }, rf) }); rawWrite = w.json; reqId = (w.json && w.json.result) || null; created = true; if (w.json && w.json.error) error = String(w.json.error_description || w.json.error); }
+    // Контрольное чтение — только по реально отправленным полям.
+    var sentKeys = Object.keys(rf), rfSent = rf;
   } catch (e) { error = String(e && e.message || e); }
-  // Контрольное чтение реквизита — какие RQ-поля реально легли.
   const verify = []; let getKeys = [];
   if (reqId) {
     try {
       const g2 = await b24('crm.requisite.get', { id: reqId });
       const cur = (g2 && g2.result) || {};
       getKeys = Object.keys(cur);
-      const LBL = { RQ_BIN: 'БИН (реквизит)', RQ_COMPANY_FULL_NAME: 'Полное наим.', RQ_COMPANY_REG_DATE: 'Дата регистрации', RQ_OKVED: 'ОКВЭД', RQ_VAT_PAYER: 'Плательщик НДС', RQ_CEO_NAME: 'Руководитель (ФИО)', RQ_CEO_WORK_POS: 'Должность рук.', RQ_DIRECTOR: 'Ген. директор' };
-      for (const c of Object.keys(rf)) {
+      const LBL = { RQ_BIN: 'БИН (реквизит)', RQ_COMPANY_FULL_NAME: 'Полное наим.', RQ_COMPANY_NAME: 'Краткое наим.', RQ_RESIDENCE_COUNTRY: 'Страна резидентства', RQ_CEO_NAME: 'Руководитель (ФИО)', RQ_CEO_WORK_POS: 'Должность рук.', RQ_DIRECTOR: 'Ген. директор' };
+      for (const c of Object.keys(rfSent || {})) {
         if (c === 'RQ_COMPANY_NAME') continue;
-        const want = String(rf[c] == null ? '' : rf[c]).trim(), got = String(cur[c] == null ? '' : cur[c]).trim();
+        const want = String(rfSent[c] == null ? '' : rfSent[c]).trim(), got = String(cur[c] == null ? '' : cur[c]).trim();
         verify.push({ field: c, label: LBL[c] || c, want: want.slice(0, 70), got: got.slice(0, 70), ok: want !== '' && (got === want || got.includes(want)) });
       }
     } catch (e) {}
   }
-  const dbg = { requisiteId: reqId, presetId, created, writeResponse: (() => { try { return JSON.stringify(rawWrite).slice(0, 400); } catch (e) { return String(rawWrite); } })(), getFieldKeys: getKeys.filter(k => /^RQ_/.test(k)).slice(0, 60) };
+  const dbg = { requisiteId: reqId, presetId, created, sent: (typeof sentKeys !== 'undefined' ? sentKeys : []), writeResponse: (() => { try { return JSON.stringify(rawWrite).slice(0, 300); } catch (e) { return String(rawWrite); } })() };
   return { requisiteId: reqId, created, error, verify, debug: dbg };
 }
 
