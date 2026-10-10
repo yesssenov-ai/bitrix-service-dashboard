@@ -4,6 +4,18 @@
 const { pool } = require('./auth');
 const onecMod = require('./onec');
 
+// Как в Power BI: показываем остаток по складскому счёту (1330) и по складам
+// (по умолчанию — Основной). Оба — через env, чтобы менять без правок кода.
+//   ONEC_STOCK_ACCOUNTS — счёт(а) учёта остатка, по умолчанию 1330 (можно "1330,1310").
+//   ONEC_STOCK_STORE    — store_id «Основного склада» (предвыбор фильтра «Склад»).
+const STOCK_ACCOUNTS = (process.env.ONEC_STOCK_ACCOUNTS || '1330').split(',').map(s => s.trim()).filter(Boolean);
+const STOCK_MAIN_STORE = (process.env.ONEC_STOCK_STORE || '30fbc59e-20f3-11eb-1381-fa163eef77d8').trim();
+function storeLabel(id, name) {
+  if (!id) return name || '—';
+  if (id === STOCK_MAIN_STORE) return 'Основной склад';
+  return name || ('Склад ' + String(id).slice(0, 8));
+}
+
 let _schema = null;
 function ensureSchema() {
   if (_schema) return _schema;
@@ -153,17 +165,37 @@ async function getStockBoard() {
   let { rows } = await pool.query('SELECT * FROM ticketsmodule_onec_stock ORDER BY name, order_no');
   if (!rows.length) { await syncStock(); ({ rows } = await pool.query('SELECT * FROM ticketsmodule_onec_stock ORDER BY name, order_no')); }
   const meta = (await pool.query(`SELECT * FROM ticketsmodule_onec_meta WHERE source='stock'`)).rows[0] || {};
-  const uniq = f => [...new Set(rows.map(r => r[f]).filter(Boolean))].sort();
+
+  // Счёт 1330 — как в Power BI (бизнес-правило). Безопасный откат: если в кэше счёт
+  // не заполнен (фильтр обнулил бы всё) — показываем без него, не прячем данные.
+  let base = rows;
+  if (STOCK_ACCOUNTS.length) {
+    const f = rows.filter(r => STOCK_ACCOUNTS.includes(String(r.account || '').trim()));
+    if (f.length) base = f;
+  }
+  // Склады по store_id (из строк, отфильтрованных по счёту) — для фильтра «Склад».
+  const storeMap = new Map();
+  for (const r of base) {
+    const id = String(r.store_id || '');
+    if (!storeMap.has(id)) storeMap.set(id, { id, name: storeLabel(id, r.store), qty: 0, amount: 0 });
+    const s = storeMap.get(id); s.qty += Number(r.qty || 0); s.amount += Number(r.amount || 0);
+  }
+  const stores = [...storeMap.values()].sort((a, b) => b.amount - a.amount);
+  const defaultStore = stores.some(s => s.id === STOCK_MAIN_STORE) ? STOCK_MAIN_STORE : '';
+  const uniq = f => [...new Set(base.map(r => r[f]).filter(Boolean))].sort();
+
   return {
-    rows: rows.map(r => ({
+    rows: base.map(r => ({
       id: r.id, name: r.name, item_code: r.item_code, part_no: r.part_no, order_no: r.order_no,
       manufacturer: r.manufacturer, made_date: r.made_date, expiry: r.expiry,
       qty: Number(r.qty || 0), price: Number(r.price || 0), amount: Number(r.amount || 0),
-      shelf: r.shelf, barcode: r.barcode, gtd: r.gtd, store_id: r.store_id, store: r.store,
+      shelf: r.shelf, barcode: r.barcode, gtd: r.gtd,
+      account: r.account || '', store_id: String(r.store_id || ''), store: storeLabel(String(r.store_id || ''), r.store),
     })),
-    totals: { qty: rows.reduce((a, r) => a + Number(r.qty || 0), 0), amount: rows.reduce((a, r) => a + Number(r.amount || 0), 0) },
+    totals: { qty: base.reduce((a, r) => a + Number(r.qty || 0), 0), amount: base.reduce((a, r) => a + Number(r.amount || 0), 0) },
     asOf: meta.last_ok_at || null, lastTry: meta.last_sync || null, mock: meta.is_mock !== false, error: meta.last_error || null,
-    filters: { orders: uniq('order_no'), manufacturers: uniq('manufacturer'), stores: uniq('store') },
+    account: STOCK_ACCOUNTS.join(','), defaultStore,
+    filters: { orders: uniq('order_no'), manufacturers: uniq('manufacturer'), stores },
   };
 }
 

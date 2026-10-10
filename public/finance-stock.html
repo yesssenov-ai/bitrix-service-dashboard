@@ -69,7 +69,7 @@ tfoot td{position:sticky;bottom:0;background:var(--card);font-weight:700;border-
 </div>
 
 <div class="card">
-  <div class="tools"><span>Позиций: <b id="cntRows">0</b></span><span>Количество: <b id="cntQty">0</b></span><span>Сумма: <b id="cntSum">0</b></span></div>
+  <div class="tools"><span>Позиций: <b id="cntRows">0</b></span><span>Количество: <b id="cntQty">0</b></span><span>Сумма: <b id="cntSum">0</b></span><span style="margin-left:auto;color:var(--text-3)" id="stockNote"></span></div>
   <div class="scroll">
     <table>
       <thead><tr>
@@ -101,13 +101,16 @@ async function load(){
   const opt=(arr)=>'<option value="">Все</option>'+(arr||[]).map(x=>`<option>${esc(x)}</option>`).join('');
   document.getElementById('fOrder').innerHTML=opt(d.filters.orders);
   document.getElementById('fMfr').innerHTML=opt(d.filters.manufacturers);
-  document.getElementById('fStore').innerHTML=opt(d.filters.stores);
+  const stores=d.filters.stores||[];
+  document.getElementById('fStore').innerHTML='<option value="">Все склады</option>'+stores.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}${s.amount?` · ${fmt(s.amount)}`:''}</option>`).join('');
+  if(d.defaultStore)document.getElementById('fStore').value=d.defaultStore;
+  document.getElementById('stockNote').textContent=d.account?('счёт '+d.account):'';
   render();
 }
 function filtered(){
   const o=document.getElementById('fOrder').value,m=document.getElementById('fMfr').value,s=document.getElementById('fStore').value;
   const q=(document.getElementById('fSearch').value||'').toLowerCase();
-  return (DATA.rows||[]).filter(r=>(!o||r.order_no===o)&&(!m||r.manufacturer===m)&&(!s||r.store===s)&&(!q||((r.name||'')+' '+(r.item_code||'')+' '+(r.part_no||'')).toLowerCase().includes(q)));
+  return (DATA.rows||[]).filter(r=>(!o||r.order_no===o)&&(!m||r.manufacturer===m)&&(!s||r.store_id===s)&&(!q||((r.name||'')+' '+(r.item_code||'')+' '+(r.part_no||'')).toLowerCase().includes(q)));
 }
 function render(){
   const rows=filtered();
