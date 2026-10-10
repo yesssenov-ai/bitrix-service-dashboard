@@ -108,6 +108,26 @@ select:focus,input:focus{border-color:var(--brand)}
 .accord{cursor:pointer;user-select:none}
 details>summary{cursor:pointer;padding:10px 14px;font-weight:600;color:var(--text-2);font-size:13px;list-style:none}
 details>summary::-webkit-details-marker{display:none}
+/* Витрина визуализаций (обзор реестра) */
+.cviz{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin:14px 0}
+@media(max-width:900px){.cviz{grid-template-columns:1fr}}
+.cvcard{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+.cvcard h3{font-size:13px;font-weight:700;margin:0 0 2px}
+.cvcard .cvh{color:var(--text-3);font-size:11px;margin-bottom:12px}
+.cvdonut{display:flex;align-items:center;gap:14px}
+.cvleg{display:flex;flex-direction:column;gap:7px;font-size:12px}
+.cvleg .it{display:flex;align-items:center;gap:8px;color:var(--text-2)}
+.cvleg .sw{width:10px;height:10px;border-radius:3px;flex:none}
+.cvleg .v{font-weight:700;color:var(--text);margin-left:3px;font-variant-numeric:tabular-nums}
+.cvbars{display:flex;flex-direction:column;gap:9px}
+.cvbar .t{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;gap:8px}
+.cvbar .nm{color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:72%}
+.cvbar .n{font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+.cvtrack{height:7px;background:var(--surface-2);border-radius:4px;overflow:hidden}
+.cvtrack i{display:block;height:100%;border-radius:4px;background:var(--info)}
+.cvbar.clk{cursor:pointer}
+.cvbar.clk:hover .nm{color:var(--text)}
+.cvbar.clk:hover .cvtrack i{filter:brightness(1.12)}
 </style>
 </head>
 <body>
@@ -134,6 +154,12 @@ details>summary::-webkit-details-marker{display:none}
     <div class="kpi" data-f="noind" onclick="setQuick('noind')"><div class="l">Без сферы</div><div class="v warn" id="kNoInd">—</div></div>
     <div class="kpi" data-f="nobin" onclick="setQuick('nobin')"><div class="l">Без БИН</div><div class="v warn" id="kNoBin">—</div></div>
     <div class="kpi" data-f="dup" onclick="setQuick('dup')"><div class="l">Возможные дубли</div><div class="v bad" id="kDup">—</div></div>
+  </div>
+
+  <div class="cviz" id="cviz">
+    <div class="cvcard"><h3>Заполненность БИН</h3><div class="cvh">цель — подтянуть БИН через ГБДЮЛ</div><div class="cvdonut"><div id="cvDonut"></div><div class="cvleg" id="cvDonutLeg"></div></div></div>
+    <div class="cvcard"><h3>По сферам деятельности</h3><div class="cvh">топ-6 + прочие · клик — фильтр</div><div class="cvbars" id="cvSpheres"></div></div>
+    <div class="cvcard"><h3>Загрузка ответственных</h3><div class="cvh">компаний на менеджера · клик — фильтр</div><div class="cvbars" id="cvOwners"></div></div>
   </div>
 
   <div class="filters">
@@ -195,8 +221,30 @@ async function load(){
   fill('fInd',(d.filters.industries||[]));
   fill('fOwner',(d.filters.owners||[]));
   fill('fCity',(d.filters.cities||[]));
+  renderCharts();
   render();
 }
+// ── Витрина визуализаций (обзор реестра): пончик БИН, сферы, загрузка менеджеров ──
+function cvGroup(field){const m={};(DATA.rows||[]).forEach(r=>{const k=String(r[field]||'').trim()||'—';m[k]=(m[k]||0)+1;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);}
+function cvTop(entries,n){const top=entries.slice(0,n);const rest=entries.slice(n).reduce((s,e)=>s+e[1],0);if(rest>0)top.push(['Прочие',rest]);return top;}
+function cvBars(elId,entries,field){const mx=Math.max(1,...entries.map(e=>e[1]));
+  document.getElementById(elId).innerHTML=entries.map(e=>{const clickable=field&&e[0]!=='Прочие'&&e[0]!=='—';
+    return `<div class="cvbar ${clickable?'clk':''}"${clickable?` onclick="cvFilter('${field}',${JSON.stringify(e[0]).replace(/"/g,'&quot;')})"`:''}>
+      <div class="t"><span class="nm">${esc(e[0])}</span><span class="n">${fmt(e[1])}</span></div>
+      <div class="cvtrack"><i style="width:${(e[1]/mx*100).toFixed(0)}%"></i></div></div>`;}).join('');}
+function cvFilter(which,val){const id=which==='industryName'?'fInd':'fOwner';const el=document.getElementById(id);
+  el.value=val; if(el.value!==val){const o=document.createElement('option');o.value=val;o.textContent=val;el.appendChild(o);el.value=val;}
+  render(); try{document.querySelector('.filters').scrollIntoView({behavior:'smooth',block:'nearest'});}catch(e){}}
+function cvDonut(withBin,noBin){const tot=(withBin+noBin)||1,R=42,C=54,sw=16,circ=2*Math.PI*R;let off=0;
+  const ring=[[withBin,'var(--good)'],[noBin,'var(--warn)']].map(s=>{const len=s[0]/tot*circ,o=-off;off+=len;
+    return `<circle cx="${C}" cy="${C}" r="${R}" fill="none" stroke="${s[1]}" stroke-width="${sw}" stroke-dasharray="${len.toFixed(2)} ${(circ-len).toFixed(2)}" stroke-dashoffset="${o.toFixed(2)}" transform="rotate(-90 ${C} ${C})"/>`;}).join('');
+  const pct=Math.round(withBin/tot*100);
+  document.getElementById('cvDonut').innerHTML=`<svg width="108" height="108" viewBox="0 0 108 108">${ring}<text x="${C}" y="${C-1}" text-anchor="middle" font-size="15" font-weight="700" fill="var(--text)">${pct}%</text><text x="${C}" y="${C+14}" text-anchor="middle" font-size="9" fill="var(--text-3)">с БИН</text></svg>`;
+  document.getElementById('cvDonutLeg').innerHTML=`<div class="it"><span class="sw" style="background:var(--good)"></span>с БИН <span class="v">${fmt(withBin)}</span></div><div class="it"><span class="sw" style="background:var(--warn)"></span>без БИН <span class="v">${fmt(noBin)}</span></div>`;}
+function renderCharts(){const rows=DATA.rows||[];const withBin=rows.filter(r=>r.bin).length;
+  cvDonut(withBin,rows.length-withBin);
+  cvBars('cvSpheres',cvTop(cvGroup('industryName'),6),'industryName');
+  cvBars('cvOwners',cvTop(cvGroup('owner'),6),'owner');}
 function fill(id,arr){const el=document.getElementById(id);el.innerHTML='<option value="">Все</option>'+arr.map(x=>`<option>${esc(x)}</option>`).join('');}
 function setQuick(f){document.getElementById('fProb').value=(f==='noind'||f==='nobin'||f==='dup')?f:'';render();
   document.querySelectorAll('.kpi').forEach(k=>k.classList.toggle('on',k.dataset.f===f&&f!==''));}
