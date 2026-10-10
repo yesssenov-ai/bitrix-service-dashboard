@@ -388,14 +388,23 @@ async function init() {
 
 function initMap() {
   map = L.map('map', { center: [48.5, 66.9], zoom: 5 });
-  // Тайлы Esri (ArcGIS World Street Map) — работают БЕЗ API-ключа.
-  // История: OSM заблокировал домен (403), затем CARTO закрыл бесплатные тайлы за ключ
-  // (API KEY REQUIRED). Esri — стабильный no-key вариант. Порядок сегментов {z}/{y}/{x}.
-  // Альтернативы: серый фон — .../Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x};
-  // спутник — .../World_Imagery/MapServer/tile/{z}/{y}/{x}.
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Tiles &copy; Esri', maxZoom: 19,
-  }).addTo(map);
+  // Базослой Esri Canvas (без API-ключа, стабильно). Современный минимал: светло-серый
+  // для светлой темы, тёмно-серый для тёмной + слой подписей сверху (детализация).
+  // Переключается автоматически вместе с темой ЦУП (data-theme на <html>).
+  // (OSM раньше блокировал домен, CARTO ушёл под ключ — поэтому проверенный Esri, но Canvas-стили.)
+  var ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/';
+  var tl = function (name) { return L.tileLayer(ESRI + name + '/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 16, maxZoom: 19, attribution: 'Tiles &copy; Esri' }); };
+  var baseLight = L.layerGroup([tl('World_Light_Gray_Base'), tl('World_Light_Gray_Reference')]);
+  var baseDark  = L.layerGroup([tl('World_Dark_Gray_Base'),  tl('World_Dark_Gray_Reference')]);
+  var _curBase = null;
+  function applyBase() {
+    var want = (document.documentElement.getAttribute('data-theme') === 'dark') ? baseDark : baseLight;
+    if (_curBase === want) return;
+    if (_curBase) map.removeLayer(_curBase);
+    _curBase = want; map.addLayer(_curBase);
+  }
+  applyBase();
+  try { new MutationObserver(applyBase).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); } catch (e) {}
   clusterGroup = L.markerClusterGroup({
     showCoverageOnHover: false,
     maxClusterRadius: 60,
