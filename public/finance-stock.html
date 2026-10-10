@@ -267,6 +267,16 @@ function ovMove(e){ovTip.style.left=(e.clientX+12)+'px';ovTip.style.top=(e.clien
 function ovHide(){ovTip.style.opacity='0';}
 function mln(v){return fmt(Number(v||0)/1e6);}
 function scrollToTable(){try{document.querySelector('.card').scrollIntoView({behavior:'smooth',block:'start'});}catch(e){}}
+// Фильтр по клику из обзора: возвращаем область обзора (склад по умолчанию),
+// сбрасываем поиск и прочие фильтры, ставим ровно один — тогда в таблице ровно то, что в баре.
+function applyOvFilter(kind,val){
+  try{document.getElementById('fSearch').value='';}catch(e){}
+  mStore.setSelected((DATA&&DATA.defaultStore)?[DATA.defaultStore]:[]);
+  mOrder.setSelected([]);
+  if(kind==='mfr'){mName.setSelected([]);mMfr.setSelected([val]);}
+  else{mMfr.setSelected([]);mName.setSelected([val]);}
+  render();scrollToTable();
+}
 function kmeter(frac,label,color){return '<div class="kmeter"><div class="kbar"><i style="width:'+(Math.max(0,Math.min(1,frac||0))*100).toFixed(0)+'%;background:'+color+'"></i></div><span class="klab">'+esc(label)+'</span></div>';}
 function renderStockOverview(ov){
   const k=ov.kpis||{};
@@ -298,15 +308,16 @@ function renderPareto(abc){
   el.querySelectorAll('.pb').forEach(b=>{
     b.addEventListener('mouseenter',e=>{b.style.opacity='.8';ovShow(e,b.dataset.nm+' · <b>'+mln(b.dataset.v)+'</b> млн · накопл. '+b.dataset.c+'% · '+b.dataset.cl);});
     b.addEventListener('mousemove',ovMove);b.addEventListener('mouseleave',()=>{b.style.opacity='1';ovHide();});
-    b.addEventListener('click',()=>{mName.setSelected([b.dataset.nm]);render();scrollToTable();});
+    if(b.dataset.nm&&b.dataset.nm!=='—')b.addEventListener('click',()=>applyOvFilter('name',b.dataset.nm));else b.style.cursor='default';
   });
 }
 function renderMfr(mfr){
   const el=document.getElementById('mfrBars'),rows=mfr||[];
   if(!rows.length){el.innerHTML='<div class="ovwempty">Нет данных.</div>';return;}
   const mx=Math.max.apply(0,rows.map(r=>r.amount))||1;
-  el.innerHTML=rows.map(r=>'<div class="hbar clk" data-nm="'+esc(r.name)+'"><div class="top"><span class="nm">'+esc(r.name)+'</span><span class="v">'+mln(r.amount)+' млн</span></div><div class="htrack"><i style="width:'+(r.amount/mx*100).toFixed(0)+'%"></i></div></div>').join('');
-  el.querySelectorAll('.hbar.clk').forEach(h=>h.addEventListener('click',()=>{const nm=h.getAttribute('data-nm');mMfr.setSelected(nm==='Прочие'?[]:[nm]);render();scrollToTable();}));
+  const canFilter=n=>n&&n!=='Прочие'&&n!=='—';
+  el.innerHTML=rows.map(r=>'<div class="hbar'+(canFilter(r.name)?' clk':'')+'" data-nm="'+esc(r.name)+'" title="'+(canFilter(r.name)?'Клик — фильтр':'сводная группа')+'"><div class="top"><span class="nm">'+esc(r.name)+'</span><span class="v">'+mln(r.amount)+' млн</span></div><div class="htrack"><i style="width:'+(r.amount/mx*100).toFixed(0)+'%"></i></div></div>').join('');
+  el.querySelectorAll('.hbar.clk').forEach(h=>h.addEventListener('click',()=>applyOvFilter('mfr',h.getAttribute('data-nm'))));
 }
 function renderExpiry(aging,soon,hasExpiry){
   const body=document.getElementById('expBody');aging=aging||[];
