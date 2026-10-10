@@ -1223,8 +1223,55 @@ async function applyBin(companyId, bin) {
   };
 }
 
+// ── Read-only диагностика «Страна» ───────────────────────────────────────────
+// Как определить страну в карточке компании и сделки: гео-поля (Город/Область/
+// Страна), их коды/настройки (IBLOCK_ID), сырые значения, стандартный адрес,
+// телефон. Ничего не пишет. Временная — убрать после сборки флагов.
+async function countryInspect(companyId, dealId) {
+  const out = { companyGeoFields: null, dealGeoFields: null, company: null, deal: null };
+  const re = /город|област|стран|country|city|region/i;
+  const pickGeo = res => Object.entries(res || {})
+    .filter(([k, f]) => re.test(String((f && (f.title || f.formLabel || f.listLabel)) || '')) || re.test(k))
+    .map(([k, f]) => ({ code: k, title: (f.title || f.formLabel || f.listLabel || ''), type: f.type, settings: (f.settings || f.userTypeSettings || f.USER_TYPE_SETTINGS || null) }));
+  try { const { result } = await b24('crm.company.fields'); out.companyGeoFields = pickGeo(result); } catch (e) { out.companyGeoFields = { error: String(e && e.message || e) }; }
+  try { const { result } = await b24('crm.deal.fields'); out.dealGeoFields = pickGeo(result); } catch (e) { out.dealGeoFields = { error: String(e && e.message || e) }; }
+  const grab = (obj, fields) => { const g = {}; (Array.isArray(fields) ? fields : []).forEach(f => { g[f.code] = obj[f.code]; }); return g; };
+  // попытка резолва значения-элемента справочника (разные API — что сработает)
+  const resolveEl = async (val, settings) => {
+    const id = Array.isArray(val) ? val[0] : val; if (!id) return null;
+    const iblockId = settings && (settings.IBLOCK_ID || settings.iblockId);
+    const iblockType = settings && (settings.IBLOCK_TYPE_ID || settings.iblockTypeId || 'lists');
+    const attempts = [];
+    for (const call of [
+      () => b24('lists.element.get', { IBLOCK_TYPE_ID: iblockType, IBLOCK_ID: iblockId, FILTER: { ID: id } }),
+      () => b24('lists.element.get', { IBLOCK_TYPE_ID: 'lists', IBLOCK_ID: iblockId, ELEMENT_ID: id }),
+    ]) { try { const r = await call(); attempts.push(r && r.result); if (r && r.result && (Array.isArray(r.result) ? r.result.length : true)) return { id, resolved: r.result }; } catch (e) { attempts.push(String(e && e.message || e)); } }
+    return { id, resolved: null, attempts };
+  };
+  if (companyId) {
+    try {
+      const c = await companyRaw(companyId);
+      const geo = grab(c, out.companyGeoFields);
+      const resolved = {};
+      for (const f of (Array.isArray(out.companyGeoFields) ? out.companyGeoFields : [])) if (c[f.code]) resolved[f.code] = await resolveEl(c[f.code], f.settings);
+      out.company = { id: String(companyId), title: c.TITLE, ADDRESS_COUNTRY: c.ADDRESS_COUNTRY, ADDRESS_COUNTRY_CODE: c.ADDRESS_COUNTRY_CODE, ADDRESS_PROVINCE: c.ADDRESS_PROVINCE, PHONE: c.PHONE, geo, resolved };
+    } catch (e) { out.company = { error: String(e && e.message || e) }; }
+  }
+  if (dealId) {
+    try {
+      const { result: d } = await b24('crm.deal.get', { id: String(dealId) });
+      const dd = d || {};
+      const geo = grab(dd, out.dealGeoFields);
+      const resolved = {};
+      for (const f of (Array.isArray(out.dealGeoFields) ? out.dealGeoFields : [])) if (dd[f.code]) resolved[f.code] = await resolveEl(dd[f.code], f.settings);
+      out.deal = { id: String(dealId), title: dd.TITLE, geo, resolved };
+    } catch (e) { out.deal = { error: String(e && e.message || e) }; }
+  }
+  return out;
+}
+
 module.exports = {
   ensureSchema, syncCompanies, getCompaniesBoard, updateCompany, industryOptions,
   getDuplicateGroups, getCompanyDeals, previewMerge, applyMerge, undoMerge, undoAllMerges, listMerges, deleteCompany, writeSelfTest,
-  companyRequisite, renameDiag, binInspect, previewBin, applyBin,
+  companyRequisite, renameDiag, binInspect, previewBin, applyBin, countryInspect,
 };
