@@ -1270,8 +1270,26 @@ async function countryInspect(companyId, dealId) {
   return out;
 }
 
+// Read-only: все пресеты реквизитов + их активные поля. Чтобы найти пресет с
+// RQ_BIN/RQ_OKVED/RQ_CEO_NAME (казахстанский) и писать реквизит в него.
+async function presetInspect() {
+  const out = { presets: [] };
+  try {
+    const pl = await b24('crm.requisite.preset.list', { select: ['ID', 'NAME', 'COUNTRY_ID', 'ACTIVE'] });
+    for (const p of (pl.result || [])) {
+      let fields = [];
+      for (const call of [
+        () => b24('crm.requisite.preset.field.list', { preset: { ID: p.ID } }),
+        () => b24('crm.requisite.preset.field.list', { presetId: p.ID }),
+      ]) { try { const pf = await call(); const arr = (pf && pf.result) || []; if (arr.length) { fields = arr.map(x => x.FIELD_NAME || x.fieldName || x.field_name || x); break; } } catch (e) { fields = ['err:' + String(e && e.message || e)]; } }
+      out.presets.push({ id: p.ID, name: p.NAME, country: p.COUNTRY_ID, active: p.ACTIVE, hasBIN: fields.indexOf('RQ_BIN') >= 0, fields });
+    }
+  } catch (e) { out.error = String(e && e.message || e); }
+  return out;
+}
+
 module.exports = {
   ensureSchema, syncCompanies, getCompaniesBoard, updateCompany, industryOptions,
   getDuplicateGroups, getCompanyDeals, previewMerge, applyMerge, undoMerge, undoAllMerges, listMerges, deleteCompany, writeSelfTest,
-  companyRequisite, renameDiag, binInspect, previewBin, applyBin, countryInspect,
+  companyRequisite, renameDiag, binInspect, previewBin, applyBin, countryInspect, presetInspect,
 };

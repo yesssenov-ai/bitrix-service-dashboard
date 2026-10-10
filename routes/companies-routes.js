@@ -51,6 +51,12 @@ router.get('/country-inspect', requireAuth(EDIT), async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Read-only: пресеты реквизитов + их поля. GET /api/companies/preset-inspect. Временная.
+router.get('/preset-inspect', requireAuth(EDIT), async (req, res) => {
+  try { res.json(await require('../companies-calc').presetInspect()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Запись подтверждённого БИН в карточку Б24 (компания + реквизит). Перезаписывает поля.
 router.post('/bin-apply', requireAuth(EDIT), express.json(), async (req, res) => {
   try { const { id, bin } = req.body || {}; res.json(await require('../companies-calc').applyBin(id, bin)); }
