@@ -260,11 +260,35 @@ async function buildDebtOverview(rows, mock) {
   const prevOf = (arr) => { for (let i = arr.length - 2; i >= 0; i--) if (arr[i] != null) return arr[i]; return null; };
   const kpi = (cur, arr) => { const p = prevOf(arr); return { value: cur, delta: p == null ? null : cur - p, pct: (p == null || p === 0) ? null : Math.round((cur - p) / p * 1000) / 10 }; };
 
+  // Контекст из ТЕКУЩЕГО снимка (без истории) — чтобы плитки были наполнены сразу.
+  const conOverdue = new Set(rows.filter(r => Number(r.overdue_days) > 0).map(r => r.contractor).filter(Boolean)).size;
+  const maxOverdue = rows.reduce((m, r) => Math.max(m, Number(r.overdue_days) || 0), 0);
+  const context = {
+    overdueShare: debt > 0 ? overdue / debt : 0,       // доля просроченного в долге
+    conOverdue,                                         // контрагентов с просрочкой
+    maxOverdue,                                          // худшая просрочка, дн
+    contracts: rows.length,                              // договоров всего
+  };
+  // Структура долга по срокам (aging) — считается из снимка, цветная, без выдумки.
+  const aging = [
+    { key: 'cur', label: 'Срок не наступил', value: 0 },
+    { key: 'b1', label: '1–30 дн', value: 0 },
+    { key: 'b2', label: '31–60 дн', value: 0 },
+    { key: 'b3', label: '61–90 дн', value: 0 },
+    { key: 'b4', label: '90+ дн', value: 0 },
+  ];
+  for (const r of rows) {
+    const od = Number(r.overdue_days) || 0, v = Number(r.debt) || 0;
+    const i = od <= 0 ? 0 : od <= 30 ? 1 : od <= 60 ? 2 : od <= 90 ? 3 : 4;
+    aging[i].value += v;
+  }
+  aging.forEach(a => { a.value = Math.round(a.value); });
+
   return {
     mock, synthetic, historyPoints,
     kpis: { debt: kpi(Math.round(debt), sDebt), overdue: kpi(Math.round(overdue), sOver), contractors: kpi(contractors, sCon), avgOverdue: kpi(avgOverdue, sAvg) },
     series: { labels, debt: sDebt, overdue: sOver, contractors: sCon, avgOverdue: sAvg },
-    depts,
+    depts, context, aging,
   };
 }
 

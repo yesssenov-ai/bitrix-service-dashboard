@@ -85,6 +85,28 @@ select:focus,input:focus{border-color:var(--brand)}
 .ovwempty{color:var(--text-3);font-size:12.5px;text-align:center;padding:34px 10px}
 #ovwTip{position:fixed;pointer-events:none;z-index:200;background:var(--text);color:var(--card);font-size:11.5px;font-weight:600;padding:5px 9px;border-radius:7px;opacity:0;transition:opacity .08s;white-space:nowrap}
 svg.ovsvg{display:block;width:100%}
+/* плитка: цветная мини-шкала контекста */
+.kmeter{display:flex;align-items:center;gap:8px;margin-top:9px}
+.kbar{flex:1;height:6px;border-radius:4px;background:var(--surface-2);overflow:hidden}
+.kbar i{display:block;height:100%;border-radius:4px}
+.klab{font-size:11px;color:var(--text-3);white-space:nowrap;font-weight:600}
+.kchip{font-size:11px;font-weight:700;border-radius:6px;padding:2px 8px}
+.kpi.clk{cursor:pointer;transition:border-color .12s,box-shadow .12s}
+.kpi.clk:hover{border-color:var(--text-3)}
+.kpi.active{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+/* структура по срокам (aging) */
+.agbar{display:flex;height:28px;border-radius:8px;overflow:hidden;gap:2px;margin:10px 0 14px}
+.agbar>i{height:100%;cursor:default;transition:opacity .1s}
+.agbar>i:hover{opacity:.82}
+.agleg{display:grid;grid-template-columns:1fr 1fr;gap:9px 22px}
+.agit{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-2)}
+.agit .sw{width:9px;height:9px;border-radius:3px;flex-shrink:0}
+.agit .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.agit .pc{color:var(--text-3);font-size:11px;width:34px;text-align:right}
+.agit .v{font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+.aghint{color:var(--text-3);font-size:11px;margin-top:12px}
+.deptrow.clk{cursor:pointer}.deptrow.clk:hover{background:var(--surface-2)}
+.dseg{transition:opacity .1s}
 </style>
 </head>
 <body>
@@ -161,12 +183,17 @@ async function load(){
   const fc=document.getElementById('fContractor');fc.innerHTML='<option value="">Все</option>'+(d.filters.contractors||[]).map(x=>`<option>${esc(x)}</option>`).join('');
   render();
 }
+let ONLY_OVERDUE=false;
 function filtered(){
   const dep=document.getElementById('fDept').value;
   const con=document.getElementById('fContractor').value;
   const q=(document.getElementById('fSearch').value||'').toLowerCase();
-  return (DATA.rows||[]).filter(r=>(!dep||r.department===dep)&&(!con||r.contractor===con)&&(!q||((r.contractor||'')+' '+(r.contract||'')).toLowerCase().includes(q)));
+  return (DATA.rows||[]).filter(r=>(!dep||r.department===dep)&&(!con||r.contractor===con)&&(!ONLY_OVERDUE||r.overdue_days>0)&&(!q||((r.contractor||'')+' '+(r.contract||'')).toLowerCase().includes(q)));
 }
+function scrollToTable(){try{document.querySelector('.wrap').scrollIntoView({behavior:'smooth',block:'start'});}catch(e){}}
+function filterByDept(name){const sel=document.getElementById('fDept');if(name&&[...sel.options].some(o=>o.value===name))sel.value=name;else sel.value='';render();scrollToTable();}
+function filterByContractor(nm){const sel=document.getElementById('fContractor');if(nm&&[...sel.options].some(o=>o.value===nm))sel.value=nm;else sel.value='';render();scrollToTable();}
+function toggleOverdue(){ONLY_OVERDUE=!ONLY_OVERDUE;document.querySelectorAll('.kpi[data-k="overdue"]').forEach(function(t){t.classList.toggle('active',ONLY_OVERDUE);});render();scrollToTable();}
 function render(){
   const rows=filtered();
   // группировка по контрагенту
@@ -193,7 +220,9 @@ function render(){
     +`<div class="sumrow" style="font-weight:700"><span>Итого</span><span><b>${fmt(rows.reduce((s,r)=>s+r.debt,0))}</b></span></div>`:'<div class="hint">—</div>';
   // топ просрочки
   const top=rows.filter(r=>r.overdue_days>0).sort((a,b)=>b.debt-a.debt).slice(0,8);
-  document.getElementById('topBox').innerHTML=top.length?top.map(r=>`<div class="deptrow"><div class="top"><span>${esc(r.contractor)}</span><span class="num" style="color:var(--bad)"><b>${fmt(r.debt)}</b></span></div><div class="hint" style="padding:0;font-size:11.5px">${esc(r.contract)} · просрочка ${r.overdue_days} дн.</div></div>`).join(''):'<div class="hint">Просроченных нет.</div>';
+  const _tb=document.getElementById('topBox');
+  _tb.innerHTML=top.length?top.map(r=>`<div class="deptrow clk" data-con="${esc(r.contractor)}" title="Показать контрагента в таблице"><div class="top"><span>${esc(r.contractor)}</span><span class="num" style="color:var(--bad)"><b>${fmt(r.debt)}</b></span></div><div class="hint" style="padding:0;font-size:11.5px">${esc(r.contract)} · просрочка ${r.overdue_days} дн.</div></div>`).join(''):'<div class="hint">Просроченных нет.</div>';
+  _tb.querySelectorAll('.deptrow.clk').forEach(function(el){el.addEventListener('click',function(){filterByContractor(el.getAttribute('data-con'));});});
 }
 async function refresh(){
   const b=document.getElementById('refreshBtn');b.disabled=true;b.textContent='Обновляю…';b.style.color='';b.title='';
@@ -225,30 +254,53 @@ function sparkSVG(arr){
   var last=pts[pts.length-1],lx=pad+last[0]*(w-2*pad)/xs,ly=h-pad-(last[1]-mn)/((mx-mn)||1)*(h-2*pad);
   return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'"><path d="'+d+'" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="'+lx.toFixed(1)+'" cy="'+ly.toFixed(1)+'" r="2.4" fill="var(--accent)"/></svg>';
 }
-function kpiTile(lab,valHTML,k,series,fmtDelta){
-  var dh;
-  if(k&&k.delta!=null&&k.delta!==0){var good=k.delta<0; // «меньше — лучше» для всех метрик долга
-    dh='<div class="kdelta '+(good?'good':'bad')+'">'+(k.delta>0?'▲':'▼')+' '+fmtDelta(k)+'<span class="vs">к пред. мес.</span></div>';}
+function resetFilters(){document.getElementById('fDept').value='';document.getElementById('fContractor').value='';document.getElementById('fSearch').value='';ONLY_OVERDUE=false;document.querySelectorAll('.kpi[data-k="overdue"]').forEach(function(t){t.classList.remove('active');});render();scrollToTable();}
+function kpiTile(o){
+  var k=o.k,dh='';
+  if(k&&k.delta!=null&&k.delta!==0){var good=k.delta<0;
+    dh='<div class="kdelta '+(good?'good':'bad')+'">'+(k.delta>0?'▲':'▼')+' '+o.fmtDelta(k)+'<span class="vs">к пред. мес.</span></div>';}
   else if(k&&k.delta===0){dh='<div class="kdelta flat">■ без изм.<span class="vs">к пред. мес.</span></div>';}
-  else{dh='<div class="kdelta flat" style="visibility:hidden">·</div>';}
-  return '<div class="kpi"><div class="lab">'+lab+'</div><div class="row"><div class="val">'+valHTML+'</div>'+sparkSVG(series)+'</div>'+dh+'</div>';
+  return '<div class="kpi'+(o.attrs?' clk':'')+'"'+(o.attrs||'')+'><div class="lab">'+o.lab+'</div>'+
+    '<div class="row"><div class="val">'+o.val+'</div>'+sparkSVG(o.series)+'</div>'+dh+(o.ctx||'')+'</div>';
 }
+function kmeter(frac,label,color){return '<div class="kmeter"><div class="kbar"><i style="width:'+(Math.max(0,Math.min(1,frac||0))*100).toFixed(0)+'%;background:'+color+'"></i></div><span class="klab">'+label+'</span></div>';}
+function kchip(label,color,sub){return '<div class="kmeter"><span class="kchip" style="color:'+color+';background:color-mix(in srgb,'+color+' 14%,var(--surface))">'+label+'</span>'+(sub?'<span class="klab">'+sub+'</span>':'')+'</div>';}
 function renderOverview(ov){
-  var k=ov.kpis,s=ov.series;
+  var k=ov.kpis,s=ov.series,c=ov.context||{};
   var moneyDelta=function(x){return x.pct!=null?Math.abs(x.pct)+'%':Math.abs(mln(x.delta))+' млн';};
+  var share=Math.max(0,Math.min(1,c.overdueShare||0)),sharePct=Math.round(share*100);
+  var conShare=k.contractors.value?((c.conOverdue||0)/k.contractors.value):0;
   document.getElementById('kpis').innerHTML=[
-    kpiTile('Общий долг', mln(k.debt.value)+' <small>млн ₸</small>', k.debt, s.debt, moneyDelta),
-    kpiTile('Просрочено', mln(k.overdue.value)+' <small>млн ₸</small>', k.overdue, s.overdue, moneyDelta),
-    kpiTile('Контрагентов с долгом', String(k.contractors.value), k.contractors, s.contractors, function(x){return Math.abs(x.delta);}),
-    kpiTile('Средняя просрочка', String(k.avgOverdue.value)+' <small>дн</small>', k.avgOverdue, s.avgOverdue, function(x){return Math.abs(x.delta)+' дн';})
+    kpiTile({lab:'Общий долг',val:mln(k.debt.value)+' <small>млн ₸</small>',k:k.debt,series:s.debt,fmtDelta:moneyDelta,
+      ctx:kmeter(share,'просрочено '+sharePct+'%',share>0.3?'var(--bad)':'var(--warn)'),attrs:' title="Сбросить фильтры" onclick="resetFilters()"'}),
+    kpiTile({lab:'Просрочено',val:'<span style="color:var(--bad)">'+mln(k.overdue.value)+'</span> <small>млн ₸</small>',k:k.overdue,series:s.overdue,fmtDelta:moneyDelta,
+      ctx:kmeter(share,sharePct+'% от долга','var(--bad)'),attrs:' data-k="overdue" title="Показать только просроченные" onclick="toggleOverdue()"'}),
+    kpiTile({lab:'Контрагентов с долгом',val:String(k.contractors.value),k:k.contractors,series:s.contractors,fmtDelta:function(x){return Math.abs(x.delta);},
+      ctx:kmeter(conShare,'просрочили '+(c.conOverdue||0),'var(--bad)'),attrs:' title="К таблице" onclick="scrollToTable()"'}),
+    kpiTile({lab:'Средняя просрочка',val:String(k.avgOverdue.value)+' <small>дн</small>',k:k.avgOverdue,series:s.avgOverdue,fmtDelta:function(x){return Math.abs(x.delta)+' дн';},
+      ctx:kchip('макс '+(c.maxOverdue||0)+' дн','var(--bad)','договоров: '+(c.contracts||0))})
   ].join('');
+  if(ONLY_OVERDUE)document.querySelectorAll('.kpi[data-k="overdue"]').forEach(function(t){t.classList.add('active');});
   renderHero(ov);
   renderDonut(ov.depts);
+}
+function renderAging(aging){
+  var el=document.getElementById('heroChart');
+  if(!aging||!aging.length){el.innerHTML='<div class="ovwempty">Нет данных.</div>';return;}
+  var cols=['var(--good)','var(--warn)','#e0733a','var(--bad)','#8a2a1f'];
+  var tot=aging.reduce(function(s,a){return s+a.value;},0)||1;
+  var bar=aging.map(function(a,i){return a.value>0?'<i class="ag-seg" data-nm="'+esc(a.label)+'" data-v="'+a.value+'" data-pc="'+Math.round(a.value/tot*100)+'" style="width:'+(a.value/tot*100).toFixed(2)+'%;background:'+cols[i]+'"></i>':'';}).join('');
+  var leg=aging.map(function(a,i){return '<div class="agit"><span class="sw" style="background:'+cols[i]+'"></span><span class="nm">'+esc(a.label)+'</span><span class="pc">'+Math.round(a.value/tot*100)+'%</span><span class="v">'+mln(a.value)+'</span></div>';}).join('');
+  el.innerHTML='<div class="agbar">'+bar+'</div><div class="agleg">'+leg+'</div><div class="aghint">Помесячная динамика появится после нескольких обновлений — пока структура долга по срокам.</div>';
+  el.querySelectorAll('.ag-seg').forEach(function(sg){
+    sg.addEventListener('mouseenter',function(e){ovShow(e,sg.dataset.nm+' · <b>'+mln(sg.dataset.v)+'</b> млн · '+sg.dataset.pc+'%');});
+    sg.addEventListener('mousemove',ovMove);sg.addEventListener('mouseleave',ovHide);
+  });
 }
 function renderHero(ov){
   var el=document.getElementById('heroChart'),debt=ov.series.debt,over=ov.series.overdue,labels=ov.series.labels;
   var idx=[];for(var i=0;i<debt.length;i++)if(debt[i]!=null)idx.push(i);
-  if(!ov.synthetic&&idx.length<2){el.innerHTML='<div class="ovwempty">История копится — график появится после нескольких обновлений.</div>';return;}
+  if(!ov.synthetic&&idx.length<2){renderAging(ov.aging);return;}
   var W=680,H=230,L=48,R=14,T=12,B=26,pw=W-L-R,ph=H-T-B,n=debt.length;
   var mx=Math.max.apply(0,idx.map(function(i){return debt[i];}))*1.1||1;
   var X=function(i){return L+i*pw/((n-1)||1);},Y=function(v){return T+ph-(v-0)/(mx-0)*ph;};
@@ -280,12 +332,15 @@ function renderDonut(depts){
   el.innerHTML='<svg width="140" height="140" viewBox="0 0 140 140">'+ring+
     '<text x="'+C+'" y="'+(C-2)+'" text-anchor="middle" font-size="18" font-weight="600" fill="var(--text)" style="font-variant-numeric:tabular-nums">'+mln(tot)+'</text>'+
     '<text x="'+C+'" y="'+(C+14)+'" text-anchor="middle" font-size="9.5" fill="var(--text-3)">млн ₸</text></svg>';
-  leg.innerHTML=depts.map(function(d,i){return '<div class="it"><span class="sw" style="background:'+cols[i%4]+'"></span><span class="nm">'+esc(d.name)+'</span><span class="pc">'+d.pct+'%</span><span class="v">'+mln(d.value)+'</span></div>';}).join('');
+  leg.innerHTML=depts.map(function(d,i){return '<div class="it" data-nm="'+esc(d.name)+'" style="cursor:pointer"><span class="sw" style="background:'+cols[i%4]+'"></span><span class="nm">'+esc(d.name)+'</span><span class="pc">'+d.pct+'%</span><span class="v">'+mln(d.value)+'</span></div>';}).join('');
+  var pick=function(nm){filterByDept(nm==='Прочие отделы'?'':nm);};
   el.querySelectorAll('.dseg').forEach(function(sg){
-    sg.addEventListener('mouseenter',function(e){sg.style.opacity='.82';ovShow(e,sg.dataset.nm+' · <b>'+mln(sg.dataset.v)+'</b> млн · '+sg.dataset.pc+'%');});
+    sg.addEventListener('mouseenter',function(e){sg.style.opacity='.82';ovShow(e,sg.dataset.nm+' · <b>'+mln(sg.dataset.v)+'</b> млн · '+sg.dataset.pc+'% · клик — фильтр');});
     sg.addEventListener('mousemove',ovMove);
     sg.addEventListener('mouseleave',function(){sg.style.opacity='1';ovHide();});
+    sg.addEventListener('click',function(){pick(sg.dataset.nm);});
   });
+  leg.querySelectorAll('.it').forEach(function(it){it.addEventListener('click',function(){pick(it.getAttribute('data-nm'));});});
 }
 boot();
 </script>
