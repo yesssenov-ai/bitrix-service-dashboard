@@ -28,6 +28,13 @@ function ensureSchema() {
       CREATE TABLE IF NOT EXISTS ticketsmodule_onec_meta (
         source VARCHAR(40) PRIMARY KEY,
         last_sync TIMESTAMPTZ, last_ok_at TIMESTAMPTZ, last_error TEXT, is_mock BOOLEAN DEFAULT true);
+      -- История суточных снимков для полосы обзора (тренды/дельты/спарклайны).
+      -- Пишется при каждом успешном syncDebt; серию строим по последнему снимку в месяце.
+      CREATE TABLE IF NOT EXISTS ticketsmodule_onec_debt_history (
+        snap_date DATE PRIMARY KEY,
+        total_debt NUMERIC DEFAULT 0, overdue NUMERIC DEFAULT 0,
+        contractors INTEGER DEFAULT 0, avg_overdue NUMERIC DEFAULT 0,
+        is_mock BOOLEAN DEFAULT true);
     `);
   })().catch(e => { _schema = null; throw e; });
   return _schema;
@@ -181,6 +188,19 @@ async function syncDebt() {
       `INSERT INTO ticketsmodule_onec_meta (source, last_sync, last_ok_at, is_mock, last_error)
        VALUES ('debt', NOW(), NOW(), $1, NULL)
        ON CONFLICT (source) DO UPDATE SET last_sync=NOW(), last_ok_at=NOW(), is_mock=$1, last_error=NULL`, [mock]);
+    // Суточный снимок для истории (обзор: тренды/дельты). Сбой истории не ломает синк.
+    try {
+      const totD = rows.reduce((a, r) => a + Number(r.debt || 0), 0);
+      const ovd = rows.filter(r => Number(r.overdue_days) > 0).reduce((a, r) => a + Number(r.debt || 0), 0);
+      const con = new Set(rows.map(r => r.contractor).filter(Boolean)).size;
+      const od = rows.filter(r => Number(r.overdue_days) > 0).map(r => Number(r.overdue_days));
+      const avgOd = od.length ? Math.round(od.reduce((a, b) => a + b, 0) / od.length) : 0;
+      await pool.query(
+        `INSERT INTO ticketsmodule_onec_debt_history (snap_date, total_debt, overdue, contractors, avg_overdue, is_mock)
+         VALUES (CURRENT_DATE, $1, $2, $3, $4, $5)
+         ON CONFLICT (snap_date) DO UPDATE SET total_debt=$1, overdue=$2, contractors=$3, avg_overdue=$4, is_mock=$5`,
+        [totD, ovd, con, avgOd, mock]);
+    } catch (e) { console.error('debt history snapshot error:', e.message); }
     return { ok: true, count: rows.length, mock };
   } catch (e) {
     await pool.query(
@@ -190,6 +210,62 @@ async function syncDebt() {
       [String(e && e.message || e).slice(0, 300), mock]).catch(() => {});
     return { ok: false, error: String(e && e.message || e), mock };
   }
+}
+
+// ── Полоса обзора: KPI + дельты + серии 12 мес + доли отделов ───────────────
+const RU_MON = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+function _rng(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+async function buildDebtOverview(rows, mock) {
+  const debt = rows.reduce((a, r) => a + Number(r.debt || 0), 0);
+  const overdue = rows.filter(r => Number(r.overdue_days) > 0).reduce((a, r) => a + Number(r.debt || 0), 0);
+  const contractors = new Set(rows.map(r => r.contractor).filter(Boolean)).size;
+  const od = rows.filter(r => Number(r.overdue_days) > 0).map(r => Number(r.overdue_days));
+  const avgOverdue = od.length ? Math.round(od.reduce((a, b) => a + b, 0) / od.length) : 0;
+
+  // Доли по отделам: топ-3 + «Прочие» (правило дата-виз: надёжно различимы 3 цвета).
+  const byDept = {};
+  for (const r of rows) { const d = r.department || '—'; byDept[d] = (byDept[d] || 0) + Number(r.debt || 0); }
+  const sorted = Object.entries(byDept).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+  const restV = sorted.slice(3).reduce((a, x) => a + x.value, 0);
+  const slices = sorted.slice(0, 3).concat(restV > 0 ? [{ name: 'Прочие отделы', value: restV }] : []);
+  const dtot = slices.reduce((a, x) => a + x.value, 0) || 1;
+  const depts = slices.map(s => ({ name: s.name, value: Math.round(s.value), pct: Math.round(s.value / dtot * 100) }));
+
+  const now = new Date(), labels = [];
+  for (let i = 11; i >= 0; i--) labels.push(RU_MON[new Date(now.getFullYear(), now.getMonth() - i, 1).getMonth()]);
+
+  let sDebt, sOver, sCon, sAvg, synthetic = false, historyPoints = 0;
+  if (mock) {
+    // Демо-серия: 12 точек, заканчивается ТЕКУЩИМИ значениями (страница помечена «демо-данные»).
+    synthetic = true;
+    const rnd = _rng(7);
+    const mk = (end, amp) => { const a = []; let b = end * 0.8; for (let i = 0; i < 11; i++) { b = b + (end - b) * (0.1 + i * 0.012) + (rnd() - 0.5) * end * amp; a.push(Math.max(0, Math.round(b))); } a.push(Math.round(end)); return a; };
+    sDebt = mk(debt, 0.05); sOver = mk(overdue, 0.06); sCon = mk(contractors, 0.04); sAvg = mk(avgOverdue, 0.05);
+  } else {
+    const h = (await pool.query(`
+      SELECT DISTINCT ON (date_trunc('month', snap_date)) date_trunc('month', snap_date) AS m,
+             total_debt, overdue, contractors, avg_overdue
+      FROM ticketsmodule_onec_debt_history
+      WHERE snap_date >= (CURRENT_DATE - INTERVAL '13 months')
+      ORDER BY date_trunc('month', snap_date), snap_date DESC`)).rows;
+    historyPoints = h.length;
+    const byMon = {};
+    h.forEach(x => { const d = new Date(x.m); byMon[d.getFullYear() + '-' + d.getMonth()] = { debt: Number(x.total_debt), over: Number(x.overdue), con: Number(x.contractors), avg: Number(x.avg_overdue) }; });
+    sDebt = []; sOver = []; sCon = []; sAvg = [];
+    for (let i = 11; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); const v = byMon[d.getFullYear() + '-' + d.getMonth()]; sDebt.push(v ? v.debt : null); sOver.push(v ? v.over : null); sCon.push(v ? v.con : null); sAvg.push(v ? v.avg : null); }
+    sDebt[11] = Math.round(debt); sOver[11] = Math.round(overdue); sCon[11] = contractors; sAvg[11] = avgOverdue;
+  }
+
+  const prevOf = (arr) => { for (let i = arr.length - 2; i >= 0; i--) if (arr[i] != null) return arr[i]; return null; };
+  const kpi = (cur, arr) => { const p = prevOf(arr); return { value: cur, delta: p == null ? null : cur - p, pct: (p == null || p === 0) ? null : Math.round((cur - p) / p * 1000) / 10 }; };
+
+  return {
+    mock, synthetic, historyPoints,
+    kpis: { debt: kpi(Math.round(debt), sDebt), overdue: kpi(Math.round(overdue), sOver), contractors: kpi(contractors, sCon), avgOverdue: kpi(avgOverdue, sAvg) },
+    series: { labels, debt: sDebt, overdue: sOver, contractors: sCon, avgOverdue: sAvg },
+    depts,
+  };
 }
 
 async function getDebtBoard() {
@@ -208,8 +284,10 @@ async function getDebtBoard() {
   const depts = Object.values(byDept).sort((a, b) => b.total - a.total);
   const totalDebt = rows.reduce((a, r) => a + Number(r.debt || 0), 0);
   const totalOverdue = rows.filter(r => Number(r.overdue_days) > 0).reduce((a, r) => a + Number(r.debt || 0), 0);
+  const overview = await buildDebtOverview(rows, meta.is_mock !== false);
 
   return {
+    overview,
     rows: rows.map(r => ({
       id: r.id, contractor: r.contractor, contract: r.contract, department: r.department,
       debt: Number(r.debt || 0), overdue_days: Number(r.overdue_days || 0), due_date: r.due_date,

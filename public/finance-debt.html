@@ -57,6 +57,34 @@ select:focus,input:focus{border-color:var(--brand)}
 .bar i.over{background:var(--bad)}
 .hint{color:var(--text-3);font-size:12.5px;padding:14px 18px}
 .tools{padding:6px 14px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;font-size:12px;color:var(--text-3)}
+/* ── Полоса обзора ─────────────────────────────────────── */
+:root{--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s-other:#9aa3b3;--grid:#e1e0d9}
+:root[data-theme="dark"]{--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s-other:#5a6473;--grid:#2c2c2a}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s-other:#5a6473;--grid:#2c2c2a}}
+.ovw{padding:16px 16px 0}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:13px 15px}
+.kpi .lab{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3)}
+.kpi .row{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;margin-top:8px}
+.kpi .val{font-size:22px;font-weight:600;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.kpi .val small{font-size:12.5px;font-weight:600;color:var(--text-3);margin-left:2px}
+.kdelta{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:700;margin-top:6px}
+.kdelta.good{color:var(--good)}.kdelta.bad{color:var(--bad)}.kdelta.flat{color:var(--text-3)}
+.kdelta .vs{color:var(--text-4);font-weight:500;margin-left:3px}
+.ovw2{display:grid;grid-template-columns:1.9fr 1fr;gap:12px;margin-top:12px}
+@media(max-width:1000px){.kpis{grid-template-columns:repeat(2,1fr)}.ovw2{grid-template-columns:1fr}}
+.ovwc{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+.ovwc h3{font-size:13px;font-weight:700;margin:0 0 2px}
+.ovwc .ch{color:var(--text-3);font-size:11.5px;margin-bottom:8px}
+.leglist{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.leglist .it{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-2)}
+.leglist .sw{width:9px;height:9px;border-radius:3px;flex-shrink:0}
+.leglist .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.leglist .pc{color:var(--text-3);font-size:11px;width:34px;text-align:right}
+.leglist .v{font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+.ovwempty{color:var(--text-3);font-size:12.5px;text-align:center;padding:34px 10px}
+#ovwTip{position:fixed;pointer-events:none;z-index:200;background:var(--text);color:var(--card);font-size:11.5px;font-weight:600;padding:5px 9px;border-radius:7px;opacity:0;transition:opacity .08s;white-space:nowrap}
+svg.ovsvg{display:block;width:100%}
 </style>
 </head>
 <body>
@@ -72,6 +100,24 @@ select:focus,input:focus{border-color:var(--brand)}
   </div>
 </header>
 
+<!-- Полоса обзора (сводка по всему модулю, не зависит от фильтров) -->
+<div class="ovw">
+  <div class="kpis" id="kpis"></div>
+  <div class="ovw2">
+    <div class="ovwc">
+      <h3>Динамика дебиторки</h3>
+      <div class="ch">помесячно, млн ₸ · линия — общий долг, заливка — просроченное</div>
+      <div id="heroChart"></div>
+    </div>
+    <div class="ovwc">
+      <h3>Долг по отделам</h3>
+      <div class="ch">доля в общем остатке</div>
+      <div id="donutChart" style="display:flex;justify-content:center;padding:4px 0 2px"></div>
+      <div class="leglist" id="donutLeg"></div>
+    </div>
+  </div>
+</div>
+
 <div class="filters">
   <div><label class="fl">Отдел</label><select id="fDept" onchange="render()"><option value="">Все</option></select></div>
   <div><label class="fl">Контрагент</label><select id="fContractor" onchange="render()"><option value="">Все</option></select></div>
@@ -85,10 +131,6 @@ select:focus,input:focus{border-color:var(--brand)}
     <div style="overflow:auto;max-height:calc(100vh - 230px)"><table class="tbl"><tbody id="debtBody"></tbody></table></div>
   </div>
   <div>
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-h">Отделы</div>
-      <div id="deptBox"></div>
-    </div>
     <div class="card">
       <div class="card-h">Топ просрочки</div>
       <div id="topBox"></div>
@@ -114,6 +156,7 @@ async function load(){
   if(d.error){_a.innerHTML='Данные от '+(d.asOf?new Date(d.asOf).toLocaleString('ru-RU'):'—')+' · <span style="color:var(--bad)">⚠ обновить не удалось</span>';_a.title=String(d.error);}
   else{_a.textContent=d.asOf?('По состоянию на '+new Date(d.asOf).toLocaleString('ru-RU')):'';_a.title='';}
   document.getElementById('mockBadge').style.display=d.mock?'inline-block':'none';
+  if(d.overview)renderOverview(d.overview);
   const fd=document.getElementById('fDept');fd.innerHTML='<option value="">Все</option>'+(d.filters.departments||[]).map(x=>`<option>${esc(x)}</option>`).join('');
   const fc=document.getElementById('fContractor');fc.innerHTML='<option value="">Все</option>'+(d.filters.contractors||[]).map(x=>`<option>${esc(x)}</option>`).join('');
   render();
@@ -145,7 +188,8 @@ function render(){
   const byDept={};for(const r of rows){const d=r.department||'—';byDept[d]=byDept[d]||{total:0,over:0};byDept[d].total+=r.debt;if(r.overdue_days>0)byDept[d].over+=r.debt;}
   const depts=Object.entries(byDept).map(([department,v])=>({department,...v})).sort((a,b)=>b.total-a.total);
   const maxT=Math.max(1,...depts.map(d=>d.total));
-  document.getElementById('deptBox').innerHTML=depts.length?depts.map(d=>`<div class="deptrow"><div class="top"><span>${esc(d.department)}</span><span class="num"><b>${fmt(d.total)}</b>${d.over?` · <span style="color:var(--bad)">просроч. ${fmt(d.over)}</span>`:''}</span></div><div class="bar"><i style="width:${(d.total/maxT*100).toFixed(1)}%"></i></div>${d.over?`<div class="bar" style="margin-top:3px"><i class="over" style="width:${(d.over/maxT*100).toFixed(1)}%"></i></div>`:''}</div>`).join('')
+  const _deptBox=document.getElementById('deptBox');
+  if(_deptBox)_deptBox.innerHTML=depts.length?depts.map(d=>`<div class="deptrow"><div class="top"><span>${esc(d.department)}</span><span class="num"><b>${fmt(d.total)}</b>${d.over?` · <span style="color:var(--bad)">просроч. ${fmt(d.over)}</span>`:''}</span></div><div class="bar"><i style="width:${(d.total/maxT*100).toFixed(1)}%"></i></div>${d.over?`<div class="bar" style="margin-top:3px"><i class="over" style="width:${(d.over/maxT*100).toFixed(1)}%"></i></div>`:''}</div>`).join('')
     +`<div class="sumrow" style="font-weight:700"><span>Итого</span><span><b>${fmt(rows.reduce((s,r)=>s+r.debt,0))}</b></span></div>`:'<div class="hint">—</div>';
   // топ просрочки
   const top=rows.filter(r=>r.overdue_days>0).sort((a,b)=>b.debt-a.debt).slice(0,8);
@@ -165,8 +209,87 @@ async function refresh(){
   setTimeout(()=>{if(b.textContent!=='Обновляю…'){b.textContent='↻ Обновить';b.style.color='';b.title='';}},4000);
 }
 async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
+
+/* ── Полоса обзора: KPI + дельты + спарклайны + герой-график + пончик ───── */
+var ovTip=document.getElementById('ovwTip');
+function ovShow(e,h){ovTip.innerHTML=h;ovTip.style.opacity='1';ovMove(e);}
+function ovMove(e){ovTip.style.left=(e.clientX+12)+'px';ovTip.style.top=(e.clientY-10)+'px';}
+function ovHide(){ovTip.style.opacity='0';}
+function mln(v){return fmt(Math.round(Number(v||0)/1e6));}
+function sparkSVG(arr){
+  var pts=[];for(var i=0;i<arr.length;i++)if(arr[i]!=null)pts.push([i,arr[i]]);
+  if(pts.length<2)return '';
+  var w=72,h=28,pad=3,xs=(arr.length-1)||1,vs=pts.map(function(p){return p[1];});
+  var mn=Math.min.apply(0,vs),mx=Math.max.apply(0,vs);
+  var d=pts.map(function(p,i){var x=pad+p[0]*(w-2*pad)/xs;var y=h-pad-(p[1]-mn)/((mx-mn)||1)*(h-2*pad);return (i?'L':'M')+x.toFixed(1)+' '+y.toFixed(1);}).join(' ');
+  var last=pts[pts.length-1],lx=pad+last[0]*(w-2*pad)/xs,ly=h-pad-(last[1]-mn)/((mx-mn)||1)*(h-2*pad);
+  return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'"><path d="'+d+'" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="'+lx.toFixed(1)+'" cy="'+ly.toFixed(1)+'" r="2.4" fill="var(--accent)"/></svg>';
+}
+function kpiTile(lab,valHTML,k,series,fmtDelta){
+  var dh;
+  if(k&&k.delta!=null&&k.delta!==0){var good=k.delta<0; // «меньше — лучше» для всех метрик долга
+    dh='<div class="kdelta '+(good?'good':'bad')+'">'+(k.delta>0?'▲':'▼')+' '+fmtDelta(k)+'<span class="vs">к пред. мес.</span></div>';}
+  else if(k&&k.delta===0){dh='<div class="kdelta flat">■ без изм.<span class="vs">к пред. мес.</span></div>';}
+  else{dh='<div class="kdelta flat" style="visibility:hidden">·</div>';}
+  return '<div class="kpi"><div class="lab">'+lab+'</div><div class="row"><div class="val">'+valHTML+'</div>'+sparkSVG(series)+'</div>'+dh+'</div>';
+}
+function renderOverview(ov){
+  var k=ov.kpis,s=ov.series;
+  var moneyDelta=function(x){return x.pct!=null?Math.abs(x.pct)+'%':Math.abs(mln(x.delta))+' млн';};
+  document.getElementById('kpis').innerHTML=[
+    kpiTile('Общий долг', mln(k.debt.value)+' <small>млн ₸</small>', k.debt, s.debt, moneyDelta),
+    kpiTile('Просрочено', mln(k.overdue.value)+' <small>млн ₸</small>', k.overdue, s.overdue, moneyDelta),
+    kpiTile('Контрагентов с долгом', String(k.contractors.value), k.contractors, s.contractors, function(x){return Math.abs(x.delta);}),
+    kpiTile('Средняя просрочка', String(k.avgOverdue.value)+' <small>дн</small>', k.avgOverdue, s.avgOverdue, function(x){return Math.abs(x.delta)+' дн';})
+  ].join('');
+  renderHero(ov);
+  renderDonut(ov.depts);
+}
+function renderHero(ov){
+  var el=document.getElementById('heroChart'),debt=ov.series.debt,over=ov.series.overdue,labels=ov.series.labels;
+  var idx=[];for(var i=0;i<debt.length;i++)if(debt[i]!=null)idx.push(i);
+  if(!ov.synthetic&&idx.length<2){el.innerHTML='<div class="ovwempty">История копится — график появится после нескольких обновлений.</div>';return;}
+  var W=680,H=230,L=48,R=14,T=12,B=26,pw=W-L-R,ph=H-T-B,n=debt.length;
+  var mx=Math.max.apply(0,idx.map(function(i){return debt[i];}))*1.1||1;
+  var X=function(i){return L+i*pw/((n-1)||1);},Y=function(v){return T+ph-(v-0)/(mx-0)*ph;};
+  var lineOf=function(a){return idx.map(function(i,j){return (j?'L':'M')+X(i).toFixed(1)+' '+Y(a[i]||0).toFixed(1);}).join(' ');};
+  var areaOf=function(a){if(!idx.length)return '';return 'M'+X(idx[0]).toFixed(1)+' '+Y(0).toFixed(1)+' '+idx.map(function(i){return 'L'+X(i).toFixed(1)+' '+Y(a[i]||0).toFixed(1);}).join(' ')+' L'+X(idx[idx.length-1]).toFixed(1)+' '+Y(0).toFixed(1)+' Z';};
+  var grid='',TK=5;for(var t=0;t<TK;t++){var gv=mx*t/(TK-1),y=Y(gv);grid+='<line x1="'+L+'" y1="'+y.toFixed(1)+'" x2="'+(W-R)+'" y2="'+y.toFixed(1)+'" stroke="var(--grid)" stroke-width="1"/><text x="'+(L-7)+'" y="'+(y+3.5).toFixed(1)+'" text-anchor="end" font-size="9.5" fill="var(--text-4)" style="font-variant-numeric:tabular-nums">'+fmt(Math.round(gv/1e6))+'</text>';}
+  var xlab=labels.map(function(m,i){return '<text x="'+X(i).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle" font-size="9.5" fill="var(--text-4)">'+m+'</text>';}).join('');
+  var dots=idx.map(function(i){return '<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(debt[i]).toFixed(1)+'" r="9" fill="transparent" class="hv" data-i="'+i+'"/>';}).join('');
+  el.innerHTML='<svg class="ovsvg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet">'+grid+xlab+
+    '<path d="'+areaOf(over)+'" fill="var(--accent)" opacity="0.12"/>'+
+    '<path d="'+lineOf(over)+'" fill="none" stroke="var(--accent)" stroke-width="1.4" opacity="0.5" stroke-dasharray="4 3"/>'+
+    '<path d="'+lineOf(debt)+'" fill="none" stroke="var(--accent)" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>'+
+    '<line id="ovCross" x1="0" y1="'+T+'" x2="0" y2="'+(T+ph)+'" stroke="var(--border2)" stroke-width="1" opacity="0"/>'+dots+'</svg>';
+  var cross=el.querySelector('#ovCross');
+  el.querySelectorAll('.hv').forEach(function(c){
+    c.addEventListener('mouseenter',function(e){var i=+c.getAttribute('data-i');cross.setAttribute('x1',c.getAttribute('cx'));cross.setAttribute('x2',c.getAttribute('cx'));cross.setAttribute('opacity','1');ovShow(e,labels[i]+' · долг <b>'+mln(debt[i])+'</b> млн'+(over[i]!=null?' · просроч. <b>'+mln(over[i])+'</b> млн':''));});
+    c.addEventListener('mousemove',ovMove);
+    c.addEventListener('mouseleave',function(){cross.setAttribute('opacity','0');ovHide();});
+  });
+}
+function renderDonut(depts){
+  var el=document.getElementById('donutChart'),leg=document.getElementById('donutLeg');
+  if(!depts||!depts.length){el.innerHTML='';leg.innerHTML='<div class="ovwempty">—</div>';return;}
+  var cols=['var(--s1)','var(--s2)','var(--s3)','var(--s-other)'];
+  var tot=depts.reduce(function(s,d){return s+d.value;},0)||1,R=56,C=70,sw=17,circ=2*Math.PI*R,off=0;
+  var ring=depts.map(function(d,i){var len=d.value/tot*circ,o=-off;off+=len;
+    return '<circle cx="'+C+'" cy="'+C+'" r="'+R+'" fill="none" stroke="'+cols[i%4]+'" stroke-width="'+sw+'" stroke-dasharray="'+len.toFixed(2)+' '+(circ-len).toFixed(2)+'" stroke-dashoffset="'+o.toFixed(2)+'" transform="rotate(-90 '+C+' '+C+')" class="dseg" data-nm="'+esc(d.name)+'" data-v="'+d.value+'" data-pc="'+d.pct+'" style="cursor:pointer"/>';
+  }).join('');
+  el.innerHTML='<svg width="140" height="140" viewBox="0 0 140 140">'+ring+
+    '<text x="'+C+'" y="'+(C-2)+'" text-anchor="middle" font-size="18" font-weight="600" fill="var(--text)" style="font-variant-numeric:tabular-nums">'+mln(tot)+'</text>'+
+    '<text x="'+C+'" y="'+(C+14)+'" text-anchor="middle" font-size="9.5" fill="var(--text-3)">млн ₸</text></svg>';
+  leg.innerHTML=depts.map(function(d,i){return '<div class="it"><span class="sw" style="background:'+cols[i%4]+'"></span><span class="nm">'+esc(d.name)+'</span><span class="pc">'+d.pct+'%</span><span class="v">'+mln(d.value)+'</span></div>';}).join('');
+  el.querySelectorAll('.dseg').forEach(function(sg){
+    sg.addEventListener('mouseenter',function(e){sg.style.opacity='.82';ovShow(e,sg.dataset.nm+' · <b>'+mln(sg.dataset.v)+'</b> млн · '+sg.dataset.pc+'%');});
+    sg.addEventListener('mousemove',ovMove);
+    sg.addEventListener('mouseleave',function(){sg.style.opacity='1';ovHide();});
+  });
+}
 boot();
 </script>
+<div id="ovwTip"></div>
 <script src="/assets/cup-theme.js" defer></script>
 </body>
 </html>
