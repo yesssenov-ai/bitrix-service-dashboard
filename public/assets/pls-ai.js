@@ -1,4 +1,5 @@
-/* ProLab AI — плавающий ассистент ЦУП (кнопка снизу справа, перетаскивается).
+/* ProLab AI — ассистент ЦУП. Маленькая статичная кнопка-иконка сверху справа,
+   в связке с переключателем темы (не перетаскивается, одинаково на всех страницах).
    Подключается одним тегом <script src="/assets/pls-ai.js" defer></script>.
    Диалог: вопрос → ответ, история хранится на сервере отдельно по каждому сотруднику
    (/api/plsai/history). Понимает выборки сделок, «Реализацию» (даты отгрузки/поставки)
@@ -6,13 +7,13 @@
 (function () {
   if (window.__prolabAI) return; window.__prolabAI = true;
   var css = `
-  #pai-fab{position:fixed;right:18px;bottom:72px;z-index:99998;display:inline-flex;align-items:center;gap:8px;
-    background:linear-gradient(135deg,#ff2d55,#5b8cff);color:#fff;border:0;border-radius:999px;padding:11px 16px;
-    font:600 13px/1 "SF Pro Display","Segoe UI",Inter,system-ui,sans-serif;cursor:grab;box-shadow:0 8px 24px rgba(0,0,0,.28);
-    touch-action:none;user-select:none;-webkit-user-select:none}
-  #pai-fab.dragging{cursor:grabbing}
-  #pai-fab:hover{filter:brightness(1.06)}
-  #pai-fab svg{width:16px;height:16px}
+  #pai-fab{position:fixed;top:58px;right:58px;z-index:99998;width:34px;height:34px;padding:0;
+    display:inline-flex;align-items:center;justify-content:center;border-radius:9px;cursor:pointer;
+    background:var(--surface,#fff);color:var(--accent,#C53B2F);border:1px solid var(--line-2,#d6dbe4);
+    box-shadow:0 1px 2px rgba(20,25,35,.06);transition:color .15s,border-color .15s}
+  #pai-fab:hover{border-color:var(--accent,#C53B2F);color:var(--accent,#C53B2F)}
+  #pai-fab svg{width:18px;height:18px}
+  #pai-fab span{display:none}
   #pai-panel{position:fixed;right:18px;bottom:70px;z-index:99999;width:min(460px,calc(100vw - 24px));height:min(76vh,660px);max-height:calc(100vh - 36px);
     display:none;flex-direction:column;background:#0e1626;color:#e8edf7;border:1px solid rgba(255,255,255,.12);border-radius:18px;overflow:hidden;
     box-shadow:0 24px 60px rgba(0,0,0,.5);font-family:"SF Pro Display","Segoe UI",Inter,system-ui,sans-serif}
@@ -431,36 +432,13 @@
     thread.innerHTML = ''; updateEmpty();
   };
 
-  // ── Перетаскивание кнопки в любое место экрана (мышь + тач) ─────────────────
-  var POSKEY = 'pls-ai-pos';
-  function applyFabPos(left, top) {
-    var r = fab.getBoundingClientRect(); var w = r.width || 120, h = r.height || 44;
-    left = Math.max(6, Math.min(left, window.innerWidth - w - 6));
-    top = Math.max(6, Math.min(top, window.innerHeight - h - 6));
-    fab.style.left = left + 'px'; fab.style.top = top + 'px'; fab.style.right = 'auto'; fab.style.bottom = 'auto';
-  }
-  try { var sp = JSON.parse(localStorage.getItem(POSKEY) || 'null'); if (sp && typeof sp.left === 'number') applyFabPos(sp.left, sp.top); } catch (e) {}
-
-  var dragging = false, moved = false, sx = 0, sy = 0, ox = 0, oy = 0;
-  fab.addEventListener('pointerdown', function (e) {
-    dragging = true; moved = false;
-    var r = fab.getBoundingClientRect(); ox = e.clientX - r.left; oy = e.clientY - r.top; sx = e.clientX; sy = e.clientY;
-    fab.classList.add('dragging'); try { fab.setPointerCapture(e.pointerId); } catch (_) {}
-  });
-  fab.addEventListener('pointermove', function (e) {
-    if (!dragging) return;
-    if (Math.abs(e.clientX - sx) > 4 || Math.abs(e.clientY - sy) > 4) moved = true;
-    if (moved) { applyFabPos(e.clientX - ox, e.clientY - oy); if (panel.classList.contains('on')) positionPanel(); }
-  });
-  function endDrag(e) {
-    if (!dragging) return; dragging = false; fab.classList.remove('dragging');
-    try { fab.releasePointerCapture(e.pointerId); } catch (_) {}
-    if (moved) { var r = fab.getBoundingClientRect(); try { localStorage.setItem(POSKEY, JSON.stringify({ left: r.left, top: r.top })); } catch (_) {} }
-    else { panel.classList.contains('on') ? close() : open(); }
-  }
-  fab.addEventListener('pointerup', endDrag);
-  fab.addEventListener('pointercancel', endDrag);
-  window.addEventListener('resize', function () { var r = fab.getBoundingClientRect(); applyFabPos(r.left, r.top); if (panel.classList.contains('on')) positionPanel(); });
+  // Кнопка статична (без перетаскивания): клик — открыть/закрыть ассистента.
+  // Раньше её можно было таскать и позиция сохранялась в localStorage — из-за этого
+  // она «прыгала» с места на место. Теперь позиция задаётся только в CSS (верх справа).
+  fab.title = 'ProLab AI'; fab.setAttribute('aria-label', 'ProLab AI');
+  try { localStorage.removeItem('pls-ai-pos'); } catch (e) {}
+  fab.addEventListener('click', function () { panel.classList.contains('on') ? close() : open(); });
+  window.addEventListener('resize', function () { if (panel.classList.contains('on')) positionPanel(); });
 
   input.addEventListener('keydown', function (e) { if (e.key === 'Enter') run(); });
   send.onclick = run;

@@ -78,6 +78,10 @@ const LEGACY_THEME = [
 ].join('\n');
 // Бейдж на иконке приложения (число действий пользователя) — см. assets/badge.js.
 const PWA_BADGE = '<script src="/assets/badge.js" defer></script>';
+// ProLab AI — маленькая статичная кнопка-ассистент. Подставляется на КАЖДУЮ страницу
+// новой дизайн-системы (кроме входа), чтобы ассистент был доступен везде одинаково.
+// Пропускаем, если страница уже подключает pls-ai.js своим тегом (чтобы не задвоить).
+const PWA_AI = '<script src="/assets/pls-ai.js?v=17" defer></script>';
 app.use((req, res, next) => {
   const orig = res.sendFile.bind(res);
   res.sendFile = (fp, opts, cb) => {
@@ -87,7 +91,9 @@ app.use((req, res, next) => {
         let out = html;
         if (out.includes('</head>') && !out.includes('/manifest.webmanifest')) {
           const usesNewUI = out.includes('/assets/cup-ui.css');  // страница на новой дизайн-системе
-          const head = PWA_BASE + '\n' + (usesNewUI ? '' : LEGACY_THEME + '\n') + PWA_BADGE + '\n';
+          const isLogin = /login\.html$/.test(fp);
+          const needAI = usesNewUI && !isLogin && !out.includes('/assets/pls-ai.js');
+          const head = PWA_BASE + '\n' + (usesNewUI ? '' : LEGACY_THEME + '\n') + PWA_BADGE + '\n' + (needAI ? PWA_AI + '\n' : '');
           out = out.replace('</head>', head + '</head>');
         }
         res.set('Content-Type', 'text/html; charset=utf-8');
