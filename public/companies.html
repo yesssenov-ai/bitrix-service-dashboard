@@ -299,7 +299,10 @@ async function applyBinNow(bin){const b=document.getElementById('binApplyBtn');i
   if(rqv.length){const rqRows=rqv.map(v=>`<tr><td class="bl">${esc(v.label||v.field)}</td><td>${v.ok?'<span style="color:var(--good);font-weight:700">✓ легло</span>':'<span style="color:var(--bad);font-weight:700">✗ откат</span>'}</td><td class="bo">${v.got?esc(v.got):'<span class="muted">—</span>'}</td></tr>`).join('');
     rqBlock=`<div class="hint" style="margin:12px 0 4px;font-weight:700">Реквизиты (вкладка «подробно»)</div><table class="bintbl"><thead><tr><th>Поле</th><th>Статус</th><th>Сейчас в Б24</th></tr></thead><tbody>${rqRows}</tbody></table>`;}
   else if(d.requisite&&d.requisite.error){rqBlock='<div class="hint" style="margin-top:8px">Реквизит: '+esc(d.requisite.error)+'</div>';}
-  box.innerHTML=head+`<div class="hint" style="margin:8px 0 4px;font-weight:700">Карточка «Общие»</div><table class="bintbl"><thead><tr><th>Поле</th><th>Статус</th><th>Сейчас в Б24</th></tr></thead><tbody>${rows}</tbody></table>`+rqBlock;
+  let dbgBlock='';
+  if(d.requisite&&d.requisite.debug){const g=d.requisite.debug;
+    dbgBlock=`<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--text-3);font-size:11px">debug реквизита (для разработчика)</summary><div class="hint" style="font-family:ui-monospace,Consolas,monospace;font-size:10.5px;white-space:pre-wrap;word-break:break-all;margin-top:6px">reqId: ${esc(g.requisiteId)} · preset: ${esc(g.presetId)} · created: ${esc(g.created)}\nwriteResponse: ${esc(g.writeResponse||'')}\nRQ-ключи в карточке: ${esc((g.getFieldKeys||[]).join(', '))}</div></details>`;}
+  box.innerHTML=head+`<div class="hint" style="margin:8px 0 4px;font-weight:700">Карточка «Общие»</div><table class="bintbl"><thead><tr><th>Поле</th><th>Статус</th><th>Сейчас в Б24</th></tr></thead><tbody>${rows}</tbody></table>`+rqBlock+dbgBlock;
   if(d.binApplied){try{await load();}catch(e){}}}
 function fill(id,arr){const el=document.getElementById(id);el.innerHTML='<option value="">Все</option>'+arr.map(x=>`<option>${esc(x)}</option>`).join('');}
 function setQuick(f){document.getElementById('fProb').value=(f==='noind'||f==='nobin'||f==='dup')?f:'';render();

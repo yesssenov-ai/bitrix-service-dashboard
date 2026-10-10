@@ -1084,6 +1084,18 @@ function companyFieldsFromGbd(g, binCode) {
 }
 
 // Upsert реквизита компании (RQ_BIN и пр.). Найти → обновить, иначе создать.
+// Прямой JSON-вызов Б24 (минуя form-кодировщик b24). Для реквизитов form-кодировка
+// не доносит поля, а JSON-тело — доносит (подтверждено selftest'ом для компании).
+async function b24json(method, params) {
+  const wh = process.env.BITRIX_WEBHOOK;
+  if (!wh) return { httpStatus: 0, json: { error: 'нет BITRIX_WEBHOOK' } };
+  const _fetch = (typeof fetch === 'function') ? fetch : require('node-fetch');
+  try {
+    const resp = await _fetch(wh + method + '.json', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params) });
+    let j = null; try { j = await resp.json(); } catch (e) {}
+    return { httpStatus: resp.status, json: j };
+  } catch (e) { return { httpStatus: 0, json: { error: String(e && e.message || e) } }; }
+}
 async function upsertRequisite(companyId, g) {
   const fmtDateRu = s => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || '')); return m ? (m[3] + '.' + m[2] + '.' + m[1]) : (s || ''); };
   const rf = {
@@ -1095,26 +1107,31 @@ async function upsertRequisite(companyId, g) {
     RQ_VAT_PAYER: g.isNds ? 'Y' : 'N',
   };
   if (g.ceoName) { rf.RQ_CEO_NAME = g.ceoName; rf.RQ_DIRECTOR = g.ceoName; if (g.ceoPosition) rf.RQ_CEO_WORK_POS = g.ceoPosition; }
-  let reqId = null, created = false, error = null;
+  let reqId = null, presetId = null, created = false, error = null, rawWrite = null;
   try {
     const { result } = await b24('crm.requisite.list', { filter: { ENTITY_TYPE_ID: 4, ENTITY_ID: String(companyId) }, select: ['ID', 'PRESET_ID'] });
     const r0 = result && result[0];
-    if (r0 && r0.ID) { reqId = r0.ID; await b24('crm.requisite.update', { id: reqId, fields: rf }); }
-    else {
+    if (r0 && r0.ID) {
+      reqId = r0.ID; presetId = r0.PRESET_ID;
+      const w = await b24json('crm.requisite.update', { id: reqId, fields: rf });
+      rawWrite = w.json; if (w.json && w.json.error) error = String(w.json.error_description || w.json.error);
+    } else {
       const pl = await b24('crm.requisite.preset.list', { select: ['ID', 'COUNTRY_ID'] });
       const ps = (pl.result || []);
-      const presetId = (ps.find(p => String(p.COUNTRY_ID) === String(KZ_COUNTRY_ID)) || ps[0] || {}).ID;
+      presetId = (ps.find(p => String(p.COUNTRY_ID) === String(KZ_COUNTRY_ID)) || ps[0] || {}).ID;
       if (!presetId) return { requisiteId: null, created: false, error: 'не найден пресет реквизита', verify: [] };
-      const add = await b24('crm.requisite.add', { fields: Object.assign({ ENTITY_TYPE_ID: 4, ENTITY_ID: String(companyId), PRESET_ID: presetId, NAME: 'Реквизиты (ГБДЮЛ)' }, rf) });
-      reqId = (add && add.result) || null; created = true;
+      const w = await b24json('crm.requisite.add', { fields: Object.assign({ ENTITY_TYPE_ID: 4, ENTITY_ID: String(companyId), PRESET_ID: presetId, NAME: 'Реквизиты (ГБДЮЛ)' }, rf) });
+      rawWrite = w.json; reqId = (w.json && w.json.result) || null; created = true;
+      if (w.json && w.json.error) error = String(w.json.error_description || w.json.error);
     }
   } catch (e) { error = String(e && e.message || e); }
   // Контрольное чтение реквизита — какие RQ-поля реально легли.
-  const verify = [];
+  const verify = []; let getKeys = [];
   if (reqId) {
     try {
       const g2 = await b24('crm.requisite.get', { id: reqId });
       const cur = (g2 && g2.result) || {};
+      getKeys = Object.keys(cur);
       const LBL = { RQ_BIN: 'БИН (реквизит)', RQ_COMPANY_FULL_NAME: 'Полное наим.', RQ_COMPANY_REG_DATE: 'Дата регистрации', RQ_OKVED: 'ОКВЭД', RQ_VAT_PAYER: 'Плательщик НДС', RQ_CEO_NAME: 'Руководитель (ФИО)', RQ_CEO_WORK_POS: 'Должность рук.', RQ_DIRECTOR: 'Ген. директор' };
       for (const c of Object.keys(rf)) {
         if (c === 'RQ_COMPANY_NAME') continue;
@@ -1123,7 +1140,8 @@ async function upsertRequisite(companyId, g) {
       }
     } catch (e) {}
   }
-  return { requisiteId: reqId, created, error, verify };
+  const dbg = { requisiteId: reqId, presetId, created, writeResponse: (() => { try { return JSON.stringify(rawWrite).slice(0, 400); } catch (e) { return String(rawWrite); } })(), getFieldKeys: getKeys.filter(k => /^RQ_/.test(k)).slice(0, 60) };
+  return { requisiteId: reqId, created, error, verify, debug: dbg };
 }
 
 // Предпросмотр: что именно запишем (старое → новое). Ничего не пишет.
