@@ -1009,8 +1009,155 @@ async function binInspect(bin) {
   return out;
 }
 
+// ── Заполнение БИН из ГБДЮЛ (подтверждение менеджера → запись в Б24) ──────────
+// Поля карточки компании (куда класть). Коды подтверждены диагностикой bin-inspect;
+// переопределяются через env на случай смены портала.
+const CMP_F = {
+  fullName: process.env.CMP_FULLNAME_FIELD || 'UF_CRM_1731859434440', // «Полное название компании»
+  address:  process.env.CMP_ADDR_FIELD     || 'UF_CRM_1731860820223', // «Адрес»
+  city:     process.env.CMP_CITY_FIELD     || 'UF_CRM_1731860808967', // «Населенный пункт»
+  redFlag:  process.env.CMP_REDFLAG_FIELD  || 'UF_CRM_1773380612420', // «Red Flag» (boolean)
+  redFlagComment: process.env.CMP_REDFLAG_COMMENT_FIELD || 'UF_CRM_1773380764288',
+};
+const KZ_COUNTRY_ID = process.env.BITRIX_KZ_COUNTRY_ID || '122';
+
+// Полный резолв ГБДЮЛ → нормализованный объект. Тот же провайдер, что в Закупках.
+async function binLookupFull(bin) {
+  bin = String(bin || '').replace(/\D/g, '');
+  if (!/^\d{12}$/.test(bin)) return { bin, found: false, error: 'БИН должен содержать 12 цифр' };
+  const tmpl = process.env.BIN_LOOKUP_URL || 'https://apiba.prgapp.kz/CompanyFullInfo?id={bin}&lang=ru';
+  const url = tmpl.replace('{bin}', encodeURIComponent(bin));
+  let json = null, httpStatus = 0;
+  try {
+    const _fetch = (typeof fetch === 'function') ? fetch : require('node-fetch');
+    let ctrl, t; try { ctrl = new AbortController(); t = setTimeout(() => ctrl.abort(), 9000); } catch (e) { ctrl = null; }
+    const opts = { headers: { accept: 'application/json', 'user-agent': 'Mozilla/5.0 (PLS-CUP)', referer: 'https://ba.prg.kz/' } };
+    if (ctrl) opts.signal = ctrl.signal;
+    const r = await _fetch(url, opts); if (t) clearTimeout(t); httpStatus = r.status;
+    try { json = await r.json(); } catch (e) {}
+  } catch (e) { return { bin, found: false, error: String(e && e.message || e) }; }
+  const bi = (json && (json.basicInfo || (json.data && json.data.basicInfo))) || null;
+  if (!bi) return { bin, found: false, httpStatus, error: 'ГБДЮЛ не вернул данные по БИН' };
+  const uv = v => (v && typeof v === 'object' && 'value' in v) ? v.value : v;
+  const descOf = v => { v = uv(v); return (v && typeof v === 'object' && 'description' in v) ? v.description : v; };
+  const S = v => { v = descOf(v); return v == null ? '' : String(typeof v === 'object' ? (v.title || v.nameRu || '') : v).trim(); };
+  const ceo = uv(bi.ceo) || {};
+  const statusText = S(bi.status);
+  const reg = uv(bi.registrationDate);
+  const crumb = uv(bi.crumbsKato) || {};
+  return {
+    bin, found: true, httpStatus,
+    fullName: S(bi.titleRu) || S(bi.titleKz),
+    ceoName: (ceo && (ceo.title || ceo.name)) || '',
+    ceoPosition: (ceo && ceo.position) || '',
+    regDate: reg ? String(reg).slice(0, 10) : '',
+    oked: S(bi.primaryOKED),
+    addressRu: S(bi.addressRu),
+    cityName: S(bi.cityName),
+    postalCode: S(bi.postalCode),
+    region: S(bi.kato) || (crumb && crumb.nameRu) || '',
+    isNds: uv(bi.isNds) === true || String(uv(bi.isNds)) === 'true',
+    statusText,
+    statusActive: /ктив|действ/i.test(statusText),
+    degreeOfRisk: S(bi.degreeOfRisk),
+  };
+}
+
+// Набор полей компании для записи (перезапись данными ГБДЮЛ).
+function companyFieldsFromGbd(g, binCode) {
+  const f = {};
+  if (binCode) f[binCode] = g.bin;
+  if (CMP_F.fullName) f[CMP_F.fullName] = g.fullName;
+  if (CMP_F.address) f[CMP_F.address] = g.addressRu;
+  if (CMP_F.city) f[CMP_F.city] = g.cityName;
+  f.ADDRESS = g.addressRu;
+  f.ADDRESS_CITY = g.cityName;
+  f.ADDRESS_POSTAL_CODE = g.postalCode;
+  f.ADDRESS_PROVINCE = g.region;
+  // Red Flag — только поджигаем, если компания НЕ действующая (ручной флаг не снимаем).
+  if (!g.statusActive && CMP_F.redFlag) {
+    f[CMP_F.redFlag] = '1';
+    if (CMP_F.redFlagComment) f[CMP_F.redFlagComment] = 'ГБДЮЛ: ' + (g.statusText || 'не действующее');
+  }
+  return f;
+}
+
+// Upsert реквизита компании (RQ_BIN и пр.). Найти → обновить, иначе создать.
+async function upsertRequisite(companyId, g) {
+  const rf = {
+    RQ_BIN: g.bin,
+    RQ_COMPANY_FULL_NAME: g.fullName,
+    RQ_COMPANY_REG_DATE: g.regDate,
+    RQ_OKVED: g.oked,
+    RQ_VAT_PAYER: g.isNds ? 'Y' : 'N',
+  };
+  if (g.ceoName) { rf.RQ_CEO_NAME = g.ceoName; rf.RQ_DIRECTOR = g.ceoName; }
+  try {
+    const { result } = await b24('crm.requisite.list', { filter: { ENTITY_TYPE_ID: 4, ENTITY_ID: String(companyId) }, select: ['ID', 'PRESET_ID'] });
+    const r0 = result && result[0];
+    if (r0 && r0.ID) { await b24('crm.requisite.update', { id: r0.ID, fields: rf }); return { requisiteId: r0.ID, created: false }; }
+  } catch (e) { return { requisiteId: null, created: false, error: String(e && e.message || e) }; }
+  // не нашли — создаём с пресетом
+  try {
+    const pl = await b24('crm.requisite.preset.list', { select: ['ID', 'COUNTRY_ID'] });
+    const ps = (pl.result || []);
+    const presetId = (ps.find(p => String(p.COUNTRY_ID) === String(KZ_COUNTRY_ID)) || ps[0] || {}).ID;
+    if (!presetId) return { requisiteId: null, created: false, note: 'не найден пресет реквизита — реквизит пропущен' };
+    const add = await b24('crm.requisite.add', { fields: Object.assign({ ENTITY_TYPE_ID: 4, ENTITY_ID: String(companyId), PRESET_ID: presetId, NAME: 'Реквизиты (ГБДЮЛ)' }, rf) });
+    return { requisiteId: (add && add.result) || null, created: true };
+  } catch (e) { return { requisiteId: null, created: false, error: String(e && e.message || e) }; }
+}
+
+// Предпросмотр: что именно запишем (старое → новое). Ничего не пишет.
+async function previewBin(companyId, bin) {
+  const g = await binLookupFull(bin);
+  if (!g.found) return { ok: false, error: g.error || 'ГБДЮЛ не нашёл БИН', gbd: g };
+  const binCode = await binFieldCode();
+  let cur = {}; try { cur = await companyRaw(companyId) || {}; } catch (e) {}
+  const pick = (...codes) => { for (const c of codes) { if (c && cur[c] != null && String(cur[c]).trim() !== '') return String(cur[c]); } return ''; };
+  const rows = [
+    ['БИН', binCode ? pick(binCode) : '', g.bin],
+    ['Полное название', pick(CMP_F.fullName), g.fullName],
+    ['Руководитель', '', g.ceoName + (g.ceoPosition ? ' (' + g.ceoPosition + ')' : '')],
+    ['Дата регистрации', '', g.regDate],
+    ['ОКЭД', '', g.oked],
+    ['Адрес', pick('ADDRESS', CMP_F.address), g.addressRu],
+    ['Город', pick('ADDRESS_CITY', CMP_F.city), g.cityName],
+    ['Индекс', pick('ADDRESS_POSTAL_CODE'), g.postalCode],
+    ['Регион', pick('ADDRESS_PROVINCE'), g.region],
+    ['НДС', '', g.isNds ? 'Да' : 'Нет'],
+    ['Статус', '', g.statusText],
+  ];
+  return {
+    ok: true, company: { id: String(companyId), title: cur.TITLE || ('#' + companyId) },
+    statusActive: g.statusActive,
+    fields: rows.map(([label, oldv, newv]) => ({ label, old: String(oldv == null ? '' : oldv), new: String(newv == null ? '' : newv) })),
+  };
+}
+
+// Запись подтверждённого БИН: компания напрямую + реквизит. Перезаписывает поля.
+async function applyBin(companyId, bin) {
+  companyId = String(companyId || '');
+  if (!companyId) return { ok: false, error: 'не указан id компании' };
+  const g = await binLookupFull(bin);
+  if (!g.found) return { ok: false, error: g.error || 'ГБДЮЛ не нашёл БИН', gbd: g };
+  const binCode = await binFieldCode();
+  const compFields = companyFieldsFromGbd(g, binCode);
+  let companyUpdated = false, companyError = null;
+  try { const r = await b24('crm.company.update', { id: companyId, fields: compFields }); companyUpdated = !!(r && r.result); }
+  catch (e) { companyError = String(e && e.message || e); }
+  const requisite = await upsertRequisite(companyId, g);
+  try { await pool.query('UPDATE ticketsmodule_companies SET bin=$1 WHERE id=$2', [g.bin, companyId]); } catch (e) {}
+  return {
+    ok: companyUpdated || !!(requisite && requisite.requisiteId),
+    companyUpdated, companyError, requisite,
+    written: { companyFields: Object.keys(compFields), requisite: ['RQ_BIN', 'RQ_COMPANY_FULL_NAME', 'RQ_CEO_NAME', 'RQ_DIRECTOR', 'RQ_COMPANY_REG_DATE', 'RQ_OKVED', 'RQ_VAT_PAYER'] },
+    bin: g.bin, statusActive: g.statusActive, statusText: g.statusText,
+  };
+}
+
 module.exports = {
   ensureSchema, syncCompanies, getCompaniesBoard, updateCompany, industryOptions,
   getDuplicateGroups, getCompanyDeals, previewMerge, applyMerge, undoMerge, undoAllMerges, listMerges, deleteCompany, writeSelfTest,
-  companyRequisite, renameDiag, binInspect,
+  companyRequisite, renameDiag, binInspect, previewBin, applyBin,
 };

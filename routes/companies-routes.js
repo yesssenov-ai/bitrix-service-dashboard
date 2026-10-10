@@ -38,6 +38,18 @@ router.get('/bin-inspect', requireAuth(EDIT), async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Предпросмотр заполнения БИН (старое→новое). Ничего не пишет.
+router.get('/bin-preview', requireAuth(EDIT), async (req, res) => {
+  try { res.json(await require('../companies-calc').previewBin(req.query.id, req.query.bin)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Запись подтверждённого БИН в карточку Б24 (компания + реквизит). Перезаписывает поля.
+router.post('/bin-apply', requireAuth(EDIT), express.json(), async (req, res) => {
+  try { const { id, bin } = req.body || {}; res.json(await require('../companies-calc').applyBin(id, bin)); }
+  catch (e) { console.error('bin-apply:', e.message); res.status(500).json({ error: e.message }); }
+});
+
 // Диагностика переименования: поле короткого имени (источник БП), TITLE,
 // заполненные UF-поля и реквизит — чтобы сверить, откуда БП берёт Название.
 router.get('/:id/requisite', requireAuth(EDIT), async (req, res) => {

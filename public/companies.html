@@ -128,6 +128,19 @@ details>summary::-webkit-details-marker{display:none}
 .cvbar.clk{cursor:pointer}
 .cvbar.clk:hover .nm{color:var(--text)}
 .cvbar.clk:hover .cvtrack i{filter:brightness(1.12)}
+/* Заполнение БИН */
+.binadd{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:700;color:var(--accent);border:1px solid var(--accent-line);border-radius:7px;padding:2px 8px;cursor:pointer}
+.binadd:hover{background:var(--accent-weak)}
+.bintbl{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:4px}
+.bintbl th{text-align:left;color:var(--text-3);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:6px 8px;border-bottom:1px solid var(--border)}
+.bintbl td{padding:7px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+.bintbl .bl{color:var(--text-3);white-space:nowrap}
+.bintbl .bo{color:var(--text-3)}
+.bintbl .bn{color:var(--text)}
+.bintbl .bn.chg{color:var(--good);font-weight:600}
+.apply2{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px;padding-top:11px;border-top:1px solid var(--border)}
+.apply2 .hint{flex:1;min-width:200px}
+.okbox{background:color-mix(in srgb,var(--good) 12%,var(--card));border:1px solid var(--good);border-radius:9px;padding:10px 12px;font-size:12.5px;color:var(--text-2)}
 </style>
 </head>
 <body>
@@ -245,6 +258,37 @@ function renderCharts(){const rows=DATA.rows||[];const withBin=rows.filter(r=>r.
   cvDonut(withBin,rows.length-withBin);
   cvBars('cvSpheres',cvTop(cvGroup('industryName'),6),'industryName');
   cvBars('cvOwners',cvTop(cvGroup('owner'),6),'owner');}
+// ── Заполнение БИН из ГБДЮЛ (предпросмотр → запись с подтверждением) ──
+let BINCTX=null;
+function openBin(id,title){BINCTX={id,title};
+  openModal('Заполнение БИН · '+esc(title),
+    `<div class="hint" style="margin-bottom:10px">Впишите БИН (12 цифр) — проверим в ГБДЮЛ и покажем, что запишется. Поля карточки перезаписываются данными ГБДЮЛ (источник правды).</div>
+     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+       <input id="binInput" type="text" inputmode="numeric" maxlength="12" placeholder="БИН (12 цифр)" style="font-family:ui-monospace,Consolas,monospace;width:190px" onkeydown="if(event.key==='Enter')checkBin()">
+       <button class="rbtn" onclick="checkBin()">Проверить в ГБДЮЛ</button>
+     </div>
+     <div id="binResult" style="margin-top:12px"></div>`,
+    '<button class="rbtn ghost" onclick="closeModal()">Закрыть</button>');
+  setTimeout(()=>{const i=document.getElementById('binInput');if(i)i.focus();},60);}
+async function checkBin(){const bin=((document.getElementById('binInput')||{}).value||'').replace(/\D/g,'');
+  const box=document.getElementById('binResult');
+  if(bin.length!==12){box.innerHTML='<div class="warnbox">БИН должен содержать 12 цифр.</div>';return;}
+  box.innerHTML='<div class="hint">Запрашиваю ГБДЮЛ…</div>';
+  const {ok,d}=await api('/api/companies/bin-preview?id='+encodeURIComponent(BINCTX.id)+'&bin='+encodeURIComponent(bin));
+  if(!ok||!d.ok){box.innerHTML='<div class="warnbox">'+esc((d&&d.error)||'Не удалось получить данные ГБДЮЛ')+'</div>';return;}
+  const rowsH=(d.fields||[]).map(f=>{const chg=String(f.old).trim()!==String(f.new).trim()&&String(f.new).trim()!=='';
+    return `<tr><td class="bl">${esc(f.label)}</td><td class="bo">${f.old?esc(f.old):'<span class="muted">—</span>'}</td><td class="bn ${chg?'chg':''}">${f.new?esc(f.new):'<span class="muted">—</span>'}</td></tr>`;}).join('');
+  const warn=d.statusActive?'':'<div class="warnbox" style="margin-bottom:8px">⚠ По ГБДЮЛ компания не действующая — будет поднят Red Flag.</div>';
+  box.innerHTML=warn+`<table class="bintbl"><thead><tr><th>Поле</th><th>Сейчас</th><th>Из ГБДЮЛ</th></tr></thead><tbody>${rowsH}</tbody></table>
+    <div class="apply2"><span class="hint">Запись идёт в реальную карточку Битрикса (компания + реквизит).</span>
+    <button class="rbtn" id="binApplyBtn" onclick="applyBinNow('${esc(bin)}')">✓ Применить и записать</button></div>`;}
+async function applyBinNow(bin){const b=document.getElementById('binApplyBtn');if(b){b.disabled=true;b.textContent='Записываю…';}
+  const r=await fetch('/api/companies/bin-apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:BINCTX.id,bin})});
+  let d={};try{d=await r.json();}catch(e){}
+  const box=document.getElementById('binResult');
+  if(!r.ok||!d.ok){if(b){b.disabled=false;b.textContent='✓ Применить и записать';}box.innerHTML='<div class="warnbox">Ошибка записи: '+esc((d&&(d.error||d.companyError))||'неизвестно')+'</div>';return;}
+  box.innerHTML='<div class="okbox">✓ Записано в Битрикс'+(d.requisite&&d.requisite.created?' (создан реквизит)':'')+'. Обновляю список…</div>';
+  await load(); setTimeout(closeModal,900);}
 function fill(id,arr){const el=document.getElementById(id);el.innerHTML='<option value="">Все</option>'+arr.map(x=>`<option>${esc(x)}</option>`).join('');}
 function setQuick(f){document.getElementById('fProb').value=(f==='noind'||f==='nobin'||f==='dup')?f:'';render();
   document.querySelectorAll('.kpi').forEach(k=>k.classList.toggle('on',k.dataset.f===f&&f!==''));}
@@ -278,7 +322,7 @@ function render(){
       <td><input type="checkbox" class="regchk" value="${esc(r.id)}" ${SEL.has(r.id)?'checked':''} onchange="toggleSel('${esc(r.id)}',this.checked)"></td>
       <td><span class="ttl">${esc(r.title)||'<span class=muted>без названия</span>'}</span>${b24link(r.url)}<span class="ed" title="Переименовать" onclick="editTitle('${esc(r.id)}',this)">✎</span><span class="savemsg" id="msg-${esc(r.id)}"></span></td>
       <td>${sph}</td>
-      <td>${r.bin?esc(r.bin):'<span class="muted">—</span>'}</td>
+      <td>${r.bin?esc(r.bin):`<span class="binadd" title="Заполнить БИН из ГБДЮЛ" onclick="openBin('${esc(r.id)}',${JSON.stringify(r.title||'').replace(/"/g,'&quot;')})">＋ ГБДЮЛ</span>`}</td>
       <td>${esc(r.owner)||'<span class="muted">—</span>'}</td>
       <td>${esc(r.city)||'<span class="muted">—</span>'}</td>
       <td class="num">${dealsCell(r.id,r.title,r.dealCount)}</td>
