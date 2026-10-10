@@ -1013,6 +1013,7 @@ async function binInspect(bin) {
 // Поля карточки компании (куда класть). Коды подтверждены диагностикой bin-inspect;
 // переопределяются через env на случай смены портала.
 const CMP_F = {
+  bin:      process.env.CMP_BIN_FIELD      || 'UF_CRM_1731860381837', // «БИН» (видимое поле карточки, НЕ поле аппы UF_CRM_SEARCH_BIN)
   fullName: process.env.CMP_FULLNAME_FIELD || 'UF_CRM_1731859434440', // «Полное название компании»
   address:  process.env.CMP_ADDR_FIELD     || 'UF_CRM_1731860820223', // «Адрес»
   city:     process.env.CMP_CITY_FIELD     || 'UF_CRM_1731860808967', // «Населенный пункт»
@@ -1141,18 +1142,38 @@ async function applyBin(companyId, bin) {
   if (!companyId) return { ok: false, error: 'не указан id компании' };
   const g = await binLookupFull(bin);
   if (!g.found) return { ok: false, error: g.error || 'ГБДЮЛ не нашёл БИН', gbd: g };
-  const binCode = await binFieldCode();
+  // Явный код поля БИН: env → автоопределение, но НИКОГДА поле аппы UF_CRM_SEARCH_BIN.
+  let binCode = process.env.CMP_BIN_FIELD || '';
+  if (!binCode) { try { binCode = await binFieldCode(); } catch (e) {} }
+  if (!binCode || binCode === 'UF_CRM_SEARCH_BIN') binCode = (CMP_F.bin || 'UF_CRM_1731860381837');
   const compFields = companyFieldsFromGbd(g, binCode);
-  let companyUpdated = false, companyError = null;
-  try { const r = await b24('crm.company.update', { id: companyId, fields: compFields }); companyUpdated = !!(r && r.result); }
-  catch (e) { companyError = String(e && e.message || e); }
+  // 1) запись в компанию
+  let rawCompanyResult = null, companyError = null;
+  try {
+    const r = await b24('crm.company.update', { id: companyId, fields: compFields });
+    rawCompanyResult = (r && r.result !== undefined) ? r.result : null;
+    if (r && r.error) companyError = String(r.error_description || r.error);
+  } catch (e) { companyError = String(e && e.message || e); }
+  // 2) контрольное чтение — какие поля реально легли (а какие откатил БП/валидация)
+  let after = {}; try { after = await companyRaw(companyId) || {}; } catch (e) {}
+  const norm = v => String(v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : v)).trim();
+  const verify = {};
+  for (const code of Object.keys(compFields)) {
+    const want = norm(compFields[code]), got = norm(after[code]);
+    verify[code] = { want: want.slice(0, 90), got: got.slice(0, 90), ok: want !== '' && (got === want || got.includes(want)) };
+  }
+  const companyApplied = Object.values(verify).some(v => v.ok);
+  // 3) реквизит (RQ_BIN и пр.)
   const requisite = await upsertRequisite(companyId, g);
-  try { await pool.query('UPDATE ticketsmodule_companies SET bin=$1 WHERE id=$2', [g.bin, companyId]); } catch (e) {}
+  // 4) локальное зеркало — только если реально применилось
+  if (companyApplied) { try { await pool.query('UPDATE ticketsmodule_companies SET bin=$1 WHERE id=$2', [g.bin, companyId]); } catch (e) {} }
   return {
-    ok: companyUpdated || !!(requisite && requisite.requisiteId),
-    companyUpdated, companyError, requisite,
-    written: { companyFields: Object.keys(compFields), requisite: ['RQ_BIN', 'RQ_COMPANY_FULL_NAME', 'RQ_CEO_NAME', 'RQ_DIRECTOR', 'RQ_COMPANY_REG_DATE', 'RQ_OKVED', 'RQ_VAT_PAYER'] },
+    ok: companyApplied,
+    companyApplied, companyError, rawCompanyResult, binField: binCode,
+    requisite, verify,
+    written: { companyFields: Object.keys(compFields) },
     bin: g.bin, statusActive: g.statusActive, statusText: g.statusText,
+    hint: companyApplied ? undefined : 'Б24 не применил поля компании — вероятно бизнес-процесс откатывает запись, валидация поля или нет прав вебхука. Детали — в verify (want/got).',
   };
 }
 

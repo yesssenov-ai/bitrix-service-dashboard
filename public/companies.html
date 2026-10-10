@@ -286,9 +286,11 @@ async function applyBinNow(bin){const b=document.getElementById('binApplyBtn');i
   const r=await fetch('/api/companies/bin-apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:BINCTX.id,bin})});
   let d={};try{d=await r.json();}catch(e){}
   const box=document.getElementById('binResult');
-  if(!r.ok||!d.ok){if(b){b.disabled=false;b.textContent='✓ Применить и записать';}box.innerHTML='<div class="warnbox">Ошибка записи: '+esc((d&&(d.error||d.companyError))||'неизвестно')+'</div>';return;}
+  if(!r.ok||!d.ok){if(b){b.disabled=false;b.textContent='✓ Применить и записать';}
+    let vsum='';try{if(d.verify){const bad=Object.keys(d.verify).filter(k=>!d.verify[k].ok);if(bad.length)vsum='<div class="hint" style="margin-top:6px">Б24 не применил поля: '+bad.map(esc).join(', ')+'</div>';}}catch(e){}
+    box.innerHTML='<div class="warnbox">Не записалось в Битрикс: '+esc((d&&(d.companyError||d.hint||d.error))||'неизвестно')+'</div>'+vsum;return;}
   box.innerHTML='<div class="okbox">✓ Записано в Битрикс'+(d.requisite&&d.requisite.created?' (создан реквизит)':'')+'. Обновляю список…</div>';
-  await load(); setTimeout(closeModal,900);}
+  await load(); setTimeout(closeModal,1100);}
 function fill(id,arr){const el=document.getElementById(id);el.innerHTML='<option value="">Все</option>'+arr.map(x=>`<option>${esc(x)}</option>`).join('');}
 function setQuick(f){document.getElementById('fProb').value=(f==='noind'||f==='nobin'||f==='dup')?f:'';render();
   document.querySelectorAll('.kpi').forEach(k=>k.classList.toggle('on',k.dataset.f===f&&f!==''));}
