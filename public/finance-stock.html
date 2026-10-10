@@ -46,6 +46,21 @@ tr:hover td{background:var(--bg2)}
 .nm{white-space:normal;min-width:250px;max-width:380px;color:var(--text)}
 tfoot td{position:sticky;bottom:0;background:var(--card);font-weight:700;border-top:2px solid var(--border2)}
 .hint{color:var(--text-3);padding:20px;font-size:13px}
+/* ── Мультивыбор (как слайсеры Power BI) ─────────────────── */
+.ms{position:relative;min-width:180px}
+.ms-btn{width:100%;text-align:left;background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:8px 26px 8px 10px;font-size:13px;color:var(--text);font-family:var(--font);cursor:pointer;position:relative;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ms-btn::after{content:'▾';position:absolute;right:9px;top:50%;transform:translateY(-50%);color:var(--text-3);font-size:11px}
+.ms-btn.on{border-color:var(--accent);color:var(--accent)}
+.ms-pop{position:absolute;z-index:60;top:calc(100% + 4px);left:0;width:280px;max-width:84vw;background:var(--card);border:1px solid var(--border2);border-radius:10px;box-shadow:0 12px 32px rgba(20,25,35,.16);padding:8px;display:none}
+.ms-pop.open{display:block}
+.ms-srch{width:100%;margin-bottom:6px;min-width:0}
+.ms-all{display:flex;align-items:center;gap:8px;padding:5px 6px;font-size:11.5px;color:var(--text-3);border-bottom:1px solid var(--border);margin-bottom:4px;cursor:pointer;user-select:none}
+.ms-list{max-height:280px;overflow:auto}
+.ms-opt{display:flex;align-items:center;gap:8px;padding:5px 6px;font-size:12.5px;border-radius:6px;cursor:pointer;user-select:none}
+.ms-opt:hover{background:var(--bg2)}
+.ms-opt input,.ms-all input{accent-color:var(--accent);flex-shrink:0}
+.ms-opt span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ms-empty{color:var(--text-3);font-size:11.5px;padding:8px 6px}
 </style>
 </head>
 <body>
@@ -62,10 +77,11 @@ tfoot td{position:sticky;bottom:0;background:var(--card);font-weight:700;border-
 </header>
 
 <div class="filters">
-  <div><label class="fl">№ заказа</label><select id="fOrder" onchange="render()"><option value="">Все</option></select></div>
-  <div><label class="fl">Производитель</label><select id="fMfr" onchange="render()"><option value="">Все</option></select></div>
-  <div><label class="fl">Склад</label><select id="fStore" onchange="render()"><option value="">Все</option></select></div>
-  <div style="flex:1;min-width:220px"><label class="fl">Поиск (номенклатура / код / партномер)</label><input type="text" id="fSearch" placeholder="Поиск…" oninput="render()" style="width:100%"></div>
+  <div><label class="fl">Склад</label><div id="fStore"></div></div>
+  <div><label class="fl">Номенклатура</label><div id="fName"></div></div>
+  <div><label class="fl">№ заказа</label><div id="fOrder"></div></div>
+  <div><label class="fl">Производитель</label><div id="fMfr"></div></div>
+  <div style="flex:1;min-width:200px"><label class="fl">Быстрый поиск (номенклатура / код / партномер)</label><input type="text" id="fSearch" placeholder="начните вводить…" oninput="render()" style="width:100%"></div>
 </div>
 
 <div class="card">
@@ -88,6 +104,43 @@ let DATA={rows:[],totals:{},filters:{}};
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const fmt=n=>Math.round(Number(n)||0).toLocaleString('ru-RU').replace(/,/g,' ');
 const dt=s=>s?new Date(s).toLocaleDateString('ru-RU'):'';
+/* ── Мультивыбор с поиском и «выбрать все» (слайсер как в Power BI) ──────── */
+function createMulti(sel){
+  const host=document.querySelector(sel);host.classList.add('ms');
+  host.innerHTML='<button type="button" class="ms-btn">Все</button><div class="ms-pop"><input type="text" class="ms-srch" placeholder="Поиск…"><div class="ms-all"><input type="checkbox"><span>Выбрать все</span></div><div class="ms-list"></div></div>';
+  const btn=host.querySelector('.ms-btn'),pop=host.querySelector('.ms-pop'),srch=host.querySelector('.ms-srch'),list=host.querySelector('.ms-list'),allRow=host.querySelector('.ms-all'),allcb=allRow.querySelector('input');
+  let items=[],selSet=new Set(),cb=null;
+  function visible(){const q=(srch.value||'').toLowerCase();return q?items.filter(it=>it.label.toLowerCase().includes(q)):items;}
+  function syncAll(){const vis=visible();allcb.checked=vis.length>0&&vis.every(it=>selSet.has(it.value));}
+  function renderBtn(){
+    let t='Все';
+    if(selSet.size===1){const it=items.find(x=>x.value===[...selSet][0]);t=it?it.label:'1 выбрано';}
+    else if(selSet.size>1)t=selSet.size+' выбрано';
+    btn.textContent=t;btn.title=t;btn.classList.toggle('on',selSet.size>0);
+  }
+  function renderList(){
+    const vis=visible();
+    list.innerHTML=vis.length?vis.map(it=>`<label class="ms-opt"><input type="checkbox" value="${esc(it.value)}" ${selSet.has(it.value)?'checked':''}><span title="${esc(it.label)}">${esc(it.label)}</span></label>`).join(''):'<div class="ms-empty">ничего не найдено</div>';
+    syncAll();
+  }
+  function render(){renderList();renderBtn();}
+  // отметка пункта НЕ перестраивает список (сохраняем прокрутку), обновляем только кнопку
+  list.addEventListener('change',e=>{const el=e.target;if(el.type!=='checkbox')return;if(el.checked)selSet.add(el.value);else selSet.delete(el.value);syncAll();renderBtn();cb&&cb();});
+  allcb.addEventListener('change',()=>{const vis=visible();if(allcb.checked)vis.forEach(it=>selSet.add(it.value));else vis.forEach(it=>selSet.delete(it.value));renderList();renderBtn();cb&&cb();});
+  allRow.addEventListener('click',e=>{if(e.target!==allcb){allcb.checked=!allcb.checked;allcb.dispatchEvent(new Event('change'));}});
+  srch.addEventListener('input',render);srch.addEventListener('click',e=>e.stopPropagation());
+  btn.addEventListener('click',e=>{e.stopPropagation();const open=pop.classList.contains('open');document.querySelectorAll('.ms-pop.open').forEach(p=>p.classList.remove('open'));if(!open){pop.classList.add('open');srch.value='';setTimeout(()=>srch.focus(),0);render();}});
+  pop.addEventListener('click',e=>e.stopPropagation());
+  document.addEventListener('click',()=>pop.classList.remove('open'));
+  return {
+    setItems(arr){items=(arr||[]).map(x=>typeof x==='string'?{value:x,label:x}:x);render();},
+    setSelected(v){selSet=new Set(v||[]);render();},
+    getSelected(){return [...selSet];},
+    onChange(fn){cb=fn;}
+  };
+}
+const mStore=createMulti('#fStore'),mName=createMulti('#fName'),mOrder=createMulti('#fOrder'),mMfr=createMulti('#fMfr');
+[mStore,mName,mOrder,mMfr].forEach(m=>m.onChange(()=>render()));
 async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.href='/login.html';return{ok:false,d:{}}}let d={};try{d=await r.json()}catch(e){}return{ok:r.ok,d}}
 async function boot(){const r=await fetch('/auth/me');if(!r.ok){location.href='/login.html';return;}await load();}
 async function load(){
@@ -98,19 +151,24 @@ async function load(){
   if(d.error){_a.innerHTML='Данные от '+(d.asOf?new Date(d.asOf).toLocaleString('ru-RU'):'—')+' · <span style="color:var(--bad)">⚠ обновить не удалось</span>';_a.title=String(d.error);}
   else{_a.textContent=d.asOf?('По состоянию на '+new Date(d.asOf).toLocaleString('ru-RU')):'';_a.title='';}
   document.getElementById('mockBadge').style.display=d.mock?'inline-block':'none';
-  const opt=(arr)=>'<option value="">Все</option>'+(arr||[]).map(x=>`<option>${esc(x)}</option>`).join('');
-  document.getElementById('fOrder').innerHTML=opt(d.filters.orders);
-  document.getElementById('fMfr').innerHTML=opt(d.filters.manufacturers);
   const stores=d.filters.stores||[];
-  document.getElementById('fStore').innerHTML='<option value="">Все склады</option>'+stores.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}${s.amount?` · ${fmt(s.amount)}`:''}</option>`).join('');
-  if(d.defaultStore)document.getElementById('fStore').value=d.defaultStore;
+  mStore.setItems(stores.map(s=>({value:s.id,label:s.name+(s.amount?(' · '+fmt(s.amount)):'')})));
+  mStore.setSelected(d.defaultStore?[d.defaultStore]:[]);
+  mName.setItems([...new Set((d.rows||[]).map(r=>r.name).filter(Boolean))].sort());
+  mOrder.setItems(d.filters.orders||[]);
+  mMfr.setItems(d.filters.manufacturers||[]);
   document.getElementById('stockNote').textContent=d.account?('счёт '+d.account):'';
   render();
 }
 function filtered(){
-  const o=document.getElementById('fOrder').value,m=document.getElementById('fMfr').value,s=document.getElementById('fStore').value;
+  const s=mStore.getSelected(),nm=mName.getSelected(),o=mOrder.getSelected(),m=mMfr.getSelected();
   const q=(document.getElementById('fSearch').value||'').toLowerCase();
-  return (DATA.rows||[]).filter(r=>(!o||r.order_no===o)&&(!m||r.manufacturer===m)&&(!s||r.store_id===s)&&(!q||((r.name||'')+' '+(r.item_code||'')+' '+(r.part_no||'')).toLowerCase().includes(q)));
+  return (DATA.rows||[]).filter(r=>
+    (!s.length||s.includes(r.store_id))&&
+    (!nm.length||nm.includes(r.name))&&
+    (!o.length||o.includes(r.order_no))&&
+    (!m.length||m.includes(r.manufacturer))&&
+    (!q||((r.name||'')+' '+(r.item_code||'')+' '+(r.part_no||'')).toLowerCase().includes(q)));
 }
 function render(){
   const rows=filtered();

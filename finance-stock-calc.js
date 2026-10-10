@@ -10,10 +10,17 @@ const onecMod = require('./onec');
 //   ONEC_STOCK_STORE    — store_id «Основного склада» (предвыбор фильтра «Склад»).
 const STOCK_ACCOUNTS = (process.env.ONEC_STOCK_ACCOUNTS || '1330').split(',').map(s => s.trim()).filter(Boolean);
 const STOCK_MAIN_STORE = (process.env.ONEC_STOCK_STORE || '30fbc59e-20f3-11eb-1381-fa163eef77d8').trim();
+// Человеческие имена складов по store_id. 1С отдаёт только GUID, поэтому карту имён
+// задаём через env ONEC_STORE_NAMES (JSON: {"<guid>":"Склад запчастей", ...}).
+// Как только 1С начнёт отдавать имя склада (поле Склад/store_name) — оно подхватится само.
+let STORE_NAMES = {};
+try { STORE_NAMES = JSON.parse(process.env.ONEC_STORE_NAMES || '{}') || {}; } catch (e) { STORE_NAMES = {}; }
 function storeLabel(id, name) {
   if (!id) return name || '—';
+  if (STORE_NAMES[id]) return STORE_NAMES[id];
+  if (name && String(name).trim()) return String(name).trim();
   if (id === STOCK_MAIN_STORE) return 'Основной склад';
-  return name || ('Склад ' + String(id).slice(0, 8));
+  return 'Склад ' + String(id).slice(0, 8);
 }
 
 let _schema = null;
