@@ -388,23 +388,24 @@ async function init() {
 
 function initMap() {
   map = L.map('map', { center: [48.5, 66.9], zoom: 5 });
-  // Базослой зависит от темы. Светлая — CARTO Voyager (современная ДЕТАЛЬНАЯ карта:
-  // города/посёлки/области, дороги, мягкий цвет), тёмная — CARTO Dark Matter.
-  // Если CARTO недоступен (ключ/блокировка) — автоматический откат на Esri (Топо / тёмно-серый),
-  // чтобы карта никогда не осталась пустой. Переключается по теме ЦУП (data-theme на <html>).
+  // Базослой зависит от темы. Светлая — OpenStreetMap (детально: города, посёлки,
+  // дороги; бесплатно, без ключа), тёмная — Esri Dark Gray (тёмная база + подписи,
+  // без ключа). Бесплатные тайлы CARTO с 2026 требуют API-ключ («API KEY REQUIRED»),
+  // поэтому больше не используются. Переключается по теме ЦУП (data-theme на <html>).
   var ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
-  function cartoLayer(style) { return L.tileLayer('https://{s}.basemaps.cartocdn.com/' + style + '/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 19, attribution: '&copy; OpenStreetMap, &copy; CARTO' }); }
-  function esriLight() { return L.tileLayer(ESRI + 'World_Topo_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles &copy; Esri' }); }
+  function osmLight() { return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { subdomains: 'abc', maxZoom: 19, attribution: '&copy; OpenStreetMap' }); }
+  function esriTopo() { return L.tileLayer(ESRI + 'World_Topo_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles &copy; Esri' }); }
   function esriDark() { return L.layerGroup([
     L.tileLayer(ESRI + 'Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 16, maxZoom: 19, attribution: 'Tiles &copy; Esri' }),
     L.tileLayer(ESRI + 'Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 16, maxZoom: 19 }) ]); }
-  var baseLight = cartoLayer('rastertiles/voyager');
-  var baseDark  = cartoLayer('dark_all');
-  var _curBase = null, _fellBack = false;
+  var baseLight = osmLight();
+  var baseDark  = esriDark();
+  var _curBase = null, _fbLight = false;
   function wantDark() { return document.documentElement.getAttribute('data-theme') === 'dark'; }
   function applyBase() { var want = wantDark() ? baseDark : baseLight; if (_curBase === want) return; if (_curBase) map.removeLayer(_curBase); _curBase = want; map.addLayer(_curBase); }
-  function fallback(layer) { var e = 0; layer.on('tileerror', function () { if (_fellBack) return; if (++e >= 4) { _fellBack = true; baseLight = esriLight(); baseDark = esriDark(); _curBase = null; applyBase(); } }); }
-  fallback(baseLight); fallback(baseDark);
+  // Если OSM не отдаёт тайлы (блок/лимит сети) — светлую базу подменяем на Esri Topo.
+  function fbLight(layer) { var e = 0; layer.on('tileerror', function () { if (_fbLight) return; if (++e >= 4) { _fbLight = true; baseLight = esriTopo(); if (!wantDark()) { _curBase = null; applyBase(); } } }); }
+  fbLight(baseLight);
   applyBase();
   try { new MutationObserver(applyBase).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); } catch (e) {}
   clusterGroup = L.markerClusterGroup({

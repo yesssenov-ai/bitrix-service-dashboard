@@ -30,6 +30,14 @@ router.get('/selftest', requireAuth(EDIT), async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Read-only диагностика БИН: GET /api/companies/bin-inspect?bin=XXXXXXXXXXXX
+// Показывает, что отдаёт ГБДЮЛ по БИН + какие поля есть в карточке/реквизитах Б24.
+// НИЧЕГО НЕ ПИШЕТ. Временная — удалить после согласования маппинга полей.
+router.get('/bin-inspect', requireAuth(EDIT), async (req, res) => {
+  try { res.json(await require('../companies-calc').binInspect(req.query.bin)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Диагностика переименования: поле короткого имени (источник БП), TITLE,
 // заполненные UF-поля и реквизит — чтобы сверить, откуда БП берёт Название.
 router.get('/:id/requisite', requireAuth(EDIT), async (req, res) => {

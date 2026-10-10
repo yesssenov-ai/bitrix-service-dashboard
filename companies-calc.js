@@ -955,8 +955,62 @@ async function writeSelfTest(id, { keep = false } = {}) {
   };
 }
 
+// ── Read-only диагностика БИН ────────────────────────────────────────────────
+// Что реально отдаёт ГБДЮЛ по БИН (как в Закупках, тот же провайдер) + какие поля
+// есть в карточке компании и в реквизитах Б24 — чтобы спланировать маппинг
+// «поле ГБДЮЛ → поле Б24» ПЕРЕД записью. НИЧЕГО НЕ ПИШЕТ. Временная (удалить после
+// согласования маппинга). Доступ — только EDIT (admin/coordinator).
+async function binInspect(bin) {
+  bin = String(bin || '').replace(/\D/g, '');
+  const out = { bin, note: 'read-only: ничего не пишет', provider: null, companyFields: null, requisiteFields: null };
+  if (!/^\d{12}$/.test(bin)) out.binWarning = 'БИН должен содержать 12 цифр — провайдер не опрошен (поля Б24 всё равно покажу)';
+
+  // 1) Провайдер ГБДЮЛ — сырой ответ → ключи + плоская выжимка (значения урезаны).
+  if (/^\d{12}$/.test(bin)) {
+    const tmpl = process.env.BIN_LOOKUP_URL || 'https://apiba.prgapp.kz/CompanyFullInfo?id={bin}&lang=ru';
+    const url = tmpl.replace('{bin}', encodeURIComponent(bin));
+    try {
+      const _fetch = (typeof fetch === 'function') ? fetch : require('node-fetch');
+      let ctrl, t; try { ctrl = new AbortController(); t = setTimeout(() => ctrl.abort(), 9000); } catch (e) { ctrl = null; }
+      const opts = { headers: { accept: 'application/json', 'user-agent': 'Mozilla/5.0 (PLS-CUP)', referer: 'https://ba.prg.kz/' } };
+      if (ctrl) opts.signal = ctrl.signal;
+      const r = await _fetch(url, opts);
+      if (t) clearTimeout(t);
+      let json = null; try { json = await r.json(); } catch (e) {}
+      const host = (() => { try { return new URL(url).host; } catch (e) { return ''; } })();
+      const unwrap = v => (v && typeof v === 'object' && 'value' in v) ? v.value : v;
+      const trunc = v => { try { const s = (v && typeof v === 'object') ? JSON.stringify(v) : String(v); return s.length > 140 ? s.slice(0, 140) + '…' : s; } catch (e) { return ''; } };
+      const bi = (json && typeof json === 'object' && (json.basicInfo || (json.data && json.data.basicInfo))) || json || {};
+      const sample = {};
+      if (bi && typeof bi === 'object') for (const k of Object.keys(bi)) sample[k] = trunc(unwrap(bi[k]));
+      out.provider = {
+        host, httpStatus: r.status, ok: r.ok,
+        topKeys: (json && typeof json === 'object') ? Object.keys(json) : [],
+        basicInfoKeys: (bi && typeof bi === 'object') ? Object.keys(bi) : [],
+        sample,
+      };
+    } catch (e) { out.provider = { error: String(e && e.message || e) }; }
+  }
+
+  // 2) Поля КОМПАНИИ Б24 (куда класть): стандартные + UF_* кастомные.
+  try {
+    const { result } = await b24('crm.company.fields');
+    const f = result || {};
+    out.companyFields = Object.keys(f).map(code => ({ code, title: (f[code].formLabel || f[code].title || f[code].listLabel || ''), type: f[code].type }));
+  } catch (e) { out.companyFields = { error: String(e && e.message || e) }; }
+
+  // 3) Поля РЕКВИЗИТА (БИН/адрес/руководитель обычно здесь): RQ_BIN, RQ_ADDR, RQ_DIRECTOR_NAME…
+  try {
+    const { result } = await b24('crm.requisite.fields');
+    const f = result || {};
+    out.requisiteFields = Object.keys(f).map(code => ({ code, title: (f[code].formLabel || f[code].title || ''), type: f[code].type }));
+  } catch (e) { out.requisiteFields = { error: String(e && e.message || e) }; }
+
+  return out;
+}
+
 module.exports = {
   ensureSchema, syncCompanies, getCompaniesBoard, updateCompany, industryOptions,
   getDuplicateGroups, getCompanyDeals, previewMerge, applyMerge, undoMerge, undoAllMerges, listMerges, deleteCompany, writeSelfTest,
-  companyRequisite, renameDiag,
+  companyRequisite, renameDiag, binInspect,
 };
