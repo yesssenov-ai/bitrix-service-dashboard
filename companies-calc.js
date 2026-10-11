@@ -5,6 +5,7 @@
 const { pool } = require('./auth');
 const { b24 } = require('./bitrix');
 const { USERS } = require('./constants');
+const geo = require('./geo');
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const uname = id => id ? (USERS[id] || ('#' + id)) : '';
@@ -30,6 +31,7 @@ function ensureSchema() {
       CREATE INDEX IF NOT EXISTS idx_cmp_industry ON ticketsmodule_companies(industry_id);
       CREATE INDEX IF NOT EXISTS idx_cmp_assigned ON ticketsmodule_companies(assigned_bid);
       ALTER TABLE ticketsmodule_companies ADD COLUMN IF NOT EXISTS merged_into VARCHAR(40);
+      ALTER TABLE ticketsmodule_companies ADD COLUMN IF NOT EXISTS country VARCHAR(4);
       CREATE TABLE IF NOT EXISTS ticketsmodule_company_merges (
         id SERIAL PRIMARY KEY,
         canonical_id VARCHAR(40),
@@ -177,8 +179,9 @@ async function syncCompanies() {
       } catch (e2) { /* зеркала может не быть — не критично */ }
     }
 
-    const select = ['ID', 'TITLE', 'INDUSTRY', 'ASSIGNED_BY_ID', 'DATE_CREATE', 'ADDRESS_CITY', 'EMAIL', 'PHONE'];
+    const select = ['ID', 'TITLE', 'INDUSTRY', 'ASSIGNED_BY_ID', 'DATE_CREATE', 'ADDRESS_CITY', 'EMAIL', 'PHONE', geo.GEO_FIELD_COMPANY];
     if (binCode) select.push(binCode);
+    await geo.loadGeoDir(); // кэш справочника стран — чтобы резолв страны шёл локально
     const rows = [];
     let start = 0, guard = 0;
     while (guard++ < 5000) {
@@ -186,15 +189,18 @@ async function syncCompanies() {
       const arr = res.result || [];
       for (const c of arr) {
         const industryId = c.INDUSTRY || '';
+        const binVal = binCode ? firstVal(c[binCode]) : '';
+        const country = await geo.resolveCountry(c[geo.GEO_FIELD_COMPANY], binVal);
         rows.push({
           id: String(c.ID), title: c.TITLE || '',
           industryId, industryName: inds[industryId] || '',
-          bin: binCode ? firstVal(c[binCode]) : '',
+          bin: binVal,
           email: firstMf(c.EMAIL), phone: firstMf(c.PHONE),
           assignedBid: c.ASSIGNED_BY_ID ? Number(c.ASSIGNED_BY_ID) : null,
           city: c.ADDRESS_CITY || '',
           createdAt: c.DATE_CREATE || null,
           dealCount: dc[String(c.ID)] || 0,
+          country: country || '',
         });
       }
       if (res.next == null) break;
@@ -208,17 +214,17 @@ async function syncCompanies() {
       const batch = rows.slice(i, i + CH);
       const vals = [], ph = [];
       batch.forEach((r, j) => {
-        const b = j * 11;
-        ph.push(`($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11})`);
+        const b = j * 12;
+        ph.push(`($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11},$${b + 12})`);
         vals.push(r.id, r.title || '', r.industryId || '', r.industryName || '', r.bin || '', r.email || '', r.phone || '',
-          r.assignedBid || null, r.city || '', r.createdAt || null, r.dealCount || 0);
+          r.assignedBid || null, r.city || '', r.createdAt || null, r.dealCount || 0, r.country || '');
       });
       await pool.query(
-        `INSERT INTO ticketsmodule_companies (id,title,industry_id,industry_name,bin,email,phone,assigned_bid,city,created_at,deal_count)
+        `INSERT INTO ticketsmodule_companies (id,title,industry_id,industry_name,bin,email,phone,assigned_bid,city,created_at,deal_count,country)
          VALUES ${ph.join(',')} ON CONFLICT (id) DO UPDATE SET
            title=EXCLUDED.title,industry_id=EXCLUDED.industry_id,industry_name=EXCLUDED.industry_name,bin=EXCLUDED.bin,
            email=EXCLUDED.email,phone=EXCLUDED.phone,assigned_bid=EXCLUDED.assigned_bid,city=EXCLUDED.city,
-           created_at=EXCLUDED.created_at,deal_count=EXCLUDED.deal_count,synced_at=NOW()`, vals);
+           created_at=EXCLUDED.created_at,deal_count=EXCLUDED.deal_count,country=EXCLUDED.country,synced_at=NOW()`, vals);
     }
     // После полного пересоздания зеркала возвращаем пометку слитых дублей из журнала,
     // иначе слитые компании «всплывали» бы снова после «Обновить».
@@ -286,6 +292,7 @@ async function getCompaniesBoard() {
       owner: uname(r.assigned_bid), city: r.city || '', createdAt: r.created_at,
       dealCount: Number(r.deal_count || 0), problems,
       mergedInto: r.merged_into || '',
+      country: r.country || '',
       url: base ? `${base}/crm/company/details/${r.id}/` : '',
     };
   });
@@ -1309,8 +1316,32 @@ async function presetInspect() {
   return out;
 }
 
+// Read-only: выгрузка справочника «Город/Область/Страна» (IBLOCK 17) — id→имя(+раздел),
+// чтобы по значению поля определять страну. Пробуем разные типы инфоблока и пагинацию.
+async function geoDir(iblockId) {
+  iblockId = Number(iblockId) || 17;
+  const types = ['lists', 'bitrix_processes', 'lists_socnet'];
+  for (const t of types) {
+    const els = []; let ok = false;
+    for (let start = 0; start < 2000; start += 50) {
+      let r; try { r = await b24('lists.element.get', { IBLOCK_TYPE_ID: t, IBLOCK_ID: iblockId, start }); } catch (e) { break; }
+      const arr = (r && r.result) || [];
+      if (!arr.length) break;
+      ok = true;
+      for (const e of arr) els.push({ id: e.ID, name: e.NAME, section: e.IBLOCK_SECTION_ID || (e.SECTION && e.SECTION[0]) || null });
+      if (arr.length < 50) break;
+    }
+    if (ok) {
+      let sections = null;
+      try { const s = await b24('lists.section.get', { IBLOCK_TYPE_ID: t, IBLOCK_ID: iblockId }); sections = ((s && s.result) || []).map(x => ({ id: x.ID, name: x.NAME, parent: x.IBLOCK_SECTION_ID || null })); } catch (e) {}
+      return { iblockId, iblockType: t, count: els.length, elements: els.slice(0, 1000), sections };
+    }
+  }
+  return { iblockId, error: 'не удалось перечислить IBLOCK ' + iblockId + ' (lists.element.get). Возможно, это не «Универсальный список».' };
+}
+
 module.exports = {
   ensureSchema, syncCompanies, getCompaniesBoard, updateCompany, industryOptions,
   getDuplicateGroups, getCompanyDeals, previewMerge, applyMerge, undoMerge, undoAllMerges, listMerges, deleteCompany, writeSelfTest,
-  companyRequisite, renameDiag, binInspect, previewBin, applyBin, countryInspect, presetInspect,
+  companyRequisite, renameDiag, binInspect, previewBin, applyBin, countryInspect, presetInspect, geoDir,
 };
