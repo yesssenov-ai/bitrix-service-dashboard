@@ -7,6 +7,7 @@
 <meta name="theme-color" content="#f6f7f9">
 <script>(function(){try{var m=localStorage.getItem('pls-theme');document.documentElement.setAttribute('data-theme',m==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
 <link rel="stylesheet" href="/assets/cup-ui.css">
+<script src="/assets/pls-flags.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 /* Переведено на общую дизайн-систему cup-ui.css: карта токенов страницы → общие токены. */
@@ -171,6 +172,7 @@ async function boot(){
   await load();
 }
 async function load(){
+  try{await PLSFlags.loadCountryMap();}catch(e){}
   const {ok,d}=await api('/api/finance/debt');
   if(!ok){document.getElementById('debtBody').innerHTML='<tr><td class="hint">Ошибка загрузки</td></tr>';return;}
   DATA=d;
@@ -202,7 +204,7 @@ function render(){
   const names=Object.keys(groups).sort((a,b)=>groups[b].reduce((s,r)=>s+r.debt,0)-groups[a].reduce((s,r)=>s+r.debt,0));
   body.innerHTML=names.length?names.map(nm=>{
     const g=groups[nm];const tot=g.reduce((s,r)=>s+r.debt,0);
-    const head=`<tr class="grp"><td>${esc(nm)}</td><td class="num">${fmt(tot)}</td><td></td><td class="dept">${esc(g[0].department||'')}</td></tr>`;
+    const head=`<tr class="grp"><td>${flagByCompany(nm)}${esc(nm)}</td><td class="num">${fmt(tot)}</td><td></td><td class="dept">${esc(g[0].department||'')}</td></tr>`;
     const subs=g.map(r=>{
       const deal=r.bitrix_deal_id?` <a href="https://crm.prolabsupport.kz/crm/deal/details/${esc(r.bitrix_deal_id)}/" target="_blank" style="color:var(--brand);text-decoration:none;font-size:11.5px" title="Сделка Битрикса">🔗 #${esc(r.bitrix_deal_id)}</a>`:' <span style="color:var(--warn);font-size:11px" title="Нет ID сделки Битрикса в 1С">⚠ нет связи</span>';
       return `<tr class="sub"><td>${esc(r.contract)}${deal}</td><td class="num">${fmt(r.debt)}</td><td class="num"><span class="days ${r.overdue_days>0?'over':'ok'}">${r.overdue_days>0?'+':''}${r.overdue_days}</span></td><td class="dept">${esc(r.department||'')}</td></tr>`;

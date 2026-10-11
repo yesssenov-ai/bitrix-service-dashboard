@@ -7,6 +7,7 @@
 <meta name="theme-color" content="#f6f7f9">
 <script>(function(){try{var m=localStorage.getItem('pls-theme');document.documentElement.setAttribute('data-theme',m==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
 <link rel="stylesheet" href="/assets/cup-ui.css">
+<script src="/assets/pls-flags.js"></script>
 <link rel="icon" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <style>
@@ -364,6 +365,7 @@ async function reloadIfChanged(){
 }
 async function load(){
   try{
+    try{await PLSFlags.loadCountryMap();}catch(e){}
     await fetchData();
     const yrs=(DATA.meta.years||[]);
     const cy=yrs.includes(now.getFullYear())?now.getFullYear():(yrs[yrs.length-1]||now.getFullYear());
@@ -597,7 +599,7 @@ function orderedYM(deals){
 function dealHtml(d){
   return `<div class="dealwrap">
     <div class="deal ${d.likely?'likely':''}">
-      <span class="dn"><b>${esc(d.title)}</b>${d.company?` · <span class="co">${esc(d.company)}</span>`:''}${d.endUser?` · <span class="eu${d.endUserDiffers?' diff':''}" title="Конечный пользователь${d.endUserDiffers?' — отличается от компании':' (совпадает с компанией)'}">🏭 ${esc(d.endUser)}</span>`:''}</span>
+      <span class="dn"><b>${esc(d.title)}</b>${d.company?` · <span class="co">${flagByCompany(d.company)}${esc(d.company)}</span>`:''}${d.endUser?` · <span class="eu${d.endUserDiffers?' diff':''}" title="Конечный пользователь${d.endUserDiffers?' — отличается от компании':' (совпадает с компанией)'}">🏭 ${esc(d.endUser)}</span>`:''}</span>
       ${d.stuck?`<span class="stuckb" title="Не двигается ${d.stuckDays} дн.${d.lastMoved?' (с '+d.lastMoved+')':''} — стоит на одной стадии больше 3 мес.">⚠</span>`:''}
       ${d.likely?'<span class="lk">⚡</span>':''}
       <span class="stg ${d.step}">${d.step}</span>
@@ -1033,7 +1035,7 @@ load();
   }
 })();
 </script>
-  <script src="/assets/pls-ai.js?v=17" defer></script>
+  <script src="/assets/pls-ai.js?v=16" defer></script>
 <script src="/assets/cup-theme.js" defer></script>
 </body>
 </html>

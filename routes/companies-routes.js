@@ -12,6 +12,12 @@ router.get('/', requireAuth([]), async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Карта «название компании → страна» для флагов в других модулях (любой авторизованный).
+router.get('/country-map', requireAuth([]), async (req, res) => {
+  try { res.set('Cache-Control', 'private, max-age=300'); res.json(await require('../companies-calc').countryMap()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Группы-кандидаты на дубль (Фаза 2 — только обнаружение)
 router.get('/duplicates', requireAuth([]), async (req, res) => {
   try { res.json(await require('../companies-calc').getDuplicateGroups()); }
@@ -54,6 +60,12 @@ router.get('/country-inspect', requireAuth(EDIT), async (req, res) => {
 // Read-only: пресеты реквизитов + их поля. GET /api/companies/preset-inspect. Временная.
 router.get('/preset-inspect', requireAuth(EDIT), async (req, res) => {
   try { res.json(await require('../companies-calc').presetInspect()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Read-only: справочник Город/Область/Страна. GET /api/companies/geo-dir?iblock=17. Временная.
+router.get('/geo-dir', requireAuth(EDIT), async (req, res) => {
+  try { res.json(await require('../companies-calc').geoDir(req.query.iblock)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -7,6 +7,7 @@
 <meta name="theme-color" content="#f6f7f9">
 <script>(function(){try{var m=localStorage.getItem('pls-theme');document.documentElement.setAttribute('data-theme',m==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
 <link rel="stylesheet" href="/assets/cup-ui.css">
+<script src="/assets/pls-flags.js"></script>
 <link rel="icon" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -412,7 +413,7 @@ function orderCard(o){
   return `<div class="${cls}">
     <div class="o-head">
       <div class="o-title"><a class="o-instr" href="${o.purchUrl||'#'}" target="_blank" title="Открыть закупку в Bitrix">${titleMain}</a>
-        <div class="o-meta">${esc(o.manufacturer||'')}${o.manufacturer?' · ':''}${esc(mgr||'—')}${o.cityCountry?' · '+esc(o.cityCountry):''}${o.contractDate?' · договор '+dfmt(o.contractDate):''} · закупка #${o.id}</div></div>
+        <div class="o-meta">${esc(o.manufacturer||'')}${o.manufacturer?' · ':''}${esc(mgr||'—')}${o.cityCountry?' · '+flagByName(o.cityCountry)+esc(o.cityCountry):''}${o.contractDate?' · договор '+dfmt(o.contractDate):''} · закупка #${o.id}</div></div>
       <div class="o-badges">
         <span class="badge dept">${esc(o.dept)}</span>
         ${o.licensed?'<span class="badge lic" title="Лицензируемый товар · срок по договору 180 дн">лицензия · 180д</span>':''}

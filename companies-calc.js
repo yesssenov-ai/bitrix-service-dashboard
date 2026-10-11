@@ -1340,8 +1340,26 @@ async function geoDir(iblockId) {
   return { iblockId, error: 'не удалось перечислить IBLOCK ' + iblockId + ' (lists.element.get). Возможно, это не «Универсальный список».' };
 }
 
+// Карта «нормализованное название компании → страна (ISO2)» для флагов в других
+// модулях (сделки/финансы показывают НАЗВАНИЕ контрагента). Берём из зеркала компаний.
+const _ORG = { 'тоо': 1, 'ооо': 1, 'оао': 1, 'зао': 1, 'ао': 1, 'пао': 1, 'ип': 1, 'чп': 1, 'чк': 1, 'ргп': 1, 'кгп': 1, 'гу': 1, 'то': 1, 'на': 1, 'пхв': 1, 'ltd': 1, 'llp': 1, 'llc': 1, 'inc': 1, 'gmbh': 1, 'co': 1, 'corp': 1, 'company': 1, 'limited': 1 };
+function _normCompany(s) {
+  const toks = String(s == null ? '' : s).toLowerCase().replace(/ё/g, 'е').replace(/[«»"'`“”„]/g, ' ').split(/[^a-zа-я0-9]+/);
+  return toks.filter(t => t && !_ORG[t]).join(' ').trim();
+}
+async function countryMap() {
+  await ensureSchema();
+  const map = {};
+  try {
+    const { rows } = await pool.query("SELECT title, country FROM ticketsmodule_companies WHERE country IS NOT NULL AND country <> ''");
+    for (const r of rows) { const k = _normCompany(r.title); if (k && !map[k]) map[k] = r.country; }
+  } catch (e) { console.error('countryMap:', e.message); }
+  return { map, count: Object.keys(map).length };
+}
+
 module.exports = {
   ensureSchema, syncCompanies, getCompaniesBoard, updateCompany, industryOptions,
+  countryMap,
   getDuplicateGroups, getCompanyDeals, previewMerge, applyMerge, undoMerge, undoAllMerges, listMerges, deleteCompany, writeSelfTest,
   companyRequisite, renameDiag, binInspect, previewBin, applyBin, countryInspect, presetInspect, geoDir,
 };

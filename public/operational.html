@@ -9,6 +9,7 @@
 <meta name="theme-color" content="#f6f7f9">
 <script>(function(){try{var m=localStorage.getItem('pls-theme');document.documentElement.setAttribute('data-theme',m==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
 <link rel="stylesheet" href="/assets/cup-ui.css">
+<script src="/assets/pls-flags.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
@@ -481,6 +482,7 @@ function getFilters(){
 
 async function loadBoard(){
   document.getElementById('tbody').innerHTML=`<tr><td colspan="12" class="loading"><span class="spin"></span>Загрузка…</td></tr>`;
+  try{await PLSFlags.loadCountryMap();}catch(e){}
   try{
     const r=await fetch('/api/operational/board?'+getFilters());
     if(r.status===401){location.href='/login.html';return;}
@@ -661,7 +663,7 @@ function renderRows(rows){
     return `<tr class="deal-row" data-id="${r.id}">
       <td class="flag">${flagIcon(r.flags)}</td>
       <td><span class="stage-pill" style="background:${esc(r.stageColor)}22;color:${esc(r.stageColor)};border:1px solid ${esc(r.stageColor)}55">${esc(r.stageName)}</span></td>
-      <td>${esc(r.company)||'<span class="faint">—</span>'}</td>
+      <td>${flagByCompany(r.company)}${esc(r.company)||'<span class="faint">—</span>'}</td>
       <td class="title-cell"><div class="t"><a class="deal-link" href="${r.url}" target="_blank" onclick="event.stopPropagation()">${esc(r.contractNo||('#'+r.id))}</a></div><div class="c">${esc(r.title)}</div></td>
       <td class="mono ${r.flags.includes('overdue')?'diff-bad':'dim'}">${fmtDate(r.deliveryBy)}</td>
       <td class="mono dim">${fmtDate(r.factoryShip)}</td>
@@ -933,7 +935,7 @@ try{ if(localStorage.getItem('opMeeting')==='1') applyMeeting(true); }catch(e){/
 
 init();
 </script>
-<script src="/assets/pls-ai.js?v=17" defer></script>
+<script src="/assets/pls-ai.js?v=16" defer></script>
 <script src="/assets/cup-theme.js" defer></script>
 </body>
 </html>

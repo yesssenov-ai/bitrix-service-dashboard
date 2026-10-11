@@ -7,6 +7,7 @@
 <meta name="theme-color" content="#f6f7f9">
 <script>(function(){try{var m=localStorage.getItem('pls-theme');document.documentElement.setAttribute('data-theme',m==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
 <link rel="stylesheet" href="/assets/cup-ui.css">
+<script src="/assets/pls-flags.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 /* Переведено на общую дизайн-систему cup-ui.css: карта токенов страницы → общие токены. */
@@ -112,6 +113,7 @@ const fmt=n=>{n=Math.round(Number(n)||0);const s=Math.abs(n).toLocaleString('ru-
 async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.href='/login.html';return{ok:false,d:{}}}let d={};try{d=await r.json()}catch(e){}return{ok:r.ok,d}}
 async function boot(){const r=await fetch('/auth/me');if(!r.ok){location.href='/login.html';return;}await load();}
 async function load(){
+  try{await PLSFlags.loadCountryMap();}catch(e){}
   const {ok,d}=await api('/api/finance/advances');
   if(!ok){document.getElementById('tree').innerHTML='<div class="hint">Ошибка загрузки</div>';return;}
   DATA=d;
@@ -165,7 +167,7 @@ function render(){
       const byCon={};dl.forEach(r=>{(byCon[r.contractor||'—']=byCon[r.contractor||'—']||[]).push(r);});
       Object.keys(byCon).sort().forEach(con=>{
         const ck=dk+'|c:'+con, cl=byCon[con];
-        html+=`<div class="trow lv2"><span class="lbl" style="padding-left:32px">${chev(ck)}${esc(con)}</span>${nums(agg(cl))}</div>`;
+        html+=`<div class="trow lv2"><span class="lbl" style="padding-left:32px">${chev(ck)}${flagByCompany(con)}${esc(con)}</span>${nums(agg(cl))}</div>`;
         if(!EXP.has(ck))return;
         cl.forEach(r=>{
           const deal=r.bitrix_deal_id?` <a href="https://crm.prolabsupport.kz/crm/deal/details/${esc(r.bitrix_deal_id)}/" target="_blank" style="color:var(--brand);text-decoration:none;font-size:11px">🔗</a>`:'';

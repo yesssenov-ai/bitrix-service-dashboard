@@ -7,6 +7,7 @@
 <meta name="theme-color" content="#f6f7f9">
 <script>(function(){try{var m=localStorage.getItem('pls-theme');document.documentElement.setAttribute('data-theme',m==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
 <link rel="stylesheet" href="/assets/cup-ui.css">
+<script src="/assets/pls-flags.js"></script>
 <link rel="icon" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <style>
@@ -434,6 +435,7 @@ async function fetchSummary(){
 async function load(){
   const L=document.getElementById('loading');L.style.display='grid';L.style.opacity='1';
   try{
+    try{await PLSFlags.loadCountryMap();}catch(e){}
     applySummary(await fetchSummary());
     loadNews();
   }catch(e){
@@ -669,7 +671,7 @@ function renderTree(deals){
         const so=openStage.has(s.id);
         return `<div class="stage">
           <div class="stage-row${so?' open':''}" onclick="tStage('${s.id.replace(/'/g,"\\'")}')"><span class="schev">▶</span><span class="sn" title="${esc(s.name)}">${esc(s.name)}</span><span class="sbar"><i style="background:${GROUPS[k].color};width:${(s.sum/maxStage*100).toFixed(1)}%"></i></span><span class="scount">${s.deals.length}</span><span class="sv tabular">${fmt(s.sum)}</span></div>
-          ${so?`<div class="deals">${s.deals.sort((a,b)=>b.sumKzt-a.sumKzt).map(d=>{const tip=[d.company?('Компания: '+d.company):'',d.instrument?('Прибор: '+d.instrument):'',d.title||('Сделка #'+d.id)].filter(Boolean).join('\n');return `<div class="deal"><span class="dn" title="${esc(tip)}">${esc(d.company||d.title||('Сделка #'+d.id))}${d.instrument?` · <span style="color:var(--dim,#8592ad)">${esc(d.instrument)}</span>`:''}</span><span class="dv tabular">${fmt3(d.sumKzt/1e6)} млн</span>${d.url?`<a class="dl" href="${d.url}" target="_blank" title="Открыть в Bitrix"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M17 7H8M17 7v9"/></svg></a>`:''}</div>`;}).join('')}</div>`:''}
+          ${so?`<div class="deals">${s.deals.sort((a,b)=>b.sumKzt-a.sumKzt).map(d=>{const tip=[d.company?('Компания: '+d.company):'',d.instrument?('Прибор: '+d.instrument):'',d.title||('Сделка #'+d.id)].filter(Boolean).join('\n');return `<div class="deal"><span class="dn" title="${esc(tip)}">${flagByCompany(d.company)}${esc(d.company||d.title||('Сделка #'+d.id))}${d.instrument?` · <span style="color:var(--dim,#8592ad)">${esc(d.instrument)}</span>`:''}</span><span class="dv tabular">${fmt3(d.sumKzt/1e6)} млн</span>${d.url?`<a class="dl" href="${d.url}" target="_blank" title="Открыть в Bitrix"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M17 7H8M17 7v9"/></svg></a>`:''}</div>`;}).join('')}</div>`:''}
         </div>`;
       }).join('')}</div></div>`;
   }).join('')||'<div class="news-empty">Нет сделок по фильтру</div>';
@@ -782,7 +784,7 @@ async function loadNews(){
 
 init();
 </script>
-  <script src="/assets/pls-ai.js?v=17" defer></script>
+  <script src="/assets/pls-ai.js?v=16" defer></script>
 <script src="/assets/cup-theme.js" defer></script>
 </body>
 </html>
