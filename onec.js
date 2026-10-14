@@ -47,6 +47,16 @@ function agentFor(url) {
 
 function isConfigured() { return !!BASE; }
 
+// Платформа 1С отдаёт ошибки как XML-страницу vrscore (exception.xslt), где
+// человекочитаемый текст лежит в <descr>. Достаём его, иначе — очищенный фрагмент.
+// Без этого в UI попадал только XML-заголовок (namespace'ы), а не сама причина.
+function onecErrText(txt) {
+  const s = String(txt || '');
+  const m = s.match(/<descr[^>]*>([\s\S]*?)<\/descr>/i) || s.match(/\bdescr\s*=\s*"([^"]+)"/i);
+  if (m && m[1].trim()) return '1С: ' + m[1].replace(/\s+/g, ' ').trim().slice(0, 600);
+  return s.replace(/<\?xml[\s\S]*?\?>/g, '').replace(/\s+/g, ' ').trim().slice(0, 600);
+}
+
 async function onec(service, params = {}, opts = {}) {
   if (!BASE) throw new Error('1С не настроена (нет ONEC_BASE_URL)');
   const method = (opts.method || 'GET').toUpperCase();
@@ -70,9 +80,9 @@ async function onec(service, params = {}, opts = {}) {
     const res = await fetch(url, { method, headers, body, signal: ctrl.signal, agent: agentFor(url) });
     clearTimeout(t);
     const txt = await res.text();
-    if (!res.ok) throw new Error('1С HTTP ' + res.status + (txt ? ': ' + txt.slice(0, 300) : ''));
+    if (!res.ok) throw new Error('1С HTTP ' + res.status + (txt ? ': ' + onecErrText(txt) : ''));
     try { return JSON.parse(txt); }
-    catch (e) { throw new Error('1С вернула не JSON: ' + txt.slice(0, 200)); }
+    catch (e) { throw new Error('1С вернула не JSON: ' + onecErrText(txt)); }
   } catch (e) { clearTimeout(t); throw e; }
 }
 

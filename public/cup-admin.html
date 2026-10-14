@@ -33,41 +33,66 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--text);min-hei
 .brand img{height:22px;width:auto;}
 .brand-name{font-family:var(--font-display);font-weight:600;font-size:15px;}
 .brand-name b{color:var(--brand);}
-main{max-width:1080px;margin:0 auto;padding:32px;}
-h1{font-family:var(--font-display);font-size:24px;font-weight:600;margin-bottom:6px;}
-.sub{color:var(--text-dim);font-size:13.5px;margin-bottom:26px;max-width:640px;line-height:1.55;}
-.toolbar{display:flex;gap:10px;margin-bottom:16px;align-items:center;}
+main{max-width:1440px;margin:0 auto;padding:28px 32px 36px;}
+h1{font-family:var(--font-display);font-size:22px;font-weight:600;letter-spacing:-.01em;margin-bottom:5px;}
+.sub{color:var(--text-dim);font-size:13px;margin-bottom:24px;max-width:680px;line-height:1.55;}
+.toolbar{display:flex;gap:10px;margin-bottom:14px;align-items:center;}
 .search{
-  flex:1;background:var(--panel);border:1px solid var(--line-2);border-radius:8px;padding:10px 14px;
-  color:var(--text);font-family:var(--font-body);font-size:13.5px;outline:none;
+  flex:1;background:var(--panel);border:1px solid var(--line-2);border-radius:8px;padding:9px 14px;
+  color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;transition:border-color .15s;
 }
 .search:focus{border-color:var(--signal);}
 .search::placeholder{color:var(--text-faint);}
-.count{font-family:var(--font-mono);font-size:12px;color:var(--text-faint);white-space:nowrap;}
+.count{font-family:var(--font-mono);font-size:11px;color:var(--text-faint);white-space:nowrap;letter-spacing:.3px;}
 
-/* Скролл-контейнер: список сотрудников прокручивается ВНУТРИ, а шапка с модулями
-   остаётся закреплённой сверху — видно, к какому модулю относится галочка. */
-#tableWrap{max-height:calc(100vh - 250px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;}
-table{width:100%;border-collapse:separate;border-spacing:0;background:var(--panel);}
+/* Скролл-контейнер: список сотрудников прокручивается ВНУТРИ, шапка с модулями и
+   первые две колонки (выбор + имя) закреплены. Полоса прокрутки окрашена в тему —
+   иначе системный белый трек выглядел как лишняя белая полоска у края. */
+#tableWrap{
+  max-height:calc(100vh - 230px);overflow:auto;
+  background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  scrollbar-width:thin;scrollbar-color:var(--line-2) transparent;
+}
+#tableWrap::-webkit-scrollbar{width:11px;height:11px;}
+#tableWrap::-webkit-scrollbar-track{background:transparent;}
+#tableWrap::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:8px;border:3px solid var(--panel);background-clip:padding-box;}
+#tableWrap::-webkit-scrollbar-thumb:hover{background:var(--text-faint);background-clip:padding-box;border:3px solid var(--panel);}
+#tableWrap::-webkit-scrollbar-corner{background:var(--panel);}
+table{width:100%;min-width:max-content;border-collapse:separate;border-spacing:0;background:var(--panel);}
 thead th{
-  font-family:var(--font-mono);font-size:10.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.8px;
-  text-align:center;padding:12px 8px;border-bottom:1px solid var(--line-2);
+  font-family:var(--font-mono);font-size:10px;font-weight:500;color:var(--text-faint);text-transform:uppercase;letter-spacing:.5px;line-height:1.3;
+  text-align:center;padding:12px 7px;min-width:62px;border-bottom:1px solid var(--line-2);
   position:sticky;top:0;z-index:5;background:var(--panel-h);
 }
-thead th.sel-col{width:40px;padding:12px 0;position:sticky;left:0;z-index:7;background:var(--panel-h);}
-tbody td.sel-col{width:40px;padding:11px 0;position:sticky;left:0;z-index:2;background:var(--panel);}
-tbody tr:hover td.sel-col{background:var(--panel-h);}
-thead th.name-col{text-align:left;padding-left:18px;position:sticky;left:40px;z-index:6;background:var(--panel-h);}
-tbody td.name-col{position:sticky;left:40px;z-index:1;background:var(--panel);}
-tbody tr:hover td.name-col{background:var(--panel-h);}
-tbody td{padding:11px 8px;border-bottom:1px solid var(--line);text-align:center;}
-tbody td.name-col{text-align:left;padding-left:18px;font-size:13.5px;font-weight:500;}
+thead th.sel-col{width:40px;min-width:40px;padding:12px 0;position:sticky;left:0;z-index:8;background:var(--panel-h);}
+thead th.name-col{width:200px;min-width:200px;text-align:left;padding-left:18px;position:sticky;left:40px;z-index:8;background:var(--panel-h);box-shadow:1px 0 0 var(--line-2);}
+tbody td.sel-col{width:40px;min-width:40px;padding:11px 0;position:sticky;left:0;z-index:3;background:var(--panel);}
+tbody td.name-col{width:200px;min-width:200px;position:sticky;left:40px;z-index:3;background:var(--panel);box-shadow:1px 0 0 var(--line);}
+tbody td{padding:10px 7px;border-bottom:1px solid var(--line);text-align:center;}
+tbody td.name-col{text-align:left;padding-left:18px;font-size:13px;font-weight:500;color:var(--text);}
 tbody tr:last-child td{border-bottom:none;}
-tbody tr:hover{background:var(--panel-h);}
-/* Выделенные (отмеченные для массовых операций) строки — мягкая бирюзовая подсветка. */
-tbody tr.selected td{background:var(--sel);}
-tbody tr.selected:hover td{background:var(--sel-h);}
-.chk{width:17px;height:17px;accent-color:var(--signal);cursor:pointer;}
+/* Подсветка строки при наведении — непрозрачный фон и у закреплённых колонок,
+   иначе сквозь них «просвечивает» прокручиваемое содержимое. */
+tbody tr:hover td{background:var(--panel-h);}
+tbody tr:hover td.sel-col,tbody tr:hover td.name-col{background:var(--panel-h);}
+/* Выделенные (отмеченные для массовых операций) строки — мягкая подсветка. */
+tbody tr.selected td,tbody tr.selected td.sel-col,tbody tr.selected td.name-col{background:var(--sel);}
+tbody tr.selected:hover td,tbody tr.selected:hover td.sel-col,tbody tr.selected:hover td.name-col{background:var(--sel-h);}
+/* Кастомный чекбокс (appearance:none) — в отличие от системного, уважает z-index,
+   поэтому не «просвечивает» сквозь закреплённые колонки при горизонтальной прокрутке.
+   Заодно единый зелёный стиль во всех темах. */
+.chk{
+  appearance:none;-webkit-appearance:none;margin:0;display:inline-block;
+  width:16px;height:16px;flex:none;border:1.5px solid var(--line-2);border-radius:4px;
+  background:var(--panel);cursor:pointer;position:relative;vertical-align:middle;
+  transition:background .12s,border-color .12s;
+}
+.chk:hover{border-color:var(--signal);}
+.chk:checked{background:var(--signal);border-color:var(--signal);}
+.chk:checked::after{content:"";position:absolute;left:4.5px;top:1.5px;width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg);}
+.chk:indeterminate{background:var(--signal);border-color:var(--signal);}
+.chk:indeterminate::after{content:"";position:absolute;left:3px;top:6.5px;width:8px;height:0;border-top:2px solid #fff;}
+.chk:focus-visible{outline:2px solid var(--signal);outline-offset:2px;}
 .row-status{font-family:var(--font-mono);font-size:10px;color:var(--text-faint);margin-left:8px;}
 .save-note{font-size:11px;color:var(--signal);opacity:0;transition:opacity .3s;}
 .save-note.show{opacity:1;}
@@ -76,7 +101,7 @@ tbody tr.selected:hover td{background:var(--sel-h);}
 .action-bar{background:var(--panel);border:1px solid var(--line-2);border-radius:12px;padding:14px 16px;margin-bottom:16px;display:flex;flex-direction:column;gap:12px;}
 .action-bar[hidden]{display:none;}
 .ab-head{display:flex;align-items:center;justify-content:space-between;gap:12px;}
-.ab-count{font-family:var(--font-mono);font-size:13px;color:var(--text);}
+.ab-count{font-family:var(--font-mono);font-size:12px;color:var(--text);letter-spacing:.3px;}
 .ab-count b{color:var(--signal);}
 .ab-clear{background:none;border:1px solid var(--line-2);color:var(--text-dim);border-radius:7px;padding:5px 12px;font-family:var(--font-body);font-size:12px;cursor:pointer;}
 .ab-clear:hover{color:var(--text);border-color:var(--text-dim);}
@@ -94,7 +119,7 @@ tbody tr.selected:hover td{background:var(--sel-h);}
 .ab-select{background:var(--panel-h);border:1px solid var(--line-2);border-radius:8px;padding:7px 10px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;min-width:220px;}
 .ab-select:focus{border-color:var(--signal);}
 .ab-apply{background:var(--signal);border:none;color:var(--bg);border-radius:8px;padding:8px 16px;font-family:var(--font-body);font-size:13px;font-weight:600;cursor:pointer;}
-.ab-apply:hover{background:#4be0d0;}
+.ab-apply:hover{background:var(--good-ink);}
 .ab-apply:disabled{opacity:.5;cursor:not-allowed;}
 
 footer{text-align:center;color:var(--text-faint);font-size:11.5px;padding:24px;font-family:var(--font-mono);}
