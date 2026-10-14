@@ -78,14 +78,55 @@ function isSessionErr(status, txt) {
   return status === 400 && /сеанс|сеансами|session|куки|cookie|идентификатор/i.test(String(txt || ''));
 }
 
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
 async function onec(service, params = {}, opts = {}) {
   if (!BASE) throw new Error('1С не настроена (нет ONEC_BASE_URL)');
-  try { return await onecOnce(service, params, opts, false); }
+  try { return await attemptWithRetry(service, params, opts, false); }
   catch (e) {
-    // Сеанс протух / публикация требует управления сеансами — стартуем сеанс и повторяем один раз.
-    if (e && e.__session) { _sessionCookie = ''; return await onecOnce(service, params, opts, true); }
+    // Сеанс протух / публикация требует управления сеансами — стартуем сеанс и повторяем.
+    if (e && e.__session) { _sessionCookie = ''; return await attemptWithRetry(service, params, opts, true); }
     throw e;
   }
+}
+
+// Короткий повтор на временные сбои веб-слоя 1С/прокси (502/503/504).
+async function attemptWithRetry(service, params, opts, startSession) {
+  let lastErr;
+  for (let i = 0; i < 3; i++) {
+    try { return await onecOnce(service, params, opts, startSession); }
+    catch (e) {
+      lastErr = e;
+      if (e && e.__session) throw e;                 // наверх — пусть стартует сеанс
+      if (e && e.__transient && i < 2) { await sleep(1200 * (i + 1)); continue; }
+      throw e;
+    }
+  }
+  throw lastErr;
+}
+
+// Дробление тяжёлой выборки по годам: вместо одного запроса dateFrom..dateTo
+// (который валит веб-публикацию 1С по таймауту → 502) — последовательные годовые
+// окна. Запросы идут по очереди: первый при reuse стартует сеанс, остальные
+// переиспользуют куку. Возвращает объединённый { count, items }.
+function* yearWindows(from, to) {
+  const fromY = parseInt(String(from).slice(0, 4), 10);
+  const toY = parseInt(String(to).slice(0, 4), 10);
+  for (let y = fromY; y <= toY; y++) {
+    yield [y === fromY ? from : (y + '-01-01'), y === toY ? to : (y + '-12-31')];
+  }
+}
+async function onecRange(service, params = {}, opts = {}) {
+  const { dateFrom, dateTo } = params;
+  if (!dateFrom || !dateTo) return await onec(service, params, opts);
+  const rest = Object.assign({}, params); delete rest.dateFrom; delete rest.dateTo;
+  const items = [];
+  for (const [wf, wt] of yearWindows(dateFrom, dateTo)) {
+    const d = await onec(service, Object.assign({}, rest, { dateFrom: wf, dateTo: wt }), opts);
+    const arr = Array.isArray(d) ? d : (d && (d.items || d.rows || d.data || d.value)) || [];
+    for (const it of arr) items.push(it);
+  }
+  return { count: items.length, items };
 }
 
 async function onecOnce(service, params, opts, startSession) {
@@ -118,6 +159,7 @@ async function onecOnce(service, params, opts, startSession) {
     if (!res.ok) {
       const err = new Error('1С HTTP ' + res.status + (txt ? ': ' + onecErrText(txt) : ''));
       if (!startSession && isSessionErr(res.status, txt)) err.__session = true;
+      if (res.status === 502 || res.status === 503 || res.status === 504) err.__transient = true;
       throw err;
     }
     try { return JSON.parse(txt); }
@@ -125,4 +167,4 @@ async function onecOnce(service, params, opts, startSession) {
   } catch (e) { clearTimeout(t); throw e; }
 }
 
-module.exports = { onec, isConfigured };
+module.exports = { onec, onecRange, isConfigured };

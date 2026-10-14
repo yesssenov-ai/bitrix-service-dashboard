@@ -104,13 +104,13 @@ async function fetchDebtRaw() {
   // dim/contractor, fact/receivables?dateFrom&dateTo (счёт 1210). Ответ: {count, items}.
   const dateFrom = process.env.ONEC_BALANCE_FROM || '2000-01-01';
   const dateTo = new Date().toISOString().slice(0, 10);
-  // Устойчивый забор: сбой fact-сервиса не должен обнулять весь модуль.
-  const safe = async (svc, params) => { try { return await onecMod.onec(svc, params); } catch (e) { console.error('1С', svc, 'error:', e.message); return { items: [], _error: e.message }; } };
-  const [contractsRaw, contractorsRaw, ledgerRaw] = await Promise.all([
-    onecMod.onec('dim/contract'),
-    onecMod.onec('dim/contractor'),
-    safe('fact/receivables', { dateFrom, dateTo }),
-  ]);
+  // Последовательно (не параллельно): первый запрос при включённом reuse стартует сеанс
+  // 1С, следующие переиспользуют куку — иначе было бы 3 параллельных старта сеанса и
+  // 3 тяжёлых запроса разом. Дебиторку тянем ПО ГОДАМ (onecRange), чтобы не упираться
+  // в таймаут веб-публикации 1С (он отдавал 502 на одном большом запросе с 2000 г.).
+  const contractsRaw = await onecMod.onec('dim/contract');
+  const contractorsRaw = await onecMod.onec('dim/contractor');
+  const ledgerRaw = await onecMod.onecRange('fact/receivables', { dateFrom, dateTo });
   const asArr = d => Array.isArray(d) ? d : (d && (d.items || d.rows || d.data || d.value)) || [];
   const contracts = asArr(contractsRaw);
   const contractors = asArr(contractorsRaw);
