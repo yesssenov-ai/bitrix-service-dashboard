@@ -90,7 +90,9 @@ async function onec(service, params = {}, opts = {}) {
 
 async function onecOnce(service, params, opts, startSession) {
   const method = (opts.method || 'GET').toUpperCase();
-  const timeoutMs = opts.timeoutMs || 30000;
+  // Тяжёлые выборки (fact/receivables за всю историю с 2000 г.) не укладываются в 30 c.
+  // Общий таймаут поднят до 180 c, настраивается env ONEC_TIMEOUT_MS (мс).
+  const timeoutMs = opts.timeoutMs || Number(process.env.ONEC_TIMEOUT_MS) || 180000;
   const headers = { 'Accept': 'application/json' };
   if (USER || PASS) headers['Authorization'] = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64');
   if (startSession) headers['IBSession'] = 'start';     // явный старт сеанса (режим reuse)
