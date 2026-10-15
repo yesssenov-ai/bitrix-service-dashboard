@@ -127,9 +127,21 @@ async function saveDraft(patch,hist,note){
   loadRegistry();
 }
 
+// Степпер мастера (cup-steps): 7 шагов регистрации. Пройденные — зелёные с
+// галочкой, текущий — кольцо акцента. Карта 1:1 к W.step.
+const NCT_STEP_LABELS=['Наименование','Партномер','Дубли','Краткое имя','Казахский','ОКТРУ','Отправка'];
+function nctStepper(cur){
+  const CHECK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+  const DOT='<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="4.5"/></svg>';
+  const inner=NCT_STEP_LABELS.map((l,idx)=>{
+    const n=idx+1, cls=n<cur?'done':(n===cur?'active':'');
+    return '<div class="st '+cls+'"><div class="node">'+((cls==='active')?DOT:CHECK)+'</div><div class="lab">'+l+'</div></div>';
+  }).join('');
+  return '<div style="overflow-x:auto;padding:16px 2px 4px"><div class="cup-steps" style="min-width:'+(NCT_STEP_LABELS.length*82)+'px">'+inner+'</div></div>';
+}
 function renderWizard(){
   const w=$('#wizard');w.classList.remove('hide');
-  let h='<div class="card"><h3>Мастер регистрации товара</h3><div class="muted">Шаг '+W.step+' из 7. Данные сохраняются автоматически на каждом шаге.</div></div>';
+  let h='<div class="card"><h3>Мастер регистрации товара</h3><div class="muted">Шаг '+W.step+' из 7. Данные сохраняются автоматически на каждом шаге.</div>'+nctStepper(W.step)+'</div>';
   h+='<div id="steps"></div>';
   w.innerHTML=h;
   const s=$('#steps');
