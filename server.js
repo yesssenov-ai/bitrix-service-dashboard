@@ -734,6 +734,51 @@ initDB().then(() => {
     };
     setInterval(runOpNightly, 5 * 60 * 1000);
     setTimeout(runOpNightly, 90 * 1000); // ранняя проверка вскоре после старта (догнать, если данные устарели)
+
+    // ── Автообновление финмодулей из 1С (будни, по расписанию Алматы) ──────────
+    // 1С отдаёт данные по запросу; обновляем зеркало Postgres к ключевым точкам
+    // рабочего дня, чтобы к приходу людей цифры были свежими — без ручного «Обновить».
+    // Время Алматы (UTC+5, без переходов): 09:00, 11:00, 13:30, 16:00, 18:00.
+    // Тик раз в минуту; каждый слот срабатывает ОДИН раз в день в окне [слот, слот+15мин]
+    // (окно переживает короткий рестарт/пропуск тика и не ретро-запускает прошлые слоты).
+    // Модули тянем ПОСЛЕДОВАТЕЛЬНО (debt→advances→stock→cashflow), чтобы не грузить
+    // туннель Tailscale параллельными тяжёлыми запросами. Сбой одного не рушит остальные.
+    const FIN_SLOTS = [540, 660, 810, 960, 1080]; // минуты от полуночи Алматы: 9:00/11:00/13:30/16:00/18:00
+    const finFired = new Set();   // ключи "YYYY-MM-DD:slot" — слот уже отработал сегодня
+    let finSyncing = false;
+    const runFinanceSync = async (source) => {
+      if (finSyncing) { console.log(`finance sync: уже идёт, пропускаю (${source})`); return; }
+      finSyncing = true;
+      const steps = [
+        ['debt', () => require('./finance-debt-calc').syncDebt()],
+        ['advances', () => require('./finance-advances-calc').syncAdvances()],
+        ['stock', () => require('./finance-stock-calc').syncStock()],
+        ['cashflow', () => require('./finance-cashflow-calc').syncCashflow()],
+      ];
+      for (const [name, fn] of steps) {
+        try {
+          const r = await fn();
+          console.log(`finance ${source}/${name}:`, (r && r.ok) ? `ok (${r.count != null ? r.count : '—'})` : `НЕ УДАЛОСЬ ${(r && r.error) || ''}`);
+        } catch (e) { console.error(`finance ${source}/${name} error:`, e.message); }
+      }
+      finSyncing = false;
+    };
+    setInterval(() => {
+      const now = new Date();
+      const dow = now.getUTCDay();            // слоты в UTC 04–13 → тот же день, что Алматы
+      if (dow === 0 || dow === 6) return;     // только будни (пн–пт)
+      const almatyMin = (now.getUTCHours() * 60 + now.getUTCMinutes() + 300) % 1440; // UTC+5
+      const dateKey = now.toISOString().slice(0, 10);
+      for (const slot of FIN_SLOTS) {
+        const key = dateKey + ':' + slot;
+        if (!finFired.has(key) && almatyMin >= slot && almatyMin < slot + 15) {
+          finFired.add(key);
+          const hh = String(Math.floor(slot / 60)).padStart(2, '0'), mm = String(slot % 60).padStart(2, '0');
+          runFinanceSync(`sched ${hh}:${mm}`);
+        }
+      }
+      for (const k of finFired) if (!k.startsWith(dateKey + ':')) finFired.delete(k); // чистим вчерашние ключи
+    }, 60 * 1000);
     setInterval(() => {
       const now = new Date();
       const dateKey = now.toISOString().slice(0, 10);
