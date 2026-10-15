@@ -147,6 +147,39 @@ async function computeBoard(year) {
     date: d.createDate, step: d.step,
   }));
 
+  // ── Сравнение «год к году» (честно, период-к-периоду) ───────────────────────
+  // Прошлое окно = выбранные годы − 1. Для ТЕКУЩЕГО календарного года сравниваем
+  // аналогичный отрезок прошлого года (YTD к YTD, до сегодняшнего дня), а не к
+  // полному году — иначе незавершённый год всегда проигрывал бы полному.
+  // Переиспользуем уже загруженный массив `all` (без лишнего запроса к БД).
+  const nowY = new Date().getFullYear();
+  const _now = new Date();
+  const capMo = _now.getMonth(), capDay = _now.getDate();   // 0-based месяц
+  const prevSel = yearsSel.map(y => y - 1);
+  const inPrev = y => prevSel.includes(y);
+  // Ограничение по дню года — только для прошлого года текущего календарного
+  // года (y === nowY-1): сравниваем одинаковый отрезок. Для завершённых прошлых
+  // лет сравнение полное.
+  const ytdOK = (y, dateStr) => {
+    if (y !== nowY - 1) return true;
+    if (!dateStr) return false;
+    const mo = parseInt(String(dateStr).slice(5, 7), 10) - 1;
+    const day = parseInt(String(dateStr).slice(8, 10), 10);
+    return mo < capMo || (mo === capMo && day <= capDay);
+  };
+  const soldP = all.filter(d => isSold(d.stage) && inPrev(yr(d.contractDate)) && ytdOK(yr(d.contractDate), d.contractDate));
+  const kpP   = all.filter(d => isKp(d.stage)   && inPrev(yr(d.createDate))   && ytdOK(yr(d.createDate), d.createDate));
+  const pipeP = all.filter(d => isPre(d.stage)  && inPrev(yr(d.createDate))   && ytdOK(yr(d.createDate), d.createDate));
+  const kpiPrev = {
+    soldSum: sum(soldP), soldCount: soldP.length, soldAvg: avg(soldP),
+    kpSum: sum(kpP), kpCount: kpP.length, kpAvg: avg(kpP),
+    companies: new Set(soldP.map(d => d.companyId).filter(Boolean)).size,
+    managers: new Set(soldP.map(d => d.managerId).filter(Boolean)).size,
+    pipeSum: sum(pipeP), pipeCount: pipeP.length,
+  };
+  // Отрезок-к-отрезку действует, когда в выборке есть текущий календарный год.
+  const ytdCap = yearsSel.includes(nowY) ? { mo: capMo + 1, day: capDay } : null;
+
   return {
     year: primary, yearsSel, rate,
     kpi: {
@@ -156,6 +189,7 @@ async function computeBoard(year) {
       managers: new Set(sold.map(d => d.managerId).filter(Boolean)).size,
       pipeSum: sum(pipe), pipeCount: pipe.length,
     },
+    kpiPrev, prevYearsSel: prevSel, ytdCap,
     funnel: snapshotFunnel(all, yearsSel),
     funnelDeals: snapshotDeals(all, yearsSel),
     producers: byManufacturer(sold),

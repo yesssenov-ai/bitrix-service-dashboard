@@ -214,6 +214,18 @@ tbody tr:hover td.l{background:var(--panel-h)}
 const F=n=>Math.round(n||0).toLocaleString('ru-RU').replace(/,/g,' ');
 const M=n=>{n=n||0;if(Math.abs(n)>=1e9)return (n/1e9).toFixed(2)+' млрд';if(Math.abs(n)>=1e6)return (n/1e6).toFixed(1)+' млн';if(Math.abs(n)>=1e3)return (n/1e3).toFixed(0)+' тыс';return String(Math.round(n));};
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+// ── Чип «год к году» (cup-delta) ──────────────────────────────────────────────
+// Показываем ТОЛЬКО когда есть база прошлого периода (prev>0) — иначе проценты
+// недостоверны, чип скрываем. Для всех KPI рост = хорошо (зелёный ▲).
+function prevYearsLabel(){ const ps=(BOARD&&BOARD.prevYearsSel)?BOARD.prevYearsSel.slice().sort((a,b)=>a-b):[]; if(!ps.length)return 'пред. году'; return ps.length===1?String(ps[0]):(ps.length<=3?ps.join(', '):ps[0]+'–'+ps[ps.length-1]); }
+function deltaChip(cur,prev){
+  cur=+cur||0; prev=+prev||0;
+  if(prev<=0) return '';
+  const pct=(cur-prev)/prev*100;
+  const r=Math.abs(pct)>=100?Math.round(pct):Math.round(pct*10)/10;
+  const up=pct>=0;
+  return ` <span class="cup-delta ${up?'up':'down'}" title="${prevYearsLabel()}: было ${F(prev)}">${up?'▲':'▼'} ${Math.abs(r)}%</span>`;
+}
 const pct=(v,t)=>t?Math.round(v/t*100):0;
 let BOARD=null, TAB='producers', DEPT='', INSTR='sold', CSEARCH='', EXPANDM={}, CX='all';
 let FDEPT='', FMGR='', FMONTH='', FMANUF='', FINSTR='', IS_ADMIN=false, CONV=null, CONV_POLL=null;
@@ -288,13 +300,17 @@ function setYears(mode){ const avail=(BOARD.years&&BOARD.years.length)?BOARD.yea
 document.addEventListener('click',e=>{ if(!e.target.closest('.msel')) closeYearMenu(); });
 function render(){
   const k=BOARD.kpi;
+  const p=BOARD.kpiPrev||{};
+  const hasYoY=!!BOARD.kpiPrev && [p.soldSum,p.kpSum,p.companies,p.managers].some(v=>(+v||0)>0);
+  const kvStyle='style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap"';
+  const cap=hasYoY?`<div style="font-size:11px;color:var(--text-faint,#9aa3b3);font-family:var(--fm);margin:-6px 0 14px">▲▼ — год к году, к ${esc(prevYearsLabel())}${BOARD.ytdCap?` · текущий год — аналогичный период (до ${BOARD.ytdCap.day}.${String(BOARD.ytdCap.mo).padStart(2,'0')})`:''}</div>`:'';
   const kpis=`<div class="kpis">
-    <div class="kpi" style="--kc:var(--good)"><div class="kv">${M(k.soldSum)} ₸</div><div class="kl">Продано за ${yearsLabel()}</div><div class="ks">${F(k.soldCount)} сделок</div></div>
-    <div class="kpi" style="--kc:var(--good)"><div class="kv">${M(k.soldAvg)} ₸</div><div class="kl">Средний чек продажи</div></div>
-    <div class="kpi" style="--kc:var(--p60)"><div class="kv">${M(k.kpSum)} ₸</div><div class="kl">Выдано КП (P60/P80)</div><div class="ks">${F(k.kpCount)} сделок</div></div>
-    <div class="kpi" style="--kc:var(--signal)"><div class="kv">${F(k.companies)}</div><div class="kl">Компаний-покупателей</div></div>
-    <div class="kpi" style="--kc:var(--warn)"><div class="kv">${F(k.managers)}</div><div class="kl">Менеджеров с продажами</div></div>
-  </div>`;
+    <div class="kpi" style="--kc:var(--good)"><div class="kv" ${kvStyle}>${M(k.soldSum)} ₸${deltaChip(k.soldSum,p.soldSum)}</div><div class="kl">Продано за ${yearsLabel()}</div><div class="ks">${F(k.soldCount)} сделок</div></div>
+    <div class="kpi" style="--kc:var(--good)"><div class="kv" ${kvStyle}>${M(k.soldAvg)} ₸${deltaChip(k.soldAvg,p.soldAvg)}</div><div class="kl">Средний чек продажи</div></div>
+    <div class="kpi" style="--kc:var(--p60)"><div class="kv" ${kvStyle}>${M(k.kpSum)} ₸${deltaChip(k.kpSum,p.kpSum)}</div><div class="kl">Выдано КП (P60/P80)</div><div class="ks">${F(k.kpCount)} сделок</div></div>
+    <div class="kpi" style="--kc:var(--signal)"><div class="kv" ${kvStyle}>${F(k.companies)}${deltaChip(k.companies,p.companies)}</div><div class="kl">Компаний-покупателей</div></div>
+    <div class="kpi" style="--kc:var(--warn)"><div class="kv" ${kvStyle}>${F(k.managers)}${deltaChip(k.managers,p.managers)}</div><div class="kl">Менеджеров с продажами</div></div>
+  </div>${cap}`;
   const tabs=`<div class="tabs">${tabBtn('producers','Производители')}${tabBtn('managers','Менеджеры')}${tabBtn('instruments','Приборы')}${tabBtn('companies','Компании')}${tabBtn('spheres','Сферы')}${tabBtn('conversions','Конверсии')}${tabBtn('leadentry','Эффективность')}${tabBtn('lost','Проигранные')}${tabBtn('cohort','Путь контракта')}</div><div id="tab"></div>`;
   document.getElementById('content').innerHTML=kpis+'<div id="funnelWrap"></div>'+tabs;
   renderFunnel();
