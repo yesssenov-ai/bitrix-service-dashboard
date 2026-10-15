@@ -301,6 +301,10 @@ tr.row-flash td { animation:rowFlash 1.05s ease 3; }
       <button class="modal-close" onclick="closeEdit()">✕</button>
     </div>
     <div class="modal-body">
+      <div class="form-group" id="editStepperWrap" style="display:none">
+        <label class="form-label">Статус заявки</label>
+        <div id="editStepper" style="overflow-x:auto;padding:16px 2px 6px"></div>
+      </div>
       <div class="form-group"><label class="form-label">Комментарий координатора</label><textarea class="form-textarea" id="editComment" placeholder="Введите комментарий…"></textarea></div>
       <div class="form-group"><label class="form-label">Сменить стадию</label><select class="form-select" id="editStage"><option value="">— не менять —</option></select></div>
       <div class="form-group"><label class="form-label">Назначить инженера</label><select class="form-select" id="editEngineer"><option value="">— не менять —</option></select></div>
@@ -419,7 +423,7 @@ const PRESETS = {
   overdue:     { overdueOnly: true, label: '⚠️ Просроченные' },
   all:         { label: '📋 Все заявки' },
 };
-let curPreset='tickets', dbt=null, allStages={}, allUsers=[], curTicketId=null, curTab='remind', curChat='ops';
+let curPreset='tickets', dbt=null, allStages={}, allUsers=[], curTicketId=null, curTab='remind', curChat='ops', lastItems=[];
 // ── Preset ────────────────────────────────────────────────────────────────────
 function onStageChange() {
   // Reset to "all" preset when filtering by stage
@@ -533,6 +537,7 @@ async function loadUsers(){
 }
 // ── Render ────────────────────────────────────────────────────────────────────
 function renderTable(items){
+  lastItems=items||[];
   const wrap=document.getElementById('tw');
   if(!items.length){
     wrap.innerHTML=`<div class="empty"><div class="empty-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg></div><h3>Нет заявок</h3><p>Попробуйте изменить фильтры</p></div>`;
@@ -645,6 +650,38 @@ function populateEditStages(stages){
   sel.innerHTML='<option value="">— не менять —</option>';
   Object.entries(stages).sort((a,b)=>a[1].order-b[1].order).forEach(([sid,cfg])=>sel.add(new Option(cfg.name,sid)));
 }
+// Степпер жизненного цикла заявки (cup-steps) — показывает положение заявки
+// в воронке Bitrix: пройденные стадии зелёные с галочкой, текущая — кольцо
+// акцента, будущие — приглушённые. Терминальный «проигрыш» (:FAIL) — красной
+// плашкой, т.к. это не часть линейного успешного пути.
+const _STEP_CHECK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+const _STEP_DOT='<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="4.5"/></svg>';
+function renderEditStepper(curStageId){
+  const wrap=document.getElementById('editStepper'), box=document.getElementById('editStepperWrap');
+  if(!wrap||!box)return;
+  const entries=Object.entries(allStages||{}).sort((a,b)=>(a[1].order||0)-(b[1].order||0));
+  if(!entries.length){box.style.display='none';return;}
+  const isFail=id=>/:FAIL$/i.test(id);
+  const isSucc=id=>/:SUCCESS$/i.test(id);
+  const path=entries.filter(([id])=>!isFail(id));
+  const curFail=isFail(curStageId);
+  const curOrder=(allStages[curStageId]!=null)?allStages[curStageId].order:null;
+  const html=path.map(([id,cfg])=>{
+    let cls='';
+    if(!curFail && curOrder!=null){
+      if(cfg.order<curOrder) cls='done';
+      else if(cfg.order===curOrder) cls=isSucc(id)?'done':'active';
+    }
+    const ico=(cls==='active')?_STEP_DOT:_STEP_CHECK;
+    return `<div class="st ${cls}"><div class="node">${ico}</div><div class="lab">${esc(cfg.name)}</div></div>`;
+  }).join('');
+  wrap.innerHTML=`<div class="cup-steps" style="min-width:${path.length*94}px">${html}</div>`
+    +(curFail?`<div style="margin-top:12px;display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,var(--surface));border:1px solid color-mix(in srgb,var(--bad) 35%,var(--line));border-radius:999px;padding:5px 12px">✕ Отклонена — ${esc((allStages[curStageId]||{}).name||'')}</div>`:'');
+  box.style.display='';
+  // прокрутить активную/текущую стадию в центр видимой области
+  const act=wrap.querySelector('.st.active')||wrap.querySelector('.st.done:last-of-type');
+  if(act&&act.scrollIntoView)act.scrollIntoView({inline:'center',block:'nearest'});
+}
 function openEdit(id,title){
   curTicketId=id;
   document.getElementById('editTicketTitle').textContent=`#${id} - ${title}`;
@@ -652,6 +689,8 @@ function openEdit(id,title){
   document.getElementById('editStage').value='';
   document.getElementById('editEngineer').value='';
   populateEditStages(allStages);
+  const t=lastItems.find(x=>String(x.id)===String(id));
+  renderEditStepper(t?t.stageId:null);
   document.getElementById('editOverlay').classList.add('show');
   setTimeout(()=>document.getElementById('editComment').focus(),100);
 }
