@@ -175,4 +175,71 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-ui);
 #themeToggle svg{display:block}
 @media print{#themeToggle{display:none}}
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Паттерны (перенято из мобильных приложений, пересобрано в токенах ЦУП).
+   Переиспользуемые блоки для всех модулей — подключаются одним классом.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* ── Степпер статуса: жизненный цикл заявки/контракта/КП ──
+   Разметка: .cup-steps > .st(.done|.active) > .node(svg) + .lab + .sub?
+   Пройденные шаги — зелёные с галочкой, текущий — кольцо акцента. Статус
+   считывается не только цветом (есть иконки и подписи). */
+.cup-steps{display:flex;align-items:flex-start}
+.cup-steps .st{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;position:relative}
+.cup-steps .st .node{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;position:relative;z-index:2;
+  background:var(--surface);border:2px solid var(--line-2);color:var(--text-faint)}
+.cup-steps .st .node svg{width:18px;height:18px}
+.cup-steps .st .lab{font-size:12px;font-weight:600;margin-top:9px;color:var(--text-3);max-width:104px;line-height:1.3}
+.cup-steps .st .sub{font-size:10.5px;color:var(--text-faint);margin-top:2px;font-family:var(--f-mono)}
+.cup-steps .st::before,.cup-steps .st::after{content:"";position:absolute;top:19px;height:2px;background:var(--line-2);z-index:1}
+.cup-steps .st::before{left:0;right:50%}
+.cup-steps .st::after{left:50%;right:0}
+.cup-steps .st:first-child::before{display:none}
+.cup-steps .st:last-child::after{display:none}
+.cup-steps .st.done .node{background:var(--good);border-color:var(--good);color:#fff}
+.cup-steps .st.done .lab{color:var(--text)}
+.cup-steps .st.done::before,.cup-steps .st.done::after{background:var(--good)}
+.cup-steps .st.active .node{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 4px var(--accent-weak)}
+.cup-steps .st.active .lab{color:var(--text)}
+.cup-steps .st.active::before{background:var(--good)}
+
+/* ── Экран-результат («чек-герой») ──
+   Разметка: .cup-result > .ico(svg) + h3 + p (+ любой контент ниже). */
+.cup-result{max-width:440px;margin:0 auto;text-align:center;padding:8px}
+.cup-result .ico{width:64px;height:64px;border-radius:50%;margin:0 auto 16px;display:grid;place-items:center;color:var(--good);
+  background:color-mix(in srgb,var(--good) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--good) 32%,var(--line))}
+.cup-result .ico svg{width:32px;height:32px}
+.cup-result h3{font-size:21px;font-weight:700;letter-spacing:-.01em}
+.cup-result p{color:var(--text-3);margin-top:7px}
+
+/* ── Квитанция с группами и итогом (КП, контракты, бонусы) ──
+   Разметка: .cup-receipt > .sec(группа) + .ln(.nm + .am)… + .tot(.l + .v). */
+.cup-receipt .sec{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);margin:16px 0 8px}
+.cup-receipt .sec:first-child{margin-top:0}
+.cup-receipt .ln{display:flex;gap:14px;padding:9px 0;border-bottom:1px solid var(--line)}
+.cup-receipt .ln .nm{flex:1;color:var(--text-2)}
+.cup-receipt .ln .am{font-family:var(--f-mono);font-variant-numeric:tabular-nums;color:var(--text);font-weight:500;white-space:nowrap}
+.cup-receipt .tot{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:12px}
+.cup-receipt .tot .l{font-size:15px;font-weight:700}
+.cup-receipt .tot .v{font-family:var(--f-mono);font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+
+/* ── Строка-данные: иконка + две линии (реквизиты в карточках) ──
+   Разметка: .cup-drow > .ic(svg) + div(.a + .b(.mono?)). */
+.cup-drow{display:flex;align-items:center;gap:13px;padding:12px 0;border-bottom:1px solid var(--line)}
+.cup-drow:last-child{border-bottom:0}
+.cup-drow .ic{width:38px;height:38px;border-radius:9px;flex:none;display:grid;place-items:center;background:var(--surface-2);color:var(--accent)}
+.cup-drow .ic svg{width:19px;height:19px}
+.cup-drow .a{font-weight:600}
+.cup-drow .b{font-size:12.5px;color:var(--text-3);margin-top:1px}
+.cup-drow .b.mono{font-family:var(--f-mono);color:var(--text-faint)}
+
+/* ── Чип-дельта для KPI (крупное число + изменение) ──
+   Разметка: <span class="cup-delta up|down|warn|soft">▲ 6%</span>. */
+.cup-delta{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;line-height:1.2}
+.cup-delta.up{color:#fff;background:var(--good)}
+.cup-delta.down{color:#fff;background:var(--bad)}
+.cup-delta.warn{color:#fff;background:var(--warn)}
+.cup-delta.soft{color:var(--good-ink);background:color-mix(in srgb,var(--good) 14%,var(--surface));
+  border:1px solid color-mix(in srgb,var(--good) 30%,var(--line))}
+
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
