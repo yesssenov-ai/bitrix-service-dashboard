@@ -23,45 +23,60 @@
   --font-display:var(--f-ui);
   --font-body:var(--f-ui);
   --font-mono:var(--f-mono);
+  --teal:#35d0c0;
 }
-.top::before,.hdr::before,.header::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 35%,transparent));z-index:1}
 html,body{height:100%;}
 body{
   font-family:var(--font-body);background:var(--bg);color:var(--text);
   min-height:100vh;display:flex;
 }
 
+/* ── Левая панель: фон-слайдшоу из фото лабораторий/приборов ────────────── */
 .side{
   flex:1.15;position:relative;overflow:hidden;display:flex;flex-direction:column;
-  justify-content:space-between;padding:44px 48px;
-  background:
-    radial-gradient(ellipse 700px 500px at 20% 10%, rgba(197,59,47,.14), transparent 60%),
-    radial-gradient(ellipse 600px 500px at 90% 90%, rgba(53,208,192,.10), transparent 55%);
-  border-right:1px solid var(--line);
+  justify-content:space-between;padding:46px 50px;background:#0a111e;
 }
+/* слои-фото: кросс-фейд по opacity + медленный ken-burns на активном */
+.ph{position:absolute;inset:0;background-size:cover;background-position:center;
+  opacity:0;transition:opacity 1.3s ease;z-index:0;transform:scale(1.05);will-change:opacity,transform;}
+.ph.on{opacity:1;animation:kb 10s ease-out forwards;}
+@keyframes kb{from{transform:scale(1.05);}to{transform:scale(1.13);}}
+/* затемняющая вуаль, чтобы белый текст читался поверх любого кадра */
+.scrim{position:absolute;inset:0;z-index:1;background:
+  linear-gradient(180deg, rgba(8,13,24,.58) 0%, rgba(8,13,24,.12) 30%, rgba(8,13,24,.42) 60%, rgba(8,13,24,.9) 100%),
+  linear-gradient(90deg, rgba(8,13,24,.62), rgba(8,13,24,.1) 58%);}
+/* фирменная линия-акцент сверху */
+.side::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;z-index:2;
+  background:linear-gradient(90deg,var(--accent),var(--teal) 55%,transparent);}
+
+.side .brand,.side .side-mid,.side .side-foot{position:relative;z-index:3;}
 .side .brand{display:flex;align-items:center;gap:10px;}
-.side .brand img{height:24px;width:auto;}
-.side .brand-name{font-family:var(--font-display);font-weight:600;font-size:16px;}
-.side .brand-name b{color:var(--brand);}
+.side .brand img{height:26px;width:auto;filter:drop-shadow(0 1px 3px rgba(0,0,0,.4));}
+.side .brand-name{font-family:var(--font-display);font-weight:600;font-size:16px;color:#fff;
+  text-shadow:0 1px 10px rgba(0,0,0,.5);}
 
 .side-mid{margin:auto 0;}
 .side h1{
-  font-family:var(--font-display);font-weight:600;font-size:44px;line-height:1.08;
-  letter-spacing:-.5px;margin-bottom:16px;
+  font-family:var(--font-display);font-weight:600;font-size:46px;line-height:1.07;
+  letter-spacing:-.6px;margin-bottom:18px;color:#fff;text-shadow:0 2px 24px rgba(0,0,0,.5);
 }
-.side h1 span{color:var(--signal);}
-.side p{color:var(--text-dim);font-size:14.5px;max-width:400px;line-height:1.6;}
+.side h1 span{color:var(--teal);}
+.side p{color:rgba(255,255,255,.84);font-size:14.5px;max-width:410px;line-height:1.62;
+  text-shadow:0 1px 12px rgba(0,0,0,.5);}
 
-.telemetry-wrap{height:64px;margin-top:34px;opacity:.5;overflow:hidden;}
-.telemetry-wrap svg{width:200%;height:100%;animation:drift 22s linear infinite;}
-@keyframes drift{from{transform:translateX(0);}to{transform:translateX(-50%);}}
+/* индикаторы кадров */
+.dots{display:flex;gap:8px;margin-top:34px;}
+.dots i{width:24px;height:3px;border-radius:3px;background:rgba(255,255,255,.3);
+  cursor:pointer;transition:background .3s,width .3s;}
+.dots i.on{background:var(--teal);width:34px;}
 
-.side-foot{font-family:var(--font-mono);font-size:11px;color:var(--text-faint);display:flex;gap:18px;}
-.side-foot .dot{width:6px;height:6px;border-radius:50%;background:var(--signal);display:inline-block;margin-right:6px;box-shadow:0 0 6px var(--signal-dim);animation:pulse 2.4s ease-in-out infinite;}
+.side-foot{font-family:var(--font-mono);font-size:11px;color:rgba(255,255,255,.74);display:flex;gap:18px;
+  text-shadow:0 1px 8px rgba(0,0,0,.5);}
+.side-foot .dot{width:6px;height:6px;border-radius:50%;background:var(--teal);display:inline-block;margin-right:6px;box-shadow:0 0 8px rgba(53,208,192,.6);animation:pulse 2.4s ease-in-out infinite;}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.45;transform:scale(.72);}}
 
 @media (prefers-reduced-motion:reduce){
-  .telemetry-wrap svg{animation:none;}
+  .ph.on{animation:none;}
   .side-foot .dot{animation:none;}
 }
 
@@ -130,25 +145,24 @@ input:focus{border-color:var(--signal);box-shadow:0 0 0 3px rgba(53,208,192,.12)
 .step{display:none;} .step.active{display:block;}
 
 @media (max-width:860px){
-  .side{display:none;}
-  .right{padding:20px;}
+  body{flex-direction:column;}
+  .side{flex:none;height:230px;padding:20px 24px;}
+  .side-mid{margin:auto 0 0;}
+  .side h1{font-size:30px;margin-bottom:0;}
+  .side p,.dots,.side-foot{display:none;}
+  .right{padding:26px 20px;}
 }
 </style>
 </head>
 <body>
 
-<div class="side">
+<div class="side" id="side">
+  <div class="scrim"></div>
   <div class="brand"><img src="/assets/logo-icon.png" alt=""><span class="brand-name"><b>ЦУП</b> · ProLabSupport</span></div>
   <div class="side-mid">
     <h1>Центр<br>управления<br><span>проектами</span></h1>
     <p>Планировщик, сервисные заявки, карты оборудования и лицензий — все модули ProLabSupport под одним входом.</p>
-    <div class="telemetry-wrap">
-      <svg viewBox="0 0 800 64" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M0,32 L70,32 L84,32 L94,8 L104,56 L114,32 L130,32 L420,32 L434,32 L444,8 L454,56 L464,32 L480,32 L800,32
-                 L870,32 L884,32 L894,8 L904,56 L914,32 L930,32 L1220,32 L1234,32 L1244,8 L1254,56 L1264,32 L1280,32 L1600,32"
-          fill="none" stroke="#35d0c0" stroke-width="1.3" stroke-linejoin="round"/>
-      </svg>
-    </div>
+    <div class="dots" id="dots"></div>
   </div>
   <div class="side-foot"><span><span class="dot"></span>Система в норме</span><span>Astana, KZ · UTC+5</span></div>
 </div>
@@ -219,6 +233,55 @@ input:focus{border-color:var(--signal);box-shadow:0 0 0 3px rgba(53,208,192,.12)
     </div>
   </div>
 </div>
+
+<script>
+// ── Фон-слайдшоу левой панели ───────────────────────────────────────────────
+// Кадры из лаборатории/приборного парка ProLabSupport (хостинг Tilda). Плавная
+// смена каждые ~7 с с кросс-фейдом и лёгким ken-burns. Если фото не загрузилось
+// (нет сети/заблокировано) — панель остаётся тёмной, вход не страдает.
+(function(){
+  var PHOTOS = [
+    'https://static.tildacdn.pro/tild3937-3661-4131-b363-633032386438/2.jpg',
+    'https://static.tildacdn.pro/tild3731-3736-4930-b238-666137346162/IMG-20241129-WA0055.jpg',
+    'https://static.tildacdn.pro/tild3066-6634-4437-a363-666161303637/IMG-20241129-WA0056.jpg',
+    'https://static.tildacdn.pro/tild6233-3961-4435-b734-386536643937/IMG-20250819-WA0014.jpg',
+    'https://static.tildacdn.pro/tild6164-6135-4762-a435-653565396636/IMG-20250904-WA0010.jpg'
+  ];
+  var side = document.getElementById('side');
+  var dotsWrap = document.getElementById('dots');
+  if(!side) return;
+  var layers = [], dots = [], cur = 0, timer = null;
+  var reduce = false;
+  try { reduce = window.matchMedia('(prefers-reduced-motion:reduce)').matches; } catch(e){}
+
+  PHOTOS.forEach(function(url, i){
+    var l = document.createElement('div'); l.className = 'ph';
+    l.style.backgroundImage = "url('" + url + "')";
+    side.insertBefore(l, side.firstChild); // под scrim/контентом
+    layers.push(l);
+    var d = document.createElement('i');
+    d.addEventListener('click', function(){ go(i); });
+    dotsWrap.appendChild(d); dots.push(d);
+    // префетч, чтобы смена была без рывка
+    var pre = new Image(); pre.src = url;
+  });
+
+  function paint(){
+    layers.forEach(function(l,i){ l.classList.toggle('on', i===cur); });
+    dots.forEach(function(d,i){ d.classList.toggle('on', i===cur); });
+  }
+  function go(i){ cur = (i + layers.length) % layers.length; paint(); schedule(); }
+  function next(){ go(cur + 1); }
+  function schedule(){ if(reduce) return; clearTimeout(timer); timer = setTimeout(next, 7000); }
+
+  paint();
+  if(!reduce) schedule();
+  // пауза при скрытой вкладке — не крутим вхолостую
+  document.addEventListener('visibilitychange', function(){
+    if(document.hidden) clearTimeout(timer); else schedule();
+  });
+})();
+</script>
 
 <script>
 let tempToken = '';
