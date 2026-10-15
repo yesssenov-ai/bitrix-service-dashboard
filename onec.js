@@ -52,8 +52,11 @@ function isConfigured() { return !!BASE; }
 // Без этого в UI попадал только XML-заголовок (namespace'ы), а не сама причина.
 function onecErrText(txt) {
   const s = String(txt || '');
-  const m = s.match(/<descr[^>]*>([\s\S]*?)<\/descr>/i) || s.match(/\bdescr\s*=\s*"([^"]+)"/i);
-  if (m && m[1].trim()) return '1С: ' + m[1].replace(/\s+/g, ' ').trim().slice(0, 600);
+  // 1С отдаёт ошибку либо XML-страницей vrscore (<descr>…), либо JSON ("descr":"…").
+  const m = s.match(/<descr[^>]*>([\s\S]*?)<\/descr>/i)
+         || s.match(/"descr"\s*:\s*"([\s\S]*?)"/i)
+         || s.match(/\bdescr\s*=\s*"([^"]+)"/i);
+  if (m && m[1].trim()) return '1С: ' + m[1].replace(/\\n/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 600);
   return s.replace(/<\?xml[\s\S]*?\?>/g, '').replace(/\s+/g, ' ').trim().slice(0, 600);
 }
 
@@ -82,9 +85,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 async function onec(service, params = {}, opts = {}) {
   if (!BASE) throw new Error('1С не настроена (нет ONEC_BASE_URL)');
-  try { return await attemptWithRetry(service, params, opts, false); }
+  // Боевая публикация BUH включает повторное использование сеансов: запрос без сеанса
+  // отдаёт 404/400. Поэтому на «холодную» (нет куки) сразу стартуем сеанс — как в curl
+  // Softpro с `IBSession: start` — а затем переиспользуем полученную куку.
+  try { return await attemptWithRetry(service, params, opts, !_sessionCookie); }
   catch (e) {
-    // Сеанс протух / публикация требует управления сеансами — стартуем сеанс и повторяем.
+    // Сеанс протух / требуется (пере)старт — стартуем сеанс и повторяем один раз.
     if (e && e.__session) { _sessionCookie = ''; return await attemptWithRetry(service, params, opts, true); }
     throw e;
   }
@@ -136,8 +142,9 @@ async function onecOnce(service, params, opts, startSession) {
   const timeoutMs = opts.timeoutMs || Number(process.env.ONEC_TIMEOUT_MS) || 180000;
   const headers = { 'Accept': 'application/json' };
   if (USER || PASS) headers['Authorization'] = 'Basic ' + Buffer.from(USER + ':' + PASS).toString('base64');
+  let sentCookie = false;
   if (startSession) headers['IBSession'] = 'start';     // явный старт сеанса (режим reuse)
-  else if (_sessionCookie) headers['Cookie'] = _sessionCookie;  // переиспользуем сеанс
+  else if (_sessionCookie) { headers['Cookie'] = _sessionCookie; sentCookie = true; }  // переиспользуем сеанс
 
   let url = BASE.replace(/\/$/, '') + '/' + String(service).replace(/^\//, '');
   let body;
@@ -158,8 +165,12 @@ async function onecOnce(service, params, opts, startSession) {
     const txt = await res.text();
     if (!res.ok) {
       const err = new Error('1С HTTP ' + res.status + (txt ? ': ' + onecErrText(txt) : ''));
-      if (!startSession && isSessionErr(res.status, txt)) err.__session = true;
       if (res.status === 502 || res.status === 503 || res.status === 504) err.__transient = true;
+      // (Пере)старт сеанса нужен, если: явная ошибка сеанса (400 + текст про сеанс/куки),
+      // ИЛИ мы шли с кукой и получили 400/404 — сеанс в 1С протух. На старте сеанса 404 —
+      // это уже настоящий «метод не найден», сеансом не лечится.
+      if (isSessionErr(res.status, txt)) err.__session = true;
+      else if (sentCookie && (res.status === 400 || res.status === 404)) err.__session = true;
       throw err;
     }
     try { return JSON.parse(txt); }
