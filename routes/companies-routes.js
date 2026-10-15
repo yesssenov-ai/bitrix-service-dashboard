@@ -30,42 +30,9 @@ router.get('/merges', requireAuth([]), async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Диагностика записи в Б24: GET /api/companies/selftest?id=123
-router.get('/selftest', requireAuth(EDIT), async (req, res) => {
-  try { res.json(await require('../companies-calc').writeSelfTest(req.query.id, { keep: req.query.keep === '1' })); }
-  catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// Read-only диагностика БИН: GET /api/companies/bin-inspect?bin=XXXXXXXXXXXX
-// Показывает, что отдаёт ГБДЮЛ по БИН + какие поля есть в карточке/реквизитах Б24.
-// НИЧЕГО НЕ ПИШЕТ. Временная — удалить после согласования маппинга полей.
-router.get('/bin-inspect', requireAuth(EDIT), async (req, res) => {
-  try { res.json(await require('../companies-calc').binInspect(req.query.bin)); }
-  catch (e) { res.status(500).json({ error: e.message }); }
-});
-
 // Предпросмотр заполнения БИН (старое→новое). Ничего не пишет.
 router.get('/bin-preview', requireAuth(EDIT), async (req, res) => {
   try { res.json(await require('../companies-calc').previewBin(req.query.id, req.query.bin)); }
-  catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// Read-only диагностика «Страна»: GET /api/companies/country-inspect?id=<companyId>&dealId=<dealId>
-// Показывает гео-поля компании и сделки (коды/настройки/значения). Ничего не пишет. Временная.
-router.get('/country-inspect', requireAuth(EDIT), async (req, res) => {
-  try { res.json(await require('../companies-calc').countryInspect(req.query.id, req.query.dealId)); }
-  catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// Read-only: пресеты реквизитов + их поля. GET /api/companies/preset-inspect. Временная.
-router.get('/preset-inspect', requireAuth(EDIT), async (req, res) => {
-  try { res.json(await require('../companies-calc').presetInspect()); }
-  catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// Read-only: справочник Город/Область/Страна. GET /api/companies/geo-dir?iblock=17. Временная.
-router.get('/geo-dir', requireAuth(EDIT), async (req, res) => {
-  try { res.json(await require('../companies-calc').geoDir(req.query.iblock)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
