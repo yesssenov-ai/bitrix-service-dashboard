@@ -240,12 +240,14 @@ input:focus{border-color:var(--signal);box-shadow:0 0 0 3px rgba(53,208,192,.12)
 // смена каждые ~7 с с кросс-фейдом и лёгким ken-burns. Если фото не загрузилось
 // (нет сети/заблокировано) — панель остаётся тёмной, вход не страдает.
 (function(){
+  // Основные фото ЦУП — реальная работа ProLabSupport (из корпоративных
+  // презентаций), размещены локально в приложении (без внешних зависимостей).
   var PHOTOS = [
-    'https://static.tildacdn.pro/tild3937-3661-4131-b363-633032386438/2.jpg',
-    'https://static.tildacdn.pro/tild3731-3736-4930-b238-666137346162/IMG-20241129-WA0055.jpg',
-    'https://static.tildacdn.pro/tild3066-6634-4437-a363-666161303637/IMG-20241129-WA0056.jpg',
-    'https://static.tildacdn.pro/tild6233-3961-4435-b734-386536643937/IMG-20250819-WA0014.jpg',
-    'https://static.tildacdn.pro/tild6164-6135-4762-a435-653565396636/IMG-20250904-WA0010.jpg'
+    '/assets/photos/cup-01.jpg',
+    '/assets/photos/cup-02.jpg',
+    '/assets/photos/cup-03.jpg',
+    '/assets/photos/cup-04.jpg',
+    '/assets/photos/cup-05.jpg'
   ];
   var side = document.getElementById('side');
   var dotsWrap = document.getElementById('dots');
