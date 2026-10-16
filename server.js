@@ -82,6 +82,10 @@ const PWA_BADGE = '<script src="/assets/badge.js" defer></script>';
 // новой дизайн-системы (кроме входа), чтобы ассистент был доступен везде одинаково.
 // Пропускаем, если страница уже подключает pls-ai.js своим тегом (чтобы не задвоить).
 const PWA_AI = '<script src="/assets/pls-ai.js?v=17" defer></script>';
+// Фирменный фон-орнамент (ою). Добавляет слой #cup-bg (стили в cup-ui.css,
+// картинки тема-зависимые). Подставляется на КАЖДУЮ страницу новой дизайн-системы
+// (включая вход). Пропускаем, если страница уже подключает cup-bg.js.
+const CUP_BG = '<script src="/assets/cup-bg.js" defer></script>';
 app.use((req, res, next) => {
   const orig = res.sendFile.bind(res);
   res.sendFile = (fp, opts, cb) => {
@@ -93,7 +97,8 @@ app.use((req, res, next) => {
           const usesNewUI = out.includes('/assets/cup-ui.css');  // страница на новой дизайн-системе
           const isLogin = /login\.html$/.test(fp);
           const needAI = usesNewUI && !isLogin && !out.includes('/assets/pls-ai.js');
-          const head = PWA_BASE + '\n' + (usesNewUI ? '' : LEGACY_THEME + '\n') + PWA_BADGE + '\n' + (needAI ? PWA_AI + '\n' : '');
+          const needBG = usesNewUI && !out.includes('/assets/cup-bg.js');
+          const head = PWA_BASE + '\n' + (usesNewUI ? '' : LEGACY_THEME + '\n') + PWA_BADGE + '\n' + (needAI ? PWA_AI + '\n' : '') + (needBG ? CUP_BG + '\n' : '');
           out = out.replace('</head>', head + '</head>');
         }
         res.set('Content-Type', 'text/html; charset=utf-8');

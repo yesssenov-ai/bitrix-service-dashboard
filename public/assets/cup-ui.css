@@ -242,4 +242,16 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-ui);
 .cup-delta.soft{color:var(--good-ink);background:color-mix(in srgb,var(--good) 14%,var(--surface));
   border:1px solid color-mix(in srgb,var(--good) 30%,var(--line))}
 
+/* ── Фирменный фон-орнамент (казахский ою) ───────────────────────────────────
+   Единый слой-водяной знак на всех страницах: фиксированный, за контентом
+   (z-index:-1 — выше фона страницы, ниже контента), не ловит клики. Карточки/
+   таблицы/шапка перекрывают его, поэтому он виден только в полях — ненавязчиво.
+   Картинки заранее «ужаты» до бледной альфы; тема-зависимые. Элемент #cup-bg
+   добавляется скриптом /assets/cup-bg.js (подставляется сервером на все страницы). */
+#cup-bg{position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:center center/cover no-repeat fixed;
+  background-image:url('/assets/cup-pattern-light.png')}
+:root[data-theme="dark"] #cup-bg{background-image:url('/assets/cup-pattern-dark.png')}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) #cup-bg{background-image:url('/assets/cup-pattern-dark.png')}}
+
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
