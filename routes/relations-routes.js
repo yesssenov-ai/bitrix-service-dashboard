@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { requireAuth, pool } = require('../auth');
+const { requireAuth, pool, isAdminLike } = require('../auth');
+const { EMPLOYEE_DEPT } = require('../dept-map');
 const {
   SMART_TYPES, getItem, getDeal, buildTree, searchDeals, findParent, isFinalStage, WEBHOOK_TOKEN,
   getDealsByManager, SALES_CATEGORIES, resolveStageName,
@@ -16,6 +17,28 @@ const {
 } = require('../bitrix-lookups');
 
 setMgrNotifyPool(pool);
+
+// ── Скоупинг «Связей» по роли: menedzher (sales) — только свои сделки;
+// руководитель отдела (sales_head) — все менеджеры своего отдела; admin/superadmin
+// и manager — все. Возвращает Set разрешённых Bitrix-ID менеджеров или null (все).
+function relBid(user) {
+  if (user && user.bitrix_user_id) return parseInt(user.bitrix_user_id, 10);
+  const nm = user && (user.engineer_name || user.display_name);
+  if (nm) { const f = Object.entries(USERS).find(([, n]) => n === nm); if (f) return parseInt(f[0], 10); }
+  return null;
+}
+function relAllowedManagers(user) {
+  const role = user && user.role;
+  if (isAdminLike(role) || role === 'manager') return null; // все
+  const bid = relBid(user);
+  const s = new Set();
+  if (bid) s.add(bid);
+  if (role === 'sales_head') {
+    const dept = bid ? EMPLOYEE_DEPT[bid] : null;
+    if (dept) for (const [b, d] of Object.entries(EMPLOYEE_DEPT)) if (d === dept) s.add(parseInt(b, 10));
+  }
+  return s; // sales и прочие — только свои
+}
 
 // ── Planner sync (Заявка на сервис 1058 → ticketsmodule_planner_events) ────
 const PLANNER_TZ = 'Asia/Almaty';
@@ -255,8 +278,10 @@ router.get('/managers', requireAuth(), (req, res) => {
     73:'Ерасыл Махаш',76:'Аскат Көбей',77:'Адиль Тасмагамбетов',78:'Дмитрий Волков',
     79:'Арман Манаспаев',85:'Максим Мазняк',86:'Аманжол Сыздыков',88:'Асем Жарылгап',90:'Ерқанат Сырғабек',
   };
+  const allow = relAllowedManagers(req.user); // null = все
   const managers = Object.entries(USERS)
     .filter(([id]) => Number(id) > 10)
+    .filter(([id]) => !allow || allow.has(Number(id)))
     .map(([id, name]) => ({ id: Number(id), name }))
     .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
   res.json({ ok: true, managers });
@@ -267,6 +292,8 @@ router.get('/manager-deals/:managerId', requireAuth(), async (req, res) => {
   try {
     const managerId = parseInt(req.params.managerId);
     if (!managerId) return res.status(400).json({ ok: false, error: 'Invalid manager ID' });
+    const allow = relAllowedManagers(req.user);
+    if (allow && !allow.has(managerId)) return res.status(403).json({ ok: false, error: 'Нет доступа к сделкам этого менеджера' });
     const deals = await getDealsByManager(managerId);
     res.json({ ok: true, deals, categories: SALES_CATEGORIES });
   } catch(err) {
