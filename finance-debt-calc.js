@@ -292,10 +292,14 @@ async function buildDebtOverview(rows, mock) {
   };
 }
 
-async function getDebtBoard() {
+// scope.departments — если задан массив отделов дебиторки, в выдачу (строки, сводка
+// по отделам, итоги, фильтры, KPI) попадают только эти отделы. null = все (админ).
+async function getDebtBoard(scope) {
   await ensureSchema();
+  const allowed = scope && Array.isArray(scope.departments) ? new Set(scope.departments) : null;
   let { rows } = await pool.query('SELECT * FROM ticketsmodule_onec_debt ORDER BY contractor, contract');
   if (!rows.length) { await syncDebt(); ({ rows } = await pool.query('SELECT * FROM ticketsmodule_onec_debt ORDER BY contractor, contract')); }
+  if (allowed) rows = rows.filter(r => allowed.has(r.department)); // скоуп по отделам
   const meta = (await pool.query(`SELECT * FROM ticketsmodule_onec_meta WHERE source='debt'`)).rows[0] || {};
 
   const byDept = {};

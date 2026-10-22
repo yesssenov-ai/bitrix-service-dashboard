@@ -4,13 +4,40 @@
 // тому выдан грант.
 const express = require('express');
 const router = express.Router();
-const { requireAuth } = require('../auth');
+const { requireAuth, isAdminLike } = require('../auth');
+const { EMPLOYEE_DEPT } = require('../dept-map');
+const { USERS } = require('../constants');
 
 const VIEW = []; // любой авторизованный, дошедший до API (страница под грантом)
 
+// ── Скоупинг Дебета: менеджеру видны только отделы дебиторки (1С) его оргподразделения.
+// Карта: орготдел (EMPLOYEE_DEPT) → отделы дебиторки. Админ/суперадмин — все.
+const DEBT_NAZERKE = ['Запчасти и расходники', 'Материаловедение', 'Общелаб', 'Электрохимия'];
+const DEBT_DEPTS_BY_ORG = {
+  'Сервисный': ['Сервис'],
+  'Хроматография': ['Хроматография'],
+  'Элементный': ['Элементный'],
+  'Тренинг-центр': ['Тренинг-центр'],
+  'ОРМ': DEBT_NAZERKE,
+  'Электрохимия': DEBT_NAZERKE,
+  'Materials': DEBT_NAZERKE,
+};
+function debtBid(user) {
+  if (user && user.bitrix_user_id) return parseInt(user.bitrix_user_id, 10);
+  const nm = user && (user.engineer_name || user.display_name);
+  if (nm) { const f = Object.entries(USERS).find(([, n]) => n === nm); if (f) return parseInt(f[0], 10); }
+  return null;
+}
+function debtScope(user) {
+  if (isAdminLike(user && user.role)) return null; // все отделы
+  const bid = debtBid(user);
+  const org = bid ? EMPLOYEE_DEPT[bid] : null;
+  return { departments: (org && DEBT_DEPTS_BY_ORG[org]) || [] }; // нет соответствия → пусто (fail-closed)
+}
+
 // ── Дебет (дебиторская задолженность) ───────────────────────────────────────
 router.get('/debt', requireAuth(VIEW), async (req, res) => {
-  try { res.json(await require('../finance-debt-calc').getDebtBoard()); }
+  try { res.json(await require('../finance-debt-calc').getDebtBoard(debtScope(req.user))); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.post('/debt/refresh', requireAuth(VIEW), async (req, res) => {
