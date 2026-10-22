@@ -859,6 +859,30 @@ async function deleteCompany(id) {
   return { ok: true, id };
 }
 
+// Массовое удаление: по каждому id переиспользуем deleteCompany (та же защита —
+// компании с привязанными объектами НЕ удаляются, а попадают в «пропущено»).
+// Последовательно, с паузой, чтобы не упереться в лимиты Б24. Возвращает сводку.
+async function bulkDeleteCompanies(ids) {
+  await ensureSchema();
+  const list = Array.from(new Set((Array.isArray(ids) ? ids : []).map(String).filter(Boolean)));
+  if (!list.length) return { ok: false, error: 'Не переданы id компаний' };
+  if (list.length > 500) return { ok: false, error: 'За один раз можно удалить не больше 500 компаний' };
+  const results = [];
+  for (const id of list) {
+    try {
+      const r = await deleteCompany(id);
+      if (r && r.ok) results.push({ id, ok: true });
+      else results.push({ id, ok: false, error: (r && r.error) || 'Не удалено', counts: r && r.counts });
+    } catch (e) {
+      results.push({ id, ok: false, error: String(e && e.message || e) });
+    }
+    await sleep(250);
+  }
+  const deleted = results.filter(r => r.ok).map(r => r.id);
+  const skipped = results.filter(r => !r.ok);
+  return { ok: true, total: list.length, deletedCount: deleted.length, skippedCount: skipped.length, deleted, skipped };
+}
+
 // ── Диагностика записи в Б24: пишем метку в название, читаем, откатываем ───────
 // Возвращает СЫРОЙ ответ Bitrix на update — чтобы точно увидеть, применяется ли запись.
 async function writeSelfTest(id, { keep = false } = {}) {
@@ -1360,6 +1384,6 @@ async function countryMap() {
 module.exports = {
   ensureSchema, syncCompanies, getCompaniesBoard, updateCompany, industryOptions,
   countryMap,
-  getDuplicateGroups, getCompanyDeals, previewMerge, applyMerge, undoMerge, undoAllMerges, listMerges, deleteCompany, writeSelfTest,
+  getDuplicateGroups, getCompanyDeals, previewMerge, applyMerge, undoMerge, undoAllMerges, listMerges, deleteCompany, bulkDeleteCompanies, writeSelfTest,
   companyRequisite, renameDiag, binInspect, previewBin, applyBin, countryInspect, presetInspect, geoDir,
 };

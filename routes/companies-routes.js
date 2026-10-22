@@ -90,6 +90,14 @@ router.post('/merge/undo-all', requireAuth(EDIT), express.json(), async (req, re
   } catch (e) { console.error('merge/undo-all:', e.message); res.status(500).json({ error: e.message }); }
 });
 
+// Массовое удаление (необратимо; компании с привязанными объектами пропускаются).
+// ВАЖНО: объявлено ДО '/:id/delete' и '/:id', иначе express примет 'bulk-delete'
+// за :id. Тело: { ids:[...] }.
+router.post('/bulk-delete', requireAuth(EDIT), express.json(), async (req, res) => {
+  try { res.json(await require('../companies-calc').bulkDeleteCompanies(req.body && req.body.ids)); }
+  catch (e) { console.error('companies bulk-delete:', e.message); res.status(500).json({ error: e.message }); }
+});
+
 // Удаление компании из Б24 (необратимо; отказ при наличии привязанных объектов)
 router.post('/:id/delete', requireAuth(EDIT), async (req, res) => {
   try { res.json(await require('../companies-calc').deleteCompany(req.params.id)); }
