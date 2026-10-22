@@ -21,7 +21,7 @@
     "https-proxy-agent": "^7.0.6",
     "imap": "^0.8.19",
     "jsonwebtoken": "^9.0.3",
-    "mailparser": "^3.6.5",
+    "mailparser": "^3.9.39",
     "multer": "^1.4.5-lts.1",
     "node-fetch": "^2.7.0",
     "pdfmake": "^0.2.20",
