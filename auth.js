@@ -719,7 +719,9 @@ function canEdit(user, ticket) {
   if (!user) return false;
   // Полное право правки — у всех «управляющих» ролей.
   if (['admin', 'superadmin', 'manager', 'logist', 'coordinator'].includes(user.role)) return true;
-  if (user.role === 'engineer') {
+  // engineer и service — правят только «свои» заявки (по имени инженера или
+  // ответственному в Bitrix). service — новое имя для сервисных инженеров.
+  if (user.role === 'engineer' || user.role === 'service') {
     if (user.engineer_name && ticket && ticket.engineer === user.engineer_name) return true;
     const uid = user.bitrix_user_id;
     if (uid && ticket && String(ticket.assignedById || ticket.responsibleId || ticket.assigned_by_id || '') === String(uid)) return true;

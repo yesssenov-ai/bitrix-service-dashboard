@@ -23,21 +23,36 @@ function resolveBitrixId(user) {
 // а API — любому авторизованному с доступом; ограничим ролями просмотра аналитики.
 // engineer (менеджеры продаж) тоже видят план и могут редактировать СВОИ сделки —
 // редактирование ограничено canCommentDeal (свои + свой отдел), просмотр общий.
-const VIEW_ROLES = ['admin', 'coordinator', 'manager', 'engineer', 'store', 'accountant'];
+const VIEW_ROLES = ['admin', 'coordinator', 'manager', 'engineer', 'sales', 'sales_head', 'store', 'accountant'];
+
+// Набор Bitrix-ID «моего отдела» (+ я) по карте EMPLOYEE_DEPT — для скоупинга.
+function deptManagerIds(bid, EMPLOYEE_DEPT) {
+  const ids = new Set();
+  if (bid) ids.add(parseInt(bid, 10));
+  const myDept = bid ? EMPLOYEE_DEPT[bid] : null;
+  if (myDept) for (const [b, d] of Object.entries(EMPLOYEE_DEPT)) if (d === myDept) ids.add(parseInt(b, 10));
+  return [...ids];
+}
 
 // GET /api/plansales — обогащённый список доконтрактных сделок с планируемой датой.
 router.get('/', requireAuth(VIEW_ROLES), async (req, res) => {
   try {
     const { getPlanSales } = require('../plansales-calc');
     const { canCommentDeal, EMPLOYEE_DEPT } = require('../dept-map');
-    const data = await getPlanSales();
+    const { isAdminLike } = require('../auth');
+    const bid = resolveBitrixId(req.user);
+    const role = req.user && req.user.role;
+    // План продаж: админ/суперадмин и руководитель отдела (sales_head) — все сделки;
+    // остальные (sales и пр.) — только свои и своего отдела.
+    const fullView = isAdminLike(role) || role === 'sales_head' || role === 'manager';
+    const scope = fullView ? null : { managerIds: deptManagerIds(bid, EMPLOYEE_DEPT) };
+    const data = await getPlanSales(scope);
     // Права на комментарии: помечаем каждую сделку — может ли текущий пользователь
     // её комментировать (свои + своего отдела; админ — любые). Фронт по этому флагу
     // прячет поле ввода, сервер всё равно проверяет на POST.
-    const bid = resolveBitrixId(req.user);
     (data.deals || []).forEach(d => { d.canComment = canCommentDeal(req.user, d.managerId, bid); });
     data.meta = data.meta || {};
-    data.meta.me = { bid: bid || null, isAdmin: !!(req.user && req.user.role === 'admin'), dept: bid ? (EMPLOYEE_DEPT[bid] || null) : null };
+    data.meta.me = { bid: bid || null, isAdmin: isAdminLike(role), scoped: !fullView, dept: bid ? (EMPLOYEE_DEPT[bid] || null) : null };
     res.set('Cache-Control', 'no-store');
     res.json(data);
   } catch (e) {

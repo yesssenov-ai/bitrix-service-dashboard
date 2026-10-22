@@ -116,7 +116,10 @@ function dealUrlBase() {
 }
 
 // Обогащённый список доконтрактных сделок с планируемой датой.
-async function getPlanSales() {
+// scope.managerIds (массив Bitrix-ID) — если задан, в выдачу (и список, и сводку)
+// попадают только сделки этих менеджеров. null/undefined = все (админ/руководитель).
+async function getPlanSales(scope) {
+  const allowed = scope && Array.isArray(scope.managerIds) ? new Set(scope.managerIds.map(String)) : null;
   const rate = await getTodayRate();               // USD→KZT (как в Статистике/Контрактах)
   const base = dealUrlBase();
   const { rows } = await pool.query(
@@ -149,6 +152,7 @@ async function getPlanSales() {
     const raw = parseFloat(r.opportunity) || 0;
     const sum = r.currency_id === 'USD' ? raw * rate : raw;
     const managerId = r.assigned_by_id || null;
+    if (allowed && !(managerId && allowed.has(String(managerId)))) continue; // скоупинг по менеджеру
     const managerName = uname(managerId);
     const dept = direction(r.category_id, r.department_id, managerId, r.manufacturer);
     yearsSet.add(y); deptSet.add(dept);
@@ -210,7 +214,9 @@ async function getPlanSales() {
         WHERE contract_date BETWEEN $1 AND $2 AND stage_id = ANY($3)`,
       [`${yrNow}-01-01`, `${yrNow + 1}-12-31`, CONTRACT_SET]
     );
-    signed = sr.map(r => {
+    signed = sr
+      .filter(r => !allowed || (r.assigned_by_id && allowed.has(String(r.assigned_by_id))))
+      .map(r => {
       const raw = parseFloat(r.opportunity) || 0;
       const sm = r.currency_id === 'USD' ? raw * rate : raw;
       return {

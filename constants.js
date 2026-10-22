@@ -59,7 +59,10 @@ const COORDINATORS = new Set([26, 79]);
 //  viewer     — только просмотр выданных модулей.
 // superadmin — распорядитель «Управление» и «Доступ к модулям»; во всём остальном
 // наследует права admin. Обычный admin видит всё, КРОМЕ этих двух разделов.
-const VALID_ROLES = new Set(['superadmin', 'admin', 'manager', 'logist', 'coordinator', 'engineer', 'store', 'accountant', 'marketolog', 'viewer']);
+// sales — менеджер продаж (скоупинг сделок «свои/свой отдел»);
+// sales_head — руководитель отдела продаж (сделки своего отдела/все);
+// service — сервисный инженер (правит свои назначенные заявки, как прежний engineer).
+const VALID_ROLES = new Set(['superadmin', 'admin', 'manager', 'logist', 'coordinator', 'engineer', 'service', 'sales', 'sales_head', 'store', 'accountant', 'marketolog', 'viewer']);
 
 // ── Гидратация справочника сотрудников из Bitrix (глобально для ВСЕХ модулей) ──
 // Статический USERS выше — курируемый минимум; сотрудники с новыми ID (49, 66, 92…)
