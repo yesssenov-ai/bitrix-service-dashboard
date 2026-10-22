@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ЦУП — Справка</title>
+<meta name="theme-color" content="#f6f7f9">
+<script>(function(){try{var m=localStorage.getItem('pls-theme');document.documentElement.setAttribute('data-theme',m==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
+<style>
+:root{
+  --bg:#f6f7f9;--surface:#fff;--surface-2:#f1f3f6;--surface-3:#e9ecf1;
+  --text:#101624;--text-2:#434e63;--text-3:#6a7488;--text-faint:#9aa3b3;
+  --line:#e7eaf0;--line-2:#d6dbe4;--good:#1a7f54;--warn:#b26c12;--bad:#c23a30;
+  --accent:#C53B2F;--accent-h:#a83126;
+  --sales:#2f6ad9;--service:#13a08a;--supply:#d98a12;--finance:#C53B2F;--analytics:#7a5cd0;--sys:#546079;
+  --f-ui:system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+  --f-mono:ui-monospace,'Segoe UI Mono',Consolas,monospace;
+  --r:12px;--r-sm:8px;color-scheme:light;
+}
+:root[data-theme="dark"]{
+  --bg:#0e1118;--surface:#161a22;--surface-2:#1b212b;--surface-3:#222a36;
+  --text:#e8ebf1;--text-2:#aeb7c6;--text-3:#7f8a9c;--text-faint:#5a6473;
+  --line:#262d39;--line-2:#333c4b;--good:#34b981;--warn:#e0a53f;--bad:#ef6a5c;
+  --accent:#e0574b;--accent-h:#C53B2F;
+  --sales:#5b8cff;--service:#2bbd93;--supply:#e0a53f;--finance:#e0574b;--analytics:#9f85e8;--sys:#8591a8;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--f-ui);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+
+/* шапка */
+.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.top::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:linear-gradient(90deg,var(--sales),var(--service),var(--supply),var(--finance),var(--analytics))}
+.top .brand{font-weight:720;font-size:16px;letter-spacing:-.01em}
+.top .brand b{color:var(--accent)}
+.top .btns{display:flex;gap:8px}
+.top button{font-family:inherit;font-size:13px;font-weight:600;border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);
+  border-radius:999px;padding:7px 14px;cursor:pointer}
+.top button:hover{color:var(--text);border-color:var(--text-3)}
+
+.wrap{max-width:900px;margin:0 auto;padding:26px 20px 80px}
+.hero{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:26px 28px;margin-bottom:22px;position:relative;overflow:hidden}
+.hero h1{font-size:30px;font-weight:760;letter-spacing:-.02em}
+.hero p{color:var(--text-3);margin-top:8px;max-width:640px}
+.hero .tag{display:inline-block;font-family:var(--f-mono);font-size:11px;color:var(--accent);letter-spacing:1px;margin-bottom:10px}
+
+/* навигация-чипы */
+.toc{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 10px}
+.toc a{font-size:13px;font-weight:600;color:var(--text-2);background:var(--surface);border:1px solid var(--line-2);
+  border-radius:999px;padding:6px 13px}
+.toc a:hover{border-color:var(--text-3);color:var(--text)}
+
+h2.sec{font-size:20px;font-weight:720;margin:34px 0 4px;scroll-margin-top:70px;display:flex;align-items:center;gap:10px}
+h2.sec .dot{width:11px;height:11px;border-radius:50%;flex:none}
+.sec-sub{color:var(--text-3);font-size:13.5px;margin-bottom:14px}
+
+/* карточка «памятка» */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px 22px;margin-bottom:16px}
+.quick{border-left:4px solid var(--accent)}
+.quick h3{font-size:16px;font-weight:720;margin-bottom:10px}
+ol.steps{margin:0 0 0 2px;padding:0;counter-reset:s;list-style:none}
+ol.steps li{position:relative;padding:7px 0 7px 36px;border-bottom:1px solid var(--line)}
+ol.steps li:last-child{border-bottom:0}
+ol.steps li::before{counter-increment:s;content:counter(s);position:absolute;left:0;top:7px;width:24px;height:24px;border-radius:50%;
+  background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center}
+.steps b{font-weight:650}
+
+/* модуль */
+.mod{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:0;margin-bottom:14px;overflow:hidden;
+  border-left:4px solid var(--c,var(--line-2))}
+.mod-h{padding:15px 20px 12px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.mod-h .name{font-size:16.5px;font-weight:720}
+.mod-h .code{font-family:var(--f-mono);font-size:11px;color:var(--text-faint);border:1px solid var(--line-2);border-radius:6px;padding:1px 7px}
+.mod-b{padding:0 20px 18px}
+.mod .why{color:var(--text-2);font-size:14.5px;margin-bottom:12px}
+.mod .lbl{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);margin:12px 0 5px}
+.mod ul{margin:0 0 0 18px;color:var(--text-2);font-size:14px}
+.mod ul li{margin:3px 0}
+.mod .how{margin:0 0 0 2px;padding:0;list-style:none;counter-reset:h}
+.mod .how li{position:relative;padding:4px 0 4px 26px;font-size:14px;color:var(--text-2)}
+.mod .how li::before{counter-increment:h;content:counter(h);position:absolute;left:0;top:4px;width:18px;height:18px;border-radius:50%;
+  background:var(--surface-3);color:var(--text-2);font-size:11px;font-weight:700;display:grid;place-items:center}
+.access{margin-top:12px;font-size:13px;color:var(--text-3);background:var(--surface-2);border-radius:var(--r-sm);padding:8px 12px}
+.access b{color:var(--text-2)}
+
+.note{background:color-mix(in srgb,var(--warn) 10%,var(--surface));border:1px solid color-mix(in srgb,var(--warn) 30%,var(--line));
+  border-radius:var(--r-sm);padding:12px 14px;font-size:13.5px;color:var(--text-2);margin:14px 0}
+.foot{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);color:var(--text-faint);font-size:12.5px;text-align:center}
+
+@media print{
+  .top,.toc{display:none}
+  body{font-size:12px;background:#fff}
+  .mod,.card,.hero{break-inside:avoid;border-color:#ddd}
+  .wrap{max-width:none;padding:0}
+}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="brand"><b>ЦУП</b> · Справка</div>
+  <div class="btns">
+    <button onclick="tgl()">◐ Тема</button>
+    <button onclick="window.print()">⎙ Печать / PDF</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="hero">
+    <div class="tag">РУКОВОДСТВО ПОЛЬЗОВАТЕЛЯ</div>
+    <h1>ЦУП — Руководство пользователя</h1>
+    <p>ЦУП (Центр управления проектами) — единый портал ProLabSupport: сервис, продажи, закупки, финансы и аналитика в одном месте. Эта справка объясняет, как войти, как устроен портал и что делает каждый модуль — простыми словами.</p>
+  </div>
+
+  <div class="toc">
+    <a href="#start">С чего начать</a>
+    <a href="#portal">Главный экран</a>
+    <a href="#sales">Продажи и CRM</a>
+    <a href="#service">Сервис и операционка</a>
+    <a href="#supply">Закупки и логистика</a>
+    <a href="#finance">Финансы</a>
+    <a href="#analytics">Аналитика</a>
+    <a href="#system">Система и доступы</a>
+    <a href="#roles">Роли и доступ</a>
+  </div>
+
+  <!-- ПАМЯТКА -->
+  <h2 class="sec" id="start"><span class="dot" style="background:var(--accent)"></span>Памятка: с чего начать</h2>
+  <div class="card quick">
+    <h3>За 5 шагов</h3>
+    <ol class="steps">
+      <li><b>Откройте адрес ЦУП</b> в браузере: <span class="mono">nms.prolabsupport.kz</span>. Можно сохранить в закладки.</li>
+      <li><b>Войдите</b> — логин и пароль выдаёт администратор. При первом входе система попросит настроить подтверждение входа (2FA): отсканируйте QR‑код приложением Google Authenticator и введите 6‑значный код.</li>
+      <li><b>Запомнить устройство</b> — поставьте галочку на своём рабочем компьютере/телефоне, чтобы не вводить код каждый раз (до конца дня). На телефоне можно включить вход по <b>Face ID / отпечатку</b>.</li>
+      <li><b>Выберите модуль</b> на главном экране — плитки сгруппированы по темам. Нужный можно найти <b>поиском</b> вверху.</li>
+      <li><b>Установите как приложение</b> (по желанию): кнопка «Установить приложение» на портале добавит ЦУП на рабочий стол/телефон — открывается как обычное приложение.</li>
+    </ol>
+    <div class="note">Видите только те модули, которые вам выданы по роли и правам. Если чего‑то не хватает или, наоборот, лишнее — скажите администратору, доступ настраивается в модуле «Доступ к модулям».</div>
+  </div>
+
+  <!-- ПОРТАЛ -->
+  <h2 class="sec" id="portal"><span class="dot" style="background:var(--sys)"></span>Главный экран (портал)</h2>
+  <div class="sec-sub">То, что вы видите сразу после входа.</div>
+  <div class="card">
+    <ul style="margin-left:18px;color:var(--text-2)">
+      <li><b>Плитки модулей</b> — сгруппированы по темам (продажи, сервис, закупки, финансы, аналитика). Клик по плитке открывает модуль.</li>
+      <li><b>Поиск</b> вверху — начните печатать название, и портал отфильтрует модули.</li>
+      <li><b>Свернуть группы</b> — чтобы видеть только заголовки разделов.</li>
+      <li><b>Тема</b> — переключатель светлой/тёмной темы (иконка ◐ справа вверху); выбор запоминается.</li>
+      <li><b>ProLab AI</b> — кнопка‑ассистент: можно задать вопрос по данным/модулям.</li>
+      <li><b>Мой кабинет / Выйти</b> — профиль, смена пароля, 2FA, биометрия; выход из системы.</li>
+    </ul>
+  </div>
+
+  <!-- СЕРВИС -->
+  <h2 class="sec" id="service"><span class="dot" style="background:var(--service)"></span>Сервис и операционка</h2>
+  <div class="sec-sub">Ежедневная работа техотдела: заявки, выезды, бонусы, НКТ.</div>
+
+  <div class="mod" style="--c:var(--service)">
+    <div class="mod-h"><span class="name">Сервисные заявки</span><span class="code">SVC</span></div>
+    <div class="mod-b">
+      <div class="why">Главный рабочий модуль сервиса: все заявки клиентов из Bitrix24 в одном списке, с обработкой прямо отсюда.</div>
+      <div class="lbl">Что внутри</div>
+      <ul><li>Список заявок с фильтрами: стадия, тип услуги, инженер, координатор, срочность, просрочка</li><li>Пресеты: тикеты, доки и допы, обязательства, просроченные, все заявки</li><li>Карточка заявки со степпером «Статус заявки» — наглядно, на каком этапе заявка</li></ul>
+      <div class="lbl">Как начать</div>
+      <ol class="how"><li>Откройте «Сервисные заявки», выберите пресет или задайте фильтры</li><li>Нажмите ✎ (редактировать) на нужной заявке</li><li>Смените стадию, назначьте инженера, добавьте комментарий — при необходимости «Сохранить + TG» (уйдёт в Telegram)</li><li>🔔 — напоминание/задача, ✉ — переписка с клиентом по email</li></ol>
+      <div class="access"><b>Доступ:</b> администратор, координатор, инженер.</div>
+    </div>
+  </div>
+
+  <div class="mod" style="--c:var(--service)">
+    <div class="mod-h"><span class="name">Планировщик</span><span class="code">PLN</span></div>
+    <div class="mod-b">
+      <div class="why">Видно занятость инженеров и удобно планировать выезды и командировки.</div>
+      <div class="lbl">Что внутри</div><ul><li>Календарь занятости по инженерам</li><li>Синхронизация с сервисными заявками Bitrix</li></ul>
+      <div class="lbl">Как начать</div><ol class="how"><li>Откройте «Планировщик», выберите период и инженера</li><li>Добавьте или подвиньте событие (выезд/командировку)</li></ol>
+      <div class="access"><b>Доступ:</b> просмотр — все роли; редактирование — координатор/администратор.</div>
+    </div>
+  </div>
+
+  <div class="mod" style="--c:var(--service)">
+    <div class="mod-h"><span class="name">Карта оборудования</span><span class="code">EQP</span></div>
+    <div class="mod-b">
+      <div class="why">Где по стране стоит установленное оборудование клиентов.</div>
+      <div class="lbl">Как начать</div><ol class="how"><li>Откройте карту, масштабируйте/листайте</li><li>Клик по метке — детали по объекту и оборудованию</li></ol>
+      <div class="access"><b>Доступ:</b> администратор, координатор, инженер.</div>
+    </div>
+  </div>
+
+  <div class="mod" style="--c:var(--service)">
+    <div class="mod-h"><span class="name">Бонусы инженеров</span><span class="code">BONUS</span></div>
+    <div class="mod-b">
+      <div class="why">Квартальный расчёт бонусов инженеров по оплатам за сервис и установкам.</div>
+      <div class="lbl">Что внутри</div><ul><li>Расчёт по каждому инженеру, тарифная сетка</li><li>Экспорт в Excel</li></ul>
+      <div class="lbl">Как начать</div><ol class="how"><li>Выберите год и квартал</li><li>Посмотрите расчёт по инженерам; при необходимости — «Экспорт в Excel»</li></ol>
+      <div class="access"><b>Доступ:</b> администратор, координатор; инженер — свои начисления.</div>
+    </div>
+  </div>
+
+  <div class="mod" style="--c:var(--service)">
+    <div class="mod-h"><span class="name">НКТ — регистрация товаров</span><span class="code">NKT</span></div>
+    <div class="mod-b">
+      <div class="why">Регистрация товаров в Национальном каталоге товаров — пошаговый мастер, не запутаешься.</div>
+      <div class="lbl">Что внутри</div><ul><li>Мастер из 7 шагов со степпером: наименование → партномер → проверка дублей → краткое имя → казахский → ОКТРУ → характеристики и отправка</li><li>Реестр черновиков со статусами</li></ul>
+      <div class="lbl">Как начать</div><ol class="how"><li>Нажмите «+ Новая заявка»</li><li>Идите по шагам — данные сохраняются автоматически на каждом</li><li>На шаге 7 отправьте заявку; статус отслеживайте в реестре кнопкой «Статус»</li></ol>
+      <div class="access"><b>Доступ:</b> по выданному праву на модуль НКТ.</div>
+    </div>
+  </div>
+
+  <div class="mod" style="--c:var(--service)">
+    <div class="mod-h"><span class="name">Проекты</span><span class="code">PROJ</span></div>
+    <div class="mod-b">
+      <div class="why">Ведение проектов техотдела и внедрений: статусы, ответственные.</div>
+      <div class="lbl">Как начать</div><ol class="how"><li>Откройте «Проекты», выберите проект</li><li>Смотрите/обновляйте статус и этапы</li></ol>
+      <div class="access"><b>Доступ:</b> по выданному праву на модуль.</div>
+    </div>
+  </div>
+
+  <div class="mod" style="--c:var(--service)">
+    <div class="mod-h"><span class="name">Операционный отчёт</span><span class="code">OPS</span></div>
+    <div class="mod-b">
+      <div class="why">Сводка показателей для оперативных совещаний.</div>
+      <div class="lbl">Как начать</div><ol class="how"><li>Откройте, выберите период</li><li>Используйте на совещании или выгрузите</li></ol>
+      <div class="access"><b>Доступ:</b> администратор, координатор.</div>
+    </div>
+  </div>
+
+  <!-- ПРОДАЖИ -->
+  <h2 class="sec" id="sales"><span class="dot" style="background:var(--sales)"></span>Продажи и CRM</h2>
+  <div class="sec-sub">Сделки, КП, контракты, клиенты, план продаж.</div>
+
+  <div class="mod" style="--c:var(--sales)">
+    <div class="mod-h"><span class="name">План продаж</span><span class="code">SALE</span></div>
+    <div class="mod-b">
+      <div class="why">План продаж и его выполнение по отделам и менеджерам.</div>
+      <div class="lbl">Как начать</div><ol class="how"><li>Выберите период и отдел</li><li>Сравните план и факт, посмотрите динамику</li></ol>
+      <div class="access"><b>Доступ:</b> администратор, координатор.</div>
+    </div>
+  </div>
+
+  <div class="mod" style="--c:var(--sales)">
+    <div class="mod-h"><span class="name">Коммерческие предложения (КП)</span><span class="code">KP</span></div>
+    <div class="mod-b">
+      <div class="why">Сборка КП в одном месте: оборудование и сервис.</div>
+      <div class="lbl">Что внутри</div><ul><li>МЛК — сборка КП по категориям оборудования от экспертов</li><li>Сервис — конструктор сервисных КП + подсказка «кому предложить сервис»</li></ul>
+      <div class="lbl">Как начать</div><ol class="how"><li>Откройте «КП», выберите тип (оборудование / сервис)</li><li>Соберите позиции и сформируйте документ</li></ol>
+      <div class="access"><b>Доступ:</b> администратор, координатор; эксперты — свои категории.</div>
+    </div>
+  </div>
+
+  <div class="mod" style="--c:var(--sales)">
+    <div class="mod-h"><span class="name">Контракты</span><span class="code">CONTR</span></div>
+    <div class="mod-b">
+      <div class="why">Портфель контрактов и выполнение плана.</div>
+      <div class="lbl">Что внутри</div><ul><li>Структура по услугам, стадии</li><li>Помесячная и накопительная динамика</li></ul>
+      <div class="lbl">Как начать</div><ol class="how"><li>Откройте, задайте фильтры (год/отдел)</li><li>Смотрите выполнение и детали по стадиям</li></ol>
+      <div class="access"><b>Доступ:</b> администратор, координатор.</div>
+    </div>
+  </div>
+
+  <div class="mod" style="--c:var(--sales)">
+    <div class="mod-h"><span class="name">Компании</span><span class="code">CMP</span></div>
+    <div class="mod-b">
+      <div class="why">Справочник компаний‑клиентов и «оздоровление» базы (чистим дубли, заполняем БИН).</div>
+      <div class="lbl">Что внутри</div><ul><li>Доска компаний, сферы, флаги стран</li><li>Поиск дублей и слияние карточек</li><li>Обогащение БИН из госреестра (ГБДЮЛ)</li></ul>
+      <div class="lbl">Как начать</div><ol class="how"><li>Найдите компанию</li><li>Проверьте дубли и БИН; при праве — объедините/заполните</li></ol>
+      <div class="access"><b>Доступ:</b> просмотр — с правом на модуль; запись в Б24 — администратор/координатор.</div>
+    </div>
+  </div>
+
+  <div class="mod" style="--c:var(--sales)">
+    <div class="mod-h"><span class="name">Связи сделок</span><span class="code">REL</span></div>
+    <div class="mod-b">
+      <div class="why">Иерархия сделок и смарт‑процессов CRM по клиенту — как всё связано.</div>
+      <div class="lbl">Как начать</div><ol class="how"><li>Откройте по клиенту/из карточки</li><li>Разверните дерево связей</li></ol>
+      <div class="access"><b>Доступ:</b> администратор, координатор.</div>
+    </div>
+  </div>
+
+  <div class="mod" style="--c:var(--sales)">
+    <div class="mod-h"><span class="name">Карта лицензий ГМК</span><span class="code">LIC</span></div>
+    <div class="mod-b">
+      <div class="why">Реестр недропользователей и лицензий на добычу — для поиска потенциальных клиентов.</div>
+      <div class="lbl">Как начать</div><ol class="how"><li>Откройте карту, задайте фильтры (регион/вид)</li><li>Клик по объекту — детали лицензии</li></ol>
+      <div class="access"><b>Доступ:</b> администратор, координатор.</div>
+    </div>
+  </div>
+
+  <div class="mod" style="--c:var(--sales)">
+    <div class="mod-h"><span class="name">Почта</span><span class="code">MAIL</span></div>
+    <div class="mod-b">
+      <div class="why">Контроль переписки по корпоративным ящикам: на все ли письма клиентов ответили.</div>
+      <div class="lbl">Что внутри</div><ul><li>Учёт и классификация писем по ящикам (logistics / orders / sales)</li><li>Контроль ответов</li></ul>
+      <div class="lbl">Как начать</div><ol class="how"><li>Откройте, выберите ящик/фильтр</li><li>Отметьте обработанные письма</li></ol>
+      <div class="access"><b>Доступ:</b> администратор, координатор.</div>
+    </div>
+  </div>
+
+  <!-- ЗАКУПКИ -->
+  <h2 class="sec" id="supply"><span class="dot" style="background:var(--supply)"></span>Закупки и логистика</h2>
+  <div class="sec-sub">Закупки, движение поставок, рассылки.</div>
+
+  <div class="mod" style="--c:var(--supply)">
+    <div class="mod-h"><span class="name">Закупки</span><span class="code">PROC</span></div>
+    <div class="mod-b">
+      <div class="why">Ведение закупок: заявки, статусы, поставщики.</div>
+      <div class="lbl">Как начать</div><ol class="how"><li>Откройте, найдите заявку (фильтры/поиск)</li><li>Работайте со статусом и позициями</li></ol>
+      <div class="access"><b>Доступ:</b> по выданному праву на модуль.</div>
+    </div>
+  </div>
+
+  <div class="mod" style="--c:var(--supply)">
+    <div class="mod-h"><span class="name">Логистика</span><span class="code">LOG</span></div>
+    <div class="mod-b">
+      <div class="why">Отслеживание поставок по этапам.</div>
+      <div class="lbl">Что внутри</div><ul><li>Этапы: закупка, транзит, таможня, доставка</li><li>Статусы по заказам</li></ul>
+      <div class="lbl">Как начать</div><ol class="how"><li>Откройте, найдите заказ/груз</li><li>Смотрите текущий этап и сроки</li></ol>
+      <div class="access"><b>Доступ:</b> по выданному праву на модуль.</div>
+    </div>
+  </div>
+
+  <div class="mod" style="--c:var(--supply)">
+    <div class="mod-h"><span class="name">Рассылки</span><span class="code">CAM</span></div>
+    <div class="mod-b">
+      <div class="why">Email‑кампании клиентам.</div>
+      <div class="lbl">Как начать</div><ol class="how"><li>Создайте или выберите кампанию</li><li>Отправьте и смотрите результаты</li></ol>
+      <div class="access"><b>Доступ:</b> администратор, координатор.</div>
+    </div>
+  </div>
+
+  <!-- ФИНАНСЫ -->
+  <h2 class="sec" id="finance"><span class="dot" style="background:var(--finance)"></span>Финансы (данные из 1С)</h2>
+  <div class="sec-sub">Цифры подтягиваются из 1С и обновляются автоматически в рабочие часы. Чип «обновлено» показывает актуальность.</div>
+
+  <div class="mod" style="--c:var(--finance)">
+    <div class="mod-h"><span class="name">Дебиторка</span><span class="code">DEBT</span></div>
+    <div class="mod-b">
+      <div class="why">Контроль дебиторской задолженности: кто сколько должен и как меняется.</div>
+      <div class="lbl">Что внутри</div><ul><li>Полоса обзора: KPI, динамика за 12 мес., пончик по отделам</li><li>Таблица задолжников</li></ul>
+      <div class="lbl">Как начать</div><ol class="how"><li>Откройте — сверху KPI и график</li><li>Ниже — таблица: кто и сколько должен, фильтры</li></ol>
+      <div class="access"><b>Доступ:</b> администратор, финансы/координатор.</div>
+    </div>
+  </div>
+
+  <div class="mod" style="--c:var(--finance)">
+    <div class="mod-h"><span class="name">Склад · Авансы · Cash Flow · Качество</span><span class="code">STOCK · ADV · CF · QUAL</span></div>
+    <div class="mod-b">
+      <div class="why">Финансовые срезы из 1С: складские остатки, выданные авансы, движение денег, качество/сверки данных.</div>
+      <div class="lbl">Как начать</div><ol class="how"><li>Откройте нужный модуль, выберите период</li><li>Читайте показатели; данные обновляются сами</li></ol>
+      <div class="access"><b>Доступ:</b> администратор, финансы/координатор.</div>
+    </div>
+  </div>
+
+  <!-- АНАЛИТИКА -->
+  <h2 class="sec" id="analytics"><span class="dot" style="background:var(--analytics)"></span>Аналитика</h2>
+  <div class="sec-sub">Сводная аналитика продаж и воронок.</div>
+
+  <div class="mod" style="--c:var(--analytics)">
+    <div class="mod-h"><span class="name">Статистика</span><span class="code">STATS</span></div>
+    <div class="mod-b">
+      <div class="why">Вся аналитика продаж в одном месте.</div>
+      <div class="lbl">Что внутри</div><ul><li>Продажи по производителям, менеджерам, приборам, сферам</li><li>Воронки, конверсии, «путь контракта», проигранные</li><li>Сравнение год‑к‑году (чип ▲/▼ на плитках)</li></ul>
+      <div class="lbl">Как начать</div><ol class="how"><li>Выберите год(а) вверху</li><li>Переключайте вкладки (производители, менеджеры, конверсии и т.д.)</li><li>Наводите курсор на графики — покажет детали</li></ol>
+      <div class="access"><b>Доступ:</b> администратор, координатор.</div>
+    </div>
+  </div>
+
+  <!-- СИСТЕМА -->
+  <h2 class="sec" id="system"><span class="dot" style="background:var(--sys)"></span>Система и доступы</h2>
+  <div class="sec-sub">Личный кабинет и, для администратора, управление доступами.</div>
+
+  <div class="mod" style="--c:var(--sys)">
+    <div class="mod-h"><span class="name">Мой кабинет</span><span class="code">account</span></div>
+    <div class="mod-b">
+      <div class="why">Ваш профиль и безопасность входа.</div>
+      <div class="lbl">Что внутри</div><ul><li>Смена пароля</li><li>Двухфакторная аутентификация (Google Authenticator)</li><li>Вход по Face ID / отпечатку, «запомнить устройство»</li></ul>
+      <div class="access"><b>Доступ:</b> все пользователи.</div>
+    </div>
+  </div>
+
+  <div class="mod" style="--c:var(--sys)">
+    <div class="mod-h"><span class="name">Управление · Доступ к модулям</span><span class="code">admin · cup-admin</span></div>
+    <div class="mod-b">
+      <div class="why">Для администратора: учётные записи и права.</div>
+      <div class="lbl">Что внутри</div><ul><li>«Управление» — пользователи системы</li><li>«Доступ к модулям» — матрица «пользователь × модуль»: кому какие модули открыты (здесь выдают и снимают доступ)</li></ul>
+      <div class="access"><b>Доступ:</b> только суперадмин.</div>
+    </div>
+  </div>
+
+  <!-- РОЛИ -->
+  <h2 class="sec" id="roles"><span class="dot" style="background:var(--accent)"></span>Роли и доступ</h2>
+  <div class="card">
+    <p style="color:var(--text-2)">Доступ складывается из двух вещей: <b>роль</b> (определяет базовые возможности и право правки) и <b>права на конкретные модули</b> (что открыто именно вам — настраивается в «Доступе к модулям»). Роли в системе:</p>
+    <ul style="margin:10px 0 0 18px;color:var(--text-2)">
+      <li><b>Суперадмин</b> — полный доступ, включая «Управление» и «Доступ к модулям».</li>
+      <li><b>Администратор</b> — все модули, кроме «Управления» и «Доступа к модулям».</li>
+      <li><b>Руководитель продаж</b> — видит все сделки своего отдела (План продаж, Связи, Дебет).</li>
+      <li><b>Менеджер продаж</b> — видит свои сделки и сделки своего отдела.</li>
+      <li><b>Координатор</b> — сервисная координация: правка в Сервисных заявках и Реализации.</li>
+      <li><b>Сервисный инженер</b> — сервисные заявки (правит заявки, назначенные на него), планировщик, карта оборудования, свои бонусы.</li>
+      <li><b>Логист</b> — логистика.</li>
+      <li><b>Бухгалтер</b> — финансовые модули по выданному доступу.</li>
+      <li><b>Маркетолог</b> — рассылки.</li>
+      <li><b>Наблюдатель</b> — только просмотр выданных модулей.</li>
+    </ul>
+    <div class="note">В модулях продаж (План продаж, Связи, Дебет) работает построчное ограничение: менеджер видит только свои сделки и сделки своего отдела, руководитель — весь свой отдел, администратор — всё. Если какого‑то модуля не хватает или, наоборот, он лишний — скажите администратору, доступ настраивается в «Доступе к модулям».</div>
+  </div>
+
+  <div class="foot">ЦУП · ProLabSupport · nms.prolabsupport.kz — руководство пользователя. Актуализируется по мере развития системы.</div>
+</div>
+
+<script>
+function tgl(){var d=document.documentElement;var dark=d.getAttribute('data-theme')==='dark';d.setAttribute('data-theme',dark?'light':'dark');try{localStorage.setItem('pls-theme',dark?'light':'dark');}catch(e){}}
+</script>
+</body>
+</html>

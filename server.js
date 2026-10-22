@@ -166,6 +166,8 @@ app.get('/finance-cashflow.html', requireModule('CASHFLOW'), (_, res) => res.sen
 app.get('/companies.html', requireModule('CMP'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'companies.html')));
 app.get('/cup-admin.html', requirePageAuth(['superadmin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'cup-admin.html')));
 app.get('/account.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'account.html')));
+// Справка (руководство пользователя) — доступна всем залогиненным.
+app.get('/help.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'help.html')));
 // `index:false` — without this, static would auto-serve public/index.html
 // for "/" and silently undo everything above.
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
