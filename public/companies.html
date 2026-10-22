@@ -193,10 +193,10 @@ details>summary::-webkit-details-marker{display:none}
     <button class="rbtn ghost" onclick="clearSel()">Снять выделение</button>
   </div>
   <div class="card">
-    <div class="hint" style="padding:9px 14px;border-bottom:1px solid var(--border)">Показано: <b id="shown" style="color:var(--text-2)">0</b>. ☑ — отметить для слияния или массового удаления; клик по сфере — изменить; ✎ — переименовать; ↗ — открыть в Битрикс; число «Сделок» — список сделок; 🗑 — удалить. Изменения сразу пишутся в Битрикс.</div>
+    <div class="hint" style="padding:9px 14px;border-bottom:1px solid var(--border)">Показано: <b id="shown" style="color:var(--text-2)">0</b> <button class="rbtn ghost" style="padding:3px 9px;font-size:11px;margin:0 6px" onclick="selectAllFiltered(event)">☑ Выделить все отфильтрованные</button>. ☑ в шапке — тоже выделяет всё; отметить для слияния или массового удаления; клик по сфере — изменить; ✎ — переименовать; ↗ — открыть в Битрикс; число «Сделок» — список сделок; 🗑 — удалить. Изменения сразу пишутся в Битрикс.</div>
     <div style="overflow:auto;max-height:calc(100vh - 330px)">
       <table class="tbl"><thead><tr>
-        <th style="width:26px"></th><th>Название</th><th>Сфера деятельности</th><th>БИН</th><th>Ответственный</th><th>Город</th><th class="num">Сделок</th><th>Проблемы</th><th></th>
+        <th style="width:26px"><input type="checkbox" id="selAllChk" title="Выделить всё отфильтрованное" onclick="toggleSelAll(this.checked)"></th><th>Название</th><th>Сфера деятельности</th><th>БИН</th><th>Ответственный</th><th>Город</th><th class="num">Сделок</th><th>Проблемы</th><th></th>
       </tr></thead><tbody id="body"></tbody></table>
     </div>
   </div>
@@ -348,7 +348,7 @@ function render(){
       <td class="num"><span class="act del" title="Удалить компанию" onclick="delCompany('${esc(r.id)}',${JSON.stringify(r.title||'').replace(/"/g,'&quot;')})">🗑</span></td>
     </tr>`;
   }).join(''):'<tr><td class="hint" colspan="9">Нет компаний по фильтру.</td></tr>';
-  updateMergeBar();
+  updateMergeBar(); syncSelAllChk();
   document.getElementById('shown').textContent=rows.length+(rows.length>3000?' (показаны первые 3000 — уточните фильтр)':'');
 }
 // Инлайн-правка сферы: подменяем ячейку на <select>, сохраняем при выборе.
@@ -387,8 +387,13 @@ async function saveTitle(id){
   render();
 }
 // ── Ручное слияние: выбор компаний галочками в реестре ──────────────────────
-function toggleSel(id,on){ if(on)SEL.add(id); else SEL.delete(id); updateMergeBar(); }
-function clearSel(){ SEL.clear(); document.querySelectorAll('.regchk').forEach(c=>c.checked=false); updateMergeBar(); }
+function toggleSel(id,on){ if(on)SEL.add(id); else SEL.delete(id); updateMergeBar(); syncSelAllChk(); }
+function clearSel(){ SEL.clear(); document.querySelectorAll('.regchk').forEach(c=>c.checked=false); updateMergeBar(); syncSelAllChk(); }
+// Выделить/снять ВСЕ строки под текущим фильтром (не только видимые на экране).
+function toggleSelAll(on){ const rows=filtered(); if(on){ rows.forEach(r=>SEL.add(r.id)); } else { rows.forEach(r=>SEL.delete(r.id)); } render(); updateMergeBar(); }
+function selectAllFiltered(e){ if(e&&e.preventDefault)e.preventDefault(); toggleSelAll(true); }
+// Состояние чекбокса в шапке: отмечен — если все отфильтрованные выбраны; «часть» — если некоторые.
+function syncSelAllChk(){ const chk=document.getElementById('selAllChk'); if(!chk)return; const rows=filtered(); const all=rows.length>0&&rows.every(r=>SEL.has(r.id)); const some=rows.some(r=>SEL.has(r.id)); chk.checked=all; chk.indeterminate=some&&!all; }
 function updateMergeBar(){
   const bar=document.getElementById('mergeBar'); if(!bar)return;
   bar.style.display=SEL.size?'flex':'none';
