@@ -90,6 +90,11 @@ th:last-child,td:last-child{text-align:right;}
 .role-store{background:rgba(53,208,192,.14);color:#0f766e;}
 .role-accountant{background:rgba(202,138,4,.14);color:#a16207;}
 .role-viewer{background:rgba(107,114,128,.1);color:#6b7280;}
+.role-superadmin{background:rgba(197,59,47,.16);color:#C53B2F;}
+.role-sales{background:rgba(47,106,217,.1);color:#2f6ad9;}
+.role-sales_head{background:rgba(47,106,217,.2);color:#1e4ea0;}
+.role-service{background:rgba(5,150,105,.12);color:#059669;}
+.role-marketolog{background:rgba(124,58,237,.12);color:#7c3aed;}
 
 .status-on{display:inline-flex;align-items:center;gap:4px;color:#059669;font-size:12px;font-weight:500;}
 .status-off{display:inline-flex;align-items:center;gap:4px;color:var(--text-4);font-size:12px;}
@@ -322,15 +327,19 @@ th:last-child,td:last-child{text-align:right;}
       <div class="form-group">
         <label class="form-label">Роль</label>
         <select class="form-select" id="fRole" onchange="toggleEngineerField()">
-          <option value="viewer">viewer — только просмотр выданных модулей</option>
-          <option value="engineer">engineer / sales — правит только свои заявки/сделки, без удаления</option>
+          <option value="superadmin">superadmin — всё, включая «Управление» и «Доступ к модулям»</option>
+          <option value="admin">admin — все модули, кроме «Управления»/«Доступа»</option>
+          <option value="sales_head">sales_head — руководитель продаж: все сделки своего отдела</option>
+          <option value="sales">sales — менеджер продаж: свои сделки и сделки своего отдела</option>
+          <option value="service">service — сервисный инженер: правит свои назначенные заявки</option>
+          <option value="coordinator">coordinator — правит любые; удаляет в «Планировщике»/«Сервисных заявках»</option>
           <option value="manager">manager — правит любые; удаляет в «Реализации»</option>
           <option value="logist">logist — правит любые; удаляет в «Логистике»</option>
-          <option value="store">store — правит любые закупки в «Закупках» (без удаления); прочее — просмотр</option>
-          <option value="accountant">accountant / бухгалтер — видит свои закупки в «Закупках», согласовывает и комментирует</option>
-          <option value="marketolog">marketolog / маркетолог — правит все «Рассылки»; в «Закупках» полный цикл по своим заявкам</option>
-          <option value="coordinator">coordinator — правит любые; удаляет в «Планировщике»/«Сервисных заявках»</option>
-          <option value="admin">admin — полный доступ, удаление везде</option>
+          <option value="store">store — правит закупки в «Закупках» (без удаления); прочее — просмотр</option>
+          <option value="accountant">accountant / бухгалтер — закупки: согласование и комментарии</option>
+          <option value="marketolog">marketolog / маркетолог — правит «Рассылки»; закупки по своим заявкам</option>
+          <option value="engineer">engineer — (устар.) правит только свои заявки, без удаления</option>
+          <option value="viewer">viewer — только просмотр выданных модулей</option>
         </select>
       </div>
       <div class="form-group" id="engineerField">
@@ -405,8 +414,8 @@ async function init() {
     const r = await fetch('/auth/me');
     if (!r.ok) { window.location.href = '/login.html'; return; }
     const d = await r.json();
-    if (d.user.role !== 'admin') { window.location.href = '/'; return; }
-    document.getElementById('currentUser').textContent = d.user.displayName + ' · admin';
+    if (d.user.role !== 'admin' && d.user.role !== 'superadmin') { window.location.href = '/'; return; }
+    document.getElementById('currentUser').textContent = d.user.displayName + ' · ' + d.user.role;
     loadUsers();
     loadBitrixEmployees();
     loadTotpStatus(d.user);
@@ -571,7 +580,7 @@ function getSelectedKpCategories() {
 
 function toggleEngineerField() {
   const role = document.getElementById('fRole').value;
-  document.getElementById('engineerField').style.display = role === 'engineer' ? '' : 'none';
+  document.getElementById('engineerField').style.display = (role === 'engineer' || role === 'service') ? '' : 'none';
 }
 
 // Список сотрудников Bitrix для привязки учётки (id → имя).
