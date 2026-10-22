@@ -4,7 +4,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../auth');
 
-const EDIT = ['admin', 'coordinator'];
+const EDIT = ['admin']; // правка «Компаний» — только админам (superadmin наследует)
 
 // Доска компаний (список + справочник сфер + сводка проблем)
 router.get('/', requireAuth([]), async (req, res) => {

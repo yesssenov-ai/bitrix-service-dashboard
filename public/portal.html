@@ -322,7 +322,7 @@ const catColor = code => { const c = CATS.find(x => x.id === CAT_OF[code]); retu
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-let USERKEY = '', IS_ADMIN = false, ALLOWED = new Set(), FILTER = 'all';
+let USERKEY = '', IS_ADMIN = false, IS_SUPERADMIN = false, ALLOWED = new Set(), FILTER = 'all';
 
 function orderKey(){ return 'pls-portal-order:' + (USERKEY || 'u'); }
 function loadOrder(){ try{ return JSON.parse(localStorage.getItem(orderKey()) || 'null'); }catch(e){ return null; } }
@@ -430,8 +430,8 @@ const SYS_ICON = {
 function renderSystem(){
   const items = [];
   items.push(`<a class="sys-chip" href="${ACCOUNT_CARD.href}">${SYS_ICON.cab}Мой кабинет</a>`);
-  if (ALLOWED.has('ADM')) items.push(`<a class="sys-chip" href="/admin.html">${SYS_ICON.adm}Управление</a>`);
-  if (IS_ADMIN) items.push(`<a class="sys-chip" href="/cup-admin.html">${SYS_ICON.acc}Доступ к модулям</a>`);
+  if (IS_SUPERADMIN) items.push(`<a class="sys-chip" href="/admin.html">${SYS_ICON.adm}Управление</a>`);
+  if (IS_SUPERADMIN) items.push(`<a class="sys-chip" href="/cup-admin.html">${SYS_ICON.acc}Доступ к модулям</a>`);
   document.getElementById('sysrow').innerHTML = items.join('');
   document.getElementById('sysBlock').style.display = '';
 }
@@ -471,7 +471,8 @@ async function init(){
     if (!r.ok) { window.location.href='/login.html'; return; }
     const { user } = await r.json();
     USERKEY = user.username || user.displayName || 'u';
-    IS_ADMIN = user.role === 'admin';
+    IS_ADMIN = user.role === 'admin' || user.role === 'superadmin';
+    IS_SUPERADMIN = user.role === 'superadmin';
     document.getElementById('userName').innerHTML = `<b>${esc(user.displayName)}</b>`;
     const hour = new Date().getHours();
     const greeting = hour<6?'Доброй ночи':hour<12?'Доброе утро':hour<18?'Добрый день':'Добрый вечер';
@@ -480,7 +481,7 @@ async function init(){
     let allowedCodes = [];
     try{
       const ar = await fetch('/api/portal/my-access');
-      if (ar.ok) { const a = await ar.json(); allowedCodes = a.admin ? MODULES.map(m=>m.code) : (a.modules || []); }
+      if (ar.ok) { const a = await ar.json(); allowedCodes = a.admin ? MODULES.map(m=>m.code) : (a.modules || []); if (!IS_SUPERADMIN) allowedCodes = allowedCodes.filter(c => c !== 'ADM'); }
     }catch(e){ allowedCodes = []; }
     ALLOWED = new Set(allowedCodes);
     render();

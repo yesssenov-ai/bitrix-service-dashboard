@@ -3,6 +3,8 @@ const router = express.Router();
 const { pool, auditLog, bcrypt, requireAuth } = require('../auth');
 const { USERS, VALID_ROLES } = require('../constants');
 
+// Весь раздел /admin/* — это «Управление» (учётки, роли, журнал) и «Доступ к
+// модулям». По распоряжению — только суперадмины. Обычный admin сюда не входит.
 const MIN_PASSWORD_LENGTH = 8;
 
 function validateRole(role) {
@@ -15,7 +17,7 @@ function sanitizeError(e, res) {
 }
 
 // GET /admin/tg-links
-router.get('/tg-links', requireAuth(['admin']), async (req, res) => {
+router.get('/tg-links', requireAuth(['superadmin']), async (req, res) => {
   try {
     const links = await pool.query(
       'SELECT bitrix_user_id, telegram_chat_id, linked_at FROM ticketsmodule_telegram_links'
@@ -41,7 +43,7 @@ router.get('/tg-links', requireAuth(['admin']), async (req, res) => {
 // ВСЕХ реальных людей, включая ID ≤ 10 (напр. Куаныш Есенов = 4), исключая только
 // настоящие служебные аккаунты.
 const SERVICE_ACCOUNTS = new Set(['Администратор', 'Power BI']);
-router.get('/employee-options', requireAuth(['admin']), async (req, res) => {
+router.get('/employee-options', requireAuth(['superadmin']), async (req, res) => {
   try {
     const users = Object.entries(USERS)
       .map(([id, name]) => ({ id: Number(id), name }))
@@ -52,7 +54,7 @@ router.get('/employee-options', requireAuth(['admin']), async (req, res) => {
 });
 
 // GET /admin/users
-router.get('/users', requireAuth(['admin']), async (req, res) => {
+router.get('/users', requireAuth(['superadmin']), async (req, res) => {
   try {
     const r = await pool.query(
       'SELECT id,username,display_name,role,totp_enabled,active,engineer_name,mail_mailbox,kp_categories,bitrix_user_id,created_at FROM ticketsmodule_users'
@@ -64,7 +66,7 @@ router.get('/users', requireAuth(['admin']), async (req, res) => {
 });
 
 // POST /admin/users
-router.post('/users', requireAuth(['admin']), async (req, res) => {
+router.post('/users', requireAuth(['superadmin']), async (req, res) => {
   try {
     const { username, displayName, password, role, engineerName, mailMailbox, kpCategories, bitrixUserId } = req.body;
     const bitrixId = (bitrixUserId === '' || bitrixUserId == null) ? null : parseInt(bitrixUserId, 10) || null;
@@ -98,7 +100,7 @@ router.post('/users', requireAuth(['admin']), async (req, res) => {
 });
 
 // PUT /admin/users/:id
-router.put('/users/:id', requireAuth(['admin']), async (req, res) => {
+router.put('/users/:id', requireAuth(['superadmin']), async (req, res) => {
   try {
     const { displayName, role, active, engineerName, mailMailbox, kpCategories, password, username, bitrixUserId } = req.body;
     const id = parseInt(req.params.id);
@@ -143,7 +145,7 @@ router.put('/users/:id', requireAuth(['admin']), async (req, res) => {
 // POST /admin/users/:id/reset-2fa — сбросить 2FA сотруднику (потерял аутентификатор).
 // После сброса при следующем входе он пройдёт обязательную настройку 2FA заново
 // (новый QR). Только админ.
-router.post('/users/:id/reset-2fa', requireAuth(['admin']), async (req, res) => {
+router.post('/users/:id/reset-2fa', requireAuth(['superadmin']), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (!id) return res.status(400).json({ ok: false, error: 'Неверный ID' });
@@ -155,7 +157,7 @@ router.post('/users/:id/reset-2fa', requireAuth(['admin']), async (req, res) => 
 });
 
 // DELETE /admin/users/:id (soft delete)
-router.delete('/users/:id', requireAuth(['admin']), async (req, res) => {
+router.delete('/users/:id', requireAuth(['superadmin']), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (id === req.user.id) return res.status(400).json({ ok: false, error: 'Нельзя деактивировать себя' });
@@ -168,7 +170,7 @@ router.delete('/users/:id', requireAuth(['admin']), async (req, res) => {
 // DELETE /admin/users/:id/permanent — безвозвратное удаление учётки.
 // Нельзя удалить себя и последнего активного администратора. Журнал действий
 // сохраняется (user_id обнулится по ON DELETE SET NULL, имя останется в записях).
-router.delete('/users/:id/permanent', requireAuth(['admin']), async (req, res) => {
+router.delete('/users/:id/permanent', requireAuth(['superadmin']), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (!id) return res.status(400).json({ ok: false, error: 'Неверный ID' });
@@ -194,7 +196,7 @@ router.delete('/users/:id/permanent', requireAuth(['admin']), async (req, res) =
 // Bitrix, сразу проставляется bitrix_user_id (для уведомлений). Категорию КП и
 // почтовый ящик НЕ трогаем. Идемпотентно: существующие учётки (по логину) не
 // изменяются — можно запускать повторно при найме новых.
-router.post('/import-bitrix-users', requireAuth(['admin']), async (req, res) => {
+router.post('/import-bitrix-users', requireAuth(['superadmin']), async (req, res) => {
   try {
     const { fetchAllActiveUsers } = require('./planner-routes');
     const users = await fetchAllActiveUsers();
@@ -223,7 +225,7 @@ router.post('/import-bitrix-users', requireAuth(['admin']), async (req, res) => 
 });
 
 // GET /admin/logs
-router.get('/logs', requireAuth(['admin']), async (req, res) => {
+router.get('/logs', requireAuth(['superadmin']), async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 50, 200);
     const offset = Math.max(parseInt(req.query.offset) || 0, 0);
@@ -252,7 +254,7 @@ router.get('/logs', requireAuth(['admin']), async (req, res) => {
 });
 
 // GET /admin/notification-log — who was notified about which planner event, when, and whether it actually went through
-router.get('/notification-log', requireAuth(['admin']), async (req, res) => {
+router.get('/notification-log', requireAuth(['superadmin']), async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 50, 200);
     const offset = Math.max(parseInt(req.query.offset) || 0, 0);
@@ -283,7 +285,7 @@ router.get('/notification-log', requireAuth(['admin']), async (req, res) => {
 const MODULE_CODES = ['PLN', 'SVC', 'EQP', 'LIC', 'REL', 'MAIL', 'KP', 'BONUS', 'STATS', 'CONTR', 'SALE', 'NKT', 'PROJ', 'LOG', 'OPS', 'PROC', 'CAM', 'DEBT', 'STOCK', 'QUALITY', 'ADV', 'CASHFLOW', 'CMP', 'ADM'];
 
 // GET /admin/bitrix-employees — every active Bitrix employee + their current module access
-router.get('/bitrix-employees', requireAuth(['admin']), async (req, res) => {
+router.get('/bitrix-employees', requireAuth(['superadmin']), async (req, res) => {
   try {
     const { fetchAllActiveUsers } = require('./planner-routes');
     const users = await fetchAllActiveUsers();
@@ -302,7 +304,7 @@ router.get('/bitrix-employees', requireAuth(['admin']), async (req, res) => {
 });
 
 // PUT /admin/module-access/:bitrixUserId — save one employee's allowed modules
-router.put('/module-access/:bitrixUserId', requireAuth(['admin']), async (req, res) => {
+router.put('/module-access/:bitrixUserId', requireAuth(['superadmin']), async (req, res) => {
   try {
     const bitrixUserId = parseInt(req.params.bitrixUserId, 10);
     const modules = Array.isArray(req.body.modules) ? req.body.modules.filter(m => MODULE_CODES.includes(m)) : [];
@@ -321,7 +323,7 @@ router.put('/module-access/:bitrixUserId', requireAuth(['admin']), async (req, r
 // модуля «Проекты / Комплексные сделки». Дёргает поля рабочим серверным вебхуком
 // и показывает совпадения по ключевым словам + значения «Тип КП/Договора».
 // Только админ. Можно удалить после настройки.
-router.get('/discover-fields', requireAuth(['admin']), async (req, res) => {
+router.get('/discover-fields', requireAuth(['superadmin']), async (req, res) => {
   try {
     const { b24 } = require('../bitrix');
     const { result } = await b24('crm.deal.fields', {});

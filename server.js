@@ -139,7 +139,7 @@ app.get('/planner.html', requireModule('PLN'), (_, res) => res.sendFile(path.joi
 app.get('/equipment-map.html', requireModule('EQP'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'equipment-map.html')));
 app.get('/licenses-map.html', requireModule('LIC'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'licenses-map.html')));
 app.get('/relations.html', requireModule('REL'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'relations.html')));
-app.get('/admin.html', requirePageAuth(['admin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/admin.html', requirePageAuth(['superadmin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/mail.html', requireModule('MAIL'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'mail.html')));
 app.get('/kp.html', requireModule('KP'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'kp.html')));
 app.get('/kp-hub.html', requireModule('KP'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'kp-hub.html')));
@@ -164,7 +164,7 @@ app.get('/finance-quality.html', requireModule('QUALITY'), (_, res) => res.sendF
 app.get('/finance-advances.html', requireModule('ADV'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'finance-advances.html')));
 app.get('/finance-cashflow.html', requireModule('CASHFLOW'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'finance-cashflow.html')));
 app.get('/companies.html', requireModule('CMP'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'companies.html')));
-app.get('/cup-admin.html', requirePageAuth(['admin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'cup-admin.html')));
+app.get('/cup-admin.html', requirePageAuth(['superadmin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'cup-admin.html')));
 app.get('/account.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'account.html')));
 // `index:false` — without this, static would auto-serve public/index.html
 // for "/" and silently undo everything above.
@@ -514,7 +514,7 @@ app.get('/api/users', requireAuth(), (_, res) => {
 // с фолбэком на совпадение по имени для старых учёток без явной привязки.
 app.get('/api/portal/my-access', requireAuth(), async (req, res) => {
   try {
-    if (req.user.role === 'admin') return res.json({ ok: true, admin: true });
+    if (req.user.role === 'admin' || req.user.role === 'superadmin') return res.json({ ok: true, admin: true });
     let bitrixUserId = req.user.bitrix_user_id || null;
     if (!bitrixUserId && req.user.engineer_name) {
       const found = Object.entries(USERS).find(([, name]) => name === req.user.engineer_name);

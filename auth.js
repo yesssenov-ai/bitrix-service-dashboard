@@ -390,6 +390,11 @@ async function initDB() {
     -- Назначается администратором в карточке пользователя.
     ALTER TABLE ticketsmodule_users ADD COLUMN IF NOT EXISTS bitrix_user_id INTEGER;
 
+    -- Бутстрап суперадминов (распорядители «Управление»/«Доступ к модулям»).
+    -- Идемпотентно, срабатывает при старте: повышает назначенных из admin → superadmin.
+    UPDATE ticketsmodule_users SET role='superadmin'
+      WHERE username IN ('kuanysh.e@prolabsupport.kz','dmitriy.v@prolabsupport.kz') AND role='admin';
+
     CREATE TABLE IF NOT EXISTS ticketsmodule_ticket_emails (
       id SERIAL PRIMARY KEY,
       ticket_id INTEGER NOT NULL,
@@ -668,7 +673,8 @@ function requireAuth(roles = []) {
       if (!result.rows.length) return res.status(401).json({ ok: false, error: 'Пользователь не найден', redirect: '/login' });
 
       const user = result.rows[0];
-      if (roles.length && !roles.includes(user.role)) {
+      // superadmin проходит везде, где требуется admin (наследует права админа).
+      if (roles.length && !roles.includes(user.role) && !(user.role === 'superadmin' && roles.includes('admin'))) {
         return res.status(403).json({ ok: false, error: 'Недостаточно прав' });
       }
       req.user = user;
@@ -691,7 +697,7 @@ function requirePageAuth(roles = []) {
       const result = await pool.query('SELECT * FROM ticketsmodule_users WHERE id=$1 AND active=true', [payload.userId]);
       if (!result.rows.length) return res.redirect('/login.html');
       const user = result.rows[0];
-      if (roles.length && !roles.includes(user.role)) return res.redirect('/');
+      if (roles.length && !roles.includes(user.role) && !(user.role === 'superadmin' && roles.includes('admin'))) return res.redirect('/');
       req.user = user;
       next();
     } catch (e) {
@@ -701,13 +707,18 @@ function requirePageAuth(roles = []) {
 }
 
 // ── Роли и доступы ────────────────────────────────────────────────────────────
+// admin-подобные роли: обычный админ и суперадмин имеют полные права во всех
+// модулях. Разница только в «Управлении»/«Доступе к модулям» — они под superadmin.
+const ADMIN_LIKE = new Set(['admin', 'superadmin']);
+function isAdminLike(role) { return ADMIN_LIKE.has(role); }
+
 // Может ли пользователь РЕДАКТИРОВАТЬ заявку/сделку.
 //  admin/manager/coordinator — любые; engineer — только «свои» (совпадает
 //  инженер по имени ИЛИ он ответственный в Bitrix — assignedById); viewer — нет.
 function canEdit(user, ticket) {
   if (!user) return false;
   // Полное право правки — у всех «управляющих» ролей.
-  if (['admin', 'manager', 'logist', 'coordinator'].includes(user.role)) return true;
+  if (['admin', 'superadmin', 'manager', 'logist', 'coordinator'].includes(user.role)) return true;
   if (user.role === 'engineer') {
     if (user.engineer_name && ticket && ticket.engineer === user.engineer_name) return true;
     const uid = user.bitrix_user_id;
@@ -727,7 +738,7 @@ const DELETE_MODULES_BY_ROLE = {
 // Может ли пользователь УДАЛЯТЬ в модуле moduleCode (удаление всегда логируется).
 function canDelete(user, moduleCode) {
   if (!user) return false;
-  if (user.role === 'admin') return true;
+  if (isAdminLike(user.role)) return true;
   const set = DELETE_MODULES_BY_ROLE[user.role];
   return !!(set && set.has(String(moduleCode || '')));
 }
@@ -735,7 +746,7 @@ function canDelete(user, moduleCode) {
 // Коды выданных пользователю модулей (admin → все). Возвращает Set строк.
 async function userModuleCodes(user) {
   if (!user) return new Set();
-  if (user.role === 'admin') return null; // null = все модули
+  if (isAdminLike(user.role)) return null; // null = все модули (admin и superadmin)
   let bid = user.bitrix_user_id || null;
   if (!bid && user.engineer_name) {
     const { USERS } = require('./constants');
@@ -787,7 +798,7 @@ async function initEquipmentMapDB() {} // no-op, table created in initDB above
 
 module.exports = {
   pool, initDB, initEquipmentMapDB, auditLog, requireAuth, requirePageAuth, canEdit,
-  canDelete, userModuleCodes, requireModule, requireModuleApi,
+  canDelete, userModuleCodes, requireModule, requireModuleApi, isAdminLike,
   checkLoginRateLimit, recordLoginAttempt, clearLoginAttempts, tokenBlacklist,
   bcrypt, jwt, speakeasy, JWT_SECRET, SESSION_HOURS, VALID_ROLES,
 };
