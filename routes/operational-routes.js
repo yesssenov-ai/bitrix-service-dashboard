@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { b24 } = require('../bitrix');
-const { requireAuth, auditLog, pool } = require('../auth');
+const { requireAuth, auditLog, pool, isAdminLike } = require('../auth');
 const { getBoard, getDealDetail, getEditMeta, invalidateDealDetail, F } = require('../operational');
 const { refresh: refreshOperationalCache, syncOneDeal, updateFactoryShipDate } = require('../operational-sync');
 const { buildPdf, buildXlsx } = require('../operational-export');
@@ -37,14 +37,13 @@ function invalidatePerms() { _permCache = null; }
 //   viewer и прочие → только «view».
 async function userCan(user, cap) {
   if (!user) return false;
-  if (user.role === 'admin') return true;
+  if (isAdminLike(user.role)) return true;
   // Просмотр — всем, кому выдан модуль (страница гейтится грантом requireModule('OPS')).
   if (cap === 'view') return true;
-  // Управленческие роли — полный доступ ко всем write-действиям.
-  if (user.role === 'manager' || user.role === 'logist' || user.role === 'coordinator') return true;
-  // Инженер — базово разрешаем write-cap; own-deal ограничение применяется в роутах.
-  if (user.role === 'engineer') return EDIT_CAPS.includes(cap);
-  // viewer и все остальные — без прав на изменение.
+  // По распоряжению: правка в «Реализации» — только у руководителей отделов и четвёрки.
+  // manager/logist/coordinator — в т.ч. четвёрка (координаторы); sales_head — руководители продаж.
+  if (['manager', 'logist', 'coordinator', 'sales_head'].includes(user.role)) return true;
+  // Инженеры (engineer/service), продажники и прочие — только просмотр.
   return false;
 }
 
@@ -249,7 +248,7 @@ router.get('/my-access', requireAuth(), async (req, res) => {
   try {
     const caps = {};
     for (const c of ALL_CAPS) caps[c] = await userCan(req.user, c);
-    res.json({ ok: true, role: req.user.role, isAdmin: req.user.role === 'admin', caps });
+    res.json({ ok: true, role: req.user.role, isAdmin: isAdminLike(req.user.role), caps });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 

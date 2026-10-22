@@ -10,7 +10,7 @@ for (const key of REQUIRED) {
   if (!process.env[key]) { console.error(`❌ Missing env: ${key}`); process.exit(1); }
 }
 const { b24, flattenInto } = require('./bitrix');
-const { initDB, requireAuth, requirePageAuth, requireModule, auditLog, canEdit, canDelete, pool } = require('./auth');
+const { initDB, requireAuth, requirePageAuth, requireModule, requireKpPage, auditLog, canEdit, canDelete, pool } = require('./auth');
 const { tgMgt, tgOps, tgBoth, notifyNewTicket, notifyOverdueNew } = require('./notifications');
 const telegramLinkBot = require('./telegram-link-bot');
 const equipmentRoutes = require('./routes/equipment-routes');
@@ -141,11 +141,11 @@ app.get('/licenses-map.html', requireModule('LIC'), (_, res) => res.sendFile(pat
 app.get('/relations.html', requireModule('REL'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'relations.html')));
 app.get('/admin.html', requirePageAuth(['superadmin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/mail.html', requireModule('MAIL'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'mail.html')));
-app.get('/kp.html', requireModule('KP'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'kp.html')));
-app.get('/kp-hub.html', requireModule('KP'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'kp-hub.html')));
+app.get('/kp.html', requireKpPage(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'kp.html')));
+app.get('/kp-hub.html', requireKpPage(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'kp-hub.html')));
 app.get('/kp-service.html', requireModule('KP'), (req, res) => {
-  // Подмодуль «Сервис» — только координатор/админ (доступ к самому КП — по гранту).
-  if (!['admin', 'coordinator'].includes(req.user && req.user.role)) return res.redirect('/kp-hub.html');
+  // Подмодуль «Сервис» — только координатор/админ/суперадмин (доступ к самому КП — по гранту).
+  if (!['admin', 'superadmin', 'coordinator'].includes(req.user && req.user.role)) return res.redirect('/kp-hub.html');
   res.sendFile(path.join(__dirname, 'public', 'kp-service.html'));
 });
 app.get('/bonus.html', requireModule('BONUS'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'bonus.html')));

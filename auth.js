@@ -795,12 +795,37 @@ function requireModuleApi(moduleCode) {
   }];
 }
 
+// Доступ к странице КП: как requireModule('KP'), но дополнительно пускает
+// назначенного эксперта МЛК (есть строка в kp_request_categories), даже если
+// грант KP ему не выдан — «кого назначили исполнителем, тем и доступ».
+function requireKpPage() {
+  return async (req, res, next) => {
+    try {
+      const token = req.cookies?.token;
+      if (!token || tokenBlacklist.has(token)) return res.redirect('/login.html');
+      const payload = jwt.verify(token, JWT_SECRET);
+      if (payload.step) return res.redirect('/login.html');
+      const result = await pool.query('SELECT * FROM ticketsmodule_users WHERE id=$1 AND active=true', [payload.userId]);
+      if (!result.rows.length) return res.redirect('/login.html');
+      const user = result.rows[0]; req.user = user; req.token = token;
+      const codes = await userModuleCodes(user);
+      if (codes === null || codes.has('KP')) return next();
+      try {
+        const { rows } = await pool.query(
+          'SELECT 1 FROM ticketsmodule_kp_request_categories WHERE expert_id=$1 OR $1 = ANY(expert_ids) LIMIT 1', [user.id]);
+        if (rows.length) return next();
+      } catch (e) { /* таблицы ещё нет — просто без исключения */ }
+      return res.redirect('/');
+    } catch (e) { return res.redirect('/login.html'); }
+  };
+}
+
 // ── Equipment map DB init (kept in same initDB now) ───────────────────────────
 async function initEquipmentMapDB() {} // no-op, table created in initDB above
 
 module.exports = {
   pool, initDB, initEquipmentMapDB, auditLog, requireAuth, requirePageAuth, canEdit,
-  canDelete, userModuleCodes, requireModule, requireModuleApi, isAdminLike,
+  canDelete, userModuleCodes, requireModule, requireModuleApi, requireKpPage, isAdminLike,
   checkLoginRateLimit, recordLoginAttempt, clearLoginAttempts, tokenBlacklist,
   bcrypt, jwt, speakeasy, JWT_SECRET, SESSION_HOURS, VALID_ROLES,
 };

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
-const { requireAuth, pool } = require('../auth');
+const { requireAuth, pool, isAdminLike } = require('../auth');
 const { notifyPersonal } = require('../kp-notify');
 
 // PM-level access: who may create requests, review, and approve. Kept as a
@@ -22,7 +22,7 @@ function inMlkPm(user) {
   const keys = [String(user.id || ''), String(user.username || '').toLowerCase(), String(user.bitrix_user_id || '')];
   return keys.some(k => k && MLK_PM_EXTRA.has(k));
 }
-function isPm(user) { return PM_ROLES.includes(user.role) || inMlkPm(user); }
+function isPm(user) { return isAdminLike(user && user.role) || PM_ROLES.includes(user.role) || inMlkPm(user); }
 // Middleware для PM-действий подмодуля МЛК: пускаем PM-роли ИЛИ аллоулист МЛК.
 function requirePm() {
   return [requireAuth(), (req, res, next) => isPm(req.user) ? next() : res.status(403).json({ error: 'Недостаточно прав' })];
