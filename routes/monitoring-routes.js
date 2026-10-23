@@ -30,6 +30,12 @@ router.get('/history', requireAuth(SA), async (req, res) => {
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
+// Прогноз/ёмкость по трендам + активные алерты
+router.get('/forecast', requireAuth(SA), async (req, res) => {
+  try { res.set('Cache-Control', 'no-store'); res.json(Object.assign({ ok: true, alerts: mon.activeAlerts() }, await mon.forecast(pool))); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 // Завершить сессии пользователя («выкинуть»)
 router.post('/kick/:userId', requireAuth(SA), async (req, res) => {
   try {

@@ -7,7 +7,7 @@
 (function () {
   if (window.__prolabAI) return; window.__prolabAI = true;
   var css = `
-  #pai-fab{position:fixed;top:58px;right:58px;z-index:99998;width:34px;height:34px;padding:0;
+  #pai-fab{position:fixed;top:98px;right:16px;z-index:99998;width:34px;height:34px;padding:0;
     display:inline-flex;align-items:center;justify-content:center;border-radius:9px;cursor:pointer;
     background:var(--surface,#fff);color:var(--accent,#C53B2F);border:1px solid var(--line-2,#d6dbe4);
     box-shadow:0 1px 2px rgba(20,25,35,.06);transition:color .15s,border-color .15s}

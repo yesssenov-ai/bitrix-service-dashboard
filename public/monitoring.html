@@ -44,6 +44,8 @@ table.t tr:last-child td{border-bottom:none}
 .hrange{font-size:12px;font-weight:600;border:1px solid var(--line-2);background:var(--surface);color:var(--text-3);border-radius:999px;padding:4px 12px;cursor:pointer}
 .hrange.act{background:var(--accent);color:#fff;border-color:var(--accent)}
 .sec .right{margin-left:auto;display:flex;gap:6px;text-transform:none;letter-spacing:0}
+.fcgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px}
+.alertbox{background:color-mix(in srgb,var(--bad) 10%,var(--surface));border:1px solid var(--bad);color:var(--bad);border-radius:10px;padding:11px 15px;font-weight:600;font-size:13px;margin:0 0 6px}
 </style>
 </head>
 <body>
@@ -55,6 +57,7 @@ table.t tr:last-child td{border-bottom:none}
   </div>
 </div>
 <div class="page">
+  <div id="alertBanner"></div>
 
   <div class="sec"><span class="sdot" id="stDot" style="background:var(--text-faint)"></span>Состояние сейчас</div>
   <div class="kpis" id="kpis"></div>
@@ -64,8 +67,8 @@ table.t tr:last-child td{border-bottom:none}
 
   <div class="sec">Пользователи онлайн · <span id="onCount" class="muted">—</span></div>
   <div class="card" style="overflow:auto;padding:0">
-    <table class="t"><thead><tr><th>Сотрудник</th><th>Роль</th><th>Активность</th><th>Последний экран</th><th>IP</th><th></th></tr></thead>
-    <tbody id="onBody"><tr><td colspan="6" class="muted" style="padding:14px">загрузка…</td></tr></tbody></table>
+    <table class="t"><thead><tr><th>Сотрудник</th><th>Роль</th><th>Активность</th><th>В сессии</th><th>Последний экран</th><th>IP</th><th></th></tr></thead>
+    <tbody id="onBody"><tr><td colspan="7" class="muted" style="padding:14px">загрузка…</td></tr></tbody></table>
   </div>
 
   <div class="sec">Нагрузка · эндпоинты (<span id="winMin">15</span> мин)</div>
@@ -82,6 +85,10 @@ table.t tr:last-child td{border-bottom:none}
   <div id="hinfo" class="muted" style="font-size:11.5px;margin:-4px 0 10px">данные накапливаются…</div>
   <div class="kpis" id="charts"></div>
 
+  <div class="sec">Прогноз и ёмкость</div>
+  <div id="fcInfo" class="muted" style="font-size:11.5px;margin:-4px 0 10px">данные накапливаются…</div>
+  <div class="fcgrid" id="forecast"></div>
+
   <div class="sec">Система</div>
   <div class="card mono" id="sysinfo" style="font-size:12.5px;color:var(--text-2);line-height:1.9"></div>
 
@@ -93,6 +100,8 @@ const api=async(u,o)=>{const r=await fetch(u,Object.assign({credentials:'include
 function col(pct){ if(pct==null) return 'var(--text-faint)'; if(pct>=90)return 'var(--bad)'; if(pct>=75)return 'var(--warn)'; return 'var(--good)'; }
 function statusColor(s){ return s==='bad'?'var(--bad)':s==='warn'?'var(--warn)':'var(--good)'; }
 function fmtUptime(s){ s=s||0; const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60); return (d?d+'д ':'')+(h?h+'ч ':'')+m+'м'; }
+function fmtDur(s){ s=s||0; if(s<60)return Math.round(s)+' с'; const h=Math.floor(s/3600),m=Math.floor(s%3600/60); return (h?h+'ч ':'')+m+'м'; }
+function hhmm(ts){ try{return new Date(ts).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});}catch(e){return '';} }
 function kpi(lab,val,sub,meterPct,meterCol){ return `<div class="card kpi"><div class="lab">${lab}</div><div class="val">${val}</div>${sub?`<div class="sub">${sub}</div>`:''}${meterPct!=null?`<div class="meter"><i style="width:${Math.min(100,meterPct)}%;background:${meterCol||col(meterPct)}"></i></div>`:''}</div>`; }
 
 async function loadOverview(){
@@ -127,10 +136,11 @@ async function loadOnline(){
     const idle=u.idleSec<60?u.idleSec+' с назад':Math.floor(u.idleSec/60)+' мин назад';
     return `<tr><td><b>${esc(u.name)}</b></td><td><span class="rolechip">${esc(u.role||'—')}</span></td>
       <td>${u.online?'<span class="on">● онлайн</span>':'<span class="off">'+idle+'</span>'}</td>
+      <td style="white-space:nowrap">${u.sinceTs?('с '+hhmm(u.sinceTs)+' <span class="muted" style="font-size:11.5px">· '+fmtDur(u.sessionSec)+'</span>'):'—'}</td>
       <td class="mono muted" style="font-size:11.5px">${esc(u.lastRoute||'')}</td>
       <td class="mono muted" style="font-size:11.5px">${esc(u.ip||'')}</td>
       <td style="text-align:right"><button class="kbtn" onclick="kick(${u.id},'${esc(u.name).replace(/'/g,"\\'")}')">Выкинуть</button></td></tr>`;
-  }).join('')||'<tr><td colspan="6" class="muted" style="padding:14px">никого онлайн</td></tr>';
+  }).join('')||'<tr><td colspan="7" class="muted" style="padding:14px">никого онлайн</td></tr>';
 }
 async function loadDeps(){
   const d=await api('/api/monitoring/deps'); if(!d||!d.ok)return;
@@ -181,11 +191,22 @@ async function loadHistory(range){
   ].join('');
   document.getElementById('hinfo').textContent=P.length?('точек: '+P.length+' · с '+new Date(P[0].t).toLocaleString('ru-RU')):'данные накапливаются — первые точки появятся в течение нескольких минут';
 }
+// ── Прогноз / ёмкость ──────────────────────────────────────────────────────
+function fcChip(s){ const c=s==='risk'?'var(--bad)':s==='watch'?'var(--warn)':'var(--good)'; const t=s==='risk'?'риск':s==='watch'?'внимание':'в норме'; return '<span class="pill" style="border-color:'+c+';color:'+c+'"><span class="sdot" style="background:'+c+'"></span>'+t+'</span>'; }
+async function loadForecast(){
+  const d=await api('/api/monitoring/forecast'); if(!d||!d.ok)return;
+  const al=d.alerts||[];
+  document.getElementById('alertBanner').innerHTML = al.length ? ('<div class="alertbox">⚠️ Активные предупреждения: '+al.map(a=>esc(a.label)).join(', ')+'. Подробнее в Telegram / в карточках ниже.</div>') : '';
+  const fc=document.getElementById('forecast'), inf=document.getElementById('fcInfo');
+  if(!d.ready){ inf.textContent=d.note||'данные накапливаются'; fc.innerHTML=''; return; }
+  inf.textContent='на основе '+d.points+' точек за '+d.spanHours+' ч';
+  fc.innerHTML=(d.items||[]).map(it=>'<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-weight:650;font-size:13px">'+esc(it.title)+'</div>'+fcChip(it.status)+'</div><div style="font-size:12.5px;color:var(--text-2);margin-top:7px;line-height:1.5">'+esc(it.text)+'</div></div>').join('');
+}
 function tick(){ if(document.hidden)return; loadOverview(); loadOnline(); }
-loadOverview(); loadOnline(); loadDeps(); loadHistory('24h');
+loadOverview(); loadOnline(); loadDeps(); loadHistory('24h'); loadForecast();
 setInterval(tick,8000);                                   // live — из памяти, пауза при скрытой вкладке
 setInterval(()=>{ if(!document.hidden) loadDeps(); },30000);   // зависимости — кэш 25с на сервере
-setInterval(()=>{ if(!document.hidden) loadHistory(HRANGE); },60000); // история — кэш 55с на сервере
+setInterval(()=>{ if(!document.hidden){ loadHistory(HRANGE); loadForecast(); } },60000); // история/прогноз — кэш на сервере
 </script>
 </body>
 </html>
