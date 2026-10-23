@@ -702,7 +702,7 @@ async function loadUserInfo(){
     const ui=document.getElementById('userInfo');
     if(ui) ui.textContent=u.displayName+' · '+u.role;
     // Показываем раздел ящиков только для админа
-    if(u.role==='admin'){
+    if(u.role==='admin'||u.role==='superadmin'){
       document.getElementById('mailboxSection').style.display='block';
     }
   }catch(e){}

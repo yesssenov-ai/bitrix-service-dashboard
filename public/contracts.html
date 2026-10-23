@@ -413,7 +413,7 @@ function confettiBurst(x,y){
 
 async function init(){
   try{const r=await fetch('/auth/me');if(r.ok){const {user}=await r.json();ROLE=user.role;}}catch(e){}
-  if(ROLE==='admin')document.getElementById('planCard').classList.add('editable');
+  if(ROLE==='admin'||ROLE==='superadmin')document.getElementById('planCard').classList.add('editable');
   await load();
   refreshNow(true); // при открытии сразу тихо подтягиваем изменившиеся сделки
 }
@@ -621,7 +621,7 @@ function renderPlan(){
   }).join('');
   document.querySelectorAll('#planRows .planrow').forEach(row=>{
     const dep=decodeURIComponent(row.dataset.dep);
-    row.onclick=e=>{if(e.target.classList.contains('planval')&&ROLE==='admin'){editPlan(dep,e.target);return;}toggleFilter(dep);};
+    row.onclick=e=>{if(e.target.classList.contains('planval')&&(ROLE==='admin'||ROLE==='superadmin')){editPlan(dep,e.target);return;}toggleFilter(dep);};
   });
   setTimeout(()=>document.querySelectorAll('#planRows .fill').forEach(f=>f.style.width=f.dataset.w+'%'),200);
   const planTotal=rows.reduce((a,r)=>a+r.plan,0),factTotal=rows.reduce((a,r)=>a+r.fact,0);

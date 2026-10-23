@@ -65,7 +65,7 @@
       const r = await fetch('/auth/me');
       if (!r.ok) return;
       const { user } = await r.json();
-      if (['admin', 'coordinator'].includes(user.role)) {
+      if (['admin', 'superadmin', 'coordinator'].includes(user.role)) {
         const c = document.getElementById('svcCard'); if (c) c.style.display = '';
       }
     } catch (e) { /* оставляем скрытым */ }

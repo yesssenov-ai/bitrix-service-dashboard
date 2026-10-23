@@ -56,7 +56,7 @@ async function getDealResponsible(dealId) {
   return d && d.ASSIGNED_BY_ID != null ? parseInt(d.ASSIGNED_BY_ID, 10) : null;
 }
 async function ensureOwnDealIfEngineer(req, res, dealId) {
-  if (!req.user || req.user.role !== 'engineer') return true;
+  if (!req.user || !['engineer', 'service'].includes(req.user.role)) return true;
   const respId = await getDealResponsible(dealId);
   const mine = req.user.bitrix_user_id != null && respId === parseInt(req.user.bitrix_user_id, 10);
   if (!mine) { res.status(403).json({ ok: false, error: 'Можно менять только свои сделки' }); return false; }

@@ -190,7 +190,7 @@ const OPENG=new Set(), OPENC=new Set(), OPENP=new Set();
 const OPENK=new Set(), OPENKG=new Set(), OPENKC=new Set(); let KSCOPE='all';
 
 async function init(){
-  try{const r=await fetch('/auth/me');if(r.ok){const {user}=await r.json();ROLE=user.role;CANEDIT=['admin','coordinator'].includes(ROLE);}}catch(e){}
+  try{const r=await fetch('/auth/me');if(r.ok){const {user}=await r.json();ROLE=user.role;CANEDIT=['admin','superadmin','coordinator'].includes(ROLE);}}catch(e){}
   document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.t,b));
   document.querySelectorAll('#kamScope button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#kamScope button').forEach(x=>x.classList.toggle('on',x===b));KSCOPE=b.dataset.s;renderKam();});
   $('resyncBtn').onclick=doResync;
@@ -384,7 +384,7 @@ async function doResync(){
 }
 init();
 </script>
-  <script src="/assets/pls-ai.js?v=17" defer></script>
+  <script src="/assets/pls-ai.js?v=16" defer></script>
 <script src="/assets/cup-theme.js" defer></script>
 </body>
 </html>

@@ -199,7 +199,7 @@ async function init(){
   if (!r.ok) { window.location.href='/login.html'; return; }
   const d = await r.json();
   me = d.user;
-  isPm = ['admin','coordinator'].includes(me.role);
+  isPm = ['admin','superadmin','coordinator'].includes(me.role);
   document.getElementById('userName').innerHTML = `<b>${esc(me.displayName)}</b>`;
 
   const yearSel = document.getElementById('fYear');
@@ -211,7 +211,7 @@ async function init(){
   document.getElementById('fQuarter').value = String(nowQuarter > 1 ? nowQuarter - 1 : 4);
 
   if (isPm) await loadEngineerOptions();
-  if (me.role === 'admin') document.getElementById('tariffBtn').style.display = '';
+  if (me.role === 'admin' || me.role === 'superadmin') document.getElementById('tariffBtn').style.display = '';
 
   document.getElementById('content').innerHTML = '<div class="card" style="text-align:center;color:var(--text-dim)">Выберите период и нажмите «Рассчитать»</div>';
 }

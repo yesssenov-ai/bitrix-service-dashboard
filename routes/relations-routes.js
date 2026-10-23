@@ -29,7 +29,7 @@ function relBid(user) {
 }
 function relAllowedManagers(user) {
   const role = user && user.role;
-  if (isAdminLike(role) || role === 'manager') return null; // все
+  if (isAdminLike(role) || role === 'manager' || role === 'coordinator') return null; // все
   const bid = relBid(user);
   const s = new Set();
   if (bid) s.add(bid);

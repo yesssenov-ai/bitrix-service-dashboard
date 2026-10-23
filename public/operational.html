@@ -859,7 +859,7 @@ async function init(){
     if(!r.ok){location.href='/login.html';return;}
     const {user}=await r.json();
     document.getElementById('userName').innerHTML=`<b>${esc(user.displayName)}</b>`;
-    window.IS_ADMIN = user.role==='admin';
+    window.IS_ADMIN = user.role==='admin' || user.role==='superadmin';
     // What can THIS user do here (view/edit каждого типа)? Drives the pencil + which controls show.
     try{ const ar=await fetch('/api/operational/my-access'); if(ar.ok){ const ad=await ar.json(); if(ad.ok) window.ACCESS=ad; } }catch(e){/* falls back to view-only */}
     window.CAN_MANAGE = EDIT_CAPS.some(c=>can(c));

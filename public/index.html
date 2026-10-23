@@ -613,12 +613,12 @@ function renderTable(items){
 function applyRoleCaps(){
   const me = window._me; if(!me) return;
   const role = me.role;
-  const full = ['admin','manager','logist','coordinator'].includes(role);
+  const full = ['admin','superadmin','manager','logist','coordinator'].includes(role);
   document.querySelectorAll('tr.tr').forEach(tr => {
     const btns = tr.querySelectorAll('.act-btn.edit, .act-btn.bell, .act-btn.mail');
     let show = true;
     if (role === 'viewer') show = false;
-    else if (role === 'engineer') {
+    else if (role === 'engineer' || role === 'service') {
       const eng = (tr.getAttribute('data-eng')||'').trim();
       show = !!(me.engineerName && eng && eng === me.engineerName);
     } else if (!full) show = false;

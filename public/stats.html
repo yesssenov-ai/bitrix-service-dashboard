@@ -272,7 +272,7 @@ async function load(force){
   try{
     const me=await fetch('/auth/me');if(!me.ok){location.href='/login.html';return;}
     const u=await me.json();document.getElementById('who').innerHTML='<b>'+esc(u.user.displayName)+'</b>';
-    if(u.user.role==='admin'){IS_ADMIN=true;document.getElementById('resyncBtn').style.display='';}
+    if(u.user.role==='admin'||u.user.role==='superadmin'){IS_ADMIN=true;document.getElementById('resyncBtn').style.display='';}
     const r=await fetch('/api/stats/board?years='+years+(force?'&force=1':''));
     if(!r.ok){document.getElementById('content').innerHTML='<div class="empty">Не удалось загрузить статистику.</div>';return;}
     BOARD=await r.json();

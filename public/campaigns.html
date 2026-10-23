@@ -253,7 +253,7 @@ async function api(u,o){const r=await fetch(u,o);let d={};try{d=await r.json()}c
 async function boot(){
   const r=await fetch('/auth/me'); if(!r.ok){location.href='/login.html';return;}
   ME=(await r.json()).user;
-  if(ME && ['admin','marketolog'].includes(ME.role)){ const lb=document.getElementById('logoBox'); if(lb) lb.style.display=''; }
+  if(ME && ['admin','superadmin','marketolog'].includes(ME.role)){ const lb=document.getElementById('logoBox'); if(lb) lb.style.display=''; }
   await loadIndustries(); loadHistory();
   try{document.execCommand('styleWithCSS',false,false);}catch(e){}   // жирный как <b>, не span-стили
   const ed=document.getElementById('cBody');
@@ -540,7 +540,7 @@ async function sendNow(){
 }
 
 const fmtDT=v=>{ if(!v)return''; const d=new Date(v); return isNaN(d)?'':d.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); };
-const isAdmin=()=>!!(ME&&ME.role==='admin');
+const isAdmin=()=>!!(ME&&(ME.role==='admin'||ME.role==='superadmin'));
 // Удаление рассылки (только админ) — из Черновиков, Истории и Аналитики. Необратимо.
 async function delCamp(id){
   if(!confirm('Удалить рассылку #'+id+' безвозвратно?\nВместе с ней удалятся все получатели и вся статистика по ней.'))return;

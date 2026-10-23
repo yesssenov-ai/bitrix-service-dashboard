@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { requireAuth } = require('../auth');
+const { requireAuth, isAdminLike } = require('../auth');
 const mailLib = require('../mail-lib');
 const { pollInbox } = require('../mail-poller');
 
@@ -8,7 +8,7 @@ const { pollInbox } = require('../mail-poller');
 // (set per-account in admin.html, mail_mailbox column). No mailbox assigned
 // yet = sees nothing, rather than guessing.
 function mailboxFilterFor(user) {
-  if (user.role === 'admin') return null;
+  if (isAdminLike(user.role)) return null;
   return user.mail_mailbox || '__none__';
 }
 

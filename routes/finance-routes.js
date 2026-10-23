@@ -29,7 +29,8 @@ function debtBid(user) {
   return null;
 }
 function debtScope(user) {
-  if (isAdminLike(user && user.role)) return null; // все отделы
+  const r = user && user.role;
+  if (isAdminLike(r) || r === 'coordinator') return null; // админ/суперадмин/координатор — все отделы
   const bid = debtBid(user);
   const org = bid ? EMPLOYEE_DEPT[bid] : null;
   return { departments: (org && DEBT_DEPTS_BY_ORG[org]) || [] }; // нет соответствия → пусто (fail-closed)

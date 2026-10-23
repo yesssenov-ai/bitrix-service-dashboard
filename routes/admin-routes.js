@@ -57,7 +57,10 @@ router.get('/employee-options', requireAuth(['superadmin']), async (req, res) =>
 router.get('/users', requireAuth(['superadmin']), async (req, res) => {
   try {
     const r = await pool.query(
-      'SELECT id,username,display_name,role,totp_enabled,active,engineer_name,mail_mailbox,kp_categories,bitrix_user_id,created_at FROM ticketsmodule_users'
+      `SELECT u.id,u.username,u.display_name,u.role,u.totp_enabled,u.active,u.engineer_name,u.mail_mailbox,u.kp_categories,u.bitrix_user_id,u.created_at,
+              (SELECT MAX(l.created_at) FROM ticketsmodule_audit_logs l
+                WHERE l.user_id=u.id AND l.action IN ('LOGIN_SUCCESS','LOGIN_2FA_SUCCESS')) AS last_login
+       FROM ticketsmodule_users u`
     );
     // Всегда по алфавиту (кириллица корректно — через localeCompare 'ru').
     r.rows.sort((a, b) => String(a.display_name || '').localeCompare(String(b.display_name || ''), 'ru', { sensitivity: 'base' }));

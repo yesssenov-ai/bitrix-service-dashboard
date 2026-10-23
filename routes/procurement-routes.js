@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { requireAuth, requireModuleApi, userModuleCodes } = require('../auth');
+const { requireAuth, requireModuleApi, userModuleCodes, isAdminLike } = require('../auth');
 
 // Доступ к модулю «Закупки»: admin, coordinator и store правят закупки.
 const ROLES = ['admin', 'coordinator', 'store'];
@@ -217,7 +217,7 @@ router.post('/:id/stage', requireAuth(VIEW_ROLES), express.json(), async (req, r
       }
     }
     // Админ может пропускать стадии (force) — шлюзы требований не проверяются.
-    const out = await moveStage(id, body.stageKey, { reason: body.reason, byBid: req.user.bitrix_user_id || null, force: role === 'admin' });
+    const out = await moveStage(id, body.stageKey, { reason: body.reason, byBid: req.user.bitrix_user_id || null, force: isAdminLike(role) });
     res.json({ ok: true, ...out });
   } catch (e) {
     // needReason → фронт покажет запрос причины отката (не как обычную ошибку).

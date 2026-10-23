@@ -44,7 +44,7 @@ router.get('/', requireAuth(VIEW_ROLES), async (req, res) => {
     const role = req.user && req.user.role;
     // План продаж: админ/суперадмин и руководитель отдела (sales_head) — все сделки;
     // остальные (sales и пр.) — только свои и своего отдела.
-    const fullView = isAdminLike(role) || role === 'sales_head' || role === 'manager';
+    const fullView = isAdminLike(role) || role === 'sales_head' || role === 'manager' || role === 'coordinator';
     const scope = fullView ? null : { managerIds: deptManagerIds(bid, EMPLOYEE_DEPT) };
     const data = await getPlanSales(scope);
     // Права на комментарии: помечаем каждую сделку — может ли текущий пользователь
