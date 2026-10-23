@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { pool, auditLog, bcrypt, requireAuth } = require('../auth');
+const { pool, auditLog, bcrypt, requireAuth, jwt, JWT_SECRET, SESSION_HOURS } = require('../auth');
 const { USERS, VALID_ROLES } = require('../constants');
+
+const IMP_COOKIE = (maxAge) => ({ httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge });
 
 // Весь раздел /admin/* — это «Управление» (учётки, роли, журнал) и «Доступ к
 // модулям». По распоряжению — только суперадмины. Обычный admin сюда не входит.
@@ -66,6 +68,32 @@ router.get('/users', requireAuth(['superadmin']), async (req, res) => {
     r.rows.sort((a, b) => String(a.display_name || '').localeCompare(String(b.display_name || ''), 'ru', { sensitivity: 'base' }));
     res.json({ ok: true, users: r.rows });
   } catch(e) { sanitizeError(e, res); }
+});
+
+// POST /admin/impersonate/:id — «Войти от имени» выбранного сотрудника.
+// Только суперадмин. Выдаём токен на userId цели + claim imp (кто вошёл), чтобы
+// показать плашку и дать кнопку «вернуться к себе». Полная сессия сотрудника —
+// суперадмин видит ровно то, что видит он (как «войти под пользователем» в Битриксе).
+router.post('/impersonate/:id', requireAuth(['superadmin']), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ ok: false, error: 'Неверный ID' });
+    if (id === req.user.id) return res.status(400).json({ ok: false, error: 'Нельзя войти от своего же имени' });
+    const r = await pool.query('SELECT id, username, display_name, role FROM ticketsmodule_users WHERE id=$1 AND active=true', [id]);
+    if (!r.rows.length) return res.status(404).json({ ok: false, error: 'Пользователь не найден или деактивирован' });
+    const target = r.rows[0];
+    if (target.role === 'superadmin') return res.status(400).json({ ok: false, error: 'Нельзя войти от имени другого суперадмина' });
+    const maxAge = SESSION_HOURS * 3600000;
+    const token = jwt.sign(
+      { userId: target.id, imp: { by: req.user.id, byName: req.user.display_name } },
+      JWT_SECRET, { expiresIn: `${SESSION_HOURS}h` }
+    );
+    res.cookie('token', token, IMP_COOKIE(maxAge));
+    await auditLog(req.user.id, req.user.username, 'IMPERSONATE_START', null,
+      { target_user_id: target.id, target_username: target.username, target_role: target.role },
+      req.headers['x-forwarded-for'] || req.ip, req.headers['user-agent']);
+    res.json({ ok: true, as: target.display_name });
+  } catch (e) { sanitizeError(e, res); }
 });
 
 // POST /admin/users

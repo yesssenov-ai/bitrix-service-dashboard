@@ -90,6 +90,9 @@ const PWA_AI = '<script src="/assets/pls-ai.js?v=17" defer></script>';
 // картинки тема-зависимые). Подставляется на КАЖДУЮ страницу новой дизайн-системы
 // (включая вход). Пропускаем, если страница уже подключает cup-bg.js.
 const CUP_BG = '<script src="/assets/cup-bg.js" defer></script>';
+// Плашка «Вход от имени» — показывается, только если сессия в режиме импersonation
+// (/auth/me вернул impersonatedBy). Подставляется на каждую страницу, кроме входа.
+const IMP_BAR = '<script src="/assets/impersonation.js?v=1" defer></script>';
 app.use((req, res, next) => {
   const orig = res.sendFile.bind(res);
   res.sendFile = (fp, opts, cb) => {
@@ -105,7 +108,8 @@ app.use((req, res, next) => {
           const isSelfThemed = /help\.html$/.test(fp);
           const needAI = usesNewUI && !isLogin && !out.includes('/assets/pls-ai.js');
           const needBG = usesNewUI && !out.includes('/assets/cup-bg.js');
-          const head = PWA_BASE + '\n' + ((usesNewUI || isSelfThemed) ? '' : LEGACY_THEME + '\n') + PWA_BADGE + '\n' + (needAI ? PWA_AI + '\n' : '') + (needBG ? CUP_BG + '\n' : '');
+          const needImp = !isLogin && !out.includes('/assets/impersonation.js');
+          const head = PWA_BASE + '\n' + ((usesNewUI || isSelfThemed) ? '' : LEGACY_THEME + '\n') + PWA_BADGE + '\n' + (needAI ? PWA_AI + '\n' : '') + (needBG ? CUP_BG + '\n' : '') + (needImp ? IMP_BAR + '\n' : '');
           out = out.replace('</head>', head + '</head>');
         }
         res.set('Content-Type', 'text/html; charset=utf-8');

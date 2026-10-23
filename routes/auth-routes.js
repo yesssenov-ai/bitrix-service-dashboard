@@ -194,7 +194,34 @@ router.post('/logout', requireAuth(), async (req, res) => {
 // GET /auth/me
 router.get('/me', requireAuth(), (req, res) => {
   const u = req.user;
-  res.json({ ok: true, user: { id: u.id, username: u.username, displayName: u.display_name, role: u.role, engineerName: u.engineer_name, totpEnabled: u.totp_enabled } });
+  const out = { ok: true, user: { id: u.id, username: u.username, displayName: u.display_name, role: u.role, engineerName: u.engineer_name, totpEnabled: u.totp_enabled } };
+  // Если это сессия «входа от имени» — сообщаем фронту, кто вошёл (для плашки и выхода).
+  if (u._imp && u._imp.by) out.impersonatedBy = { id: u._imp.by, name: u._imp.byName || 'Суперадмин' };
+  res.json(out);
+});
+
+// POST /auth/stop-impersonate — вернуться из режима «входа от имени» в свою учётку.
+// Текущая сессия — это сотрудник, под которым вошли; настоящего суперадмина берём
+// из claim imp.by в токене. Проверяем, что он ещё активен и всё ещё superadmin.
+router.post('/stop-impersonate', async (req, res) => {
+  try {
+    const token = req.cookies?.token;
+    if (!token) return res.status(401).json({ ok: false, error: 'Не авторизован' });
+    const payload = jwt.verify(token, JWT_SECRET);
+    if (!payload.imp || !payload.imp.by) return res.status(400).json({ ok: false, error: 'Сессия не в режиме входа от имени' });
+    const r = await pool.query("SELECT id, username, display_name, role FROM ticketsmodule_users WHERE id=$1 AND active=true", [payload.imp.by]);
+    if (!r.rows.length || r.rows[0].role !== 'superadmin') {
+      res.clearCookie('token');
+      return res.status(403).json({ ok: false, error: 'Исходная учётка недоступна', redirect: '/login' });
+    }
+    const sa = r.rows[0];
+    const spec = sessionSpec(false);
+    const restored = jwt.sign({ userId: sa.id }, JWT_SECRET, { expiresIn: spec.expiresIn });
+    res.cookie('token', restored, COOKIE_OPTS(spec.maxAge));
+    await auditLog(sa.id, sa.username, 'IMPERSONATE_STOP', null, { from_user_id: payload.userId },
+      req.headers['x-forwarded-for'] || req.ip, req.headers['user-agent']);
+    res.json({ ok: true });
+  } catch (e) { res.status(401).json({ ok: false, error: 'Сессия истекла', redirect: '/login' }); }
 });
 
 // POST /auth/setup-totp

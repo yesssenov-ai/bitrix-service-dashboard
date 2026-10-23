@@ -685,6 +685,7 @@ function requireAuth(roles = []) {
         return res.status(403).json({ ok: false, error: 'Недостаточно прав' });
       }
       req.user = user;
+      req.user._imp = payload.imp || null; // режим «входа от имени» (кто из суперадминов вошёл)
       req.token = token;
       next();
     } catch(e) {
@@ -707,6 +708,7 @@ function requirePageAuth(roles = []) {
       if (isKicked(user, payload)) return res.redirect('/login.html');
       if (roles.length && !roles.includes(user.role) && !(user.role === 'superadmin' && roles.includes('admin'))) return res.redirect('/');
       req.user = user;
+      req.user._imp = payload.imp || null; // режим «входа от имени»
       next();
     } catch (e) {
       res.redirect('/login.html');
