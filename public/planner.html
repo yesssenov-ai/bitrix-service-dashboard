@@ -742,9 +742,9 @@ let myRole = 'viewer';
 // (Управление / Data Fields / staff sync): admin/coordinator only.
 let canEditRole = false, canDeleteRole = false, canConfigRole = false;
 function applyRoleCaps() {
-  canEditRole   = ['admin','manager','logist','coordinator','engineer'].includes(myRole);
-  canDeleteRole = ['admin','coordinator'].includes(myRole);
-  canConfigRole = ['admin','coordinator'].includes(myRole);
+  canEditRole   = ['admin','superadmin','manager','logist','coordinator','engineer','service'].includes(myRole);
+  canDeleteRole = ['admin','superadmin','coordinator'].includes(myRole);
+  canConfigRole = ['admin','superadmin','coordinator'].includes(myRole);
   const hide = (sel) => { const el = document.querySelector(sel); if (el) el.style.display = 'none'; };
   if (!canEditRole)   hide('button[onclick="openNew()"]');       // + Событие
   if (!canConfigRole) hide('button[onclick="openAdmin()"]');     // Управление

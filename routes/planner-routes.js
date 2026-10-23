@@ -317,7 +317,7 @@ router.delete('/events/:id', requireAuth(), async (req, res) => {
 // Planner configuration (data fields, config blobs, staff sync) is restricted
 // to admin and coordinator — this is the coordinator's module.
 function requirePlannerAdmin(req, res, next) {
-  if (!['admin', 'coordinator'].includes(req.user.role)) {
+  if (!['admin', 'superadmin', 'coordinator'].includes(req.user.role)) {
     return res.status(403).json({ error: 'Недостаточно прав' });
   }
   next();
