@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ЦУП — Мониторинг</title>
+<meta name="theme-color" content="#f6f7f9">
+<script>(function(){try{var m=localStorage.getItem('pls-theme');document.documentElement.setAttribute('data-theme',m==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
+<link rel="stylesheet" href="/assets/cup-ui.css">
+<style>
+.page{max-width:1240px;margin:0 auto;padding:18px 22px 70px}
+.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);padding:12px 22px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.top .brand{font-weight:720;font-size:16px;letter-spacing:-.01em}.top .brand b{color:var(--accent)}
+.top .r{display:flex;align-items:center;gap:10px}
+.top button{font-family:inherit;font-size:13px;font-weight:600;border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);border-radius:999px;padding:7px 14px;cursor:pointer}
+.top button:hover{color:var(--text);border-color:var(--text-3)}
+.muted{color:var(--text-3)}.mono{font-family:var(--f-mono,ui-monospace,Consolas,monospace)}
+.sec{font-size:12.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-3);margin:22px 0 10px;display:flex;align-items:center;gap:8px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r,12px);padding:16px 18px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.kpi .lab{font-size:12px;color:var(--text-3);margin-bottom:5px}
+.kpi .val{font-size:24px;font-weight:740;letter-spacing:-.02em}
+.kpi .sub{font-size:11.5px;color:var(--text-faint);margin-top:3px}
+.meter{height:7px;border-radius:5px;background:var(--surface-3,#e9ecf1);overflow:hidden;margin-top:8px}
+.meter i{display:block;height:100%;border-radius:5px;transition:width .4s}
+.sdot{display:inline-block;width:9px;height:9px;border-radius:50%;flex:none}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;border:1px solid var(--line-2)}
+.deps{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.dep{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.dep .n{font-weight:650}.dep .m{font-size:12px;color:var(--text-3)}
+table.t{width:100%;border-collapse:collapse;font-size:13px}
+table.t th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);padding:7px 10px;border-bottom:1px solid var(--line)}
+table.t td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+table.t tr:last-child td{border-bottom:none}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.kbtn{font-size:11.5px;font-weight:600;color:#fff;background:var(--bad);border:none;border-radius:7px;padding:5px 11px;cursor:pointer}
+.kbtn:hover{filter:brightness(1.07)}.kbtn:disabled{opacity:.5;cursor:default}
+.on{color:var(--good);font-weight:700}.off{color:var(--text-faint)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:820px){.grid2{grid-template-columns:1fr}}
+.rolechip{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;padding:2px 7px;border-radius:5px;background:var(--surface-3,#eee);color:var(--text-2)}
+.flash{animation:fl 1s}@keyframes fl{from{background:color-mix(in srgb,var(--accent) 12%,transparent)}to{background:transparent}}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="brand"><b>ЦУП</b> · Мониторинг</div>
+  <div class="r">
+    <span id="live" class="pill"><span class="sdot" style="background:var(--text-faint)"></span><span id="liveTxt">загрузка…</span></span>
+    <button onclick="(history.length>1?history.back():location.href='/')">← Назад</button>
+  </div>
+</div>
+<div class="page">
+
+  <div class="sec"><span class="sdot" id="stDot" style="background:var(--text-faint)"></span>Состояние сейчас</div>
+  <div class="kpis" id="kpis"></div>
+
+  <div class="sec">Внешние зависимости</div>
+  <div class="deps" id="deps"><div class="card muted">загрузка…</div></div>
+
+  <div class="sec">Пользователи онлайн · <span id="onCount" class="muted">—</span></div>
+  <div class="card" style="overflow:auto;padding:0">
+    <table class="t"><thead><tr><th>Сотрудник</th><th>Роль</th><th>Активность</th><th>Последний экран</th><th>IP</th><th></th></tr></thead>
+    <tbody id="onBody"><tr><td colspan="6" class="muted" style="padding:14px">загрузка…</td></tr></tbody></table>
+  </div>
+
+  <div class="sec">Нагрузка · эндпоинты (<span id="winMin">15</span> мин)</div>
+  <div class="grid2">
+    <div class="card" style="padding:0;overflow:auto"><div style="padding:10px 14px;font-weight:650;font-size:13px">Чаще всего</div>
+      <table class="t"><thead><tr><th>Запрос</th><th class="num">Кол-во</th><th class="num">p95</th><th class="num">Ошибки</th></tr></thead><tbody id="topCount"></tbody></table></div>
+    <div class="card" style="padding:0;overflow:auto"><div style="padding:10px 14px;font-weight:650;font-size:13px">Самые медленные</div>
+      <table class="t"><thead><tr><th>Запрос</th><th class="num">p95, мс</th><th class="num">Сред.</th><th class="num">N</th></tr></thead><tbody id="topSlow"></tbody></table></div>
+  </div>
+
+  <div class="sec">Система</div>
+  <div class="card mono" id="sysinfo" style="font-size:12.5px;color:var(--text-2);line-height:1.9"></div>
+
+</div>
+<script src="/assets/cup-theme.js" defer></script>
+<script>
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const api=async(u,o)=>{const r=await fetch(u,Object.assign({credentials:'include'},o||{}));if(r.status===401){location.href='/login.html';return{ok:false}}return r.json().catch(()=>({ok:false}))};
+function col(pct){ if(pct==null) return 'var(--text-faint)'; if(pct>=90)return 'var(--bad)'; if(pct>=75)return 'var(--warn)'; return 'var(--good)'; }
+function statusColor(s){ return s==='bad'?'var(--bad)':s==='warn'?'var(--warn)':'var(--good)'; }
+function fmtUptime(s){ s=s||0; const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60); return (d?d+'д ':'')+(h?h+'ч ':'')+m+'м'; }
+function kpi(lab,val,sub,meterPct,meterCol){ return `<div class="card kpi"><div class="lab">${lab}</div><div class="val">${val}</div>${sub?`<div class="sub">${sub}</div>`:''}${meterPct!=null?`<div class="meter"><i style="width:${Math.min(100,meterPct)}%;background:${meterCol||col(meterPct)}"></i></div>`:''}</div>`; }
+
+async function loadOverview(){
+  const d=await api('/api/monitoring/overview'); if(!d||!d.ok)return;
+  const o=d.overview;
+  document.getElementById('stDot').style.background=statusColor(o.status);
+  const lt=document.getElementById('liveTxt'); lt.textContent=o.status==='ok'?'система в норме':o.status==='warn'?'повышенная нагрузка':'нагрузка критична';
+  document.querySelector('#live .sdot').style.background=statusColor(o.status);
+  const mem=o.mem||{}, cpu=o.cpu||{}, db=o.db||{};
+  const K=[];
+  K.push(kpi('Память (контейнер)', mem.pct!=null?mem.pct+'%':'н/д', (mem.usedMB!=null?mem.usedMB+' / '+(mem.limitMB||'∞')+' МБ':''), mem.pct));
+  K.push(kpi('CPU', cpu.pct!=null?cpu.pct+'%':'н/д', (cpu.cores?('лимит '+cpu.cores+' vCPU'):''), cpu.pct));
+  K.push(kpi('Event-loop lag', (o.eventLoopLagMs!=null?o.eventLoopLagMs+' мс':'—'), 'p99 '+(o.eventLoopP99Ms!=null?o.eventLoopP99Ms+' мс':'—'), o.eventLoopLagMs!=null?Math.min(100,o.eventLoopLagMs):null, o.eventLoopLagMs>=200?'var(--bad)':o.eventLoopLagMs>=80?'var(--warn)':'var(--good)'));
+  K.push(kpi('Онлайн', o.online, 'активны за 10 мин'));
+  K.push(kpi('Запросы/сек', o.rps, o.reqLastMin+' за мин'));
+  K.push(kpi('Ошибки 5xx/мин', o.err5LastMin, (o.errRatePct||0)+'% запросов', o.err5LastMin>0?Math.min(100,o.errRatePct*4):0, o.err5LastMin>10?'var(--bad)':o.err5LastMin>0?'var(--warn)':'var(--good)'));
+  K.push(kpi('Задержка p95', (o.p95!=null?o.p95+' мс':'—'), 'p50 '+(o.p50!=null?o.p50+' мс':'—')+' · p99 '+(o.p99!=null?o.p99+' мс':'—')));
+  K.push(kpi('Пул БД', db.total!=null?(db.total-(db.idle||0))+' / '+db.total:'—', 'в очереди: '+((db.waiting!=null)?db.waiting:'—'), db.total?Math.round((db.total-(db.idle||0))/Math.max(1,db.total)*100):null));
+  document.getElementById('kpis').innerHTML=K.join('');
+
+  const t=d.top||{}; document.getElementById('winMin').textContent=t.windowMin||15;
+  document.getElementById('topCount').innerHTML=(t.byCount||[]).map(r=>`<tr><td class="mono" style="font-size:11.5px">${esc(r.route)}</td><td class="num">${r.count}</td><td class="num">${r.p95!=null?r.p95:'—'}</td><td class="num" style="color:${r.errors?'var(--bad)':'inherit'}">${r.errors||0}</td></tr>`).join('')||'<tr><td colspan="4" class="muted" style="padding:12px">нет данных</td></tr>';
+  document.getElementById('topSlow').innerHTML=(t.bySlow||[]).map(r=>`<tr><td class="mono" style="font-size:11.5px">${esc(r.route)}</td><td class="num">${r.p95!=null?r.p95:'—'}</td><td class="num">${r.avg}</td><td class="num">${r.count}</td></tr>`).join('')||'<tr><td colspan="4" class="muted" style="padding:12px">нет данных</td></tr>';
+
+  document.getElementById('sysinfo').innerHTML=
+    `uptime: <b>${fmtUptime(o.uptimeSec)}</b> &nbsp;·&nbsp; node: ${esc(o.node)} &nbsp;·&nbsp; коммит: ${o.commit?esc(o.commit):'—'} &nbsp;·&nbsp; регион: ${o.region?esc(o.region):'—'}<br>heap: ${o.heapUsedMB} МБ &nbsp;·&nbsp; rss: ${o.rssMB} МБ &nbsp;·&nbsp; обновлено: ${new Date(o.at).toLocaleTimeString('ru-RU')}`;
+}
+async function loadOnline(){
+  const d=await api('/api/monitoring/online'); if(!d||!d.ok)return;
+  const us=d.users||[]; document.getElementById('onCount').textContent=us.filter(u=>u.online).length+' сейчас · '+us.length+' за 30 мин';
+  document.getElementById('onBody').innerHTML=us.map(u=>{
+    const idle=u.idleSec<60?u.idleSec+' с назад':Math.floor(u.idleSec/60)+' мин назад';
+    return `<tr><td><b>${esc(u.name)}</b></td><td><span class="rolechip">${esc(u.role||'—')}</span></td>
+      <td>${u.online?'<span class="on">● онлайн</span>':'<span class="off">'+idle+'</span>'}</td>
+      <td class="mono muted" style="font-size:11.5px">${esc(u.lastRoute||'')}</td>
+      <td class="mono muted" style="font-size:11.5px">${esc(u.ip||'')}</td>
+      <td style="text-align:right"><button class="kbtn" onclick="kick(${u.id},'${esc(u.name).replace(/'/g,"\\'")}')">Выкинуть</button></td></tr>`;
+  }).join('')||'<tr><td colspan="6" class="muted" style="padding:14px">никого онлайн</td></tr>';
+}
+async function loadDeps(){
+  const d=await api('/api/monitoring/deps'); if(!d||!d.ok)return;
+  const dp=d.deps||{}; const names={db:'База данных (Supabase)',bitrix:'Bitrix24',onec:'1С'};
+  const order=['db','bitrix','onec'];
+  document.getElementById('deps').innerHTML=order.map(k=>{
+    const v=dp[k]||{}; const c=v.ok===true?'var(--good)':v.ok===false?'var(--bad)':'var(--text-faint)';
+    const st=v.ok===true?'в норме':v.ok===false?'ошибка':'н/д';
+    return `<div class="card dep"><div><div class="n">${names[k]||k}</div><div class="m">${st}${v.error?' · '+esc(v.error):''}</div></div>
+      <div style="text-align:right"><span class="sdot" style="background:${c}"></span> <span class="mono" style="font-size:12px">${v.ms!=null?v.ms+' мс':''}</span></div></div>`;
+  }).join('');
+}
+async function kick(id,name){
+  if(!confirm('Завершить все сессии пользователя «'+name+'»?\nЕму придётся войти заново (это не блокирует учётку).'))return;
+  const r=await api('/api/monitoring/kick/'+id,{method:'POST'});
+  if(r&&r.ok){ loadOnline(); } else { alert((r&&r.error)||'Не удалось'); }
+}
+function tick(){ if(document.hidden)return; loadOverview(); loadOnline(); }
+loadOverview(); loadOnline(); loadDeps();
+setInterval(tick,5000);
+setInterval(()=>{ if(!document.hidden) loadDeps(); },30000);
+</script>
+</body>
+</html>

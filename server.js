@@ -51,6 +51,10 @@ app.use((req, res, next) => {
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());
 
+// ── Мониторинг: замер каждого запроса (длительность, статус, онлайн-юзеры) ──
+const monitoring = require('./monitoring');
+app.use((req, res, next) => { const _t = Date.now(); res.on('finish', () => { monitoring.onRequestFinish(req, res, Date.now() - _t); }); next(); });
+
 // ── PWA: делаем дашборд устанавливаемым приложением на телефоне ──────────────
 // Патчим res.sendFile так, чтобы в КАЖДУЮ html-страницу (все они отдаются через
 // sendFile после проверки авторизации) автоматически подставлялись манифест,
@@ -96,9 +100,12 @@ app.use((req, res, next) => {
         if (out.includes('</head>') && !out.includes('/manifest.webmanifest')) {
           const usesNewUI = out.includes('/assets/cup-ui.css');  // страница на новой дизайн-системе
           const isLogin = /login\.html$/.test(fp);
+          // Справка (help.html) со своей встроенной темой — старую тему НЕ подставляем,
+          // иначе два движка темы конфликтуют и нижняя кнопка работает неверно.
+          const isSelfThemed = /help\.html$/.test(fp);
           const needAI = usesNewUI && !isLogin && !out.includes('/assets/pls-ai.js');
           const needBG = usesNewUI && !out.includes('/assets/cup-bg.js');
-          const head = PWA_BASE + '\n' + (usesNewUI ? '' : LEGACY_THEME + '\n') + PWA_BADGE + '\n' + (needAI ? PWA_AI + '\n' : '') + (needBG ? CUP_BG + '\n' : '');
+          const head = PWA_BASE + '\n' + ((usesNewUI || isSelfThemed) ? '' : LEGACY_THEME + '\n') + PWA_BADGE + '\n' + (needAI ? PWA_AI + '\n' : '') + (needBG ? CUP_BG + '\n' : '');
           out = out.replace('</head>', head + '</head>');
         }
         res.set('Content-Type', 'text/html; charset=utf-8');
@@ -168,6 +175,8 @@ app.get('/cup-admin.html', requirePageAuth(['superadmin']), (_, res) => res.send
 app.get('/account.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'account.html')));
 // Справка (руководство пользователя) — доступна всем залогиненным.
 app.get('/help.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'help.html')));
+// Мониторинг системы — только суперадмины.
+app.get('/monitoring.html', requirePageAuth(['superadmin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'monitoring.html')));
 // `index:false` — without this, static would auto-serve public/index.html
 // for "/" and silently undo everything above.
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
@@ -196,6 +205,7 @@ app.use('/api/campaigns', require('./routes/campaigns-routes').router);
 app.use('/api/finance', require('./routes/finance-routes').router);
 app.use('/api/companies', require('./routes/companies-routes').router);
 app.use('/api/notify', require('./routes/notify-routes').router);
+app.use('/api/monitoring', require('./routes/monitoring-routes').router);
 const { router: relationsRouter, handleBitrixWebhook } = require('./routes/relations-routes');
 app.use('/relations', relationsRouter);
 app.post('/webhook/bitrix-update', express.urlencoded({ extended: true }), handleBitrixWebhook);

@@ -656,6 +656,12 @@ async function clearLoginAttempts(ip) {
 // ── JWT token blacklist (for logout invalidation) ─────────────────────────────
 const tokenBlacklist = new Set();
 
+// ── Принудительное завершение сессий пользователя («выкинуть» из мониторинга) ──
+// Помечаем момент; все токены, выданные ДО него (по iat), становятся недействительны.
+const kickedAt = new Map(); // userId -> ms
+function kickUser(id) { kickedAt.set(parseInt(id, 10), Date.now()); }
+function isKicked(user, payload) { const k = user && kickedAt.get(user.id); return !!(k && payload && payload.iat && payload.iat * 1000 < k); }
+
 // ── Auth middleware ───────────────────────────────────────────────────────────
 function requireAuth(roles = []) {
   return async (req, res, next) => {
@@ -673,6 +679,7 @@ function requireAuth(roles = []) {
       if (!result.rows.length) return res.status(401).json({ ok: false, error: 'Пользователь не найден', redirect: '/login' });
 
       const user = result.rows[0];
+      if (isKicked(user, payload)) return res.status(401).json({ ok: false, error: 'Сессия завершена администратором', redirect: '/login' });
       // superadmin проходит везде, где требуется admin (наследует права админа).
       if (roles.length && !roles.includes(user.role) && !(user.role === 'superadmin' && roles.includes('admin'))) {
         return res.status(403).json({ ok: false, error: 'Недостаточно прав' });
@@ -697,6 +704,7 @@ function requirePageAuth(roles = []) {
       const result = await pool.query('SELECT * FROM ticketsmodule_users WHERE id=$1 AND active=true', [payload.userId]);
       if (!result.rows.length) return res.redirect('/login.html');
       const user = result.rows[0];
+      if (isKicked(user, payload)) return res.redirect('/login.html');
       if (roles.length && !roles.includes(user.role) && !(user.role === 'superadmin' && roles.includes('admin'))) return res.redirect('/');
       req.user = user;
       next();
@@ -776,6 +784,7 @@ function requireModule(moduleCode) {
       const result = await pool.query('SELECT * FROM ticketsmodule_users WHERE id=$1 AND active=true', [payload.userId]);
       if (!result.rows.length) return res.redirect('/login.html');
       const user = result.rows[0];
+      if (isKicked(user, payload)) return res.redirect('/login.html');
       req.user = user; req.token = token;
       const codes = await userModuleCodes(user);
       if (codes === null || codes.has(moduleCode)) return next();
@@ -808,6 +817,7 @@ function requireKpPage() {
       const result = await pool.query('SELECT * FROM ticketsmodule_users WHERE id=$1 AND active=true', [payload.userId]);
       if (!result.rows.length) return res.redirect('/login.html');
       const user = result.rows[0]; req.user = user; req.token = token;
+      if (isKicked(user, payload)) return res.redirect('/login.html');
       const codes = await userModuleCodes(user);
       if (codes === null || codes.has('KP')) return next();
       try {
@@ -826,6 +836,6 @@ async function initEquipmentMapDB() {} // no-op, table created in initDB above
 module.exports = {
   pool, initDB, initEquipmentMapDB, auditLog, requireAuth, requirePageAuth, canEdit,
   canDelete, userModuleCodes, requireModule, requireModuleApi, requireKpPage, isAdminLike,
-  checkLoginRateLimit, recordLoginAttempt, clearLoginAttempts, tokenBlacklist,
+  checkLoginRateLimit, recordLoginAttempt, clearLoginAttempts, tokenBlacklist, kickUser,
   bcrypt, jwt, speakeasy, JWT_SECRET, SESSION_HOURS, VALID_ROLES,
 };

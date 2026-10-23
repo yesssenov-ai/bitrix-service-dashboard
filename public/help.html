@@ -40,6 +40,13 @@ a{color:var(--accent);text-decoration:none}
   border-radius:999px;padding:7px 14px;cursor:pointer}
 .top button:hover{color:var(--text);border-color:var(--text-3)}
 
+/* плавающая кнопка смены темы (снизу справа) */
+#themeToggle{position:fixed;right:18px;bottom:18px;z-index:50;width:44px;height:44px;border-radius:50%;
+  border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px -10px rgba(0,0,0,.35)}
+#themeToggle:hover{color:var(--text);border-color:var(--text-3)}
+@media print{#themeToggle,.top{display:none}}
+
 .wrap{max-width:900px;margin:0 auto;padding:26px 20px 80px}
 .hero{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:26px 28px;margin-bottom:22px;position:relative;overflow:hidden}
 .hero h1{font-size:30px;font-weight:760;letter-spacing:-.02em}
@@ -101,7 +108,7 @@ ol.steps li::before{counter-increment:s;content:counter(s);position:absolute;lef
 <div class="top">
   <div class="brand"><b>ЦУП</b> · Справка</div>
   <div class="btns">
-    <button onclick="tgl()">◐ Тема</button>
+    <button onclick="(history.length>1?history.back():location.href='/')">← Назад</button>
     <button onclick="window.print()">⎙ Печать / PDF</button>
   </div>
 </div>
@@ -410,8 +417,13 @@ ol.steps li::before{counter-increment:s;content:counter(s);position:absolute;lef
   <div class="foot">ЦУП · ProLabSupport · nms.prolabsupport.kz — руководство пользователя. Актуализируется по мере развития системы.</div>
 </div>
 
+<button id="themeToggle" type="button" onclick="tgl()" title="Сменить тему" aria-label="Сменить тему"></button>
 <script>
-function tgl(){var d=document.documentElement;var dark=d.getAttribute('data-theme')==='dark';d.setAttribute('data-theme',dark?'light':'dark');try{localStorage.setItem('pls-theme',dark?'light':'dark');}catch(e){}}
+var _SUN='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.6v2.2M12 19.2v2.2M4.5 4.5l1.6 1.6M17.9 17.9l1.6 1.6M2.6 12h2.2M19.2 12h2.2M4.5 19.5l1.6-1.6M17.9 6.1l1.6-1.6"/></svg>';
+var _MOON='<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 13.2A8 8 0 1 1 10.8 3.5a6.3 6.3 0 0 0 9.7 9.7z"/></svg>';
+function _themeIcon(){var dark=document.documentElement.getAttribute('data-theme')==='dark';var b=document.getElementById('themeToggle');if(b)b.innerHTML=dark?_SUN:_MOON;}
+function tgl(){var d=document.documentElement;var dark=d.getAttribute('data-theme')==='dark';var next=dark?'light':'dark';d.setAttribute('data-theme',next);try{localStorage.setItem('pls-theme',next);}catch(e){}var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',next==='dark'?'#0e1118':'#f6f7f9');_themeIcon();}
+_themeIcon();
 </script>
 </body>
 </html>
