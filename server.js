@@ -769,6 +769,7 @@ initDB().then(() => {
     const FIN_SLOTS = [540, 660, 810, 960, 1080]; // минуты от полуночи Алматы: 9:00/11:00/13:30/16:00/18:00
     const finFired = new Set();   // ключи "YYYY-MM-DD:slot" — слот уже отработал сегодня
     let finSyncing = false;
+    const FIN_RU = { debt: 'дебет', advances: 'авансы', stock: 'склад', cashflow: 'cashflow' };
     const runFinanceSync = async (source) => {
       if (finSyncing) { console.log(`finance sync: уже идёт, пропускаю (${source})`); return; }
       finSyncing = true;
@@ -778,13 +779,38 @@ initDB().then(() => {
         ['stock', () => require('./finance-stock-calc').syncStock()],
         ['cashflow', () => require('./finance-cashflow-calc').syncCashflow()],
       ];
+      const results = {};          // ru-ключ → "ok 123" | "сбой: …"
+      let anyFail = false;
+      const startedMs = Date.now();
       for (const [name, fn] of steps) {
         try {
           const r = await fn();
-          console.log(`finance ${source}/${name}:`, (r && r.ok) ? `ok (${r.count != null ? r.count : '—'})` : `НЕ УДАЛОСЬ ${(r && r.error) || ''}`);
-        } catch (e) { console.error(`finance ${source}/${name} error:`, e.message); }
+          if (r && r.ok) {
+            results[FIN_RU[name]] = `ok${r.count != null ? ' ' + r.count : ''}`;
+            console.log(`finance ${source}/${name}: ok (${r.count != null ? r.count : '—'})`);
+          } else {
+            anyFail = true;
+            results[FIN_RU[name]] = `сбой: ${String((r && r.error) || 'неизвестно').slice(0, 200)}`;
+            console.log(`finance ${source}/${name}: НЕ УДАЛОСЬ ${(r && r.error) || ''}`);
+          }
+        } catch (e) {
+          anyFail = true;
+          results[FIN_RU[name]] = `ошибка: ${String(e.message || e).slice(0, 200)}`;
+          console.error(`finance ${source}/${name} error:`, e.message);
+        }
       }
       finSyncing = false;
+      // Системный журнал: одна запись на прогон (успех ИЛИ сбой — чтобы тихих
+      // падений больше не было). Пишется в ticketsmodule_audit_logs без user_id.
+      try {
+        await auditLog(
+          null, 'Система · 1С',
+          anyFail ? 'FIN_AUTOSYNC_1C_FAIL' : 'FIN_AUTOSYNC_1C',
+          null,
+          Object.assign({ источник: source, итог: anyFail ? 'есть сбои' : 'успешно', 'сек': Math.round((Date.now() - startedMs) / 1000) }, results),
+          null, 'scheduler'
+        );
+      } catch (e) { console.error('finance autosync auditLog error:', e.message); }
     };
     setInterval(() => {
       const now = new Date();
