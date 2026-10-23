@@ -24,6 +24,12 @@ router.get('/deps', requireAuth(SA), async (req, res) => {
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
+// История метрик (24ч / 7д) — с серверным кэшем, грузится по запросу
+router.get('/history', requireAuth(SA), async (req, res) => {
+  try { res.set('Cache-Control', 'no-store'); res.json(Object.assign({ ok: true }, await mon.history(pool, req.query.range))); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 // Завершить сессии пользователя («выкинуть»)
 router.post('/kick/:userId', requireAuth(SA), async (req, res) => {
   try {

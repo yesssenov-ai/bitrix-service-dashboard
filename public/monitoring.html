@@ -41,6 +41,9 @@ table.t tr:last-child td{border-bottom:none}
 @media(max-width:820px){.grid2{grid-template-columns:1fr}}
 .rolechip{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;padding:2px 7px;border-radius:5px;background:var(--surface-3,#eee);color:var(--text-2)}
 .flash{animation:fl 1s}@keyframes fl{from{background:color-mix(in srgb,var(--accent) 12%,transparent)}to{background:transparent}}
+.hrange{font-size:12px;font-weight:600;border:1px solid var(--line-2);background:var(--surface);color:var(--text-3);border-radius:999px;padding:4px 12px;cursor:pointer}
+.hrange.act{background:var(--accent);color:#fff;border-color:var(--accent)}
+.sec .right{margin-left:auto;display:flex;gap:6px;text-transform:none;letter-spacing:0}
 </style>
 </head>
 <body>
@@ -72,6 +75,12 @@ table.t tr:last-child td{border-bottom:none}
     <div class="card" style="padding:0;overflow:auto"><div style="padding:10px 14px;font-weight:650;font-size:13px">Самые медленные</div>
       <table class="t"><thead><tr><th>Запрос</th><th class="num">p95, мс</th><th class="num">Сред.</th><th class="num">N</th></tr></thead><tbody id="topSlow"></tbody></table></div>
   </div>
+
+  <div class="sec">История и тренды
+    <span class="right"><button class="hrange act" data-r="24h" onclick="loadHistory('24h')">24 часа</button><button class="hrange" data-r="7d" onclick="loadHistory('7d')">7 дней</button></span>
+  </div>
+  <div id="hinfo" class="muted" style="font-size:11.5px;margin:-4px 0 10px">данные накапливаются…</div>
+  <div class="kpis" id="charts"></div>
 
   <div class="sec">Система</div>
   <div class="card mono" id="sysinfo" style="font-size:12.5px;color:var(--text-2);line-height:1.9"></div>
@@ -139,10 +148,44 @@ async function kick(id,name){
   const r=await api('/api/monitoring/kick/'+id,{method:'POST'});
   if(r&&r.ok){ loadOnline(); } else { alert((r&&r.error)||'Не удалось'); }
 }
+// ── История / графики (инлайн-SVG, без библиотек) ──────────────────────────
+let HRANGE='24h';
+function chartSVG(vals,color){
+  const v=vals.filter(x=>x!=null);
+  if(v.length<2) return '<div class="muted" style="font-size:11px;padding:14px 0">данные накапливаются…</div>';
+  const min=Math.min(...v),max=Math.max(...v),span=(max-min)||1,n=vals.length,W=100,H=30;
+  const pts=vals.map((x,i)=>({px:(n>1?i/(n-1):0)*W, py:x==null?null:(H-((x-min)/span)*(H-4)-2)}));
+  let line='',started=false; pts.forEach(p=>{ if(p.py==null){started=false;return;} line+=(started?'L':'M')+p.px.toFixed(1)+' '+p.py.toFixed(1)+' '; started=true; });
+  const valid=pts.filter(p=>p.py!=null);
+  const area=valid.length>1?('M'+valid[0].px.toFixed(1)+' '+H+' '+valid.map(p=>'L'+p.px.toFixed(1)+' '+p.py.toFixed(1)).join(' ')+' L'+valid[valid.length-1].px.toFixed(1)+' '+H+' Z'):'';
+  return '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" style="width:100%;height:46px;display:block"><path d="'+area+'" fill="'+color+'" opacity="0.14"/><path d="'+line+'" fill="none" stroke="'+color+'" stroke-width="1.4" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+}
+function chartCard(title,vals,color,unit,fmt){
+  const v=vals.filter(x=>x!=null),last=v.length?v[v.length-1]:null,mn=v.length?Math.min(...v):null,mx=v.length?Math.max(...v):null;
+  const F=x=>x==null?'—':((fmt?fmt(x):x)+(unit||''));
+  return '<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline"><div style="font-size:12px;color:var(--text-3)">'+title+'</div><div style="font-weight:720;font-size:16px">'+F(last)+'</div></div>'+chartSVG(vals,color)+'<div style="font-size:10.5px;color:var(--text-faint);display:flex;justify-content:space-between"><span>мин '+F(mn)+'</span><span>макс '+F(mx)+'</span></div></div>';
+}
+async function loadHistory(range){
+  HRANGE=range;
+  document.querySelectorAll('.hrange').forEach(b=>b.classList.toggle('act',b.dataset.r===range));
+  const d=await api('/api/monitoring/history?range='+range); if(!d||!d.ok)return;
+  const P=d.points||[]; const col=k=>P.map(p=>p[k]);
+  document.getElementById('charts').innerHTML=[
+    chartCard('Память, %',col('mem_pct'),'var(--bad)','%'),
+    chartCard('CPU, %',col('cpu_pct'),'var(--warn)','%'),
+    chartCard('Event-loop lag',col('lag_ms'),'var(--accent)',' мс'),
+    chartCard('Запросы/сек',col('rps'),'var(--sales)',''),
+    chartCard('Задержка p95',col('p95_ms'),'var(--service)',' мс'),
+    chartCard('Онлайн',col('online'),'var(--good)',''),
+    chartCard('Ошибки 5xx',col('err5'),'var(--bad)',''),
+  ].join('');
+  document.getElementById('hinfo').textContent=P.length?('точек: '+P.length+' · с '+new Date(P[0].t).toLocaleString('ru-RU')):'данные накапливаются — первые точки появятся в течение нескольких минут';
+}
 function tick(){ if(document.hidden)return; loadOverview(); loadOnline(); }
-loadOverview(); loadOnline(); loadDeps();
-setInterval(tick,5000);
-setInterval(()=>{ if(!document.hidden) loadDeps(); },30000);
+loadOverview(); loadOnline(); loadDeps(); loadHistory('24h');
+setInterval(tick,8000);                                   // live — из памяти, пауза при скрытой вкладке
+setInterval(()=>{ if(!document.hidden) loadDeps(); },30000);   // зависимости — кэш 25с на сервере
+setInterval(()=>{ if(!document.hidden) loadHistory(HRANGE); },60000); // история — кэш 55с на сервере
 </script>
 </body>
 </html>

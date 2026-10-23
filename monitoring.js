@@ -152,4 +152,53 @@ async function deps(pool) {
   return out;
 }
 
-module.exports = { onRequestFinish, touchUser, onlineList, overview, topEndpoints, deps };
+// ── Фаза 2: семплер метрик + история ────────────────────────────────────────
+async function ensureMetricsTable(pool) {
+  await pool.query(`CREATE TABLE IF NOT EXISTS ticketsmodule_sys_metrics (
+    ts timestamptz NOT NULL DEFAULT now(),
+    mem_pct int, mem_used_mb int, cpu_pct int, lag_ms real,
+    db_total int, db_waiting int, rps real, req_count int, err5 int, p95_ms int, online int
+  )`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_sys_metrics_ts ON ticketsmodule_sys_metrics (ts)`);
+}
+async function sampleOnce(pool) {
+  try {
+    const o = overview(pool);
+    await pool.query(
+      `INSERT INTO ticketsmodule_sys_metrics (mem_pct,mem_used_mb,cpu_pct,lag_ms,db_total,db_waiting,rps,req_count,err5,p95_ms,online)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [o.mem.pct, o.mem.usedMB, o.cpu.pct, o.eventLoopLagMs, o.db && o.db.total, o.db && o.db.waiting, o.rps, o.reqLastMin, o.err5LastMin, o.p95, o.online]
+    );
+  } catch (e) { console.error('sys metrics sample:', e.message); }
+}
+const _histCache = {};
+async function history(pool, range) {
+  const is7d = range === '7d';
+  const key = is7d ? '7d' : '24h';
+  const c = _histCache[key];
+  if (c && Date.now() - c.at < 55000) return c.data;   // кэш 55с — данные меняются раз в минуту
+  const bucketSec = is7d ? 3600 : 300;           // 7д — по часу, 24ч — по 5 минут
+  const interval = is7d ? '7 days' : '24 hours';
+  const { rows } = await pool.query(
+    `SELECT to_timestamp(floor(extract(epoch from ts)/$1)*$1) AS t,
+       round(avg(mem_pct))::int AS mem_pct, round(avg(cpu_pct))::int AS cpu_pct,
+       round(max(lag_ms)::numeric,1)::float AS lag_ms, round(avg(rps)::numeric,2)::float AS rps,
+       max(p95_ms) AS p95_ms, round(avg(online))::int AS online, sum(err5)::int AS err5
+     FROM ticketsmodule_sys_metrics
+     WHERE ts > now() - $2::interval
+     GROUP BY 1 ORDER BY 1`, [bucketSec, interval]);
+  const data = { range: key, points: rows };
+  _histCache[key] = { at: Date.now(), data };
+  return data;
+}
+async function prune(pool) { try { await pool.query(`DELETE FROM ticketsmodule_sys_metrics WHERE ts < now() - interval '9 days'`); } catch (e) {} }
+function startSampler(pool) {
+  ensureMetricsTable(pool).then(() => {
+    setTimeout(() => sampleOnce(pool), 15000);          // первый снимок через 15с после старта
+    setInterval(() => sampleOnce(pool), 60000);         // далее раз в минуту
+    setInterval(() => prune(pool), 6 * 3600 * 1000);    // чистка старше 9 дней
+    console.log('Мониторинг: семплер метрик запущен (раз в минуту)');
+  }).catch(e => console.error('sys metrics table:', e.message));
+}
+
+module.exports = { onRequestFinish, touchUser, onlineList, overview, topEndpoints, deps, history, startSampler };

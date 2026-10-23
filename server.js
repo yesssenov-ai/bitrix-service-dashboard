@@ -621,6 +621,8 @@ initDB().then(() => {
     // во ВСЕХ модулях сразу — Логистика, Контракты, Реализация и т.д.).
     const { hydrateUsers } = require('./constants');
     setTimeout(() => hydrateUsers().catch(e => console.error('hydrateUsers boot error:', e.message)), 3000);
+    // Мониторинг: семплер метрик раз в минуту (лёгкая запись для истории/графиков).
+    monitoring.startSampler(pool);
     // Single interval: check new tickets every 30 min + overdue every run
     checkNewAndOverdue();
     setInterval(checkNewAndOverdue, 30 * 60 * 1000);
