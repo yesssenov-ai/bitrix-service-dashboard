@@ -329,6 +329,11 @@ async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_stat_deals_parent ON ticketsmodule_stat_deals(parent_deal_id);
     CREATE INDEX IF NOT EXISTS idx_stat_deals_kptype ON ticketsmodule_stat_deals(kp_type);
 
+    -- Модель КАМ: поле сделки «В рамках проекта» (UF_CRM_1791972186) — список-значение.
+    -- Сделка проектная, если project_tag не пуст и не «Без проекта». Проект = значение.
+    ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS project_tag VARCHAR(300);
+    CREATE INDEX IF NOT EXISTS idx_stat_deals_project ON ticketsmodule_stat_deals(project_tag);
+
     -- Справочник ЦУП: Клиент (компания Bitrix) → БДМ и Группа компаний. Управляется
     -- в модуле «Проекты» (можно переназначать; позже — переключение на уровень группы).
     CREATE TABLE IF NOT EXISTS ticketsmodule_project_clients (
@@ -341,6 +346,15 @@ async function initDB() {
     );
     CREATE INDEX IF NOT EXISTS idx_project_clients_group ON ticketsmodule_project_clients(group_name);
     CREATE INDEX IF NOT EXISTS idx_project_clients_bdm ON ticketsmodule_project_clients(bdm_bitrix_id);
+
+    -- Справочник ЦУП модели КАМ: Проект (значение поля «В рамках проекта») → КАМ.
+    -- Один КАМ на проект; назначается в модуле «Проекты КАМ» (координатор/админ).
+    CREATE TABLE IF NOT EXISTS ticketsmodule_project_kam (
+      project_tag    VARCHAR(300) PRIMARY KEY,
+      kam_bitrix_id  INTEGER,
+      updated_at     TIMESTAMPTZ DEFAULT NOW(),
+      updated_by     VARCHAR(120)
+    );
 
     -- ── Фаза 2 Статистики: история стадий сделок ───────────────────────────
     -- Каждая запись = момент входа сделки в стадию (из crm.stagehistory.list).

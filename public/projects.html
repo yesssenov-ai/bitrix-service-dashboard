@@ -3,27 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ЦУП · Проекты</title>
+<title>ЦУП · Проекты КАМ</title>
 <meta name="theme-color" content="#f6f7f9">
 <script>(function(){try{var m=localStorage.getItem('pls-theme');document.documentElement.setAttribute('data-theme',m==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
 <link rel="stylesheet" href="/assets/cup-ui.css">
 <link rel="icon" href="/favicon.svg">
 <script src="/assets/theme.js"></script>
 <style>
-  :root{
-  --panel:var(--surface);
-  --panel2:var(--surface-2);
-  --border:var(--line);
-  --border2:var(--line-2);
-  --dim:var(--text-3);
-  --dim2:var(--text-faint);
-  --brand:var(--accent);
-  --signal:var(--good);
-  --p60:#5b8cff;
-  --p80:#ffb020;
-}
-.top::before,.hdr::before,.header::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 35%,transparent));z-index:1}
-  
+  :root{--panel:var(--surface);--panel2:var(--surface-2);--border:var(--line);--border2:var(--line-2);--dim:var(--text-3);--dim2:var(--text-faint);--brand:var(--accent);--signal:var(--good)}
+  .top::before,.hdr::before,.header::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 35%,transparent));z-index:1}
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--text);font-family:"SF Pro Display","Segoe UI",Inter,system-ui,sans-serif;min-height:100vh;
     background-image:radial-gradient(1000px 500px at 15% -5%,rgba(255,45,85,.08),transparent 60%),radial-gradient(900px 600px at 100% 0%,rgba(91,140,255,.08),transparent 55%);}
@@ -49,327 +37,211 @@
   @keyframes sp{to{transform:rotate(360deg)}}
   .empty{padding:34px;text-align:center;color:var(--dim)}
   .tabular{font-variant-numeric:tabular-nums}
-  /* дерево */
-  .grp{margin-bottom:14px}
-  .grp-h{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--panel2);border:1px solid var(--border);border-radius:12px;cursor:pointer;font-weight:800}
-  .grp-h .cnt{color:var(--dim);font-weight:700;font-size:12px}
-  .grp-h .sum{margin-left:auto;color:var(--signal);font-weight:800}
-  .cli{border:1px solid var(--border);border-radius:12px;margin:8px 0 0 14px;background:var(--panel)}
-  .cli-h{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer}
-  .cli-h .nm{font-weight:700}
-  .bdm{font-size:11px;font-weight:800;border-radius:999px;padding:3px 10px;background:rgba(91,140,255,.16);color:#bcd2ff;white-space:nowrap}
-  html[data-theme="light"] .bdm{background:#e5edff;color:#1d4ed8}
-  .bdm.none{background:rgba(255,91,110,.16);color:#ffb3c1}
-  html[data-theme="light"] .bdm.none{background:#fde8e8;color:#b91c1c}
-  .cli-h .sum{margin-left:auto;font-weight:800}
-  .cli-body{padding:2px 14px 12px 14px;display:none}
-  .cli.open .cli-body{display:block}
-  .proj{border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:10px;margin:8px 0;background:var(--panel2)}
-  .proj-h{display:flex;align-items:center;gap:9px;padding:9px 12px;cursor:pointer;flex-wrap:wrap}
-  .proj-h .t{font-weight:700}
-  .proj-h .sum{margin-left:auto;font-weight:800;color:var(--signal)}
-  .tag{font-size:10px;font-weight:800;border-radius:6px;padding:2px 7px;background:rgba(255,45,85,.16);color:#ffb3c1}
-  html[data-theme="light"] .tag{background:#fde8e8;color:#b91c1c}
-  .kids{display:none;padding:0 12px 10px 12px}
-  .proj.open .kids{display:block}
-  .deal{display:flex;align-items:center;gap:8px;padding:7px 9px;border-top:1px solid var(--border);font-size:13px;flex-wrap:wrap}
-  .deal .dt{flex:1;min-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .deal .co2{color:var(--dim2);font-size:11.5px}
-  .stg{font-size:10.5px;font-weight:800;border-radius:6px;padding:2px 7px;background:var(--panel);border:1px solid var(--border);color:var(--dim)}
-  .stg.P60{color:#bcd2ff}.stg.P80{color:#ffce7a}.stg.CONTRACT{color:#7ee0c6}
-  .prod{font-size:10.5px;color:var(--dim);background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:2px 7px}
-  .mgr{font-size:11px;color:var(--dim)}
-  .dsum{font-weight:700}
-  .stand{margin:8px 0}
-  .stand .lbl{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.4px;font-weight:700;margin:6px 0 3px}
-  .ext{color:var(--dim2)}
-  .tw{color:var(--dim);width:14px;display:inline-block}
-  /* клиенты */
-  table.dir{width:100%;border-collapse:collapse;font-size:13px}
-  table.dir th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--dim);font-weight:700;padding:9px 10px;border-bottom:1px solid var(--border)}
-  table.dir td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+  .hint{font-size:11.5px;color:var(--dim2)}
+  .search{width:100%;max-width:340px;margin-bottom:12px}
   input,select{background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);font:inherit;font-size:13px;padding:7px 9px;outline:none}
   input:focus,select:focus{border-color:var(--accent)}
-  .save{background:var(--accent);border:1px solid var(--accent);color:#fff;border-radius:8px;padding:7px 12px;font:inherit;font-weight:700;font-size:12px;cursor:pointer}
-  .save:disabled{opacity:.5;cursor:default}
-  .search{width:100%;max-width:340px;margin-bottom:12px}
-  /* аудит */
-  .aud{margin-bottom:16px}
-  .aud h3{font-size:14px;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:8px}
-  .aud .badge{font-size:11px;font-weight:800;border-radius:999px;padding:2px 9px;background:rgba(255,176,32,.18);color:#ffce7a}
-  html[data-theme="light"] .aud .badge{background:#fef0d8;color:#a15c00}
-  .chiprow{display:flex;flex-wrap:wrap;gap:6px}
-  .achip{font-size:12px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:5px 9px}
-  .hint{font-size:11.5px;color:var(--dim2)}
-  /* KAM-вид */
+  .tw{color:var(--dim);width:14px;display:inline-block}
+  .ext{color:var(--dim2)}
   .klegend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--dim)}
   .klegend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:5px}
-  .kam-h{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--panel2);border:1px solid var(--border);border-radius:12px;cursor:pointer;font-weight:800;margin-bottom:8px}
-  .kam-h .role{font-size:10.5px;font-weight:800;border-radius:999px;padding:3px 9px;background:rgba(193,91,66,.18);color:#e6a08c}
-  html[data-theme="light"] .kam-h .role{background:#f6e7e2;color:#b4532f}
-  .kam-h .cnt{color:var(--dim);font-weight:700;font-size:12px}
-  .kam-h .sum{margin-left:auto;color:var(--signal);font-weight:800}
-  .kgrp{margin:0 0 8px 14px}
-  .kgrp-h{display:flex;align-items:center;gap:9px;padding:9px 13px;border:1px solid var(--border);border-radius:11px;cursor:pointer;font-weight:700;background:var(--panel)}
-  .kgrp-h .um{font-size:10px;font-weight:800;border-radius:6px;padding:2px 7px;background:rgba(91,140,255,.16);color:#bcd2ff}
-  .kgrp-h .sum{margin-left:auto;font-weight:800;color:var(--signal)}
-  .kco{border:1px solid var(--border);border-radius:11px;margin:8px 0 0 14px;background:var(--panel)}
-  .kco-h{display:flex;align-items:center;gap:9px;padding:9px 13px;cursor:pointer}
-  .kco-h .nm{font-weight:700}
-  .kco-h .pbar{display:flex;height:9px;width:150px;border-radius:5px;overflow:hidden;margin-left:auto}
-  .kco-h .pbar span{display:block}
-  .kco-h .sum{font-weight:800;min-width:96px;text-align:right}
-  .kco-body{display:none;padding:2px 14px 12px}
-  .kco.open .kco-body{display:block}
+  /* компания */
+  .co{border:1px solid var(--border);border-radius:12px;margin:0 0 10px;background:var(--panel)}
+  .co-h{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;font-weight:800}
+  .co-h .cnt{color:var(--dim);font-weight:700;font-size:12px}
+  .co-h .sum{margin-left:auto;color:var(--signal);font-weight:800}
+  .co-body{display:none;padding:2px 14px 12px}
+  .co.open .co-body{display:block}
+  /* проект */
+  .proj{border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:11px;margin:9px 0;background:var(--panel2)}
+  .proj-h{display:flex;align-items:center;gap:9px;padding:10px 13px;cursor:pointer;flex-wrap:wrap}
+  .proj-h .tag{font-size:10px;font-weight:800;border-radius:6px;padding:2px 7px;background:rgba(255,45,85,.16);color:#ffb3c1}
+  html[data-theme="light"] .proj-h .tag{background:#fde8e8;color:#b91c1c}
+  .proj-h .t{font-weight:800}
+  .proj-h .co2{color:var(--dim2);font-size:12px}
+  .proj-h .sum{margin-left:auto;font-weight:800;color:var(--signal)}
+  .kam{font-size:11px;font-weight:800;border-radius:999px;padding:3px 10px;background:rgba(193,91,66,.18);color:#e6a08c;white-space:nowrap}
+  html[data-theme="light"] .kam{background:#f6e7e2;color:#b4532f}
+  .kam.none{background:rgba(255,91,110,.16);color:#ffb3c1}
+  html[data-theme="light"] .kam.none{background:#fde8e8;color:#b91c1c}
+  .kam-sel{min-width:190px}
+  .kids{display:none;padding:2px 12px 11px}
+  .proj.open .kids{display:block}
   .kdir{margin-top:11px}
   .kdir .dh{display:flex;align-items:center;gap:8px;margin-bottom:5px}
   .kdir .dn{font-weight:800;font-size:12.5px}
   .kdir .dc{font-size:11px;color:var(--dim)}
   .kchips{display:flex;flex-wrap:wrap;gap:7px}
-  .kchip{border-radius:9px;padding:7px 10px;font-size:12px;line-height:1.25;border:1px solid var(--border);min-width:180px;background:var(--panel2)}
+  .kchip{border-radius:9px;padding:7px 10px;font-size:12px;line-height:1.25;border:1px solid var(--border);min-width:200px;background:var(--panel)}
   .kchip .st{font-weight:800;font-size:10.5px;display:flex;align-items:center;gap:6px}
   .kchip .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
   .kchip .mid{margin:3px 0 1px}
   .kchip .mt{font-size:11px;color:var(--dim)}
   .kchip.pre{border-left:3px solid var(--warn)}
-  .kchip.contract{border-left:3px solid var(--accent)}
+  .kchip.post{border-left:3px solid var(--accent)}
   .kchip.done{border-left:3px solid var(--good)}
-  .kchip.other{border-left:3px solid var(--dim2)}
   .kchip .dsum{font-weight:800}
+  .psub{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--dim);margin:4px 0 2px}
+  .psub b{color:var(--text)}
+  /* аудит */
+  .aud h3{font-size:14px;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+  .aud .badge{font-size:11px;font-weight:800;border-radius:999px;padding:2px 9px;background:rgba(255,176,32,.18);color:#ffce7a}
+  html[data-theme="light"] .aud .badge{background:#fef0d8;color:#a15c00}
+  .chiprow{display:flex;flex-wrap:wrap;gap:6px}
+  .achip{font-size:12px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:5px 9px}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <a href="/" class="back" title="В ЦУП">←</a>
-    <div><h1>Проекты · <span>БДМ</span></h1><div class="lead">Единый вход через БДМ: Группа → Клиент → БДМ → Проект → продакт-сделки</div></div>
+    <div><h1>Проекты · <span>КАМ</span></h1><div class="lead">Компания → Проект → КАМ → сделки. Привязка по полю «В рамках проекта» (Bitrix)</div></div>
     <div class="sp"></div>
-    <button class="minibtn" id="resyncBtn" title="Полная пересинхронизация (админ) — заполнит новые поля комплексных сделок">⟲ Полная</button>
-    <div class="seg" id="tabs"><button data-t="kam" class="on">KAM</button><button data-t="tree">Дерево</button><button data-t="clients">Клиенты</button><button data-t="audit">Аудит</button></div>
+    <button class="minibtn" id="resyncBtn" title="Полная пересинхронизация (админ) — заполнит поле «В рамках проекта» у всех сделок">⟲ Полная</button>
+    <div class="seg" id="tabs"><button data-t="company" class="on">По компаниям</button><button data-t="project">По проектам</button><button data-t="audit">Аудит</button></div>
   </header>
 
   <div class="kpis" id="kpis" style="display:none">
-    <div class="kpi"><div class="kl">Группы компаний</div><div class="kv tabular" id="kGroups">—</div></div>
-    <div class="kpi"><div class="kl">Клиенты</div><div class="kv tabular" id="kClients">—</div></div>
-    <div class="kpi"><div class="kl">Проекты (Complex)</div><div class="kv tabular" id="kProjects">—</div></div>
-    <div class="kpi"><div class="kl">⚠ Без БДМ</div><div class="kv tabular" id="kNoBdm" style="color:var(--bad)">—</div></div>
+    <div class="kpi"><div class="kl">Проекты</div><div class="kv tabular" id="kProjects">—</div></div>
+    <div class="kpi"><div class="kl">Компании</div><div class="kv tabular" id="kCompanies">—</div></div>
+    <div class="kpi"><div class="kl">Сделок в проектах</div><div class="kv tabular" id="kDeals">—</div></div>
+    <div class="kpi"><div class="kl">⚠ Без КАМ</div><div class="kv tabular" id="kNoKam" style="color:var(--bad)">—</div></div>
   </div>
 
-  <div id="viewKam">
-    <div class="card pad" style="margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      <div class="hint" style="font-size:12px">Матрёшка: <b style="color:var(--text)">KAM → клиент-группы → компании → направления × стадии</b>. Клик — вглубь. Назначение KAM/группы — во вкладке «Клиенты».</div>
-      <div class="sp"></div>
-      <div class="seg" id="kamScope"><button data-s="all" class="on">Все стадии</button><button data-s="pre">В работе</button><button data-s="post">Контракт+</button></div>
-      <div class="klegend">
-        <span><i style="background:var(--warn)"></i>Доконтракт (P10–P80)</span>
-        <span><i style="background:var(--accent)"></i>Контракт / реализация</span>
-        <span><i style="background:var(--good)"></i>Завершена</span>
-      </div>
-    </div>
-    <div class="card"><div id="kam"><div class="spin"></div></div></div>
-  </div>
-  <div id="viewTree" style="display:none"><div class="card"><div id="tree"><div class="spin"></div></div></div></div>
-  <div id="viewClients" style="display:none">
-    <div class="card pad">
-      <input class="search" id="dirSearch" placeholder="Поиск клиента…" oninput="renderDir()">
-      <div id="dir"><div class="spin"></div></div>
+  <div class="card pad" id="toolbar" style="margin-bottom:12px;display:none;align-items:center;gap:12px;flex-wrap:wrap">
+    <input class="search" id="search" placeholder="Поиск: проект, компания, менеджер…" style="margin:0" oninput="render()">
+    <div class="sp"></div>
+    <div class="seg" id="scope"><button data-s="all" class="on">Все стадии</button><button data-s="pre">В работе</button><button data-s="post">Контракт+</button></div>
+    <div class="klegend">
+      <span><i style="background:var(--warn)"></i>До контракта (P10–P80)</span>
+      <span><i style="background:var(--accent)"></i>После контракта</span>
+      <span><i style="background:var(--good)"></i>Завершена</span>
     </div>
   </div>
-  <div id="viewAudit" style="display:none"><div class="card pad" id="audit"><div class="spin"></div></div></div>
+
+  <div id="view"><div class="card"><div class="pad"><div class="spin"></div></div></div></div>
 </div>
 
-<datalist id="groupList"></datalist>
-
 <script>
-let DATA=null, DIR=[], ROLE='viewer', CANEDIT=false;
+let DATA=null, ROLE='viewer', CANEDIT=false, TAB='company', SCOPE='all';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const fmt=n=>Math.round(n||0).toLocaleString('ru-RU').replace(/,/g,' ');
 const fmtMln=v=>{const m=(v||0)/1e6; if(Math.abs(m)>=100)return fmt(m)+' млн'; return (Math.round(m*10)/10).toLocaleString('ru-RU')+' млн';};
-const OPENG=new Set(), OPENC=new Set(), OPENP=new Set();
-const OPENK=new Set(), OPENKG=new Set(), OPENKC=new Set(); let KSCOPE='all';
+const OPENC=new Set(), OPENP=new Set();
+const PH={pre:{c:'var(--warn)',l:'До контракта'},post:{c:'var(--accent)',l:'После контракта'},done:{c:'var(--good)',l:'Завершена'}};
 
 async function init(){
   try{const r=await fetch('/auth/me');if(r.ok){const {user}=await r.json();ROLE=user.role;CANEDIT=['admin','superadmin','coordinator'].includes(ROLE);}}catch(e){}
-  document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.t,b));
-  document.querySelectorAll('#kamScope button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#kamScope button').forEach(x=>x.classList.toggle('on',x===b));KSCOPE=b.dataset.s;renderKam();});
+  document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{TAB=b.dataset.t;document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('on',x===b));render();});
+  document.querySelectorAll('#scope button').forEach(b=>b.onclick=()=>{SCOPE=b.dataset.s;document.querySelectorAll('#scope button').forEach(x=>x.classList.toggle('on',x===b));render();});
   $('resyncBtn').onclick=doResync;
   await load();
 }
 async function load(){
   try{
     DATA=await (await fetch('/api/projects')).json();
-    const c=DATA.meta&&DATA.meta.counts||{};
-    $('kGroups').textContent=c.groups??'—'; $('kClients').textContent=c.clients??'—';
-    $('kProjects').textContent=c.projects??'—'; $('kNoBdm').textContent=(DATA.audit&&DATA.audit.noBdm||[]).length;
-    $('kpis').style.display='';
-    $('groupList').innerHTML=(DATA.meta.groups||[]).map(g=>`<option value="${esc(g)}">`).join('');
-    renderKam(); renderTree(); renderAudit();
-  }catch(e){ $('tree').innerHTML='<div class="empty">Не удалось загрузить: '+esc(e.message)+'</div>'; }
+    updateKpis();
+    $('kpis').style.display=''; $('toolbar').style.display='flex';
+    render();
+  }catch(e){ $('view').innerHTML='<div class="card pad"><div class="empty">Не удалось загрузить: '+esc(e.message)+'</div></div>'; }
 }
-function switchTab(t,btn){
-  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b===btn));
-  $('viewKam').style.display=t==='kam'?'':'none';
-  $('viewTree').style.display=t==='tree'?'':'none';
-  $('viewClients').style.display=t==='clients'?'':'none';
-  $('viewAudit').style.display=t==='audit'?'':'none';
-  if(t==='clients'&&!DIR.length) loadDir();
-}
-
-/* ── Дерево ── */
-function dealRow(d){
-  return `<div class="deal">
-    <span class="dt"><b>${esc(d.title)}</b>${d.company?` · <span class="co2">${esc(d.company)}</span>`:''}</span>
-    <span class="prod">${esc(d.product)}</span>
-    <span class="stg ${esc(d.step)}">${esc(d.step)}</span>
-    <span class="mgr">👤 ${esc(d.owner)}</span>
-    <span class="dsum tabular">${fmt(d.sum)} ₸</span>
-    ${d.url?`<a class="ext" href="${esc(d.url)}" target="_blank" title="Открыть в Bitrix">↗</a>`:''}
-  </div>`;
-}
-function renderTree(){
-  const box=$('tree');
-  const groups=DATA.groupsTree||[];
-  if(!groups.length){box.innerHTML='<div class="empty">Нет данных. Запусти ⟲ Полная, чтобы подтянуть комплексные сделки.</div>';return;}
-  let html='';
-  for(const g of groups){
-    const gk='g:'+g.group, go=OPENG.has(gk);
-    html+=`<div class="grp"><div class="grp-h" data-g="${esc(gk)}"><span class="tw">${go?'▾':'▶'}</span><span>${esc(g.group)}</span><span class="cnt">${g.clientCount} клиент.</span><span class="sum tabular">${fmtMln(g.totalSum)} ₸</span></div>`;
-    if(go){
-      for(const c of g.clients){
-        const ck='c:'+(c.companyId||c.company), co=OPENC.has(ck);
-        html+=`<div class="cli ${co?'open':''}"><div class="cli-h" data-c="${esc(ck)}"><span class="tw">${co?'▾':'▶'}</span><span class="nm">${esc(c.company)}</span>${c.bdmId?`<span class="bdm" title="БДМ (${esc(c.bdmSource||'')})">БДМ: ${esc(c.bdm)}</span>`:`<span class="bdm none">БДМ не назначен</span>`}<span class="sum tabular">${fmtMln(c.totalSum)} ₸</span></div><div class="cli-body">`;
-        for(const p of c.projects){
-          const pk='p:'+p.dealId, po=OPENP.has(pk);
-          html+=`<div class="proj ${po?'open':''}"><div class="proj-h" data-p="${pk}"><span class="tw">${po?'▾':'▶'}</span><span class="tag">Complex</span><span class="t">${esc(p.title)}</span><span class="mgr">БДМ: ${esc(p.bdm)}</span><span class="stg ${esc(p.step)}">${esc(p.step)}</span><span class="sum tabular">${fmtMln(p.totalSum)} ₸</span>${p.url?` <a class="ext" href="${esc(p.url)}" target="_blank">↗</a>`:''}</div><div class="kids">${p.children.length?p.children.map(dealRow).join(''):'<div class="hint" style="padding:8px">Нет привязанных продакт-сделок</div>'}</div></div>`;
-        }
-        if(c.standalone.length){
-          html+=`<div class="stand"><div class="lbl">Единичные сделки (вне комплексных)</div>${c.standalone.map(dealRow).join('')}</div>`;
-        }
-        if(!c.projects.length&&!c.standalone.length) html+='<div class="hint" style="padding:8px">Нет активных сделок</div>';
-        html+=`</div></div>`;
-      }
-    }
-    html+=`</div>`;
-  }
-  box.innerHTML=html;
-  box.querySelectorAll('.grp-h').forEach(e=>e.onclick=()=>{tog(OPENG,e.dataset.g);renderTree();});
-  box.querySelectorAll('.cli-h').forEach(e=>e.onclick=()=>{tog(OPENC,e.dataset.c);renderTree();});
-  box.querySelectorAll('.proj-h').forEach(e=>e.onclick=(ev)=>{if(ev.target.closest('a'))return;tog(OPENP,e.dataset.p);renderTree();});
+function updateKpis(){
+  const P=DATA.projects||[];
+  $('kProjects').textContent=P.length;
+  $('kCompanies').textContent=(DATA.companies||[]).length;
+  $('kDeals').textContent=P.reduce((s,p)=>s+(p.dealCount||0),0);
+  $('kNoKam').textContent=P.filter(p=>!p.kamId).length;
 }
 function tog(set,k){ if(set.has(k))set.delete(k); else set.add(k); }
+function scopeOk(ph){ return SCOPE==='all'||SCOPE===ph; }
+function matchQ(p,q){ if(!q)return true; return ((p.project||'')+' '+(p.company||'')+' '+(p.kam||'')+' '+(p.managers||[]).join(' ')+' '+(p.products||[]).join(' ')).toLowerCase().includes(q); }
 
-/* ── KAM-вид (матрёшка: KAM → клиент-группы → компании → направления × стадии) ── */
-const PH={pre:{c:'var(--warn)',l:'Доконтракт'},contract:{c:'var(--accent)',l:'Контракт'},done:{c:'var(--good)',l:'Завершена'},other:{c:'var(--dim2)',l:'—'}};
-// Все стадии — всё (вкл. проигранные/замороженные). В работе — только доконтракт
-// P10–P80 (pre). Контракт+ — от контракта до завершённых (contract/done); LOST и
-// прочие (other) сюда НЕ попадают — они видны только в «Все стадии».
-const KSCOPE_OK=ph=>KSCOPE==='all'||(KSCOPE==='pre'?ph==='pre':(ph==='contract'||ph==='done'));
-function clientDealCards(c){
-  const out=[];
-  (c.projects||[]).forEach(p=>{ if(p.children&&p.children.length)out.push(...p.children); else out.push(p); });
-  (c.standalone||[]).forEach(d=>out.push(d));
-  return out;
+function kamOptions(sel){
+  const emps=(DATA.meta&&DATA.meta.employees)||[];
+  return '<option value="">— КАМ не назначен —</option>'+emps.map(e=>`<option value="${e.id}" ${String(sel)===String(e.id)?'selected':''}>${esc(e.name)} · ${esc(e.dept)}</option>`).join('');
 }
-function pbarHtml(deals){
-  const by={pre:0,contract:0,done:0,other:0};
-  deals.forEach(d=>by[d.phase||'other']=(by[d.phase||'other']||0)+d.sum);
-  const tot=Object.values(by).reduce((a,b)=>a+b,0)||1;
-  return `<div class="pbar">`+['pre','contract','done','other'].map(p=>{const w=by[p]/tot*100;return w?`<span style="width:${w}%;background:${PH[p].c}"></span>`:'';}).join('')+`</div>`;
+function kamCell(p){
+  if(CANEDIT) return `<select class="kam-sel" data-project="${esc(p.project)}" onclick="event.stopPropagation()" onchange="saveKam(this)">${kamOptions(p.kamId)}</select>`;
+  return p.kamId?`<span class="kam">КАМ: ${esc(p.kam)}</span>`:`<span class="kam none">КАМ не назначен</span>`;
 }
 function kchip(d){
-  const ph=d.phase||'other';
-  return `<div class="kchip ${ph}"><div class="st"><span class="dot" style="background:${PH[ph].c}"></span>${esc(d.step||d.stage||PH[ph].l)}</div><div class="mid">${esc(d.title||d.product)} · <span class="dsum tabular">${fmt(d.sum)} ₸</span></div><div class="mt">👤 ${esc(d.owner||'—')}${d.url?` · <a class="ext" href="${esc(d.url)}" target="_blank">↗</a>`:''}</div></div>`;
+  const cls=d.done?'done':(d.phase||'pre'); const info=PH[cls]||PH.pre;
+  const label=d.done?'Завершена':(d.step||d.stage||info.l);
+  return `<div class="kchip ${cls}"><div class="st"><span class="dot" style="background:${info.c}"></span>${esc(label)}</div><div class="mid">${esc(d.title||d.product)} · <span class="dsum tabular">${fmt(d.sum)} ₸</span></div><div class="mt">👤 ${esc(d.owner||'—')}${d.url?` · <a class="ext" href="${esc(d.url)}" target="_blank">↗</a>`:''}</div></div>`;
 }
-function renderKam(){
-  const box=$('kam'); if(!box)return;
-  const clients=(DATA&&DATA.groupsTree||[]).flatMap(g=>g.clients);
-  const filt=deals=>deals.filter(d=>KSCOPE_OK(d.phase));
-  const byKam=new Map();
-  clients.forEach(c=>{const k=c.bdmId!=null?String(c.bdmId):'none';if(!byKam.has(k))byKam.set(k,{bdmId:c.bdmId,bdm:c.bdm||'Без KAM',clients:[]});byKam.get(k).clients.push(c);});
-  let kams=[...byKam.values()];
-  kams.forEach(k=>{k._deals=k.clients.flatMap(clientDealCards);k.sum=filt(k._deals).reduce((s,d)=>s+d.sum,0);});
-  kams=kams.filter(k=>filt(k._deals).length).sort((a,b)=>b.sum-a.sum);
-  if(!kams.length){box.innerHTML='<div class="empty">Нет сделок в выбранной стадии. Назначь KAM/группы во вкладке «Клиенты» и запусти ⟲ Полная.</div>';return;}
-  let html='';
-  for(const k of kams){
-    const kk='k:'+(k.bdmId||'none'), ko=OPENK.has(kk);
-    html+=`<div class="kam-h" data-k="${esc(kk)}"><span class="tw">${ko?'▾':'▶'}</span><span class="role">KAM</span><span>${esc(k.bdm)}</span><span class="cnt">${k.clients.length} комп.</span><span class="sum tabular">${fmtMln(k.sum)} ₸</span></div>`;
-    if(!ko)continue;
-    const gmap=new Map();
-    k.clients.forEach(c=>{const g=c.group||'Без группы';if(!gmap.has(g))gmap.set(g,[]);gmap.get(g).push(c);});
-    for(const [gname,cls] of [...gmap.entries()].sort((a,b)=>a[0].localeCompare(b[0],'ru'))){
-      const gk=kk+'|g:'+gname, go=OPENKG.has(gk);
-      const gsum=filt(cls.flatMap(clientDealCards)).reduce((s,d)=>s+d.sum,0);
-      html+=`<div class="kgrp"><div class="kgrp-h" data-kg="${esc(gk)}"><span class="tw">${go?'▾':'▶'}</span><span class="um">группа</span><span>${esc(gname)}</span><span class="cnt">${cls.length} комп.</span><span class="sum tabular">${fmtMln(gsum)} ₸</span></div>`;
-      if(go){
-        for(const c of cls){
-          const cds=filt(clientDealCards(c)); if(!cds.length)continue;
-          const ck=gk+'|c:'+(c.companyId||c.company), co2=OPENKC.has(ck);
-          html+=`<div class="kco ${co2?'open':''}"><div class="kco-h" data-kc="${esc(ck)}"><span class="tw">${co2?'▾':'▶'}</span><span class="nm">${esc(c.company)}</span>${pbarHtml(cds)}<span class="sum tabular">${fmtMln(cds.reduce((s,d)=>s+d.sum,0))} ₸</span></div><div class="kco-body">`;
-          const dirmap=new Map();
-          cds.forEach(d=>{const p=d.product||'—';if(!dirmap.has(p))dirmap.set(p,[]);dirmap.get(p).push(d);});
-          for(const [prod,items] of [...dirmap.entries()].sort((a,b)=>b[1].reduce((s,d)=>s+d.sum,0)-a[1].reduce((s,d)=>s+d.sum,0))){
-            items.sort((a,b)=>b.sum-a.sum);
-            html+=`<div class="kdir"><div class="dh"><span class="dn">${esc(prod)}</span><span class="dc">${items.length} · ${fmtMln(items.reduce((s,d)=>s+d.sum,0))} ₸</span></div><div class="kchips">${items.map(kchip).join('')}</div></div>`;
-          }
-          html+=`</div></div>`;
-        }
+function projectBlock(p,showCompany){
+  const deals=[...(p.pre||[]),...(p.post||[])].filter(d=>scopeOk(d.phase));
+  const sum=deals.reduce((s,d)=>s+d.sum,0);
+  const pk='p:'+p.project, po=OPENP.has(pk);
+  let body='';
+  if(po){
+    if(!deals.length) body='<div class="hint" style="padding:8px">Нет сделок в выбранной стадии.</div>';
+    else{
+      const dirmap=new Map();
+      deals.forEach(d=>{const pr=d.product||'—';if(!dirmap.has(pr))dirmap.set(pr,[]);dirmap.get(pr).push(d);});
+      for(const [prod,items] of [...dirmap.entries()].sort((a,b)=>b[1].reduce((s,d)=>s+d.sum,0)-a[1].reduce((s,d)=>s+d.sum,0))){
+        items.sort((a,b)=>b.sum-a.sum);
+        body+=`<div class="kdir"><div class="dh"><span class="dn">${esc(prod)}</span><span class="dc">${items.length} · ${fmtMln(items.reduce((s,d)=>s+d.sum,0))} ₸</span></div><div class="kchips">${items.map(kchip).join('')}</div></div>`;
       }
-      html+=`</div>`;
     }
   }
-  box.innerHTML=html;
-  box.querySelectorAll('.kam-h').forEach(e=>e.onclick=()=>{tog(OPENK,e.dataset.k);renderKam();});
-  box.querySelectorAll('.kgrp-h').forEach(e=>e.onclick=()=>{tog(OPENKG,e.dataset.kg);renderKam();});
-  box.querySelectorAll('.kco-h').forEach(e=>e.onclick=(ev)=>{if(ev.target.closest('a'))return;tog(OPENKC,e.dataset.kc);renderKam();});
+  const preN=(p.pre||[]).filter(d=>scopeOk(d.phase)).length, postN=(p.post||[]).filter(d=>scopeOk(d.phase)).length;
+  return `<div class="proj ${po?'open':''}">
+    <div class="proj-h" data-p="${esc(pk)}"><span class="tw">${po?'▾':'▶'}</span><span class="tag">Проект</span><span class="t">${esc(p.project)}</span>${showCompany?`<span class="co2">· ${esc(p.company)}</span>`:''}${kamCell(p)}<span class="sum tabular">${fmtMln(sum)} ₸</span></div>
+    <div class="kids"><div class="psub"><span>До контракта (P10–P80): <b>${preN}</b> · ${fmtMln((p.pre||[]).filter(d=>scopeOk(d.phase)).reduce((s,d)=>s+d.sum,0))} ₸</span><span>После контракта: <b>${postN}</b> · ${fmtMln((p.post||[]).filter(d=>scopeOk(d.phase)).reduce((s,d)=>s+d.sum,0))} ₸</span></div>${body}</div>
+  </div>`;
 }
 
-/* ── Клиенты (справочник БДМ/группы) ── */
-async function loadDir(){
-  try{ DIR=(await (await fetch('/api/projects/clients')).json()).items||[]; renderDir(); }
-  catch(e){ $('dir').innerHTML='<div class="empty">Ошибка: '+esc(e.message)+'</div>'; }
+function render(){
+  if(!DATA){return;}
+  if(TAB==='audit') return renderAudit();
+  const q=($('search').value||'').trim().toLowerCase();
+  const box=$('view');
+  if(TAB==='project'){
+    const list=(DATA.projects||[]).filter(p=>matchQ(p,q));
+    if(!list.length){box.innerHTML=emptyCard();return;}
+    box.innerHTML='<div class="card pad">'+list.map(p=>projectBlock(p,true)).join('')+'</div>';
+  } else { // company
+    const comps=(DATA.companies||[]).map(c=>({...c,projects:c.projects.filter(p=>matchQ(p,q))})).filter(c=>c.projects.length);
+    if(!comps.length){box.innerHTML=emptyCard();return;}
+    let html='<div class="card pad">';
+    for(const c of comps){
+      const ck='c:'+(c.companyId||c.company), co=OPENC.has(ck);
+      const sum=c.projects.reduce((s,p)=>s+[...(p.pre||[]),...(p.post||[])].filter(d=>scopeOk(d.phase)).reduce((a,d)=>a+d.sum,0),0);
+      html+=`<div class="co ${co?'open':''}"><div class="co-h" data-c="${esc(ck)}"><span class="tw">${co?'▾':'▶'}</span><span>${esc(c.company)}</span><span class="cnt">${c.projects.length} проект.</span><span class="sum tabular">${fmtMln(sum)} ₸</span></div><div class="co-body">${c.projects.map(p=>projectBlock(p,false)).join('')}</div></div>`;
+    }
+    html+='</div>';
+    box.innerHTML=html;
+  }
+  box.querySelectorAll('.co-h').forEach(e=>e.onclick=(ev)=>{if(ev.target.closest('a,select'))return;tog(OPENC,e.dataset.c);render();});
+  box.querySelectorAll('.proj-h').forEach(e=>e.onclick=(ev)=>{if(ev.target.closest('a,select'))return;tog(OPENP,e.dataset.p);render();});
 }
-function bdmOptions(sel){
-  const emps=(DATA.meta&&DATA.meta.employees)||[];
-  return '<option value="">— не назначен —</option>'+emps.map(e=>`<option value="${e.id}" ${String(sel)===String(e.id)?'selected':''}>${esc(e.name)} · ${esc(e.dept)}</option>`).join('');
-}
-function renderDir(){
-  const q=($('dirSearch').value||'').trim().toLowerCase();
-  let list=DIR;
-  if(q) list=DIR.filter(c=>(c.company+' '+(c.group||'')+' '+(c.bdm||'')).toLowerCase().includes(q));
-  if(!list.length){$('dir').innerHTML='<div class="empty">Нет клиентов по фильтру.</div>';return;}
-  const rows=list.slice(0,600).map(c=>`<tr data-cid="${esc(c.companyId)}">
-    <td><b>${esc(c.company)}</b><div class="hint">${c.dealCount} сдел.</div></td>
-    <td>${CANEDIT?`<select class="e-bdm">${bdmOptions(c.bdmId)}</select>`:(c.bdm?esc(c.bdm):'—')}</td>
-    <td>${CANEDIT?`<input class="e-grp" list="groupList" value="${esc(c.group||'')}" placeholder="Группа компаний" style="min-width:180px">`:(c.group?esc(c.group):'—')}</td>
-    <td>${CANEDIT?`<button class="save" onclick="saveClient(this)">Сохранить</button>`:''}</td>
-  </tr>`).join('');
-  $('dir').innerHTML=`<div style="overflow-x:auto"><table class="dir"><thead><tr><th>Клиент</th><th>БДМ</th><th>Группа компаний</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
-}
-async function saveClient(btn){
-  const tr=btn.closest('tr'); const cid=tr.dataset.cid;
-  const bdmId=tr.querySelector('.e-bdm').value||null;
-  const group=tr.querySelector('.e-grp').value.trim()||null;
-  const company=tr.querySelector('td b').textContent;
-  btn.disabled=true; const o=btn.textContent; btn.textContent='…';
-  try{
-    const r=await fetch('/api/projects/client',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({companyId:cid,companyName:company,bdmId,group})});
-    const d=await r.json(); if(!r.ok)throw new Error(d.error||'Ошибка');
-    const it=DIR.find(x=>String(x.companyId)===String(cid)); if(it){it.bdmId=bdmId;it.group=group;}
-    btn.textContent='✓'; setTimeout(()=>{btn.textContent=o;btn.disabled=false;},1200);
-  }catch(e){ alert('Не удалось: '+e.message); btn.textContent=o; btn.disabled=false; }
+function emptyCard(){
+  return '<div class="card pad"><div class="empty">Нет проектов по фильтру. Проект появляется, когда в сделке заполнено поле «В рамках проекта». Если поле недавно завели — запусти ⟲ Полная.</div></div>';
 }
 
-/* ── Аудит ── */
 function renderAudit(){
-  const a=DATA.audit||{};
-  const noBdm=a.noBdm||[], orphan=a.orphanP60||[], multi=a.multiManager||[];
-  let html='';
-  html+=`<div class="aud"><h3>🚫 Клиенты без БДМ <span class="badge">${noBdm.length}</span></h3><div class="hint" style="margin-bottom:6px">Есть активные сделки, но не назначен единый вход. Назначь БДМ во вкладке «Клиенты».</div><div class="chiprow">${noBdm.length?noBdm.map(c=>`<span class="achip"><b>${esc(c.company)}</b> · ${fmtMln(c.totalSum)} ₸ · ${c.dealCount} сдел.${c.group?' · '+esc(c.group):''}</span>`).join(''):'<span class="hint">Нет — у всех клиентов есть БДМ 👍</span>'}</div></div>`;
-  html+=`<div class="aud"><h3>🔗 P60+ без привязки к комплексной <span class="badge">${orphan.length}</span></h3><div class="hint" style="margin-bottom:6px">Сделка на P60/P80, но «Комплексная сделка» не заполнена и нет родителя — по новой модели должна быть привязана.</div><div class="chiprow">${orphan.length?orphan.slice(0,200).map(d=>`<span class="achip"><b>${esc(d.title)}</b> · ${esc(d.company)} · ${esc(d.product)} · ${esc(d.step)} · 👤 ${esc(d.owner)}${d.url?` <a class="ext" href="${esc(d.url)}" target="_blank">↗</a>`:''}</span>`).join(''):'<span class="hint">Нет — все P60+ привязаны 👍</span>'}</div></div>`;
-  html+=`<div class="aud"><h3>👥 Один продукт — разные менеджеры <span class="badge">${multi.length}</span></h3><div class="hint" style="margin-bottom:6px">У одного клиента по одному направлению работают несколько менеджеров — то, что убираем.</div><div class="chiprow">${multi.length?multi.map(m=>`<span class="achip"><b>${esc(m.company)}</b> · ${esc(m.product)}: ${esc(m.managers.join(', '))}</span>`).join(''):'<span class="hint">Нет пересечений 👍</span>'}</div></div>`;
-  $('audit').innerHTML=html;
+  const noKam=(DATA.audit&&DATA.audit.noKam)||[];
+  const box=$('view');
+  let html='<div class="card pad aud">';
+  html+=`<h3>🚫 Проекты без назначенного КАМ <span class="badge">${noKam.length}</span></h3><div class="hint" style="margin-bottom:6px">Есть сделки в проекте, но КАМ не назначен. Назначь во вкладках «По компаниям»/«По проектам» (выпадашка в строке проекта).</div><div class="chiprow">${noKam.length?noKam.map(p=>`<span class="achip"><b>${esc(p.project)}</b> · ${esc(p.company)} · ${fmtMln(p.totalSum)} ₸ · ${p.dealCount} сдел.</span>`).join(''):'<span class="hint">Нет — у всех проектов есть КАМ 👍</span>'}</div>`;
+  html+='</div>';
+  box.innerHTML=html;
+}
+
+async function saveKam(sel){
+  const project=sel.dataset.project; const kamId=sel.value||null;
+  sel.disabled=true;
+  try{
+    const r=await fetch('/api/projects/kam',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project,kamId})});
+    const d=await r.json(); if(!r.ok)throw new Error(d.error||'Ошибка');
+    const emps=(DATA.meta&&DATA.meta.employees)||[];
+    const nm=kamId?((emps.find(e=>String(e.id)===String(kamId))||{}).name||('#'+kamId)):null;
+    (DATA.projects||[]).forEach(p=>{if(p.project===project){p.kamId=kamId?Number(kamId):null;p.kam=nm;}});
+    updateKpis();
+  }catch(e){ alert('Не удалось: '+e.message); }
+  finally{ sel.disabled=false; }
 }
 
 async function doResync(){
@@ -384,7 +256,7 @@ async function doResync(){
 }
 init();
 </script>
-  <script src="/assets/pls-ai.js?v=16" defer></script>
+<script src="/assets/pls-ai.js?v=16" defer></script>
 <script src="/assets/cup-theme.js" defer></script>
 </body>
 </html>
