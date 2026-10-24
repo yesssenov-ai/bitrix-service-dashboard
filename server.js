@@ -93,6 +93,9 @@ const CUP_BG = '<script src="/assets/cup-bg.js" defer></script>';
 // Плашка «Вход от имени» — показывается, только если сессия в режиме импersonation
 // (/auth/me вернул impersonatedBy). Подставляется на каждую страницу, кроме входа.
 const IMP_BAR = '<script src="/assets/impersonation.js?v=1" defer></script>';
+// Переиспользуемый индикатор прогресса фоновой синхронизации (SyncBar.run). На
+// всех страницах, кроме входа, чтобы любой модуль с фоновым синком мог показать бар.
+const SYNC_BAR = '<script src="/assets/sync-bar.js?v=1" defer></script>';
 app.use((req, res, next) => {
   const orig = res.sendFile.bind(res);
   res.sendFile = (fp, opts, cb) => {
@@ -109,7 +112,8 @@ app.use((req, res, next) => {
           const needAI = usesNewUI && !isLogin && !out.includes('/assets/pls-ai.js');
           const needBG = usesNewUI && !out.includes('/assets/cup-bg.js');
           const needImp = !isLogin && !out.includes('/assets/impersonation.js');
-          const head = PWA_BASE + '\n' + ((usesNewUI || isSelfThemed) ? '' : LEGACY_THEME + '\n') + PWA_BADGE + '\n' + (needAI ? PWA_AI + '\n' : '') + (needBG ? CUP_BG + '\n' : '') + (needImp ? IMP_BAR + '\n' : '');
+          const needSync = !isLogin && !out.includes('/assets/sync-bar.js');
+          const head = PWA_BASE + '\n' + ((usesNewUI || isSelfThemed) ? '' : LEGACY_THEME + '\n') + PWA_BADGE + '\n' + (needAI ? PWA_AI + '\n' : '') + (needBG ? CUP_BG + '\n' : '') + (needImp ? IMP_BAR + '\n' : '') + (needSync ? SYNC_BAR + '\n' : '');
           out = out.replace('</head>', head + '</head>');
         }
         res.set('Content-Type', 'text/html; charset=utf-8');

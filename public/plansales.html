@@ -776,16 +776,13 @@ document.getElementById('refreshBtn').onclick=async(e)=>{
   finally{ b.disabled=false; }
 };
 
-document.getElementById('resyncBtn').onclick=async(e)=>{
-  const b=e.currentTarget;
-  if(!confirm('Запустить полную пересинхронизацию сделок из Bitrix? Это займёт несколько минут и обновит все данные. Страницу можно закрыть — синк идёт на сервере.'))return;
-  b.disabled=true; const old=b.textContent; b.textContent='⏳ Запускаю…';
-  try{
-    const r=await fetch('/api/plansales/resync',{method:'POST'});
-    if(r.status===403){alert('Пересинхронизацию может запускать только администратор.');}
-    else{const d=await r.json(); alert(d.busy?'Синк уже идёт — подожди пару минут и обнови страницу.':'Пересинхронизация запущена. Через 2–5 минут обнови страницу — данные подтянутся.');}
-  }catch(err){alert('Ошибка запуска: '+err.message);}
-  finally{b.disabled=false; b.textContent=old;}
+document.getElementById('resyncBtn').onclick=(e)=>{
+  SyncBar.run({
+    startUrl:'/api/plansales/resync', statusUrl:'/api/plansales/resync-status',
+    button:e.currentTarget,
+    confirm:'Запустить полную пересинхронизацию сделок из Bitrix? Идёт на сервере — покажу живой прогресс, страницу можно не закрывать.',
+    onDone:function(){ location.reload(); }
+  });
 };
 // ── Режим «Митинг»: крупный вид всего дашборда (все функции работают) ──────────
 // Клик циклически меняет масштаб: 100% → 125% → 150% → 100%.

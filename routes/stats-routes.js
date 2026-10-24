@@ -251,7 +251,10 @@ router.post('/resync', requireAuth(['admin']), async (req, res) => {
   res.json({ ok: true, started: true, note: 'Пересинк запущен в фоне сервера — прогресс в логах деплоя Railway' });
 });
 
-// GET /api/stats/resync-status — идёт ли пересинк прямо сейчас.
-router.get('/resync-status', requireAuth(['admin']), (req, res) => res.json({ ok: true, running: statsResyncRunning }));
+// GET /api/stats/resync-status — живой прогресс пересинка (сколько из скольки, %).
+router.get('/resync-status', requireAuth(['admin', 'superadmin']), (req, res) => {
+  try { res.json({ ok: true, busy: statsResyncRunning, running: statsResyncRunning, progress: require('../stats-sync').getSyncProgress() }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 
 module.exports = { router };

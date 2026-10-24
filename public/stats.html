@@ -1037,12 +1037,13 @@ function brk(title,entries,total){
   return `<div class="brk"><h5>${title}</h5>${entries.map(e=>`<div class="bar"><div class="bl">${esc(e.key)}</div><div class="bt"><i style="width:${Math.max(3,e.sum/max*100)}%"></i>${e.count!=null?`<span class="bcnt">${e.count} шт</span>`:''}</div><div class="bv">${M(e.sum)}</div></div>`).join('')}</div>`;
 }
 
-async function resync(){
-  if(!confirm('Запустить полную пересинхронизацию сделок из Битрикс?\n\nЗаполнит новые поля (название компании, дата создания) и обновит все данные. Идёт в фоне ~несколько минут, прогресс — в логах Railway. После завершения нажмите «Обновить».'))return;
-  const b=document.getElementById('resyncBtn');b.disabled=true;const old=b.textContent;b.textContent='Пересинк запущен…';
-  try{const r=await fetch('/api/stats/resync',{method:'POST'});const d=await r.json();alert(d.note||'Запущено. Прогресс в логах Railway. Через несколько минут нажмите «Обновить».');}
-  catch(e){alert('Ошибка запуска пересинка');}
-  b.disabled=false;b.textContent=old;
+function resync(){
+  SyncBar.run({
+    startUrl:'/api/stats/resync', statusUrl:'/api/stats/resync-status',
+    button:document.getElementById('resyncBtn'),
+    confirm:'Запустить полную пересинхронизацию сделок из Битрикс?\n\nИдёт на сервере — покажу живой прогресс, страницу можно не закрывать.',
+    onDone:function(){ location.reload(); }
+  });
 }
 // Инкрементальное обновление: тянет из Битрикса всё, что изменилось после
 // последней синхронизации зеркала, а по ручному нажатию — ещё и убирает

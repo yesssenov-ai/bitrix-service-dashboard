@@ -221,4 +221,10 @@ router.post('/resync', requireAuth(['admin']), async (req, res) => {
   })();
 });
 
+// GET /api/plansales/resync-status — живой прогресс пересинка.
+router.get('/resync-status', requireAuth(['admin', 'superadmin']), (req, res) => {
+  try { res.json({ ok: true, busy: _resyncBusy, progress: require('../stats-sync').getSyncProgress() }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 module.exports = { router };
