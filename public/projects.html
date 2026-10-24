@@ -256,7 +256,7 @@ async function saveKam(sel){
   finally{ sel.disabled=false; }
 }
 
-let _pollTimer=null;
+let _pollTimer=null,_pollFails=0;
 function fmtEta(s){ if(s==null)return''; if(s<60)return s+' сек'; const m=Math.floor(s/60),ss=s%60; return m+' мин'+(ss?' '+ss+' сек':''); }
 async function doResync(){
   if(!confirm('Запустить полную пересинхронизацию? Идёт на сервере, страницу можно не закрывать — покажу живой прогресс.'))return;
@@ -265,12 +265,15 @@ async function doResync(){
     const r=await fetch('/api/projects/resync',{method:'POST'});
     if(r.status===403){alert('Только для админа.');b.disabled=false;b.textContent='⟲ Полная';return;}
     await r.json();
-    $('syncPanel').style.display=''; if(_pollTimer)clearTimeout(_pollTimer); pollSync();
+    $('syncPanel').style.display=''; _pollFails=0; if(_pollTimer)clearTimeout(_pollTimer); pollSync();
   }catch(e){alert('Ошибка: '+e.message);b.disabled=false;b.textContent='⟲ Полная';}
 }
 async function pollSync(){
   try{
-    const d=await (await fetch('/api/projects/resync-status')).json();
+    const r=await fetch('/api/projects/resync-status',{cache:'no-store'});
+    const ct=(r.headers.get('content-type')||'');
+    if(!r.ok || ct.indexOf('json')<0) throw new Error('not-json'); // сервер перезапускается/роут не задеплоен
+    const d=await r.json(); _pollFails=0;
     const p=d.progress||{};
     const phase={count:'Подсчёт сделок в Bitrix…',sync:'Загрузка и обновление…',done:'Готово',idle:'Запуск…'}[p.phase]||'Синхронизация…';
     $('syncTitle').textContent=phase;
@@ -285,7 +288,13 @@ async function pollSync(){
       setTimeout(()=>{ $('syncPanel').style.display='none'; },6000);
       await load();
     }
-  }catch(e){ $('syncInfo').textContent='Статус недоступен: '+e.message; const b=$('resyncBtn'); b.disabled=false; b.textContent='⟲ Полная'; }
+  }catch(e){
+    // Транзиентная ошибка (перезапуск сервера после деплоя / роут статуса ещё не поднялся):
+    // синк идёт на сервере, не пугаем — несколько раз пробуем, потом спокойно просим обновить.
+    _pollFails++;
+    if(_pollFails<6){ $('syncTitle').textContent='Синхронизация идёт…'; $('syncInfo').textContent='ждём ответ сервера…'; _pollTimer=setTimeout(pollSync,1500); }
+    else{ $('syncTitle').textContent='Синхронизация идёт на сервере'; $('syncInfo').textContent='Статус пока недоступен — обновите страницу через пару минут.'; const b=$('resyncBtn'); b.disabled=false; b.textContent='⟲ Полная'; }
+  }
 }
 init();
 </script>

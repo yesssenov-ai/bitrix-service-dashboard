@@ -67,13 +67,25 @@
         panel.querySelector('.sb-pct').textContent = p.total ? '100%' : '';
         panel.querySelector('.sb-info').textContent = 'обновлено ' + (p.done || 0) + (p.errors ? ' · ошибок ' + p.errors : '');
       }
+      var fails = 0;
       function poll() {
-        fetch(opts.statusUrl, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
+        fetch(opts.statusUrl, { credentials: 'same-origin', cache: 'no-store' }).then(function (r) {
+          var ct = r.headers.get('content-type') || '';
+          if (!r.ok || ct.indexOf('json') < 0) throw new Error('not-json'); // сервер перезапускается / роут не поднят
+          return r.json();
+        }).then(function (d) {
+          fails = 0;
           var p = (d && d.progress) || {}, busy = !!(d && (d.busy || p.running));
           render(panel, p, busy);
           if (busy) { setTimeout(poll, 1500); }
           else { finishUi(p); restore(); setTimeout(function () { panel.remove(); }, 6000); if (opts.onDone) try { opts.onDone(); } catch (e) {} }
-        }).catch(function (e) { panel.querySelector('.sb-info').textContent = 'Статус недоступен: ' + e.message; restore(); });
+        }).catch(function () {
+          // Транзиентно (перезапуск после деплоя / статус-роут ещё не поднялся): синк идёт
+          // на сервере — не пугаем, пробуем несколько раз, потом спокойно просим обновить.
+          fails++;
+          if (fails < 6) { panel.querySelector('.sb-title').textContent = 'Синхронизация идёт…'; panel.querySelector('.sb-info').textContent = 'ждём ответ сервера…'; setTimeout(poll, 1500); }
+          else { panel.querySelector('.sb-title').textContent = 'Синхронизация идёт на сервере'; panel.querySelector('.sb-info').textContent = 'Статус пока недоступен — обновите страницу через пару минут.'; restore(); }
+        });
       }
       fetch(opts.startUrl, { method: 'POST', credentials: 'same-origin' }).then(function (r) {
         if (r.status === 403) { alert('Только для администратора.'); restore(); panel.remove(); return null; }
