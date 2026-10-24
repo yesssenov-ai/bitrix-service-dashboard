@@ -7,6 +7,18 @@
 const { b24 } = require('./bitrix');
 const { pool } = require('./auth');
 
+// Прогресс полной сверки (для живого индикатора в UI). Общий на процесс —
+// fullSync защищён флагом от параллельного запуска, так что гонок нет.
+const syncProgress = { running: false, phase: 'idle', total: 0, done: 0, errors: 0, pct: 0, startedAt: 0, finishedAt: 0, etaSec: null };
+function getSyncProgress() { return { ...syncProgress }; }
+function _progReset() { Object.assign(syncProgress, { running: true, phase: 'count', total: 0, done: 0, errors: 0, pct: 0, startedAt: Date.now(), finishedAt: 0, etaSec: null }); }
+function _progTick() {
+  const p = syncProgress;
+  p.pct = p.total ? Math.min(100, Math.round(p.done / p.total * 100)) : 0;
+  const el = (Date.now() - p.startedAt) / 1000;
+  p.etaSec = (p.done > 0 && p.total > p.done) ? Math.round(el / p.done * (p.total - p.done)) : null;
+}
+
 const REAL_CONTRACT_DATE_FIELD = 'UF_CRM_1753708701368';
 const INSTRUMENT_FIELD = 'UF_CRM_NAME_PRIOBOR';
 const DEPARTMENT_FIELD = 'UF_CRM_1758005356984'; // "Отдел" — confirmed via correlation across 93 deals (find-department-field.js)
@@ -296,8 +308,22 @@ async function fullSync() {
   if (_fullSyncRunning) { console.log('stats fullSync уже идёт — пропускаю повторный запуск'); return 0; }
   _fullSyncRunning = true;
   let total = 0, errors = 0;
-  const startedAt = Date.now();
+  _progReset();
+  const startedAt = syncProgress.startedAt;
   try {
+    // Быстрый проход: узнаём ОБЩЕЕ число сделок (поле total из ответа Битрикса,
+    // один запрос на категорию) — чтобы показать честный процент, а не «крутилку».
+    let grand = 0;
+    for (const categoryId of CATEGORY_IDS) {
+      try {
+        const r = await b24('crm.deal.list', { filter: { CATEGORY_ID: categoryId }, select: ['ID'], start: 0 });
+        grand += parseInt(r && r.total, 10) || 0;
+      } catch (e) { console.warn(`count category ${categoryId}: ${e.message}`); }
+    }
+    syncProgress.total = grand;
+    syncProgress.phase = 'sync';
+    _progTick();
+
     for (const categoryId of CATEGORY_IDS) {
       const deals = await paginatedDealList({ CATEGORY_ID: categoryId });
       console.log(`Категория ${categoryId}: найдено ${deals.length} сделок`);
@@ -310,6 +336,7 @@ async function fullSync() {
           errors++;
           console.error(`  ⚠️  Ошибка на сделке #${d.ID}: ${e.message} (продолжаю дальше)`);
         }
+        syncProgress.done = total; syncProgress.errors = errors; _progTick();
         if (total % 50 === 0 && total > 0) {
           const elapsedMin = ((Date.now() - startedAt) / 60000).toFixed(1);
           console.log(`  ...обработано ${total} сделок (${elapsedMin} мин, ошибок: ${errors})`);
@@ -319,6 +346,8 @@ async function fullSync() {
     }
   } finally {
     _fullSyncRunning = false;
+    syncProgress.running = false; syncProgress.finishedAt = Date.now();
+    syncProgress.phase = 'done'; if (syncProgress.total) syncProgress.pct = 100; syncProgress.etaSec = 0;
   }
 
   // После полной сверки — убрать из зеркала сделки, удалённые в Битриксе.
@@ -364,4 +393,4 @@ async function incrementalSync(sinceMs) {
   return { updated, since };
 }
 
-module.exports = { syncOneDeal, deleteDeal, reconcileDeletions, fullSync, upsertDeal, incrementalSync };
+module.exports = { syncOneDeal, deleteDeal, reconcileDeletions, fullSync, upsertDeal, incrementalSync, getSyncProgress };

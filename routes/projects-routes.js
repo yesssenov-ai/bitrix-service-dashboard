@@ -33,7 +33,7 @@ router.post('/kam', requireAuth(EDIT_ROLES), express.json(), async (req, res) =>
 });
 
 // POST /api/projects/resync — полная пересинхронизация зеркала (админ), чтобы у сделок
-// заполнилось поле «В рамках проекта». Фон.
+// заполнилось поле «В рамках проекта». Фон; прогресс — в /resync-status.
 let _busy = false;
 router.post('/resync', requireAuth(['admin', 'superadmin']), async (req, res) => {
   if (_busy) return res.json({ ok: true, started: false, busy: true });
@@ -44,6 +44,12 @@ router.post('/resync', requireAuth(['admin', 'superadmin']), async (req, res) =>
     catch (e) { console.error('projects resync error:', e.message); }
     finally { _busy = false; }
   })();
+});
+
+// GET /api/projects/resync-status — живой прогресс полной сверки (сколько из скольки, %).
+router.get('/resync-status', requireAuth(['admin', 'superadmin']), (req, res) => {
+  try { res.json({ ok: true, busy: _busy, progress: require('../stats-sync').getSyncProgress() }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
 module.exports = { router };
