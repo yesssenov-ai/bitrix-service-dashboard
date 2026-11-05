@@ -249,6 +249,7 @@ async function refresh(){
   const b=document.getElementById('refreshBtn');b.disabled=true;b.textContent='Обновляю…';b.style.color='';b.title='';
   let r;try{r=await api('/api/finance/stock/refresh',{method:'POST'});}catch(e){r={ok:false,d:{error:String(e&&e.message||e)}};}
   await load();b.disabled=false;
+  if(r&&r.d&&r.d.busy){b.textContent='⏳ Идёт обновление';b.style.color='';b.title=String(r.d.error||'Обновление уже идёт');setTimeout(()=>{if(b.textContent!=='Обновляю…'){b.textContent='↻ Обновить';b.style.color='';b.title='';}},5000);return;}
   let err=null;
   if(!r||r.ok===false)err=(r&&r.d&&r.d.error)||'сервер недоступен';
   else if(r.d&&r.d.error)err=r.d.error;

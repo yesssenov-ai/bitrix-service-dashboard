@@ -24,6 +24,40 @@ async function logManualRefresh(req, module, r) {
   } catch (e) { /* журнал — не критичен */ }
 }
 
+// Один 1С-синк за раз. Если обновление уже идёт — второе НЕ запускаем, отвечаем 409
+// с понятным сообщением. Плюс жёсткий таймаут: зависший запрос к 1С не держит кнопку
+// вечно и гарантированно пишет результат в журнал.
+let fbusy = false, fbusySince = 0, fbusyWhat = '';
+const FBUSY_STALE_MS = 15 * 60 * 1000;      // «идёт» дольше — считаем залипшим, сбрасываем
+const FREFRESH_TIMEOUT_MS = 6 * 60 * 1000;  // потолок на один модуль
+function fbusyActive() { if (fbusy && Date.now() - fbusySince > FBUSY_STALE_MS) { fbusy = false; fbusyWhat = ''; } return fbusy; }
+const fWithTimeout = (p, ms, label) => Promise.race([
+  Promise.resolve().then(() => p),
+  new Promise((_, rej) => setTimeout(() => rej(new Error(`таймаут модуля ${label} (${Math.round(ms / 1000)}с)`)), ms)),
+]);
+async function doManualRefresh(req, res, module, fn) {
+  if (fbusyActive()) {
+    const sec = Math.round((Date.now() - fbusySince) / 1000);
+    return res.status(409).json({ ok: false, busy: true, module: fbusyWhat, sec,
+      error: `Сейчас уже идёт обновление${fbusyWhat ? ' («' + fbusyWhat + '»)' : ''} — ${sec} с. Подождите, пока закончится, и попробуйте снова.` });
+  }
+  fbusy = true; fbusySince = Date.now(); fbusyWhat = module;
+  try {
+    const r = await fWithTimeout(fn(), FREFRESH_TIMEOUT_MS, module);
+    logManualRefresh(req, module, r);
+    res.json(r);
+  } catch (e) {
+    logManualRefresh(req, module, { ok: false, error: e.message });
+    res.status(500).json({ error: e.message });
+  } finally { fbusy = false; fbusyWhat = ''; }
+}
+
+// Текущее состояние синка — чтобы фронт мог показать «идёт обновление» без клика.
+router.get('/sync-state', requireAuth(VIEW), (req, res) => {
+  const b = fbusyActive();
+  res.json({ busy: b, module: b ? fbusyWhat : '', sec: b ? Math.round((Date.now() - fbusySince) / 1000) : 0 });
+});
+
 // ── Скоупинг Дебета: менеджеру видны только отделы дебиторки (1С) его оргподразделения.
 // Карта: орготдел (EMPLOYEE_DEPT) → отделы дебиторки. Админ/суперадмин — все.
 const DEBT_NAZERKE = ['Запчасти и расходники', 'Материаловедение', 'Общелаб', 'Электрохимия'];
@@ -55,49 +89,34 @@ router.get('/debt', requireAuth(VIEW), async (req, res) => {
   try { res.json(await require('../finance-debt-calc').getDebtBoard(debtScope(req.user))); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
-router.post('/debt/refresh', requireAuth(VIEW), async (req, res) => {
-  try { const r = await require('../finance-debt-calc').syncDebt(); logManualRefresh(req, 'Дебет', r); res.json(r); }
-  catch (e) { logManualRefresh(req, 'Дебет', { ok: false, error: e.message }); res.status(500).json({ error: e.message }); }
-});
+router.post('/debt/refresh', requireAuth(VIEW), (req, res) => doManualRefresh(req, res, 'Дебет', () => require('../finance-debt-calc').syncDebt()));
 
 // ── Склад (остатки на складах, fact_stock) ──────────────────────────────────
 router.get('/stock', requireAuth(VIEW), async (req, res) => {
   try { res.json(await require('../finance-stock-calc').getStockBoard()); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
-router.post('/stock/refresh', requireAuth(VIEW), async (req, res) => {
-  try { const r = await require('../finance-stock-calc').syncStock(); logManualRefresh(req, 'Склад', r); res.json(r); }
-  catch (e) { logManualRefresh(req, 'Склад', { ok: false, error: e.message }); res.status(500).json({ error: e.message }); }
-});
+router.post('/stock/refresh', requireAuth(VIEW), (req, res) => doManualRefresh(req, res, 'Склад', () => require('../finance-stock-calc').syncStock()));
 
 // ── Авансы (счёт 3510 + оплаты 1210/1010-1030) ──────────────────────────────
 router.get('/advances', requireAuth(VIEW), async (req, res) => {
   try { res.json(await require('../finance-advances-calc').getAdvancesBoard()); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
-router.post('/advances/refresh', requireAuth(VIEW), async (req, res) => {
-  try { const r = await require('../finance-advances-calc').syncAdvances(); logManualRefresh(req, 'Авансы', r); res.json(r); }
-  catch (e) { logManualRefresh(req, 'Авансы', { ok: false, error: e.message }); res.status(500).json({ error: e.message }); }
-});
+router.post('/advances/refresh', requireAuth(VIEW), (req, res) => doManualRefresh(req, res, 'Авансы', () => require('../finance-advances-calc').syncAdvances()));
 
 // ── Cash Flow (13-недельный прогноз ликвидности; приток из Дебета 1210) ──────
 router.get('/cashflow', requireAuth(VIEW), async (req, res) => {
   try { res.json(await require('../finance-cashflow-calc').getCashflowBoard()); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
-router.post('/cashflow/refresh', requireAuth(VIEW), async (req, res) => {
-  try { const r = await require('../finance-cashflow-calc').syncCashflow(); logManualRefresh(req, 'Cash Flow', r); res.json(r); }
-  catch (e) { logManualRefresh(req, 'Cash Flow', { ok: false, error: e.message }); res.status(500).json({ error: e.message }); }
-});
+router.post('/cashflow/refresh', requireAuth(VIEW), (req, res) => doManualRefresh(req, res, 'Cash Flow', () => require('../finance-cashflow-calc').syncCashflow()));
 
 // ── Качество (сверка контрактов 1С ↔ сделок Битрикса) ───────────────────────
 router.get('/quality', requireAuth(VIEW), async (req, res) => {
   try { res.json(await require('../finance-quality-calc').getQualityBoard()); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
-router.post('/quality/refresh', requireAuth(VIEW), async (req, res) => {
-  try { const r = await require('../finance-quality-calc').syncQuality(); logManualRefresh(req, 'Качество', r); res.json(r); }
-  catch (e) { logManualRefresh(req, 'Качество', { ok: false, error: e.message }); res.status(500).json({ error: e.message }); }
-});
+router.post('/quality/refresh', requireAuth(VIEW), (req, res) => doManualRefresh(req, res, 'Качество', () => require('../finance-quality-calc').syncQuality()));
 
 module.exports = { router };
