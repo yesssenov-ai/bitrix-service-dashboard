@@ -772,11 +772,21 @@ initDB().then(() => {
     // туннель Tailscale параллельными тяжёлыми запросами. Сбой одного не рушит остальные.
     const FIN_SLOTS = [540, 660, 810, 960, 1080]; // минуты от полуночи Алматы: 9:00/11:00/13:30/16:00/18:00
     const finFired = new Set();   // ключи "YYYY-MM-DD:slot" — слот уже отработал сегодня
-    let finSyncing = false;
+    let finSyncing = false, finSyncStartedAt = 0;
     const FIN_RU = { debt: 'дебет', advances: 'авансы', stock: 'склад', cashflow: 'cashflow' };
+    const FIN_STALE_MS = 20 * 60 * 1000;        // «идёт» дольше 20 мин ⇒ считаем залипшим, сбрасываем
+    const FIN_STEP_TIMEOUT_MS = 6 * 60 * 1000;  // жёсткий потолок на ОДИН модуль (защита от зависшего запроса к 1С/туннелю)
+    // Гарантированно завершаемый await: если fn() не ответил за ms — reject, а не вечное ожидание
+    // (иначе зависший запрос навсегда заблокировал бы планировщик — причина «тишины» после сбоя).
+    const finWithTimeout = (p, ms, label) => Promise.race([
+      Promise.resolve().then(() => p),
+      new Promise((_, rej) => setTimeout(() => rej(new Error(`таймаут модуля ${label} (${Math.round(ms / 1000)}с)`)), ms)),
+    ]);
     const runFinanceSync = async (source) => {
-      if (finSyncing) { console.log(`finance sync: уже идёт, пропускаю (${source})`); return; }
-      finSyncing = true;
+      // Самолечение залипания: если предыдущий запуск «висит» дольше FIN_STALE_MS — не ждём вечно.
+      if (finSyncing && (Date.now() - finSyncStartedAt) < FIN_STALE_MS) { console.log(`finance sync: уже идёт, пропускаю (${source})`); return; }
+      if (finSyncing) console.warn(`finance sync: предыдущий запуск завис (${Math.round((Date.now() - finSyncStartedAt) / 60000)} мин) — сбрасываю и запускаю заново (${source})`);
+      finSyncing = true; finSyncStartedAt = Date.now();
       const steps = [
         ['debt', () => require('./finance-debt-calc').syncDebt()],
         ['advances', () => require('./finance-advances-calc').syncAdvances()],
@@ -786,24 +796,28 @@ initDB().then(() => {
       const results = {};          // ru-ключ → "ok 123" | "сбой: …"
       let anyFail = false;
       const startedMs = Date.now();
-      for (const [name, fn] of steps) {
-        try {
-          const r = await fn();
-          if (r && r.ok) {
-            results[FIN_RU[name]] = `ok${r.count != null ? ' ' + r.count : ''}`;
-            console.log(`finance ${source}/${name}: ok (${r.count != null ? r.count : '—'})`);
-          } else {
+      try {
+        for (const [name, fn] of steps) {
+          try {
+            const r = await finWithTimeout(fn(), FIN_STEP_TIMEOUT_MS, name);
+            if (r && r.ok) {
+              results[FIN_RU[name]] = `ok${r.count != null ? ' ' + r.count : ''}`;
+              console.log(`finance ${source}/${name}: ok (${r.count != null ? r.count : '—'})`);
+            } else {
+              anyFail = true;
+              results[FIN_RU[name]] = `сбой: ${String((r && r.error) || 'неизвестно').slice(0, 200)}`;
+              console.log(`finance ${source}/${name}: НЕ УДАЛОСЬ ${(r && r.error) || ''}`);
+            }
+          } catch (e) {
             anyFail = true;
-            results[FIN_RU[name]] = `сбой: ${String((r && r.error) || 'неизвестно').slice(0, 200)}`;
-            console.log(`finance ${source}/${name}: НЕ УДАЛОСЬ ${(r && r.error) || ''}`);
+            results[FIN_RU[name]] = `ошибка: ${String(e.message || e).slice(0, 200)}`;
+            console.error(`finance ${source}/${name} error:`, e.message);
           }
-        } catch (e) {
-          anyFail = true;
-          results[FIN_RU[name]] = `ошибка: ${String(e.message || e).slice(0, 200)}`;
-          console.error(`finance ${source}/${name} error:`, e.message);
         }
+      } finally {
+        // ВСЕГДА снимаем флаг — даже при неожиданном исключении, иначе планировщик «залипнет».
+        finSyncing = false;
       }
-      finSyncing = false;
       // Системный журнал: одна запись на прогон (успех ИЛИ сбой — чтобы тихих
       // падений больше не было). Пишется в ticketsmodule_audit_logs без user_id.
       try {
@@ -816,6 +830,9 @@ initDB().then(() => {
         );
       } catch (e) { console.error('finance autosync auditLog error:', e.message); }
     };
+    // Догоняющий синк вскоре после старта: после каждого деплоя/рестарта цифры свежие
+    // сразу, и в журнале видно, что планировщик жив (а не ждать первого слота).
+    setTimeout(() => runFinanceSync('boot').catch(e => console.error('finance boot sync error:', e.message)), 120 * 1000);
     setInterval(() => {
       const now = new Date();
       const dow = now.getUTCDay();            // слоты в UTC 04–13 → тот же день, что Алматы
