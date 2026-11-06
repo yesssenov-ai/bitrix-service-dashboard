@@ -140,4 +140,26 @@ router.post('/telegram/unlink', requireAuth(), async (req, res) => {
   } catch (e) { console.error('account/telegram/unlink:', e.message); res.status(500).json({ ok: false, error: 'Ошибка' }); }
 });
 
+// ── Личные настройки (ключ-значение): напр. флаг «видел онбординг-тур» ──
+router.get('/prefs/:key', requireAuth(), async (req, res) => {
+  try {
+    const key = String(req.params.key || '').slice(0, 50);
+    const { rows } = await pool.query('SELECT value FROM ticketsmodule_user_prefs WHERE user_id=$1 AND key=$2', [req.user.id, key]);
+    res.json({ ok: true, key, value: rows.length ? rows[0].value : null });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+router.put('/prefs/:key', requireAuth(), express.json(), async (req, res) => {
+  try {
+    const key = String(req.params.key || '').slice(0, 50);
+    if (!key) return res.status(400).json({ ok: false, error: 'key required' });
+    const value = (req.body && 'value' in req.body) ? req.body.value : null;
+    await pool.query(
+      `INSERT INTO ticketsmodule_user_prefs (user_id, key, value, updated_at) VALUES ($1,$2,$3,NOW())
+         ON CONFLICT (user_id, key) DO UPDATE SET value=$3, updated_at=NOW()`,
+      [req.user.id, key, JSON.stringify(value)]
+    );
+    res.json({ ok: true, key, value });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 module.exports = router;
