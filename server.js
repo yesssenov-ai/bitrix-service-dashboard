@@ -209,6 +209,7 @@ app.use('/api/plansales', require('./routes/plansales-routes').router);
 app.use('/api/nct', require('./routes/nct-routes').router);
 app.use('/api/projects', require('./routes/projects-routes').router);
 app.use('/api/feedback', require('./routes/feedback-routes').router);
+app.use('/api/myday', require('./routes/myday-routes').router);
 app.use('/api/plsai', require('./routes/plsai-routes').router);
 app.use('/api/logistics', require('./routes/logistics-routes').router);
 app.use('/api/operational', require('./routes/operational-routes').router);

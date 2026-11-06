@@ -198,6 +198,8 @@ footer{text-align:center;color:var(--text-faint);font-size:11.5px;padding:20px;f
     </div>
   </div>
 
+  <div id="myday" style="display:none"></div>
+
   <div class="controls">
     <div class="search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
@@ -469,6 +471,35 @@ function tickClock(){
 
 async function logout(){ await fetch('/auth/logout', { method:'POST' }); window.location.href = '/login.html'; }
 
+// «Мой день» — персональная панель под шапкой. v1: мои сделки в работе. Показываем,
+// только если есть что показать (иначе панель скрыта — без пустых блоков).
+async function loadMyDay(){
+  const box = document.getElementById('myday'); if(!box) return;
+  let d; try { const r = await fetch('/api/myday'); if(!r.ok) return; d = await r.json(); } catch(e){ return; }
+  if (!d || !d.ok || !d.deals || !d.deals.count) return;
+  const dl = d.deals;
+  const STEP = { P10:'#8aa0bd', P30:'#5b8cff', P60:'#f0a23a', P80:'#e5574e' };
+  const mln = v => (Math.round(((v||0)/1e6)*10)/10).toLocaleString('ru-RU')+' млн ₸';
+  box.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px 18px;margin:16px 0 4px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <b style="font-size:15px">Мой день</b>
+        <span style="color:var(--text-3);font-size:12.5px">в работе ${dl.count} · ${mln(dl.sum)}${dl.hotCount?` · 🔥 горячих ${dl.hotCount}`:''}</span>
+        <span style="flex:1"></span>
+        <a href="/plansales.html" style="font-size:12.5px;color:var(--accent);font-weight:600;text-decoration:none">Все мои сделки →</a>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${dl.top.map(x=>`<a href="${x.url||'/plansales.html'}" ${x.url?'target="_blank"':''} style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;text-decoration:none;color:inherit">
+          <span style="font-size:10.5px;font-weight:800;color:#fff;background:${STEP[x.step]||'#888'};border-radius:5px;padding:2px 6px">${x.step}</span>
+          ${x.hot?'🔥':''}
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.title)}${x.company?` · <span style="color:var(--text-3)">${esc(x.company)}</span>`:''}</span>
+          <b style="font-variant-numeric:tabular-nums;white-space:nowrap">${mln(x.sum)}</b>
+        </a>`).join('')}
+      </div>
+    </div>`;
+  box.style.display='';
+}
+
 async function init(){
   try{
     const r = await fetch('/auth/me');
@@ -481,6 +512,7 @@ async function init(){
     const hour = new Date().getHours();
     const greeting = hour<6?'Доброй ночи':hour<12?'Доброе утро':hour<18?'Добрый день':'Добрый вечер';
     document.getElementById('helloLine').textContent = `${greeting} · роль: ${user.role}`;
+    loadMyDay();
 
     let allowedCodes = [];
     try{
