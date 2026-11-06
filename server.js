@@ -98,6 +98,8 @@ const IMP_BAR = '<script src="/assets/impersonation.js?v=1" defer></script>';
 const SYNC_BAR = '<script src="/assets/sync-bar.js?v=1" defer></script>';
 // Кнопка обратной связи «💬» — на всех страницах, кроме входа.
 const FEEDBACK = '<script src="/assets/feedback.js?v=1" defer></script>';
+// Глобальный поиск + командная палитра (Ctrl+K) «🔍» — на всех страницах, кроме входа.
+const SEARCH = '<script src="/assets/search.js?v=1" defer></script>';
 app.use((req, res, next) => {
   const orig = res.sendFile.bind(res);
   res.sendFile = (fp, opts, cb) => {
@@ -116,7 +118,8 @@ app.use((req, res, next) => {
           const needImp = !isLogin && !out.includes('/assets/impersonation.js');
           const needSync = !isLogin && !out.includes('/assets/sync-bar.js');
           const needFb = !isLogin && !out.includes('/assets/feedback.js');
-          const head = PWA_BASE + '\n' + ((usesNewUI || isSelfThemed) ? '' : LEGACY_THEME + '\n') + PWA_BADGE + '\n' + (needAI ? PWA_AI + '\n' : '') + (needBG ? CUP_BG + '\n' : '') + (needImp ? IMP_BAR + '\n' : '') + (needSync ? SYNC_BAR + '\n' : '') + (needFb ? FEEDBACK + '\n' : '');
+          const needSearch = !isLogin && !out.includes('/assets/search.js');
+          const head = PWA_BASE + '\n' + ((usesNewUI || isSelfThemed) ? '' : LEGACY_THEME + '\n') + PWA_BADGE + '\n' + (needAI ? PWA_AI + '\n' : '') + (needBG ? CUP_BG + '\n' : '') + (needImp ? IMP_BAR + '\n' : '') + (needSync ? SYNC_BAR + '\n' : '') + (needFb ? FEEDBACK + '\n' : '') + (needSearch ? SEARCH + '\n' : '');
           out = out.replace('</head>', head + '</head>');
         }
         res.set('Content-Type', 'text/html; charset=utf-8');
@@ -210,6 +213,7 @@ app.use('/api/nct', require('./routes/nct-routes').router);
 app.use('/api/projects', require('./routes/projects-routes').router);
 app.use('/api/feedback', require('./routes/feedback-routes').router);
 app.use('/api/myday', require('./routes/myday-routes').router);
+app.use('/api/search', require('./routes/search-routes').router);
 app.use('/api/plsai', require('./routes/plsai-routes').router);
 app.use('/api/logistics', require('./routes/logistics-routes').router);
 app.use('/api/operational', require('./routes/operational-routes').router);
