@@ -51,6 +51,12 @@
         '<button data-k="problem" style="border:0;background:none;color:' + sub + ';font:inherit;font-weight:700;font-size:13px;padding:6px 12px;border-radius:8px;cursor:pointer">🐞 Проблема</button>' +
       '</div>' +
       '<textarea id="pls-fb-text" rows="5" maxlength="4000" placeholder="Опишите идею или проблему…" style="width:100%;box-sizing:border-box;background:' + sur2 + ';border:1px solid ' + line + ';border-radius:10px;color:' + text + ';font:inherit;font-size:14px;padding:10px;outline:none;resize:vertical"></textarea>' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-top:10px">' +
+        '<button id="pls-fb-attach" type="button" style="background:none;border:1px solid ' + line + ';border-radius:9px;color:' + text + ';font:inherit;font-weight:600;font-size:12.5px;padding:7px 11px;cursor:pointer;white-space:nowrap">📎 Прикрепить</button>' +
+        '<span style="font-size:11.5px;color:' + sub + '">или вставьте скрин через Ctrl+V</span>' +
+      '</div>' +
+      '<input id="pls-fb-file" type="file" accept="image/*,application/pdf" style="display:none">' +
+      '<div id="pls-fb-att" style="margin-top:8px"></div>' +
       '<div style="display:flex;align-items:center;gap:10px;margin-top:12px">' +
         '<span id="pls-fb-msg" style="font-size:12px;color:' + sub + '"></span>' +
         '<span style="flex:1"></span>' +
@@ -76,6 +82,67 @@
     ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
     var ta = box.querySelector('#pls-fb-text'); setTimeout(function () { ta.focus(); }, 30);
 
+    // ── Вложение (скрин/файл): кнопка, Ctrl+V, сжатие картинок, превью ──
+    var attachment = null;
+    var MAX_BYTES = 6 * 1024 * 1024;
+    var fileInput = box.querySelector('#pls-fb-file');
+    var attBox = box.querySelector('#pls-fb-att');
+    function setMsg(t) { var m = box.querySelector('#pls-fb-msg'); m.textContent = t; m.style.color = accent; }
+    function b64bytes(u) { var i = u.indexOf(','); return Math.floor((u.length - i - 1) * 3 / 4); }
+    function renderAtt() {
+      if (!attachment) { attBox.innerHTML = ''; return; }
+      var isImg = /^image\//.test(attachment.type);
+      var thumb = isImg ? ('<img src="' + attachment.data + '" style="width:40px;height:40px;object-fit:cover;border-radius:6px;flex:none">') : '<span style="font-size:22px">📄</span>';
+      var kb = Math.round(b64bytes(attachment.data) / 1024);
+      attBox.innerHTML = '<div style="display:flex;align-items:center;gap:10px;border:1px solid ' + line + ';border-radius:10px;padding:6px 8px">' +
+        thumb +
+        '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px">' + attachment.name.replace(/[<>&]/g, '') + ' <span style="color:' + sub + '">· ' + kb + ' КБ</span></span>' +
+        '<button id="pls-fb-att-x" type="button" style="background:none;border:0;color:' + sub + ';font-size:18px;cursor:pointer;line-height:1">×</button></div>';
+      attBox.querySelector('#pls-fb-att-x').addEventListener('click', function () { attachment = null; fileInput.value = ''; renderAtt(); });
+    }
+    function downscaleImage(file, cb) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        var img = new Image();
+        img.onload = function () {
+          var MAX = 1600, w = img.width, h = img.height;
+          if (w > MAX || h > MAX) { var k = Math.min(MAX / w, MAX / h); w = Math.round(w * k); h = Math.round(h * k); }
+          try {
+            var c = document.createElement('canvas'); c.width = w; c.height = h;
+            c.getContext('2d').drawImage(img, 0, 0, w, h);
+            cb(c.toDataURL('image/jpeg', 0.82), 'image/jpeg', (file.name || 'screenshot').replace(/\.[a-z0-9]+$/i, '') + '.jpg');
+          } catch (e) { cb(reader.result, file.type, file.name || 'image'); }
+        };
+        img.onerror = function () { cb(reader.result, file.type, file.name || 'image'); };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    }
+    function acceptFile(file) {
+      if (!file) return;
+      var isImg = /^image\//.test(file.type);
+      if (!isImg && file.type !== 'application/pdf') { setMsg('Можно картинку или PDF'); return; }
+      if (isImg) {
+        downscaleImage(file, function (data, type, name) {
+          if (b64bytes(data) > MAX_BYTES) { setMsg('Картинка слишком большая'); return; }
+          attachment = { data: data, type: type, name: name }; renderAtt();
+        });
+      } else {
+        if (file.size > MAX_BYTES) { setMsg('Файл больше 6 МБ'); return; }
+        var fr = new FileReader();
+        fr.onload = function () { attachment = { data: fr.result, type: 'application/pdf', name: file.name || 'file.pdf' }; renderAtt(); };
+        fr.readAsDataURL(file);
+      }
+    }
+    box.querySelector('#pls-fb-attach').addEventListener('click', function () { fileInput.click(); });
+    fileInput.addEventListener('change', function () { acceptFile(fileInput.files && fileInput.files[0]); });
+    ov.addEventListener('paste', function (e) {
+      var items = (e.clipboardData && e.clipboardData.items) || [];
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].type && items[i].type.indexOf('image') === 0) { var f = items[i].getAsFile(); if (f) { acceptFile(f); e.preventDefault(); break; } }
+      }
+    });
+
     box.querySelector('#pls-fb-send').addEventListener('click', function () {
       var txt = (ta.value || '').trim();
       var msg = box.querySelector('#pls-fb-msg');
@@ -83,7 +150,7 @@
       var send = box.querySelector('#pls-fb-send'); send.disabled = true; send.textContent = 'Отправляю…';
       fetch('/api/feedback', {
         method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: kind, text: txt, page: info.page, module: info.module })
+        body: JSON.stringify({ kind: kind, text: txt, page: info.page, module: info.module, attachment: attachment })
       }).then(function (r) { return r.json().catch(function () { return {}; }); })
         .then(function (d) {
           if (d && d.ok) {

@@ -372,6 +372,10 @@ async function initDB() {
       created_at   TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS idx_feedback_created ON ticketsmodule_feedback(created_at DESC);
+    -- Вложение к обращению (скрин/файл) — base64 data URL, хранится прямо в БД.
+    ALTER TABLE ticketsmodule_feedback ADD COLUMN IF NOT EXISTS attachment_data TEXT;
+    ALTER TABLE ticketsmodule_feedback ADD COLUMN IF NOT EXISTS attachment_name VARCHAR(255);
+    ALTER TABLE ticketsmodule_feedback ADD COLUMN IF NOT EXISTS attachment_type VARCHAR(100);
 
     -- ── Фаза 2 Статистики: история стадий сделок ───────────────────────────
     -- Каждая запись = момент входа сделки в стадию (из crm.stagehistory.list).

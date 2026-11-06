@@ -491,7 +491,7 @@ async function loadFeedback(){
         <td>${FB_KIND[i.kind]||esc(i.kind)}</td>
         <td><strong>${esc(i.display_name||i.username||'—')}</strong></td>
         <td style="color:var(--text-3)">${esc(i.module||i.page||'—')}</td>
-        <td style="max-width:440px;white-space:pre-wrap">${esc(i.text)}</td>
+        <td style="max-width:440px;white-space:pre-wrap">${esc(i.text)}${i.has_attachment?`<div style="margin-top:6px"><a href="/api/feedback/${i.id}/attachment" target="_blank" style="color:var(--accent);font-weight:600;text-decoration:none">📎 ${esc(i.attachment_name||'вложение')}</a> <a href="/api/feedback/${i.id}/attachment?dl=1" style="color:var(--text-3);font-size:11px" title="Скачать">↓</a></div>`:''}</td>
         <td>${FB_STBADGE[i.status||'new']||esc(i.status)}</td>
         <td><div class="row-actions">
           ${(i.status!=='seen')?`<button class="btn btn-sm" onclick="setFb(${i.id},'seen')">Просмотрено</button>`:''}
