@@ -356,6 +356,23 @@ async function initDB() {
       updated_by     VARCHAR(120)
     );
 
+    -- Обратная связь от сотрудников: «Предложить улучшение / Сообщить о проблеме».
+    -- Кнопка есть на всех страницах; падает сюда + уведомление в Telegram/почту.
+    CREATE TABLE IF NOT EXISTS ticketsmodule_feedback (
+      id           SERIAL PRIMARY KEY,
+      user_id      INTEGER,
+      username     VARCHAR(100),
+      display_name VARCHAR(200),
+      kind         VARCHAR(20),          -- 'idea' | 'problem'
+      page         VARCHAR(300),         -- путь страницы, откуда отправлено
+      module       VARCHAR(120),         -- заголовок/модуль
+      text         TEXT NOT NULL,
+      user_agent   TEXT,
+      status       VARCHAR(20) DEFAULT 'new',  -- new | seen | done
+      created_at   TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_feedback_created ON ticketsmodule_feedback(created_at DESC);
+
     -- ── Фаза 2 Статистики: история стадий сделок ───────────────────────────
     -- Каждая запись = момент входа сделки в стадию (из crm.stagehistory.list).
     -- По ней считаем РЕАЛЬНЫЕ конверсии между стадиями и время на каждой стадии.
