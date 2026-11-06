@@ -194,6 +194,7 @@ th:last-child,td:last-child{text-align:right;}
     <button class="tab" onclick="showTab('totp',this)">🔐 Настройка 2FA</button>
     <button class="tab" onclick="showTab('tglinks',this)">🔔 Telegram-уведомления</button>
     <button class="tab" onclick="showTab('notiflog',this)">📨 Лог уведомлений</button>
+    <button class="tab" onclick="showTab('feedback',this)">💬 Обратная связь</button>
   </div>
 
   <!-- USERS TAB -->
@@ -298,6 +299,28 @@ th:last-child,td:last-child{text-align:right;}
         <button class="btn btn-sm" id="btnNotifPrev" onclick="changeNotifPage(-1)">← Назад</button>
         <button class="btn btn-sm" id="btnNotifNext" onclick="changeNotifPage(1)">Вперёд →</button>
       </div>
+    </div>
+  </div>
+
+  <div id="tabFeedback" style="display:none">
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Обратная связь сотрудников</span>
+        <div style="display:flex;gap:8px">
+          <select class="form-select" style="width:150px;padding:6px 10px" id="fbKind" onchange="loadFeedback()">
+            <option value="">Все типы</option>
+            <option value="idea">💡 Идеи</option>
+            <option value="problem">🐞 Проблемы</option>
+          </select>
+          <select class="form-select" style="width:160px;padding:6px 10px" id="fbStatus" onchange="loadFeedback()">
+            <option value="">Все статусы</option>
+            <option value="new">Новые</option>
+            <option value="seen">Просмотренные</option>
+            <option value="done">Готовые</option>
+          </select>
+        </div>
+      </div>
+      <div id="fbTable"><div class="empty">Загрузка…</div></div>
     </div>
   </div>
 </div>
@@ -438,9 +461,48 @@ function showTab(tab, el) {
   document.getElementById('tabTotp').style.display = tab === 'totp' ? '' : 'none';
   document.getElementById('tabTglinks').style.display = tab === 'tglinks' ? '' : 'none';
   document.getElementById('tabNotiflog').style.display = tab === 'notiflog' ? '' : 'none';
+  document.getElementById('tabFeedback').style.display = tab === 'feedback' ? '' : 'none';
   if (tab === 'logs') loadLogs();
   if (tab === 'tglinks') loadTgLinks();
   if (tab === 'notiflog') loadNotifLog();
+  if (tab === 'feedback') loadFeedback();
+}
+
+const FB_KIND = { idea: '💡 Идея', problem: '🐞 Проблема' };
+const FB_STBADGE = {
+  new: '<span class="status-off"><span class="dot"></span>Новое</span>',
+  seen: '<span class="role-badge">Просмотрено</span>',
+  done: '<span class="status-on"><span class="dot"></span>Готово</span>',
+};
+async function loadFeedback(){
+  const wrap = document.getElementById('fbTable');
+  wrap.innerHTML = '<div class="empty">Загрузка…</div>';
+  try {
+    const r = await fetch('/api/feedback/list');
+    const d = await r.json();
+    if (!d.ok) { wrap.innerHTML = `<div class="empty">${esc(d.error||'Ошибка')}</div>`; return; }
+    const fk = document.getElementById('fbKind').value, fs = document.getElementById('fbStatus').value;
+    let items = (d.items || []).filter(i => (!fk || i.kind === fk) && (!fs || (i.status || 'new') === fs));
+    if (!items.length) { wrap.innerHTML = '<div class="empty">Пока нет обращений по фильтру.</div>'; return; }
+    wrap.innerHTML = `<table>
+      <thead><tr><th>Время</th><th>Тип</th><th>От кого</th><th>Модуль</th><th>Сообщение</th><th>Статус</th><th></th></tr></thead>
+      <tbody>${items.map(i => `<tr>
+        <td class="log-time">${new Date(i.created_at).toLocaleString('ru',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})}</td>
+        <td>${FB_KIND[i.kind]||esc(i.kind)}</td>
+        <td><strong>${esc(i.display_name||i.username||'—')}</strong></td>
+        <td style="color:var(--text-3)">${esc(i.module||i.page||'—')}</td>
+        <td style="max-width:440px;white-space:pre-wrap">${esc(i.text)}</td>
+        <td>${FB_STBADGE[i.status||'new']||esc(i.status)}</td>
+        <td><div class="row-actions">
+          ${(i.status!=='seen')?`<button class="btn btn-sm" onclick="setFb(${i.id},'seen')">Просмотрено</button>`:''}
+          ${(i.status!=='done')?`<button class="btn btn-sm btn-icon" onclick="setFb(${i.id},'done')" title="Отметить готовым">✓</button>`:''}
+        </div></td>
+      </tr>`).join('')}</tbody></table>`;
+  } catch(e){ wrap.innerHTML = `<div class="empty">Ошибка: ${esc(e.message)}</div>`; }
+}
+async function setFb(id, status){
+  try { const r = await fetch(`/api/feedback/${id}/status`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})}); if(!r.ok)throw new Error(); loadFeedback(); }
+  catch(e){ alert('Не удалось обновить статус'); }
 }
 
 async function loadTgLinks() {
