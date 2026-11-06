@@ -10,12 +10,17 @@
 
   function mountButton() {
     if (document.getElementById('pls-fb-btn')) return;
-    var b = el('button', [
-      'position:fixed', 'right:16px', 'bottom:16px', 'z-index:2147483600',
-      'width:44px', 'height:44px', 'border-radius:50%', 'cursor:pointer',
-      'background:var(--accent,#C53B2F)', 'color:#fff', 'border:0',
-      'box-shadow:0 4px 14px rgba(0,0,0,.22)', 'font-size:20px', 'line-height:44px', 'padding:0'
-    ].join(';'), '💬');
+    if (!document.getElementById('pls-fb-style')) {
+      var st = document.createElement('style'); st.id = 'pls-fb-style';
+      st.textContent = '#pls-fb-btn{position:fixed;right:16px;bottom:16px;z-index:2147483600;width:34px;height:34px;' +
+        'border-radius:9px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;' +
+        'background:var(--surface,#fff);color:var(--accent,#C53B2F);border:1px solid var(--line-2,#d6dbe4);' +
+        'box-shadow:0 1px 2px rgba(20,25,35,.06);transition:color .15s,border-color .15s}' +
+        '#pls-fb-btn:hover{border-color:var(--accent,#C53B2F)}#pls-fb-btn svg{width:18px;height:18px;display:block}';
+      document.head.appendChild(st);
+    }
+    var b = el('button', null,
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-12.6 7.4L3 20.5l1.6-5A8.5 8.5 0 1 1 21 11.5z"/></svg>');
     b.id = 'pls-fb-btn';
     b.title = 'Предложить улучшение или сообщить о проблеме';
     b.setAttribute('aria-label', b.title);

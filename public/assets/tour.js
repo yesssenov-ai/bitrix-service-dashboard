@@ -45,18 +45,20 @@
   // ── Контекстная «?» ──
   function mountHelpButton() {
     if (document.getElementById('pls-help-btn')) return;
+    if (!document.getElementById('pls-help-style')) {
+      var st = document.createElement('style'); st.id = 'pls-help-style';
+      st.textContent = '#pls-help-btn{position:fixed;right:16px;bottom:96px;z-index:2147483600;width:34px;height:34px;' +
+        'border-radius:9px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;' +
+        'background:var(--surface,#fff);color:var(--text-2,#3a4254);border:1px solid var(--line-2,#d6dbe4);' +
+        'box-shadow:0 1px 2px rgba(20,25,35,.06);transition:color .15s,border-color .15s}' +
+        '#pls-help-btn:hover{color:var(--text,#101624);border-color:var(--text-3,#6a7488)}#pls-help-btn svg{width:18px;height:18px;display:block}';
+      document.head.appendChild(st);
+    }
     var b = document.createElement('button');
     b.id = 'pls-help-btn';
-    b.textContent = '?';
+    b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M9.2 9.3a2.8 2.8 0 0 1 5.5.7c0 1.9-2.8 2.3-2.8 4"/><line x1="12" y1="17.2" x2="12" y2="17.2"/></svg>';
     b.title = 'Что это за раздел';
     b.setAttribute('aria-label', b.title);
-    b.style.cssText = [
-      'position:fixed', 'right:16px', 'bottom:128px', 'z-index:2147483600',
-      'width:44px', 'height:44px', 'border-radius:50%', 'cursor:pointer',
-      'background:var(--surface,#fff)', 'color:var(--text,#101624)',
-      'border:1px solid var(--line-2,#d6dbe4)', 'box-shadow:0 4px 14px rgba(0,0,0,.18)',
-      'font-size:20px', 'font-weight:800', 'line-height:44px', 'padding:0'
-    ].join(';');
     b.addEventListener('click', openHelp);
     document.body.appendChild(b);
   }

@@ -51,16 +51,20 @@
     return list.concat([ACCOUNT]);
   }
 
-  // ── Запуск: плавающая кнопка 🔍 (над кнопкой фидбэка) + Ctrl/Cmd+K ──
+  // ── Запуск: плавающая кнопка поиска (над кнопкой фидбэка) + Ctrl/Cmd+K ──
   function mountButton() {
     if (document.getElementById('pls-sr-btn')) return;
-    var b = el('button', [
-      'position:fixed', 'right:16px', 'bottom:72px', 'z-index:2147483600',
-      'width:44px', 'height:44px', 'border-radius:50%', 'cursor:pointer',
-      'background:var(--surface,#fff)', 'color:var(--text,#101624)',
-      'border:1px solid var(--line-2,#d6dbe4)', 'box-shadow:0 4px 14px rgba(0,0,0,.18)',
-      'font-size:19px', 'line-height:44px', 'padding:0'
-    ].join(';'), '🔍');
+    if (!document.getElementById('pls-sr-style')) {
+      var st = document.createElement('style'); st.id = 'pls-sr-style';
+      st.textContent = '#pls-sr-btn{position:fixed;right:16px;bottom:56px;z-index:2147483600;width:34px;height:34px;' +
+        'border-radius:9px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;' +
+        'background:var(--surface,#fff);color:var(--text-2,#3a4254);border:1px solid var(--line-2,#d6dbe4);' +
+        'box-shadow:0 1px 2px rgba(20,25,35,.06);transition:color .15s,border-color .15s}' +
+        '#pls-sr-btn:hover{color:var(--text,#101624);border-color:var(--text-3,#6a7488)}#pls-sr-btn svg{width:18px;height:18px;display:block}';
+      document.head.appendChild(st);
+    }
+    var b = el('button', null,
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>');
     b.id = 'pls-sr-btn';
     b.title = 'Поиск по ЦУП (Ctrl+K)';
     b.setAttribute('aria-label', b.title);
