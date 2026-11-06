@@ -36,6 +36,46 @@ async function tgBoth(text) {
   await Promise.all([tgMgt(text), tgOps(text)]);
 }
 
+// Собрать multipart/form-data вручную (без зависимости form-data).
+function buildMultipart(fields, file) {
+  const boundary = '----plsfb' + Date.now().toString(16) + Math.random().toString(16).slice(2, 8);
+  const parts = [];
+  for (const k of Object.keys(fields)) {
+    if (fields[k] == null) continue;
+    parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${fields[k]}\r\n`));
+  }
+  parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${file.field}"; filename="${file.name}"\r\nContent-Type: ${file.type}\r\n\r\n`));
+  parts.push(file.buffer);
+  parts.push(Buffer.from(`\r\n--${boundary}--\r\n`));
+  return { body: Buffer.concat(parts), boundary };
+}
+
+// Отправить вложение (скрин/файл) в чат Руководства как фото или документ,
+// чтобы его можно было открыть прямо в Telegram. dataUrl = "data:<mime>;base64,…".
+async function tgMgtAttachment(dataUrl, filename, caption) {
+  if (!TG_TOKEN || !TG_MGT) return;
+  const m = /^data:([^;,]+);base64,(.+)$/.exec(String(dataUrl || ''));
+  if (!m) return;
+  const type = m[1].toLowerCase();
+  const buf = Buffer.from(m[2], 'base64');
+  const isImg = /^image\//.test(type);
+  const method = isImg ? 'sendPhoto' : 'sendDocument';
+  const field = isImg ? 'photo' : 'document';
+  const fields = { chat_id: TG_MGT, parse_mode: 'HTML' };
+  if (caption) fields.caption = String(caption).slice(0, 1000);
+  const { body, boundary } = buildMultipart(fields, {
+    field, name: filename || (isImg ? 'image.jpg' : 'file.bin'), type, buffer: buf,
+  });
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${TG_TOKEN}/${method}`, {
+      method: 'POST',
+      headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}`, 'Content-Length': body.length },
+      body,
+    });
+    if (!r.ok) console.error('TG attach HTTP', r.status, (await r.text()).slice(0, 200));
+  } catch (e) { console.error('TG attach error:', e.message); }
+}
+
 // ── Resend ────────────────────────────────────────────────────────────────────
 
 async function sendEmail(subject, html) {
@@ -155,4 +195,4 @@ async function notifyOverdueNew(tickets) {
   await sendEmail(`⚠️ ${tickets.length} необработанных заявок более 8 часов`, html);
 }
 
-module.exports = { tgMgt, tgOps, tgBoth, sendEmail, notifyNewTicket, notifyOverdueNew };
+module.exports = { tgMgt, tgOps, tgBoth, tgMgtAttachment, sendEmail, notifyNewTicket, notifyOverdueNew };

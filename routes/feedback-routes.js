@@ -52,8 +52,13 @@ router.post('/', requireAuth(), express.json({ limit: '9mb' }), async (req, res)
       const who = u.display_name || u.username;
       const label = kind === 'problem' ? '🐞 Проблема' : '💡 Идея';
       const where = module || page || '—';
-      const clip = att ? `\n📎 Вложение: ${att.name}` : '';
-      if (notif && notif.tgMgt) notif.tgMgt(`${label} · ЦУП\nОт: ${who}\nМодуль: ${where}\n\n${text}${clip}`);
+      if (notif && notif.tgMgt) {
+        const sent = notif.tgMgt(`${label} · ЦУП\nОт: ${who}\nМодуль: ${where}\n\n${text}`);
+        // Вложение отправляем отдельным фото/документом — чтобы открывалось прямо в TG.
+        if (att && notif.tgMgtAttachment) {
+          Promise.resolve(sent).then(() => notif.tgMgtAttachment(att.data, att.name, `📎 Вложение · ${esc(who)}`)).catch(() => {});
+        }
+      }
       if (notif && notif.sendEmail) notif.sendEmail(
         `ЦУП: ${label} от ${who}`,
         `<p><b>${label}</b> · ${esc(who)} · ${esc(where)}</p><pre style="white-space:pre-wrap;font:inherit">${esc(text)}</pre>` +
