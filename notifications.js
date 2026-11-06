@@ -3,6 +3,20 @@ const fetch = require('node-fetch');
 const RESEND_KEY = process.env.RESEND_API_KEY;
 const TG_TOKEN = process.env.TG_TOKEN;
 const TG_MGT = process.env.TG_MGT_CHAT;
+// Получатели обратной связи (идеи/проблемы). Приоритет:
+//  1) явный список chats, переданный вызовом (напр. личные chat_id суперадминов из БД);
+//  2) env TG_FEEDBACK_CHATS="12345678,87654321" (необязательный оверрайд);
+//  3) фолбэк на чат Руководства — чтобы фидбэк не потерялся.
+const TG_FEEDBACK = process.env.TG_FEEDBACK_CHATS;
+function resolveFeedbackChats(explicit) {
+  if (Array.isArray(explicit)) {
+    const ex = explicit.map(x => String(x).trim()).filter(Boolean);
+    if (ex.length) return ex;
+  }
+  const env = String(TG_FEEDBACK || '').split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+  if (env.length) return env;
+  return TG_MGT ? [String(TG_MGT)] : [];
+}
 
 const COORD_EMAILS = ['azamat.a@prolabsupport.kz', 'arman.man@prolabsupport.kz'];
 const FROM_EMAIL = 'service@prolabsupport.kz';
@@ -50,10 +64,10 @@ function buildMultipart(fields, file) {
   return { body: Buffer.concat(parts), boundary };
 }
 
-// Отправить вложение (скрин/файл) в чат Руководства как фото или документ,
+// Отправить вложение (скрин/файл) в конкретный чат как фото или документ,
 // чтобы его можно было открыть прямо в Telegram. dataUrl = "data:<mime>;base64,…".
-async function tgMgtAttachment(dataUrl, filename, caption) {
-  if (!TG_TOKEN || !TG_MGT) return;
+async function tgSendAttachment(chatId, dataUrl, filename, caption) {
+  if (!TG_TOKEN || !chatId) return;
   const m = /^data:([^;,]+);base64,(.+)$/.exec(String(dataUrl || ''));
   if (!m) return;
   const type = m[1].toLowerCase();
@@ -61,7 +75,7 @@ async function tgMgtAttachment(dataUrl, filename, caption) {
   const isImg = /^image\//.test(type);
   const method = isImg ? 'sendPhoto' : 'sendDocument';
   const field = isImg ? 'photo' : 'document';
-  const fields = { chat_id: TG_MGT, parse_mode: 'HTML' };
+  const fields = { chat_id: chatId, parse_mode: 'HTML' };
   if (caption) fields.caption = String(caption).slice(0, 1000);
   const { body, boundary } = buildMultipart(fields, {
     field, name: filename || (isImg ? 'image.jpg' : 'file.bin'), type, buffer: buf,
@@ -74,6 +88,24 @@ async function tgMgtAttachment(dataUrl, filename, caption) {
     });
     if (!r.ok) console.error('TG attach HTTP', r.status, (await r.text()).slice(0, 200));
   } catch (e) { console.error('TG attach error:', e.message); }
+}
+
+// ── Обратная связь: личные сообщения получателям. chats — явный список
+// chat_id (напр. суперадмины с привязанным Telegram из БД); если пуст — см.
+// resolveFeedbackChats (env-оверрайд, затем чат Руководства). ──
+async function tgFeedback(text, chats) {
+  if (!TG_TOKEN) return;
+  const ids = resolveFeedbackChats(chats);
+  await Promise.all(ids.map(id =>
+    fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: id, text, parse_mode: 'HTML' }),
+    }).catch(e => console.error('TG feedback error:', e.message))
+  ));
+}
+async function tgFeedbackAttachment(dataUrl, filename, caption, chats) {
+  const ids = resolveFeedbackChats(chats);
+  for (const id of ids) { await tgSendAttachment(id, dataUrl, filename, caption); }
 }
 
 // ── Resend ────────────────────────────────────────────────────────────────────
@@ -195,4 +227,4 @@ async function notifyOverdueNew(tickets) {
   await sendEmail(`⚠️ ${tickets.length} необработанных заявок более 8 часов`, html);
 }
 
-module.exports = { tgMgt, tgOps, tgBoth, tgMgtAttachment, sendEmail, notifyNewTicket, notifyOverdueNew };
+module.exports = { tgMgt, tgOps, tgBoth, tgSendAttachment, tgFeedback, tgFeedbackAttachment, sendEmail, notifyNewTicket, notifyOverdueNew };

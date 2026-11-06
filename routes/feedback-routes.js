@@ -7,6 +7,21 @@ let notif = null; try { notif = require('../notifications'); } catch (e) { /* у
 
 const esc = s => String(s == null ? '' : s).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
 
+// Кому слать обратную связь в Telegram: суперадмины (я и Дима) с привязанным
+// Telegram — chat_id берём из уже существующей связки ticketsmodule_telegram_links.
+// Если ни у кого нет привязки — вернём [], и notifications уйдёт в фолбэк (env → чат Руководства).
+async function feedbackRecipients() {
+  try {
+    const { rows } = await pool.query(
+      `SELECT tl.telegram_chat_id
+         FROM ticketsmodule_users u
+         JOIN ticketsmodule_telegram_links tl ON tl.bitrix_user_id = u.bitrix_user_id
+        WHERE u.role = 'superadmin' AND tl.telegram_chat_id IS NOT NULL`
+    );
+    return rows.map(r => String(r.telegram_chat_id)).filter(Boolean);
+  } catch (e) { console.error('feedback recipients:', e.message); return []; }
+}
+
 // Разрешённые типы вложений и лимиты. Храним base64 data URL прямо в БД.
 const ATTACH_MIME = /^(image\/(png|jpe?g|gif|webp)|application\/pdf)$/i;
 const EXT_OF = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'application/pdf': 'pdf' };
@@ -52,11 +67,12 @@ router.post('/', requireAuth(), express.json({ limit: '9mb' }), async (req, res)
       const who = u.display_name || u.username;
       const label = kind === 'problem' ? '🐞 Проблема' : '💡 Идея';
       const where = module || page || '—';
-      if (notif && notif.tgMgt) {
-        const sent = notif.tgMgt(`${label} · ЦУП\nОт: ${who}\nМодуль: ${where}\n\n${text}`);
+      if (notif && notif.tgFeedback) {
+        const recips = await feedbackRecipients();
+        const sent = notif.tgFeedback(`${label} · ЦУП\nОт: ${who}\nМодуль: ${where}\n\n${text}`, recips);
         // Вложение отправляем отдельным фото/документом — чтобы открывалось прямо в TG.
-        if (att && notif.tgMgtAttachment) {
-          Promise.resolve(sent).then(() => notif.tgMgtAttachment(att.data, att.name, `📎 Вложение · ${esc(who)}`)).catch(() => {});
+        if (att && notif.tgFeedbackAttachment) {
+          Promise.resolve(sent).then(() => notif.tgFeedbackAttachment(att.data, att.name, `📎 Вложение · ${esc(who)}`, recips)).catch(() => {});
         }
       }
       if (notif && notif.sendEmail) notif.sendEmail(
