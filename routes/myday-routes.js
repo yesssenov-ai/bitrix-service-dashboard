@@ -5,6 +5,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth, pool } = require('../auth');
 const { getTodayRate } = require('../nbrk-exchange-rate');
+const { b24 } = require('../bitrix');
 
 // Стадия Bitrix → шаг воронки (как в Плане продаж). Только доконтракт P10–P80.
 const STEP_OF = { NEW: 'P10', PREPARATION: 'P30', PREPAYMENT_INVOICE: 'P60', EXECUTING: 'P80' };
@@ -45,6 +46,27 @@ router.get('/', requireAuth(), async (req, res) => {
         top: pipe.slice(0, 6),
       };
     }
+    // Мои задачи Bitrix (best-effort; если нет прав на задачи у вебхука — просто пропустим).
+    out.tasks = null;
+    if (bid) {
+      try {
+        const base = (() => { try { return new URL(process.env.BITRIX_WEBHOOK).origin; } catch (e) { return ''; } })();
+        const r = await b24('tasks.task.list', {
+          filter: { RESPONSIBLE_ID: bid, '<REAL_STATUS': 5 }, // не завершённые/не отложенные
+          select: ['ID', 'TITLE', 'DEADLINE', 'STATUS'],
+          order: { DEADLINE: 'asc' }, start: 0,
+        });
+        const items = (r && r.result && (r.result.tasks || r.result)) || [];
+        const now = Date.now();
+        const list = items.map(t => {
+          const id = t.id || t.ID, title = t.title || t.TITLE || '—', dl = t.deadline || t.DEADLINE || null;
+          return { id, title, deadline: dl, overdue: dl ? (new Date(dl).getTime() < now) : false,
+            url: base ? `${base}/company/personal/user/${bid}/tasks/task/view/${id}/` : null };
+        });
+        out.tasks = { count: list.length, overdueCount: list.filter(x => x.overdue).length, top: list.slice(0, 5) };
+      } catch (e) { console.warn('myday tasks:', e.message); out.tasks = null; }
+    }
+
     res.set('Cache-Control', 'no-store');
     res.json(out);
   } catch (e) { console.error('myday:', e.message); res.status(500).json({ ok: false, error: e.message }); }
