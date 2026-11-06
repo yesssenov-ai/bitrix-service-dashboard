@@ -956,6 +956,23 @@ initDB().then(() => {
         catch (e) { console.error('morning digest error:', e.message); }
       }
     }, 5 * 60 * 1000);
+
+    // Умные триггеры — еженедельно в ПОНЕДЕЛЬНИК 04:00 UTC (09:00 Алматы):
+    //   🛡 гарантии → чат Руководства + координаторы; 💸 дебиторка-отчёт → лично админам.
+    let lastWeeklyTrig = null;
+    setInterval(async () => {
+      const now = new Date();
+      const dateKey = now.toISOString().slice(0, 10);
+      if (now.getUTCHours() === 4 && now.getUTCDay() === 1 && lastWeeklyTrig !== dateKey) {
+        lastWeeklyTrig = dateKey;
+        const st = require('./smart-triggers');
+        try { await st.sendWarrantyWeekly(); } catch (e) { console.error('warranty weekly error:', e.message); }
+        try { await st.sendDebtWeekly(); } catch (e) { console.error('debt weekly error:', e.message); }
+      }
+    }, 5 * 60 * 1000);
+    // 💸 Дебиторка — событийные алерты (новый долг / переход в просрочку): проверка раз в час.
+    setInterval(() => { require('./smart-triggers').checkDebtAlerts().catch(e => console.error('debt alerts error:', e.message)); }, 60 * 60 * 1000);
+    setTimeout(() => { require('./smart-triggers').checkDebtAlerts().catch(e => console.error('debt alerts boot error:', e.message)); }, 4 * 60 * 1000);
   });
 }).catch(err => {
   console.error('DB init failed:', err);

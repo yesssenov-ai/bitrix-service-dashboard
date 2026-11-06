@@ -144,6 +144,9 @@
     if (d && d.deals) d.deals.forEach(function (x) {
       r.push({ group: 'Сделки', icon: '💼', label: x.title, sub: [x.company, x.sum ? mln(x.sum) : ''].filter(Boolean).join(' · '), href: x.url, external: true });
     });
+    if (d && d.tickets) d.tickets.forEach(function (x) {
+      r.push({ group: 'Заявки', icon: '🛠', label: (x.isOverdue ? '⏰ ' : '') + x.title, sub: [x.stageName, x.engineer].filter(Boolean).join(' · '), href: x.url, external: true });
+    });
     remoteItems = r;
   }
 

@@ -82,4 +82,20 @@ router.post('/digest-test', requireAuth(['admin', 'superadmin']), express.json()
   }
 });
 
+// Тесты умных триггеров (админ/суперадмин). ?what=warranty|debt|alerts (по умолчанию warranty).
+router.post('/triggers-test', requireAuth(['admin', 'superadmin']), express.json(), async (req, res) => {
+  try {
+    const st = require('../smart-triggers');
+    const what = String((req.query && req.query.what) || (req.body && req.body.what) || 'warranty');
+    let stat;
+    if (what === 'debt') stat = await st.sendDebtWeekly();
+    else if (what === 'alerts') stat = await st.checkDebtAlerts();
+    else stat = await st.sendWarrantyWeekly();
+    res.json({ ok: true, what, stat });
+  } catch (e) {
+    console.error('POST /api/notify/triggers-test error:', e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 module.exports = { router };

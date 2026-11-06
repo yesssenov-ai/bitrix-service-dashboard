@@ -6,6 +6,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth, pool } = require('../auth');
 const { getTodayRate } = require('../nbrk-exchange-rate');
+const ticketsLib = require('../tickets-lib');
 
 const FULL_DEALS = ['admin', 'superadmin', 'coordinator', 'manager'];
 function bitrixOrigin() { try { return new URL(process.env.BITRIX_WEBHOOK).origin; } catch (e) { return null; } }
@@ -13,7 +14,7 @@ function bitrixOrigin() { try { return new URL(process.env.BITRIX_WEBHOOK).origi
 router.get('/', requireAuth(), async (req, res) => {
   try {
     const q = String(req.query.q || '').trim();
-    const out = { ok: true, q, companies: [], deals: [] };
+    const out = { ok: true, q, companies: [], deals: [], tickets: [] };
     if (q.length < 2) { res.set('Cache-Control', 'no-store'); return res.json(out); }
 
     const like = '%' + q.replace(/[\\%_]/g, c => '\\' + c) + '%';
@@ -71,6 +72,15 @@ router.get('/', requireAuth(), async (req, res) => {
         };
       });
     } catch (e) { console.warn('search deals:', e.message); }
+
+    // ── Сервисные заявки (из общего кэша, по названию/ID) ──
+    try {
+      const tk = await ticketsLib.searchTickets(q, 6);
+      out.tickets = tk.map(t => ({
+        id: t.id, title: t.title, stageName: t.stageName, stageColor: t.stageColor,
+        isOverdue: t.isOverdue, engineer: t.engineer || '', url: t.bitrixUrl,
+      }));
+    } catch (e) { console.warn('search tickets:', e.message); }
 
     res.set('Cache-Control', 'no-store');
     res.json(out);

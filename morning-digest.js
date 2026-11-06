@@ -7,6 +7,7 @@ const { pool } = require('./auth');
 const { b24 } = require('./bitrix');
 const { getTodayRate } = require('./nbrk-exchange-rate');
 const notif = require('./notifications');
+const ticketsLib = require('./tickets-lib');
 
 const STEP_OF = { NEW: 'P10', PREPARATION: 'P30', PREPAYMENT_INVOICE: 'P60', EXECUTING: 'P80' };
 function stepOf(stage) { return STEP_OF[String(stage || '').replace(/^C\d+:/, '')] || null; }
@@ -45,7 +46,15 @@ async function collect(bid, rate, origin) {
       .map(t => ({ id: t.id || t.ID, title: t.title || t.TITLE || '—' }));
   } catch (e) { console.warn('digest tasks:', e.message); }
 
-  return { pipeCount, pipeSum, hot, overdue };
+  // Мои активные сервисные заявки (из общего кэша): всего + просроченные.
+  let tickets = [], ticketsOverdue = 0;
+  try {
+    const my = await ticketsLib.ticketsForBid(bid);
+    tickets = my.map(t => ({ id: t.id, title: t.title, overdue: t.isOverdue, url: t.bitrixUrl }));
+    ticketsOverdue = tickets.filter(t => t.overdue).length;
+  } catch (e) { console.warn('digest tickets:', e.message); }
+
+  return { pipeCount, pipeSum, hot, overdue, tickets, ticketsOverdue };
 }
 
 function buildTelegram(name, data, origin) {
@@ -57,6 +66,13 @@ function buildTelegram(name, data, origin) {
     L.push(`⏰ <b>Просроченные задачи: ${data.overdue.length}</b>`);
     data.overdue.slice(0, 5).forEach(t => L.push(`• ${esc(t.title)}`));
     if (data.overdue.length > 5) L.push(`…и ещё ${data.overdue.length - 5}`);
+  }
+  if (data.tickets && data.tickets.length) {
+    L.push('');
+    L.push(`🛠 <b>Мои заявки: ${data.tickets.length}</b>${data.ticketsOverdue ? ` · ⏰ просрочено ${data.ticketsOverdue}` : ''}`);
+    data.tickets.slice().sort((a, b) => (b.overdue - a.overdue)).slice(0, 5).forEach(t => {
+      L.push(`• ${t.overdue ? '⏰ ' : ''}<a href="${t.url}">${esc(t.title)}</a>`);
+    });
   }
   if (data.hot.length) {
     L.push('');
@@ -81,10 +97,13 @@ function buildEmail(name, data, origin) {
     const t = esc(d.title) + (d.sum ? ` — ${mln(d.sum)}` : '');
     return `<li>${origin ? `<a href="${origin}/crm/deal/details/${d.id}/" style="color:#C53B2F">${t}</a>` : t}</li>`;
   });
+  const tk = (data.tickets || []).slice().sort((a, b) => (b.overdue - a.overdue)).slice(0, 5).map(t =>
+    `<li>${t.overdue ? '⏰ ' : ''}<a href="${t.url}" style="color:#C53B2F">${esc(t.title)}</a></li>`);
   return `<div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto">
     <div style="background:#C53B2F;padding:18px 22px;border-radius:10px 10px 0 0"><h2 style="color:#fff;margin:0;font-size:17px">🌅 Доброе утро, ${esc(name)}!</h2></div>
     <div style="background:#fff;border:1px solid #e3e6ef;border-top:none;padding:18px 22px;border-radius:0 0 10px 10px">
       ${block('⏰ Просроченные задачи: ' + data.overdue.length, od)}
+      ${block('🛠 Мои заявки: ' + (data.tickets ? data.tickets.length : 0) + (data.ticketsOverdue ? ' (⏰ ' + data.ticketsOverdue + ')' : ''), tk)}
       ${block('🔥 Горячие сделки: ' + data.hot.length, hot)}
       ${data.pipeCount ? `<p style="font-size:14px;color:#374151;margin-top:14px">💼 В работе всего: <b>${data.pipeCount}</b> сделок на <b>${mln(data.pipeSum)}</b></p>` : ''}
       <div style="margin-top:18px"><a href="${dash}" style="background:#C53B2F;color:#fff;padding:9px 18px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Открыть ЦУП</a></div>
@@ -112,7 +131,7 @@ async function sendMorningDigests(opts) {
   for (const u of users) {
     try {
       const data = await collect(u.bitrix_user_id, rate, origin);
-      const hasSomething = data.overdue.length || data.hot.length || data.pipeCount;
+      const hasSomething = data.overdue.length || data.hot.length || data.pipeCount || (data.tickets && data.tickets.length);
       if (!hasSomething) { stat.skipped++; continue; }
       const name = u.display_name || u.username || 'коллега';
       let ok = false;
