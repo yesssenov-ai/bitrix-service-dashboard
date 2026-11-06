@@ -940,6 +940,19 @@ initDB().then(() => {
         } catch (e) { console.error('mail daily report error:', e.message); }
       }
     }, 5 * 60 * 1000);
+
+    // Утренний персональный дайджест: будни в 03:00 UTC (08:00 Алматы), раз в день.
+    let lastDigestDate = null;
+    setInterval(async () => {
+      const now = new Date();
+      const dateKey = now.toISOString().slice(0, 10);
+      const dow = now.getUTCDay(); // 1–5 = пн–пт (в 03:00 UTC дата в Алматы та же)
+      if (now.getUTCHours() === 3 && dow >= 1 && dow <= 5 && lastDigestDate !== dateKey) {
+        lastDigestDate = dateKey;
+        try { await require('./morning-digest').sendMorningDigests(); }
+        catch (e) { console.error('morning digest error:', e.message); }
+      }
+    }, 5 * 60 * 1000);
   });
 }).catch(err => {
   console.error('DB init failed:', err);

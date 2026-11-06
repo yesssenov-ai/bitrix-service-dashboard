@@ -67,4 +67,19 @@ router.post('/unsubscribe', requireAuth(), express.json({ limit: '64kb' }), asyn
   }
 });
 
+// Тест утреннего дайджеста (админ/суперадмин). Без тела — только себе (onlyBid =
+// bitrix_user_id вызывающего); { all:true } — всем, как по расписанию.
+router.post('/digest-test', requireAuth(['admin', 'superadmin']), express.json(), async (req, res) => {
+  try {
+    const all = req.body && req.body.all === true;
+    const onlyBid = all ? null : (req.user && req.user.bitrix_user_id);
+    if (!all && !onlyBid) return res.status(400).json({ ok: false, error: 'У вашей учётки не привязан Bitrix-ID — укажите {all:true} или привяжите ID.' });
+    const stat = await require('../morning-digest').sendMorningDigests({ onlyBid });
+    res.json({ ok: true, stat });
+  } catch (e) {
+    console.error('POST /api/notify/digest-test error:', e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 module.exports = { router };

@@ -108,25 +108,39 @@ async function tgFeedbackAttachment(dataUrl, filename, caption, chats) {
   for (const id of ids) { await tgSendAttachment(id, dataUrl, filename, caption); }
 }
 
+// Отправить произвольное сообщение в конкретный Telegram-чат (личный дайджест и т.п.).
+async function tgTo(chatId, text) {
+  if (!TG_TOKEN || !chatId) return false;
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true }),
+    });
+    return r.ok;
+  } catch (e) { console.error('TG tgTo error:', e.message); return false; }
+}
+
 // ── Resend ────────────────────────────────────────────────────────────────────
 
-async function sendEmail(subject, html) {
-  if (!RESEND_KEY) return;
+// Письмо на произвольный адрес(а). to — строка или массив.
+async function sendEmailTo(to, subject, html) {
+  if (!RESEND_KEY || !to) return false;
+  const list = (Array.isArray(to) ? to : [to]).filter(Boolean);
+  if (!list.length) return false;
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: `ProLabSupport Service <${FROM_EMAIL}>`,
-        to: COORD_EMAILS,
-        subject,
-        html,
-      }),
+      body: JSON.stringify({ from: `ProLabSupport Service <${FROM_EMAIL}>`, to: list, subject, html }),
     });
-    const d = await r.json();
-    if (!r.ok) console.error('Resend error:', d);
-  } catch(e) { console.error('Resend error:', e.message); }
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { console.error('Resend error:', d); return false; }
+    return true;
+  } catch (e) { console.error('Resend error:', e.message); return false; }
 }
+
+// Письмо координаторам (постоянный список).
+async function sendEmail(subject, html) { return sendEmailTo(COORD_EMAILS, subject, html); }
 
 // ── New ticket notification ───────────────────────────────────────────────────
 
@@ -227,4 +241,4 @@ async function notifyOverdueNew(tickets) {
   await sendEmail(`⚠️ ${tickets.length} необработанных заявок более 8 часов`, html);
 }
 
-module.exports = { tgMgt, tgOps, tgBoth, tgSendAttachment, tgFeedback, tgFeedbackAttachment, sendEmail, notifyNewTicket, notifyOverdueNew };
+module.exports = { tgMgt, tgOps, tgBoth, tgTo, tgSendAttachment, tgFeedback, tgFeedbackAttachment, sendEmail, sendEmailTo, notifyNewTicket, notifyOverdueNew };
