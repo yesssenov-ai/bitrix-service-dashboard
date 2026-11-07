@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f6f7f9">
+<title>Мои задачи — ЦУП</title>
+<script>(function(){try{var m=localStorage.getItem('pls-theme');document.documentElement.setAttribute('data-theme',m==='dark'?'dark':'light');}catch(e){}})();</script>
+<link rel="stylesheet" href="/assets/cup-ui.css">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-ui);min-height:100vh}
+.top{display:flex;align-items:center;gap:12px;padding:14px 18px;max-width:1500px;margin:0 auto}
+.top a.back{color:var(--text-3);text-decoration:none;font-size:13px;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-2);border-radius:9px;padding:7px 11px;background:var(--surface)}
+.top a.back:hover{color:var(--text);border-color:var(--text-3)}
+.top h1{font-size:18px;margin:0;font-weight:800;letter-spacing:-.01em}
+.top .sp{flex:1}
+.hint{color:var(--text-3);font-size:12.5px}
+.wrap{max-width:1500px;margin:0 auto;padding:6px 18px 40px}
+.board{display:flex;gap:14px;align-items:flex-start;overflow-x:auto;padding-bottom:10px}
+.col{flex:0 0 300px;max-width:300px;background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:10px;display:flex;flex-direction:column;max-height:calc(100vh - 150px)}
+.col-h{display:flex;align-items:center;gap:8px;padding:4px 6px 10px}
+.col-h b{font-size:13.5px;font-weight:800}
+.col-h .cnt{font-size:11.5px;color:var(--text-3);background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:1px 8px;font-weight:700}
+.col-cards{display:flex;flex-direction:column;gap:8px;overflow-y:auto;padding:2px;min-height:12px;flex:1}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:10px 11px;cursor:pointer;position:relative;box-shadow:0 1px 2px rgba(20,25,35,.05);transition:border-color .12s}
+.card:hover{border-color:var(--line-2)}
+.card.lbl{border-left-width:3px}
+.card .t{font-size:13.5px;line-height:1.4;word-break:break-word}
+.card.done-c .t{color:var(--text-3);text-decoration:line-through}
+.card .meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:7px}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;border-radius:6px;padding:2px 6px;white-space:nowrap}
+.due{background:var(--surface-2);color:var(--text-3);border:1px solid var(--line)}
+.due.today{background:color-mix(in srgb,var(--warn) 14%,var(--surface));color:var(--warn-ink);border-color:color-mix(in srgb,var(--warn) 30%,var(--line))}
+.due.over{background:color-mix(in srgb,var(--bad) 13%,var(--surface));color:var(--bad-ink);border-color:color-mix(in srgb,var(--bad) 30%,var(--line))}
+.prio{width:8px;height:8px;border-radius:50%;flex:none}
+.chk{color:var(--text-3);font-size:11px;font-weight:700}
+.reflink{color:var(--text-3);font-size:11px;text-decoration:none}
+.reflink:hover{color:var(--accent)}
+.add{display:flex;gap:6px;margin-top:9px}
+.add input{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:9px;color:var(--text);font:inherit;font-size:13px;padding:8px 10px;outline:none}
+.add input:focus{border-color:var(--accent-line)}
+.add button{background:none;border:1px dashed var(--line-2);border-radius:9px;color:var(--text-3);font:inherit;font-size:18px;line-height:1;width:36px;cursor:pointer}
+.add button:hover{color:var(--accent);border-color:var(--accent-line)}
+.placeholder{border:1.5px dashed var(--accent-line);border-radius:11px;background:var(--accent-weak);height:var(--ph-h,44px)}
+.drag-clone{position:fixed;z-index:9999;pointer-events:none;width:280px;opacity:.95;transform:rotate(2deg);box-shadow:0 18px 44px rgba(20,25,35,.28)}
+/* модалка карточки */
+.ov{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.4);display:flex;align-items:flex-start;justify-content:center;padding:7vh 16px 16px}
+.modal{width:100%;max-width:520px;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.3);max-height:84vh;overflow:auto}
+.modal .mh{display:flex;gap:8px;padding:16px 16px 6px}
+.modal textarea.title{flex:1;border:0;outline:none;background:transparent;color:var(--text);font:inherit;font-size:17px;font-weight:700;resize:none;line-height:1.35}
+.modal .x{background:none;border:0;color:var(--text-3);font-size:22px;cursor:pointer;line-height:1;height:28px}
+.modal .body{padding:2px 16px 16px;display:flex;flex-direction:column;gap:14px}
+.fieldrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:3px}
+.seg button{border:0;background:none;color:var(--text-3);font:inherit;font-size:12.5px;font-weight:700;padding:5px 9px;border-radius:7px;cursor:pointer}
+.seg button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(20,25,35,.08)}
+.swatch{width:22px;height:22px;border-radius:6px;cursor:pointer;border:2px solid transparent}
+.swatch.on{border-color:var(--text)}
+input[type=date].di{background:var(--surface);border:1px solid var(--line);border-radius:8px;color:var(--text);font:inherit;font-size:13px;padding:6px 9px}
+.lbl-t{font-size:11.5px;color:var(--text-3);font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+textarea.notes{width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;color:var(--text);font:inherit;font-size:13.5px;padding:10px;outline:none;resize:vertical;min-height:70px}
+.cl-item{display:flex;align-items:center;gap:8px;padding:3px 0}
+.cl-item input[type=checkbox]{width:16px;height:16px;flex:none}
+.cl-item span{flex:1;font-size:13px}
+.cl-item span.done{color:var(--text-3);text-decoration:line-through}
+.cl-item button{background:none;border:0;color:var(--text-faint);cursor:pointer;font-size:15px}
+.cl-add{display:flex;gap:6px;margin-top:4px}
+.cl-add input{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:8px;color:var(--text);font:inherit;font-size:13px;padding:7px 9px;outline:none}
+.mfoot{display:flex;align-items:center;gap:10px;border-top:1px solid var(--line);padding-top:12px}
+.btn{border:1px solid var(--line-2);background:var(--surface);color:var(--text);font:inherit;font-weight:600;font-size:13px;padding:7px 12px;border-radius:9px;cursor:pointer}
+.btn:hover{border-color:var(--text-3)}
+.btn.danger{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 30%,var(--line))}
+.empty{color:var(--text-3);font-size:12.5px;text-align:center;padding:30px 10px}
+@media (max-width:640px){ .col{flex-basis:84vw;max-width:84vw} .wrap{padding:6px 12px 40px} }
+</style>
+</head>
+<body>
+<div class="top">
+  <a class="back" href="/portal.html">← ЦУП</a>
+  <h1>📋 Мои задачи</h1>
+  <span class="sp"></span>
+  <span class="hint" id="hint"></span>
+</div>
+<div class="wrap"><div class="board" id="board"></div></div>
+
+<script>
+const COLS = [{k:'todo',n:'Надо'},{k:'doing',n:'Делаю'},{k:'done',n:'Сделано'},{k:'later',n:'Отложено'}];
+const LABEL_COLORS = {gray:'#9aa3b3',red:'#C53B2F',amber:'#b26c12',green:'#1a7f54',blue:'#2763d6',violet:'#7c56d6'};
+const PRIO_COLOR = {1:'#9aa3b3',2:'#b26c12',3:'#C53B2F'};
+const PRIO_NAME = {0:'—',1:'низкий',2:'средний',3:'высокий'};
+const REF_NAME = {deal:'сделка',ticket:'заявка',task:'задача',company:'компания'};
+const esc = s => String(s==null?'':s).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+let cards = [];
+const byId = id => cards.find(c=>c.id===id);
+const todayStr = () => new Date().toISOString().slice(0,10);
+
+async function api(method, path, body){
+  const r = await fetch('/api/board'+path, {method, credentials:'same-origin',
+    headers: body?{'Content-Type':'application/json'}:undefined, body: body?JSON.stringify(body):undefined});
+  if (r.status===401){ location.href='/login.html'; return null; }
+  return r.json().catch(()=>({}));
+}
+
+function dueBadge(due){
+  if(!due) return '';
+  const t = todayStr();
+  const cls = due<t?'over':(due===t?'today':'');
+  const d = new Date(due); const txt = d.toLocaleDateString('ru',{day:'2-digit',month:'2-digit'});
+  const lbl = due<t?('⏰ '+txt):(due===t?('сегодня'):txt);
+  return `<span class="badge due ${cls}">${lbl}</span>`;
+}
+function cardHTML(c){
+  const prog = (c.checklist||[]).length;
+  const doneN = (c.checklist||[]).filter(x=>x.d).length;
+  const lblColor = c.label?LABEL_COLORS[c.label]:null;
+  return `<div class="card ${c.label?'lbl':''} ${c.column==='done'?'done-c':''}" data-id="${c.id}" ${lblColor?`style="border-left-color:${lblColor}"`:''}>
+    <div class="t">${esc(c.title)}</div>
+    <div class="meta">
+      ${c.priority?`<span class="prio" style="background:${PRIO_COLOR[c.priority]}" title="приоритет ${PRIO_NAME[c.priority]}"></span>`:''}
+      ${dueBadge(c.due)}
+      ${prog?`<span class="chk">☑ ${doneN}/${prog}</span>`:''}
+      ${c.refUrl?`<a class="reflink" href="${c.refUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗ ${REF_NAME[c.refType]||'ссылка'}</a>`:''}
+    </div>
+  </div>`;
+}
+function render(){
+  const board = document.getElementById('board');
+  board.innerHTML = COLS.map(col=>{
+    const list = cards.filter(c=>c.column===col.k).sort((a,b)=>a.position-b.position);
+    return `<div class="col" data-col="${col.k}">
+      <div class="col-h"><b>${col.n}</b><span class="cnt">${list.length}</span></div>
+      <div class="col-cards" data-col="${col.k}">${list.map(cardHTML).join('')||''}</div>
+      <div class="add"><input placeholder="+ задача…" data-col="${col.k}"><button data-col="${col.k}" title="Добавить">+</button></div>
+    </div>`;
+  }).join('');
+  // клики
+  board.querySelectorAll('.card').forEach(el=>{
+    el.addEventListener('click',()=>{ if(!dragMoved) openCard(Number(el.getAttribute('data-id'))); });
+    el.addEventListener('pointerdown', onPointerDown);
+  });
+  board.querySelectorAll('.add input').forEach(inp=>{
+    inp.addEventListener('keydown',e=>{ if(e.key==='Enter') quickAdd(inp); });
+  });
+  board.querySelectorAll('.add button').forEach(b=>{
+    b.addEventListener('click',()=>{ const inp=b.parentElement.querySelector('input'); quickAdd(inp); });
+  });
+  const total = cards.filter(c=>c.column!=='done').length;
+  const over = cards.filter(c=>c.column!=='done'&&c.due&&c.due<todayStr()).length;
+  document.getElementById('hint').textContent = total?`${total} активных${over?` · ⏰ ${over} просрочено`:''}`:'';
+}
+
+async function quickAdd(inp){
+  const title = (inp.value||'').trim(); if(!title) return;
+  const col = inp.getAttribute('data-col'); inp.value='';
+  const d = await api('POST','/',{title, column:col});
+  if(d&&d.ok){ cards.push(d.card); render(); const ni=document.querySelector(`.add input[data-col="${col}"]`); if(ni) ni.focus(); }
+}
+
+// ── Drag & drop (pointer-based, мышь + тач) ──
+let dragId=null, dragEl=null, clone=null, ph=null, dragMoved=false, startX=0, startY=0, pending=null;
+function onPointerDown(e){
+  if(e.button!==undefined && e.button!==0) return;
+  const el = e.currentTarget;
+  if(e.target.closest('a,button,input')) return;
+  pending = el; startX=e.clientX; startY=e.clientY; dragMoved=false;
+  window.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerup', onPointerUp, {once:true});
+}
+function onPointerMove(e){
+  if(!pending && !dragEl) return;
+  if(pending && !dragEl){
+    if(Math.abs(e.clientX-startX)<5 && Math.abs(e.clientY-startY)<5) return;
+    startDrag(pending, e); pending=null;
+  }
+  if(!dragEl) return;
+  dragMoved=true;
+  clone.style.left=(e.clientX-clone._dx)+'px'; clone.style.top=(e.clientY-clone._dy)+'px';
+  const under = document.elementFromPoint(e.clientX, e.clientY);
+  const colCards = under && under.closest('.col-cards');
+  if(colCards){
+    const cardsEls=[...colCards.querySelectorAll('.card')].filter(x=>x!==dragEl);
+    let before=null;
+    for(const ce of cardsEls){ const r=ce.getBoundingClientRect(); if(e.clientY < r.top+r.height/2){ before=ce; break; } }
+    if(before) colCards.insertBefore(ph, before); else colCards.appendChild(ph);
+  }
+}
+function startDrag(el, e){
+  dragId=Number(el.getAttribute('data-id')); dragEl=el;
+  const r=el.getBoundingClientRect();
+  clone=el.cloneNode(true); clone.classList.add('drag-clone'); clone.style.width=r.width+'px';
+  clone._dx=e.clientX-r.left; clone._dy=e.clientY-r.top;
+  clone.style.left=r.left+'px'; clone.style.top=r.top+'px';
+  document.body.appendChild(clone);
+  ph=document.createElement('div'); ph.className='placeholder'; ph.style.setProperty('--ph-h', r.height+'px');
+  el.style.display='none';
+  el.parentElement.insertBefore(ph, el.nextSibling);
+}
+async function onPointerUp(e){
+  window.removeEventListener('pointermove', onPointerMove);
+  if(!dragEl){ pending=null; return; }
+  const col = ph.closest('.col-cards'); const colKey = col?col.getAttribute('data-col'):null;
+  const siblings = col?[...col.querySelectorAll('.card')].filter(x=>x!==dragEl):[];
+  // позиция: середина между соседями относительно места плейсхолдера
+  let idx=0; const kids=[...col.children]; idx=kids.indexOf(ph);
+  const prev = findCardPos(col, idx, -1), next = findCardPos(col, idx, 1);
+  let pos;
+  if(prev==null && next==null) pos=1;
+  else if(prev==null) pos=next-1;
+  else if(next==null) pos=prev+1;
+  else pos=(prev+next)/2;
+  clone.remove(); ph.remove(); dragEl.style.display='';
+  const card = byId(dragId);
+  const movedCol = colKey && colKey!==card.column, movedPos = pos!==card.position;
+  if(card && colKey && (movedCol||movedPos)){
+    card.column=colKey; card.position=pos; render();
+    await api('PATCH','/'+dragId,{column:colKey, position:pos});
+  }
+  dragEl=null; dragId=null; clone=null; ph=null;
+}
+function findCardPos(col, phIdx, dir){
+  const kids=[...col.children]; let i=phIdx+dir;
+  while(i>=0 && i<kids.length){ const el=kids[i]; if(el.classList.contains('card')&&el.style.display!=='none'){ const c=byId(Number(el.getAttribute('data-id'))); if(c) return c.position; } i+=dir; }
+  return null;
+}
+
+// ── Карточка (деталь) ──
+function openCard(id){
+  const c=byId(id); if(!c) return;
+  const ov=document.createElement('div'); ov.className='ov';
+  ov.innerHTML = `<div class="modal">
+    <div class="mh"><textarea class="title" rows="1">${esc(c.title)}</textarea><button class="x" title="Закрыть">×</button></div>
+    <div class="body">
+      ${c.refUrl?`<a class="btn" style="align-self:flex-start" href="${c.refUrl}" target="_blank" rel="noopener">↗ Открыть ${c.refType==='deal'?'сделку':c.refType==='ticket'?'заявку':'задачу'} в Bitrix</a>`:''}
+      <div class="fieldrow">
+        <div class="seg" id="segCol">${COLS.map(x=>`<button data-k="${x.k}" class="${c.column===x.k?'on':''}">${x.n}</button>`).join('')}</div>
+      </div>
+      <div class="fieldrow">
+        <span class="lbl-t">Срок</span><input type="date" class="di" id="fDue" value="${c.due||''}">
+        <span class="lbl-t" style="margin-left:6px">Приоритет</span>
+        <div class="seg" id="segPrio">${[0,1,2,3].map(p=>`<button data-p="${p}" class="${c.priority===p?'on':''}">${p===0?'—':PRIO_NAME[p]}</button>`).join('')}</div>
+      </div>
+      <div class="fieldrow">
+        <span class="lbl-t">Метка</span>
+        <div class="swatch" data-l="" style="background:var(--surface-2);border:1px solid var(--line-2)${!c.label?';border-color:var(--text)':''}" title="без метки"></div>
+        ${Object.keys(LABEL_COLORS).map(l=>`<div class="swatch ${c.label===l?'on':''}" data-l="${l}" style="background:${LABEL_COLORS[l]}"></div>`).join('')}
+      </div>
+      <div><div class="lbl-t" style="margin-bottom:5px">Заметка</div><textarea class="notes" id="fNotes" placeholder="Детали, ссылки, контекст…">${esc(c.notes)}</textarea></div>
+      <div>
+        <div class="lbl-t" style="margin-bottom:5px">Чек-лист</div>
+        <div id="clList"></div>
+        <div class="cl-add"><input id="clInput" placeholder="+ пункт…"><button class="btn" id="clAdd">Добавить</button></div>
+      </div>
+      <div class="mfoot">
+        <button class="btn" id="btnArchive">Архивировать</button>
+        <span class="sp" style="flex:1"></span>
+        <button class="btn danger" id="btnDelete">Удалить</button>
+      </div>
+    </div></div>`;
+  document.body.appendChild(ov);
+  const modal=ov.querySelector('.modal');
+  const close=()=>ov.remove();
+  ov.addEventListener('mousedown',e=>{ if(e.target===ov) close(); });
+  modal.querySelector('.x').addEventListener('click',close);
+
+  const save = patch => { Object.assign(c, patch); render(); api('PATCH','/'+id, patch); };
+  // title
+  const ta=modal.querySelector('.title');
+  const fit=()=>{ ta.style.height='auto'; ta.style.height=ta.scrollHeight+'px'; }; fit();
+  ta.addEventListener('input',fit);
+  ta.addEventListener('blur',()=>{ const t=ta.value.trim(); if(t&&t!==c.title) save({title:t}); });
+  // column
+  modal.querySelector('#segCol').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return;
+    modal.querySelectorAll('#segCol button').forEach(x=>x.classList.toggle('on',x===b)); save({column:b.getAttribute('data-k')}); });
+  // priority
+  modal.querySelector('#segPrio').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return;
+    modal.querySelectorAll('#segPrio button').forEach(x=>x.classList.toggle('on',x===b)); save({priority:Number(b.getAttribute('data-p'))}); });
+  // due
+  modal.querySelector('#fDue').addEventListener('change',e=>save({due:e.target.value||null}));
+  // label
+  modal.querySelectorAll('.swatch').forEach(sw=>sw.addEventListener('click',()=>{
+    modal.querySelectorAll('.swatch').forEach(x=>x.classList.remove('on')); sw.classList.add('on');
+    save({label:sw.getAttribute('data-l')||null}); }));
+  // notes
+  const nt=modal.querySelector('#fNotes');
+  nt.addEventListener('blur',()=>{ if(nt.value!==c.notes) save({notes:nt.value}); });
+  // checklist
+  const clList=modal.querySelector('#clList');
+  function renderCL(){
+    clList.innerHTML=(c.checklist||[]).map((it,i)=>`<div class="cl-item"><input type="checkbox" data-i="${i}" ${it.d?'checked':''}><span class="${it.d?'done':''}">${esc(it.t)}</span><button data-del="${i}" title="Удалить">×</button></div>`).join('');
+    clList.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.addEventListener('change',()=>{ c.checklist[Number(cb.getAttribute('data-i'))].d=cb.checked; save({checklist:c.checklist}); renderCL(); }));
+    clList.querySelectorAll('button[data-del]').forEach(b=>b.addEventListener('click',()=>{ c.checklist.splice(Number(b.getAttribute('data-del')),1); save({checklist:c.checklist}); renderCL(); }));
+  }
+  renderCL();
+  const clInput=modal.querySelector('#clInput');
+  const addCl=()=>{ const t=clInput.value.trim(); if(!t)return; c.checklist=c.checklist||[]; c.checklist.push({t,d:false}); clInput.value=''; save({checklist:c.checklist}); renderCL(); clInput.focus(); };
+  modal.querySelector('#clAdd').addEventListener('click',addCl);
+  clInput.addEventListener('keydown',e=>{ if(e.key==='Enter') addCl(); });
+  // archive / delete
+  modal.querySelector('#btnArchive').addEventListener('click',()=>{ cards=cards.filter(x=>x.id!==id); render(); api('PATCH','/'+id,{archived:true}); close(); });
+  modal.querySelector('#btnDelete').addEventListener('click',()=>{ if(!confirm('Удалить задачу?'))return; cards=cards.filter(x=>x.id!==id); render(); api('DELETE','/'+id); close(); });
+}
+
+async function load(){
+  const d = await api('GET','/');
+  if(d&&d.ok){ cards=d.cards; render(); }
+}
+load();
+</script>
+</body>
+</html>

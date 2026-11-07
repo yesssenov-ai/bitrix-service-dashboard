@@ -8,6 +8,7 @@ const { b24 } = require('./bitrix');
 const { getTodayRate } = require('./nbrk-exchange-rate');
 const notif = require('./notifications');
 const ticketsLib = require('./tickets-lib');
+const { boardDueForUser } = require('./routes/board-routes');
 
 const STEP_OF = { NEW: 'P10', PREPARATION: 'P30', PREPAYMENT_INVOICE: 'P60', EXECUTING: 'P80' };
 function stepOf(stage) { return STEP_OF[String(stage || '').replace(/^C\d+:/, '')] || null; }
@@ -61,6 +62,13 @@ function buildTelegram(name, data, origin) {
   const L = [];
   L.push(`🌅 <b>Доброе утро, ${esc(name)}!</b>`);
   L.push('Сводка на сегодня:');
+  if (data.boardDue && data.boardDue.length) {
+    L.push('');
+    const ov = data.boardDue.filter(t => t.overdue).length;
+    L.push(`📋 <b>Мои задачи на сегодня: ${data.boardDue.length}</b>${ov ? ` · ⏰ просрочено ${ov}` : ''}`);
+    data.boardDue.slice(0, 6).forEach(t => L.push(`• ${t.overdue ? '⏰ ' : ''}${esc(t.title)}`));
+    L.push(`<a href="${process.env.DASH_URL || 'https://nms.prolabsupport.kz'}/board.html">Открыть доску</a>`);
+  }
   if (data.overdue.length) {
     L.push('');
     L.push(`⏰ <b>Просроченные задачи: ${data.overdue.length}</b>`);
@@ -102,6 +110,7 @@ function buildEmail(name, data, origin) {
   return `<div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto">
     <div style="background:#C53B2F;padding:18px 22px;border-radius:10px 10px 0 0"><h2 style="color:#fff;margin:0;font-size:17px">🌅 Доброе утро, ${esc(name)}!</h2></div>
     <div style="background:#fff;border:1px solid #e3e6ef;border-top:none;padding:18px 22px;border-radius:0 0 10px 10px">
+      ${block('📋 Мои задачи на сегодня: ' + (data.boardDue ? data.boardDue.length : 0), (data.boardDue || []).slice(0, 8).map(t => `<li>${t.overdue ? '⏰ ' : ''}${esc(t.title)}</li>`))}
       ${block('⏰ Просроченные задачи: ' + data.overdue.length, od)}
       ${block('🛠 Мои заявки: ' + (data.tickets ? data.tickets.length : 0) + (data.ticketsOverdue ? ' (⏰ ' + data.ticketsOverdue + ')' : ''), tk)}
       ${block('🔥 Горячие сделки: ' + data.hot.length, hot)}
@@ -122,7 +131,7 @@ async function sendMorningDigests(opts) {
   const params = [];
   if (opts.onlyBid) { params.push(parseInt(opts.onlyBid, 10)); where += ` AND u.bitrix_user_id = $${params.length}`; }
   const { rows: users } = await pool.query(
-    `SELECT u.username, u.display_name, u.bitrix_user_id, tl.telegram_chat_id
+    `SELECT u.id, u.username, u.display_name, u.bitrix_user_id, tl.telegram_chat_id
        FROM ticketsmodule_users u
        LEFT JOIN ticketsmodule_telegram_links tl ON tl.bitrix_user_id = u.bitrix_user_id
       WHERE ${where}`, params
@@ -131,7 +140,8 @@ async function sendMorningDigests(opts) {
   for (const u of users) {
     try {
       const data = await collect(u.bitrix_user_id, rate, origin);
-      const hasSomething = data.overdue.length || data.hot.length || data.pipeCount || (data.tickets && data.tickets.length);
+      try { data.boardDue = await boardDueForUser(u.id); } catch (e) { data.boardDue = []; }
+      const hasSomething = data.overdue.length || data.hot.length || data.pipeCount || (data.tickets && data.tickets.length) || (data.boardDue && data.boardDue.length);
       if (!hasSomething) { stat.skipped++; continue; }
       const name = u.display_name || u.username || 'коллега';
       let ok = false;

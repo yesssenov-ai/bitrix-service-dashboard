@@ -155,6 +155,7 @@ app.get('/login', (_, res) => res.sendFile(path.join(__dirname, 'public', 'login
 app.get('/login.html', (_, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 app.get('/', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'portal.html')));
 app.get('/portal.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'portal.html')));
+app.get('/board.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'board.html')));
 // Доступ к модулям — ПО ВЫДАННЫМ ГРАНТАМ (requireModule), а не по роли: кому
 // выдан модуль, тот может его открыть (в т.ч. viewer — в режиме просмотра).
 // admin видит всё. Роль дальше определяет право правки/удаления внутри модуля.
@@ -217,6 +218,7 @@ app.use('/api/projects', require('./routes/projects-routes').router);
 app.use('/api/feedback', require('./routes/feedback-routes').router);
 app.use('/api/myday', require('./routes/myday-routes').router);
 app.use('/api/search', require('./routes/search-routes').router);
+app.use('/api/board', require('./routes/board-routes').router);
 app.use('/api/plsai', require('./routes/plsai-routes').router);
 app.use('/api/logistics', require('./routes/logistics-routes').router);
 app.use('/api/operational', require('./routes/operational-routes').router);

@@ -430,9 +430,11 @@ const SYS_ICON = {
   acc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
   help:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.2a2.4 2.4 0 0 1 4.4 1.3c0 1.5-2 1.8-2 3.2"/><circle cx="12" cy="17" r="0.5" fill="currentColor"/></svg>',
   mon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-7 4 14 2.5-7H21"/></svg>',
+  task:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M8.5 11l1.5 1.5L13 9M8 16h6"/></svg>',
 };
 function renderSystem(){
   const items = [];
+  items.push(`<a class="sys-chip" href="/board.html">${SYS_ICON.task}Мои задачи</a>`);
   items.push(`<a class="sys-chip" href="${ACCOUNT_CARD.href}">${SYS_ICON.cab}Мой кабинет</a>`);
   items.push(`<a class="sys-chip" href="/help.html">${SYS_ICON.help}Справка</a>`);
   if (IS_SUPERADMIN) items.push(`<a class="sys-chip" href="/admin.html">${SYS_ICON.adm}Управление</a>`);
@@ -482,29 +484,39 @@ async function loadMyDay(user){
     try { const r = await fetch('/api/tickets?engineer='+encodeURIComponent(user.engineerName));
       if (r.ok) { const t = await r.json(); tickets = (t.tickets||[]).filter(x=>x.isActive!==false); } } catch(e){}
   }
+  let board = [];
+  try { const r = await fetch('/api/board'); if(r.ok){ const b = await r.json(); board = b.cards||[]; } } catch(e){}
+  const _today = new Date().toISOString().slice(0,10);
+  const boardDue = board.filter(c=>c.column!=='done' && c.due && c.due<=_today)
+    .sort((a,b)=>(a.due<b.due?-1:a.due>b.due?1:0));
+
   const dl = (d && d.deals && d.deals.count) ? d.deals : null;
   const tasks = (d && d.tasks && d.tasks.count) ? d.tasks : null;
   const tk = tickets.length ? tickets : null;
-  if (!dl && !tasks && !tk) return; // нечего показать — панель скрыта
+  if (!dl && !tasks && !tk && !boardDue.length) return; // нечего показать — панель скрыта
 
   const mln = v => (Math.round(((v||0)/1e6)*10)/10).toLocaleString('ru-RU')+' млн ₸';
   const STEP = { P10:'#8aa0bd', P30:'#5b8cff', P60:'#f0a23a', P80:'#e5574e' };
   const fmtDate = s => { try{ return new Date(s).toLocaleDateString('ru',{day:'2-digit',month:'2-digit'}); }catch(e){ return ''; } };
-  const row = (color,badge,title,right,url,hotIco) => `<a href="${url||'#'}" ${url?'target="_blank"':''} style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;text-decoration:none;color:inherit">
+  const addBtn = ref => ref ? `<button class="myday-add" data-rt="${ref.t}" data-ri="${ref.i}" data-ru="${esc(ref.u||'')}" data-rl="${encodeURIComponent(ref.l||'')}" title="В мои задачи" style="flex:none;background:var(--surface);border:1px solid var(--line-2);border-radius:7px;color:var(--text-3);font-size:14px;line-height:1;width:26px;height:26px;cursor:pointer;padding:0">+</button>` : '';
+  const row = (color,badge,title,right,url,hotIco,ref) => `<div style="display:flex;align-items:center;gap:8px">
+    <a href="${url||'#'}" ${url?'target="_blank"':''} style="flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;text-decoration:none;color:inherit">
     <span style="font-size:10.5px;font-weight:800;color:#fff;background:${color};border-radius:5px;padding:2px 6px;white-space:nowrap">${badge}</span>
     ${hotIco||''}
     <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${title}</span>
-    <b style="font-variant-numeric:tabular-nums;white-space:nowrap">${right||''}</b></a>`;
+    <b style="font-variant-numeric:tabular-nums;white-space:nowrap">${right||''}</b></a>${addBtn(ref)}</div>`;
   let sec = '';
+  if (boardDue.length) sec += `<div style="margin-bottom:10px"><div style="font-size:12px;color:var(--text-3);font-weight:700;margin:0 2px 6px;overflow:hidden">📋 Задачи на сегодня: ${boardDue.length}<a href="/board.html" style="color:var(--accent);font-weight:600;float:right">доска →</a></div>
+    <div style="display:flex;flex-direction:column;gap:6px">${boardDue.slice(0,6).map(x=>row(x.due<_today?'#e5574e':'#1a9e7a', x.due<_today?'⏰':'сегодня', esc(x.title), '', '/board.html')).join('')}</div></div>`;
   if (dl) sec += `<div style="margin-bottom:10px"><div style="font-size:12px;color:var(--text-3);font-weight:700;margin:0 2px 6px;overflow:hidden">💼 Сделки в работе: ${dl.count} · ${mln(dl.sum)}${dl.hotCount?` · 🔥 ${dl.hotCount}`:''}<a href="/plansales.html" style="color:var(--accent);font-weight:600;float:right">все →</a></div>
-    <div style="display:flex;flex-direction:column;gap:6px">${dl.top.map(x=>row(STEP[x.step]||'#888', x.step, esc(x.title)+(x.company?` · <span style="color:var(--text-3)">${esc(x.company)}</span>`:''), mln(x.sum), x.url||'/plansales.html', x.hot?'🔥':'')).join('')}</div></div>`;
+    <div style="display:flex;flex-direction:column;gap:6px">${dl.top.map(x=>row(STEP[x.step]||'#888', x.step, esc(x.title)+(x.company?` · <span style="color:var(--text-3)">${esc(x.company)}</span>`:''), mln(x.sum), x.url||'/plansales.html', x.hot?'🔥':'', {t:'deal',i:x.dealId,u:x.url,l:x.title})).join('')}</div></div>`;
   if (tk) sec += `<div style="margin-bottom:10px"><div style="font-size:12px;color:var(--text-3);font-weight:700;margin:0 2px 6px;overflow:hidden">🛠 Мои заявки: ${tk.length} активных<a href="/index.html" style="color:var(--accent);font-weight:600;float:right">все →</a></div>
-    <div style="display:flex;flex-direction:column;gap:6px">${tk.slice(0,5).map(x=>row(x.stageColor||'#888', (x.stageName||'—').slice(0,16), (x.isOverdue?'⏰ ':'')+(x.urgency?'🔴 ':'')+esc(x.title), '', x.bitrixUrl)).join('')}</div></div>`;
+    <div style="display:flex;flex-direction:column;gap:6px">${tk.slice(0,5).map(x=>row(x.stageColor||'#888', (x.stageName||'—').slice(0,16), (x.isOverdue?'⏰ ':'')+(x.urgency?'🔴 ':'')+esc(x.title), '', x.bitrixUrl, '', {t:'ticket',i:x.id,u:x.bitrixUrl,l:x.title})).join('')}</div></div>`;
   if (tasks) sec += `<div><div style="font-size:12px;color:var(--text-3);font-weight:700;margin:0 2px 6px;overflow:hidden">✅ Мои задачи: ${tasks.count}${tasks.overdueCount?` · ⏰ просрочено ${tasks.overdueCount}`:''}</div>
-    <div style="display:flex;flex-direction:column;gap:6px">${tasks.top.map(x=>row(x.overdue?'#e5574e':'#1a9e7a', x.overdue?'⏰':'задача', esc(x.title), x.deadline?fmtDate(x.deadline):'', x.url)).join('')}</div></div>`;
+    <div style="display:flex;flex-direction:column;gap:6px">${tasks.top.map(x=>row(x.overdue?'#e5574e':'#1a9e7a', x.overdue?'⏰':'задача', esc(x.title), x.deadline?fmtDate(x.deadline):'', x.url, '', {t:'task',i:x.id,u:x.url,l:x.title})).join('')}</div></div>`;
 
   let collapsed = false; try { collapsed = localStorage.getItem('myday-collapsed')==='1'; } catch(e){}
-  const summary = [dl?`💼 ${dl.count}`:'', tk?`🛠 ${tk.length}`:'', tasks?`✅ ${tasks.count}`:''].filter(Boolean).join(' · ');
+  const summary = [boardDue.length?`📋 ${boardDue.length}`:'', dl?`💼 ${dl.count}`:'', tk?`🛠 ${tk.length}`:'', tasks?`✅ ${tasks.count}`:''].filter(Boolean).join(' · ');
   box.innerHTML = `<div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 18px;margin:16px 0 4px">
     <div id="mydayHead" style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none" title="Свернуть / развернуть">
       <b style="font-size:15px">Мой день</b>
@@ -517,6 +529,17 @@ async function loadMyDay(user){
   box.style.display='';
   const head = document.getElementById('mydayHead'), body = document.getElementById('mydayBody'), tog = document.getElementById('mydayTog');
   head.addEventListener('click', ()=>{ const show = body.style.display==='none'; body.style.display = show?'':'none'; tog.textContent = show?'▾ свернуть':'▸ развернуть'; try{ localStorage.setItem('myday-collapsed', show?'0':'1'); }catch(e){} });
+  box.querySelectorAll('.myday-add').forEach(btn=>btn.addEventListener('click', async e=>{
+    e.preventDefault(); e.stopPropagation();
+    btn.disabled = true; btn.textContent = '…';
+    try{
+      const r = await fetch('/api/board/from-entity', { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ refType: btn.getAttribute('data-rt'), refId: btn.getAttribute('data-ri'), title: decodeURIComponent(btn.getAttribute('data-rl')||''), refUrl: btn.getAttribute('data-ru')||'' }) });
+      const d = await r.json();
+      btn.textContent = (d&&d.ok)?'✓':'+'; if(d&&d.ok) btn.style.color='var(--good)';
+    }catch(err){ btn.textContent='+'; }
+    btn.disabled = false;
+  }));
 }
 
 async function init(){

@@ -33,6 +33,7 @@
     { c: 'ADM', n: 'Управление', h: '/admin.html' }
   ];
   var ACCOUNT = { c: 'КАБ', n: 'Мой кабинет', h: '/account.html' };
+  var TASK = { c: 'TASK', n: 'Мои задачи', h: '/board.html' };
 
   function cssVar(n, d) { try { var v = getComputedStyle(document.documentElement).getPropertyValue(n); return v && v.trim() ? v.trim() : d; } catch (e) { return d; } }
   function el(tag, css, html) { var e = document.createElement(tag); if (css) e.style.cssText = css; if (html != null) e.innerHTML = html; return e; }
@@ -48,7 +49,7 @@
   }
   function allowedModules() {
     var list = MODULES.filter(function (m) { return allowed === '*' || (allowed && allowed.has(m.c)); });
-    return list.concat([ACCOUNT]);
+    return [TASK].concat(list, [ACCOUNT]);
   }
 
   // ── Запуск: плавающая кнопка поиска (над кнопкой фидбэка) + Ctrl/Cmd+K ──
@@ -139,13 +140,13 @@
   function mergeRemote(d) {
     var r = [];
     if (d && d.companies) d.companies.forEach(function (c) {
-      r.push({ group: 'Компании', icon: '🏢', label: c.title, sub: [c.industry, c.city, c.dealCount ? (c.dealCount + ' сделок') : ''].filter(Boolean).join(' · '), href: c.url, external: true });
+      r.push({ group: 'Компании', icon: '🏢', label: c.title, sub: [c.industry, c.city, c.dealCount ? (c.dealCount + ' сделок') : ''].filter(Boolean).join(' · '), href: c.url, external: true, refType: 'company', refId: String(c.id) });
     });
     if (d && d.deals) d.deals.forEach(function (x) {
-      r.push({ group: 'Сделки', icon: '💼', label: x.title, sub: [x.company, x.sum ? mln(x.sum) : ''].filter(Boolean).join(' · '), href: x.url, external: true });
+      r.push({ group: 'Сделки', icon: '💼', label: x.title, sub: [x.company, x.sum ? mln(x.sum) : ''].filter(Boolean).join(' · '), href: x.url, external: true, refType: 'deal', refId: String(x.id) });
     });
     if (d && d.tickets) d.tickets.forEach(function (x) {
-      r.push({ group: 'Заявки', icon: '🛠', label: (x.isOverdue ? '⏰ ' : '') + x.title, sub: [x.stageName, x.engineer].filter(Boolean).join(' · '), href: x.url, external: true });
+      r.push({ group: 'Заявки', icon: '🛠', label: (x.isOverdue ? '⏰ ' : '') + x.title, sub: [x.stageName, x.engineer].filter(Boolean).join(' · '), href: x.url, external: true, refType: 'ticket', refId: String(x.id) });
     });
     remoteItems = r;
   }
@@ -172,12 +173,27 @@
         '<span style="font-size:15px;flex:none;width:20px;text-align:center">' + it.icon + '</span>' +
         '<span style="flex:1;min-width:0"><span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px">' + esc(it.label) + '</span>' +
         (it.sub ? '<span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:' + sub + '">' + esc(it.sub) + '</span>' : '') +
-        '</span>' + (it.external ? '<span style="color:' + sub + ';font-size:12px;flex:none">↗</span>' : '') + '</div>';
+        '</span>' +
+        (it.refType ? '<button class="pls-sr-add" data-add="' + i + '" title="В мои задачи" style="flex:none;background:none;border:1px solid ' + line + ';border-radius:7px;color:' + sub + ';font-size:14px;line-height:1;width:24px;height:24px;cursor:pointer;padding:0">+</button>' : '') +
+        (it.external ? '<span style="color:' + sub + ';font-size:12px;flex:none">↗</span>' : '') + '</div>';
     });
     listBox.innerHTML = html;
     Array.prototype.forEach.call(listBox.querySelectorAll('.pls-sr-row'), function (row) {
       row.addEventListener('mouseenter', function () { sel = parseInt(row.getAttribute('data-i'), 10); paint(); });
       row.addEventListener('click', function () { sel = parseInt(row.getAttribute('data-i'), 10); openSel(); });
+    });
+    Array.prototype.forEach.call(listBox.querySelectorAll('.pls-sr-add'), function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var it = items[parseInt(btn.getAttribute('data-add'), 10)];
+        if (!it) return;
+        btn.disabled = true; btn.textContent = '…';
+        fetch('/api/board/from-entity', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refType: it.refType, refId: it.refId, title: it.label.replace(/^⏰\s*/, ''), refUrl: it.href }) })
+          .then(function (r) { return r.json(); })
+          .then(function (d) { btn.textContent = (d && d.ok) ? '✓' : '+'; btn.style.color = (d && d.ok) ? cssVar('--good', '#1a7f54') : ''; btn.disabled = false; })
+          .catch(function () { btn.textContent = '+'; btn.disabled = false; });
+      });
     });
   }
   function paint() {

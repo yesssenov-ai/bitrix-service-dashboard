@@ -377,6 +377,33 @@ async function initDB() {
     ALTER TABLE ticketsmodule_feedback ADD COLUMN IF NOT EXISTS attachment_name VARCHAR(255);
     ALTER TABLE ticketsmodule_feedback ADD COLUMN IF NOT EXISTS attachment_type VARCHAR(100);
 
+    -- ── «Мои задачи»: персональная канбан-доска каждого сотрудника ──────────
+    -- Карточки приватны (owner = user_id). column_key: todo|doing|done|later.
+    -- position — дробная позиция внутри колонки (для drag-and-drop без переиндексации).
+    -- checklist — JSONB [{t:текст, d:bool}]. ref_* — необязательная связь со
+    -- сделкой/заявкой/задачей ЦУП (кнопка «+ в задачи»).
+    CREATE TABLE IF NOT EXISTS ticketsmodule_board_cards (
+      id          SERIAL PRIMARY KEY,
+      user_id     INTEGER NOT NULL,
+      column_key  VARCHAR(20) NOT NULL DEFAULT 'todo',
+      title       TEXT NOT NULL,
+      notes       TEXT,
+      priority    SMALLINT DEFAULT 0,          -- 0 нет · 1 низкий · 2 средний · 3 высокий
+      due_date    DATE,
+      label       VARCHAR(20),                 -- цветная метка (ключ)
+      position    DOUBLE PRECISION DEFAULT 0,
+      checklist   JSONB DEFAULT '[]',
+      ref_type    VARCHAR(20),                 -- deal|ticket|task|null
+      ref_id      VARCHAR(40),
+      ref_url     TEXT,
+      archived    BOOLEAN DEFAULT FALSE,
+      done_at     TIMESTAMPTZ,
+      created_at  TIMESTAMPTZ DEFAULT NOW(),
+      updated_at  TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_board_user ON ticketsmodule_board_cards(user_id, archived, column_key, position);
+    CREATE INDEX IF NOT EXISTS idx_board_due ON ticketsmodule_board_cards(user_id, due_date) WHERE archived = FALSE;
+
     -- ── Фаза 2 Статистики: история стадий сделок ───────────────────────────
     -- Каждая запись = момент входа сделки в стадию (из crm.stagehistory.list).
     -- По ней считаем РЕАЛЬНЫЕ конверсии между стадиями и время на каждой стадии.
