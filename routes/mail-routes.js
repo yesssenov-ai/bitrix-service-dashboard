@@ -46,8 +46,7 @@ router.put('/emails/:id/category', requireAuth(), async (req, res) => {
     const { category } = req.body;
     const valid = ['client','spam','adv','tender','internal','uncategorized'];
     if (!valid.includes(category)) return res.status(400).json({ error: 'Неверная категория' });
-    const emails = await mailLib.getEmails({});
-    const email = emails.find(e => e.id === req.params.id);
+    const email = await mailLib.getEmailById(req.params.id);
     if (email) await mailLib.learnFromManualChange(email, category);
     await mailLib.updateCategory(category, req.params.id);
     res.json({ ok: true });

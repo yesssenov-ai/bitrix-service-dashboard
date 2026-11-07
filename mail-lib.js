@@ -97,6 +97,12 @@ async function getEmails(filter = {}) {
   return rows;
 }
 
+// Одно письмо по id — чтобы не тянуть весь список ради одной записи.
+async function getEmailById(id) {
+  const { rows } = await pool.query('SELECT * FROM ticketsmodule_mail_emails WHERE id = $1', [id]);
+  return rows[0] || null;
+}
+
 async function getPendingEmails() {
   const { rows } = await pool.query(`
     SELECT * FROM ticketsmodule_mail_emails
@@ -178,6 +184,6 @@ async function getLearnedPatterns() {
 module.exports = {
   classify, learnFromManualChange,
   upsertEmail, findBySubject, findByMessageId, markAnswered, updateCategory,
-  getEmails, getPendingEmails, getUnnotified, markNotified, getStats,
+  getEmails, getEmailById, getPendingEmails, getUnnotified, markNotified, getStats,
   getRules, addRule, deleteRule, incrementRule, learnPattern, getLearnedPatterns,
 };
