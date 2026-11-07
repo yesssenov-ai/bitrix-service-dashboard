@@ -72,7 +72,7 @@ main{flex:1;padding:22px 32px 60px;max-width:1180px;width:100%;margin:0 auto}
 .hero h1{color:#fff;font-size:30px;font-weight:720;letter-spacing:-.025em;line-height:1.1;text-shadow:0 2px 18px rgba(0,0,0,.35)}
 .hero h1 .grad{background:linear-gradient(120deg,#7fb0ff,#b79cff 40%,#ff9a8f 75%,#ffd27a);-webkit-background-clip:text;background-clip:text;color:transparent}
 .hero .h1-sub{color:rgba(255,255,255,.86);font-size:14.5px;margin-top:9px;max-width:540px}
-.tasks-cta{display:inline-flex;align-items:center;gap:10px;margin-top:18px;padding:11px 16px 11px 18px;border-radius:14px;
+.tasks-cta{position:absolute;right:20px;bottom:16px;z-index:3;display:inline-flex;align-items:center;gap:10px;padding:10px 15px 10px 17px;border-radius:13px;
   background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.26);
   -webkit-backdrop-filter:blur(10px) saturate(1.2);backdrop-filter:blur(10px) saturate(1.2);
   color:#fff;text-decoration:none;font-weight:700;font-size:14.5px;letter-spacing:-.01em;
@@ -83,7 +83,7 @@ main{flex:1;padding:22px 32px 60px;max-width:1180px;width:100%;margin:0 auto}
 .tasks-cta .ov{display:inline-flex;align-items:center;gap:3px;color:#ffd4cc;font-size:12.5px;font-weight:800}
 .tasks-cta .arr{opacity:.65;transition:transform .16s}
 .tasks-cta:hover .arr{transform:translateX(3px);opacity:.9}
-@media (max-width:640px){.tasks-cta{margin-top:14px;padding:10px 14px;font-size:14px}}
+@media (max-width:640px){.tasks-cta{right:14px;bottom:12px;padding:9px 13px;font-size:13.5px;gap:8px}}
 .hero .user-chip{position:absolute;top:18px;right:20px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:flex-end;z-index:3}
 .hero .user-chip .name{font-size:13px;color:rgba(255,255,255,.82)}
 .hero .user-chip .name b{color:#fff;font-weight:600}
@@ -201,12 +201,6 @@ footer{text-align:center;color:var(--text-faint);font-size:11.5px;padding:20px;f
       <div class="hello" id="helloLine">Загрузка…</div>
       <h1>Центр управления <span class="grad">проектами</span></h1>
       <p class="h1-sub">Все модули ProLabSupport в одном месте. Откройте нужную группу — или найдите модуль поиском.</p>
-      <a class="tasks-cta" href="/board.html" title="Личная доска задач">
-        <span class="ic">📋</span><span>Мои задачи</span>
-        <span class="cnt" id="tasksCtaCnt" style="display:none"></span>
-        <span class="ov" id="tasksCtaOv" style="display:none"></span>
-        <span class="arr">→</span>
-      </a>
     </div>
     <div class="hdots" id="heroDots"></div>
     <div class="user-chip">
@@ -214,6 +208,12 @@ footer{text-align:center;color:var(--text-faint);font-size:11.5px;padding:20px;f
       <button id="installBtn" onclick="onInstallClick()" style="display:none;font-size:12.5px;font-weight:600;color:#fff;background:linear-gradient(135deg,var(--brand),var(--brand-h));border:0;padding:8px 15px;border-radius:999px;cursor:pointer;align-items:center;gap:7px">⬇ Установить приложение</button>
       <button class="logout-btn" onclick="logout()">Выйти</button>
     </div>
+    <a class="tasks-cta" href="/board.html" title="Личная доска задач">
+      <span>Мои задачи</span>
+      <span class="cnt" id="tasksCtaCnt" style="display:none"></span>
+      <span class="ov" id="tasksCtaOv" style="display:none"></span>
+      <span class="arr">→</span>
+    </a>
   </div>
 
   <div id="myday" style="display:none"></div>
