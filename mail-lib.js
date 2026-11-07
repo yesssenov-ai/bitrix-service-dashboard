@@ -1,4 +1,5 @@
 const { pool } = require('./auth');
+const { memo, bust } = require('./cache');
 
 // ── Classification ──────────────────────────────────────────────────────────
 
@@ -143,9 +144,12 @@ async function getStats(mailbox = null) {
   return rows[0];
 }
 
+// Правила классификатора читаются на КАЖДОЕ входящее письмо (poll). Кэш 60с на
+// всех — таблица маленькая и меняется редко (только из админки). Сбрасываем при
+// добавлении/удалении правила.
 async function getRules() {
-  const { rows } = await pool.query('SELECT * FROM ticketsmodule_mail_rules ORDER BY hit_count DESC');
-  return rows;
+  return memo('mail:rules', 60 * 1000, async () =>
+    (await pool.query('SELECT * FROM ticketsmodule_mail_rules ORDER BY hit_count DESC')).rows);
 }
 
 async function addRule(field, pattern, category) {
@@ -153,11 +157,13 @@ async function addRule(field, pattern, category) {
     'INSERT INTO ticketsmodule_mail_rules (field, pattern, category) VALUES ($1,$2,$3) RETURNING id',
     [field, pattern, category]
   );
+  bust('mail:rules');
   return rows[0];
 }
 
 async function deleteRule(id) {
   await pool.query('DELETE FROM ticketsmodule_mail_rules WHERE id = $1', [id]);
+  bust('mail:rules');
 }
 
 async function incrementRule(id) {
@@ -172,13 +178,13 @@ async function learnPattern(pattern, field, category) {
       confidence = ticketsmodule_mail_learned_patterns.confidence + 1,
       category = EXCLUDED.category
   `, [pattern, field, category]);
+  bust('mail:patterns');
 }
 
+// Тоже читается на каждое письмо. Кэш 60с; сбрасываем при обучении (learnPattern).
 async function getLearnedPatterns() {
-  const { rows } = await pool.query(
-    'SELECT * FROM ticketsmodule_mail_learned_patterns WHERE confidence >= 2 ORDER BY confidence DESC'
-  );
-  return rows;
+  return memo('mail:patterns', 60 * 1000, async () =>
+    (await pool.query('SELECT * FROM ticketsmodule_mail_learned_patterns WHERE confidence >= 2 ORDER BY confidence DESC')).rows);
 }
 
 module.exports = {

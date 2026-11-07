@@ -142,6 +142,7 @@ router.post('/refresh', requireModuleApi('STATS'), express.json(), async (req, r
     _boardCache.clear();
     _convCache.clear();
     _cohortCache.clear();
+    require('../cache').bust('stats:'); // сбросить общий кэш сырых чтений зеркала/истории
     const { rows: r2 } = await pool.query('SELECT MAX(synced_at) AS t FROM ticketsmodule_stat_deals');
     res.json({ ok: true, updated: r.updated || 0, deleted, updatedAt: r2[0] && r2[0].t ? new Date(r2[0].t).toISOString() : null });
   } catch (e) {

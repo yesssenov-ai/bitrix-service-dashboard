@@ -85,11 +85,20 @@ async function broadcastBadges() {
   if (!_enabled) return;
   await ensureSchema();
   const { pendingForBid } = require('./pending-actions');
-  const { rows: bids } = await pool.query('SELECT DISTINCT bid FROM ticketsmodule_push_subs WHERE bid IS NOT NULL');
-  for (const { bid } of bids) {
+  // Один запрос на все подписки вместо «DISTINCT bid + SELECT на каждый bid»
+  // (было N+1 каждые 3 мин × все подписчики — заметный egress/нагрузка).
+  // Группируем по пользователю в JS.
+  const { rows: allSubs } = await pool.query(
+    'SELECT bid, id, endpoint, sub, last_count FROM ticketsmodule_push_subs WHERE bid IS NOT NULL'
+  );
+  const byBid = new Map();
+  for (const s of allSubs) {
+    if (!byBid.has(s.bid)) byBid.set(s.bid, []);
+    byBid.get(s.bid).push(s);
+  }
+  for (const [bid, subs] of byBid) {
     let count = 0;
     try { ({ count } = await pendingForBid(bid)); } catch (e) { continue; }
-    const subs = (await pool.query('SELECT id, endpoint, sub, last_count FROM ticketsmodule_push_subs WHERE bid=$1', [bid])).rows;
     for (const s of subs) {
       const prev = Number(s.last_count);
       if (prev === Number(count)) continue; // без изменений — не трогаем

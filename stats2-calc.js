@@ -6,6 +6,7 @@ const { pool } = require('./auth');
 const { b24 } = require('./bitrix');
 const { getTodayRate } = require('./nbrk-exchange-rate');
 const { USERS } = require('./constants');
+const { memo } = require('./cache');
 
 // Справочник сфер деятельности (INDUSTRY): Bitrix хранит код (напр. «3»), а имя
 // берётся из статус-справочника. Кэш 6ч, коды → человеческие названия.
@@ -97,7 +98,11 @@ const yr = d => { if (!d) return null; const n = parseInt(String(d).slice(0, 4),
 async function loadEnriched() {
   const rate = await getTodayRate();
   const kzt = d => (d.currency_id === 'USD' ? (parseFloat(d.opportunity) || 0) * rate : (parseFloat(d.opportunity) || 0));
-  const { rows } = await pool.query('SELECT * FROM ticketsmodule_stat_deals');
+  // Полное зеркало сделок читают и борд, и когорты, и выгрузка — делим один
+  // кэш (5 мин), чтобы не тянуть таблицу по разу на каждый эндпоинт/набор лет.
+  // Сбрасывается в POST /api/stats/refresh через bust('stats:').
+  const rows = await memo('stats:deals:all', 300 * 1000, async () =>
+    (await pool.query('SELECT * FROM ticketsmodule_stat_deals')).rows);
   const indMap = await getIndustryMap();
   const enrich = d => ({
     id: d.deal_id, cat: d.category_id, stage: d.stage_id, step: step(d.stage_id),
@@ -402,13 +407,15 @@ const MS_DAY = 86400000;
 const tms = v => { if (v == null) return NaN; if (v instanceof Date) return v.getTime(); const t = Date.parse(String(v)); return t; };
 
 async function computeConversions(year) {
-  const { rows: hist } = await pool.query('SELECT deal_id, stage_id, created_time FROM ticketsmodule_stage_history');
+  // Вся история стадий (десятки тысяч строк) — делим один кэш 5 мин на все годы:
+  // когорта фильтруется в JS, запрос одинаков. Сбрасывается в /stats/refresh.
+  const hist = await memo('stats:hist:all', 300 * 1000, async () =>
+    (await pool.query('SELECT deal_id, stage_id, created_time FROM ticketsmodule_stage_history')).rows);
   if (!hist.length) return { year, hasData: false };
 
   // Атрибуция из зеркала (менеджер / отдел / прибор).
-  const { rows: dealRows } = await pool.query(
-    'SELECT deal_id, category_id, assigned_by_id, department_id, instrument_name FROM ticketsmodule_stat_deals'
-  );
+  const dealRows = await memo('stats:deals:attrib', 300 * 1000, async () =>
+    (await pool.query('SELECT deal_id, category_id, assigned_by_id, department_id, instrument_name FROM ticketsmodule_stat_deals')).rows);
   const attr = {};
   for (const d of dealRows) {
     attr[d.deal_id] = {

@@ -6,6 +6,7 @@
 const { b24 } = require('./bitrix');
 const { pool } = require('./auth');
 const { USERS, USER_EMAILS } = require('./constants');
+const { memo } = require('./cache');
 
 const APP_BASE = process.env.APP_BASE_URL || 'https://bitrix-service-dashboard-production.up.railway.app';
 const dashUrl = () => `${APP_BASE}/procurement.html`;
@@ -1869,9 +1870,13 @@ async function pendingActionsFor(bid) {
   const paymentStage = (FLOW.find(s => s.key === 'payment') || {}).bitrix;
   const waitingStage = (FLOW.find(s => s.key === 'waiting') || {}).bitrix;
   const chief = String(chiefAccountantId() || '');
+  // Базовый чит одинаков для всех пользователей (фильтр по bid — в Node ниже),
+  // поэтому кэшируем его на 20 сек: бейдж «Закупки» дёргается очень часто (на каждом
+  // заходе + пушем каждые 3 мин × все подписчики) — это был топ-1 по egress.
   let rows = [];
   try {
-    ({ rows } = await pool.query('SELECT id, bitrix_item_id, title, stage_id, accountant_bid, payload FROM ticketsmodule_procurement'));
+    rows = await memo('proc:pending:all', 20 * 1000, async () =>
+      (await pool.query('SELECT id, bitrix_item_id, title, stage_id, accountant_bid, payload FROM ticketsmodule_procurement')).rows);
   } catch (e) { return { count: 0, items: [] }; }
   const items = [];
   for (const r of rows) {
