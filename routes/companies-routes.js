@@ -3,12 +3,14 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../auth');
+const { memo, bust } = require('../cache');
 
 const EDIT = ['admin']; // правка «Компаний» — только админам (superadmin наследует)
 
-// Доска компаний (список + справочник сфер + сводка проблем)
+// Доска компаний (список + справочник сфер + сводка проблем). Кэш 2 мин на всех —
+// большая выборка, читается всеми одинаково; сбрасывается после правки/синка.
 router.get('/', requireAuth([]), async (req, res) => {
-  try { res.json(await require('../companies-calc').getCompaniesBoard()); }
+  try { res.json(await memo('cmp:board', 120 * 1000, () => require('../companies-calc').getCompaniesBoard())); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -38,7 +40,7 @@ router.get('/bin-preview', requireAuth(EDIT), async (req, res) => {
 
 // Запись подтверждённого БИН в карточку Б24 (компания + реквизит). Перезаписывает поля.
 router.post('/bin-apply', requireAuth(EDIT), express.json(), async (req, res) => {
-  try { const { id, bin } = req.body || {}; res.json(await require('../companies-calc').applyBin(id, bin)); }
+  try { const { id, bin } = req.body || {}; const r = await require('../companies-calc').applyBin(id, bin); bust('cmp:board'); res.json(r); }
   catch (e) { console.error('bin-apply:', e.message); res.status(500).json({ error: e.message }); }
 });
 
@@ -57,7 +59,7 @@ router.get('/:id/deals', requireAuth([]), async (req, res) => {
 
 // Пересинхронизировать компании из Б24
 router.post('/refresh', requireAuth(EDIT), async (req, res) => {
-  try { res.json(await require('../companies-calc').syncCompanies()); }
+  try { const r = await require('../companies-calc').syncCompanies(); bust('cmp:board'); res.json(r); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -108,7 +110,9 @@ router.post('/:id/delete', requireAuth(EDIT), async (req, res) => {
 router.post('/:id', requireAuth(EDIT), express.json(), async (req, res) => {
   try {
     const { industryId, title } = req.body || {};
-    res.json(await require('../companies-calc').updateCompany(req.params.id, { industryId, title }));
+    const r = await require('../companies-calc').updateCompany(req.params.id, { industryId, title });
+    bust('cmp:board');
+    res.json(r);
   } catch (e) {
     console.error('POST /api/companies/:id error:', e.message);
     res.status(500).json({ error: e.message });

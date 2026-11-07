@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../auth');
+const { memo } = require('../cache');
 
 const VIEW_ROLES = ['admin', 'superadmin', 'coordinator', 'manager', 'store', 'accountant'];
 const EDIT_ROLES = ['admin', 'superadmin', 'coordinator'];   // кто назначает КАМ на проект
@@ -8,9 +9,8 @@ const EDIT_ROLES = ['admin', 'superadmin', 'coordinator'];   // кто назн�
 // GET /api/projects — проекты (по полю «В рамках проекта») + вид по компаниям + аудит.
 router.get('/', requireAuth(VIEW_ROLES), async (req, res) => {
   try {
-    const { getProjects } = require('../projects-calc');
     res.set('Cache-Control', 'no-store');
-    res.json(await getProjects());
+    res.json(await memo('proj:board', 120 * 1000, () => require('../projects-calc').getProjects()));
   } catch (e) {
     console.error('GET /api/projects error:', e.message);
     res.status(500).json({ error: e.message, projects: [], companies: [], audit: {}, meta: {} });

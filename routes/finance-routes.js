@@ -7,6 +7,10 @@ const router = express.Router();
 const { requireAuth, isAdminLike, auditLog } = require('../auth');
 const { EMPLOYEE_DEPT } = require('../dept-map');
 const { USERS } = require('../constants');
+const { memo, bust } = require('../cache');
+// Кэш финансовых бордов на 2 мин (данные 1С обновляются синком пару раз в день):
+// десять человек, открывших Дебет в одно окно, читают Postgres один раз.
+const FIN_TTL = 120 * 1000;
 
 const VIEW = []; // любой авторизованный, дошедший до API (страница под грантом)
 
@@ -44,6 +48,7 @@ async function doManualRefresh(req, res, module, fn) {
   fbusy = true; fbusySince = Date.now(); fbusyWhat = module;
   try {
     const r = await fWithTimeout(fn(), FREFRESH_TIMEOUT_MS, module);
+    bust('fin:'); // синк обновил зеркала — сбрасываем кэш бордов, чтобы сразу было свежо
     logManualRefresh(req, module, r);
     res.json(r);
   } catch (e) {
@@ -86,35 +91,37 @@ function debtScope(user) {
 
 // ── Дебет (дебиторская задолженность) ───────────────────────────────────────
 router.get('/debt', requireAuth(VIEW), async (req, res) => {
-  try { res.json(await require('../finance-debt-calc').getDebtBoard(debtScope(req.user))); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    const scope = debtScope(req.user);
+    res.json(await memo('fin:debt:' + JSON.stringify(scope), FIN_TTL, () => require('../finance-debt-calc').getDebtBoard(scope)));
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.post('/debt/refresh', requireAuth(VIEW), (req, res) => doManualRefresh(req, res, 'Дебет', () => require('../finance-debt-calc').syncDebt()));
 
 // ── Склад (остатки на складах, fact_stock) ──────────────────────────────────
 router.get('/stock', requireAuth(VIEW), async (req, res) => {
-  try { res.json(await require('../finance-stock-calc').getStockBoard()); }
+  try { res.json(await memo('fin:stock', FIN_TTL, () => require('../finance-stock-calc').getStockBoard())); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.post('/stock/refresh', requireAuth(VIEW), (req, res) => doManualRefresh(req, res, 'Склад', () => require('../finance-stock-calc').syncStock()));
 
 // ── Авансы (счёт 3510 + оплаты 1210/1010-1030) ──────────────────────────────
 router.get('/advances', requireAuth(VIEW), async (req, res) => {
-  try { res.json(await require('../finance-advances-calc').getAdvancesBoard()); }
+  try { res.json(await memo('fin:advances', FIN_TTL, () => require('../finance-advances-calc').getAdvancesBoard())); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.post('/advances/refresh', requireAuth(VIEW), (req, res) => doManualRefresh(req, res, 'Авансы', () => require('../finance-advances-calc').syncAdvances()));
 
 // ── Cash Flow (13-недельный прогноз ликвидности; приток из Дебета 1210) ──────
 router.get('/cashflow', requireAuth(VIEW), async (req, res) => {
-  try { res.json(await require('../finance-cashflow-calc').getCashflowBoard()); }
+  try { res.json(await memo('fin:cashflow', FIN_TTL, () => require('../finance-cashflow-calc').getCashflowBoard())); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.post('/cashflow/refresh', requireAuth(VIEW), (req, res) => doManualRefresh(req, res, 'Cash Flow', () => require('../finance-cashflow-calc').syncCashflow()));
 
 // ── Качество (сверка контрактов 1С ↔ сделок Битрикса) ───────────────────────
 router.get('/quality', requireAuth(VIEW), async (req, res) => {
-  try { res.json(await require('../finance-quality-calc').getQualityBoard()); }
+  try { res.json(await memo('fin:quality', FIN_TTL, () => require('../finance-quality-calc').getQualityBoard())); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.post('/quality/refresh', requireAuth(VIEW), (req, res) => doManualRefresh(req, res, 'Качество', () => require('../finance-quality-calc').syncQuality()));

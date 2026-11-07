@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../auth');
+const { memo } = require('../cache');
+const TTL = 120 * 1000; // борды «Контрактов» читают stat_deals — кэш 2 мин на всех
 
 // Просмотр — любому авторизованному, кому выдан модуль (страница гейтится грантом
 // requireModule('CONTR')). Запись плана (/plan) остаётся только у admin.
@@ -10,8 +12,7 @@ const VIEW_ROLES = [];
 router.get('/summary', requireAuth(VIEW_ROLES), async (req, res) => {
   try {
     const year = parseInt(req.query.year, 10) || new Date().getFullYear();
-    const { getContractsSummary } = require('../contracts-calc');
-    res.json(await getContractsSummary(year));
+    res.json(await memo('contr:summary:' + year, TTL, () => require('../contracts-calc').getContractsSummary(year)));
   } catch (e) {
     console.error('GET /api/contracts/summary error:', e.message);
     res.status(500).json({ error: 'Не удалось рассчитать: ' + e.message });
@@ -22,8 +23,8 @@ router.get('/summary', requireAuth(VIEW_ROLES), async (req, res) => {
 router.get('/monthly', requireAuth(VIEW_ROLES), async (req, res) => {
   try {
     const years = String(req.query.years || '').split(',').map(s => parseInt(s, 10)).filter(Boolean);
-    const { getMonthlyByYears } = require('../contracts-calc');
-    res.json(await getMonthlyByYears(years.length ? years : [new Date().getFullYear()]));
+    const ys = years.length ? years : [new Date().getFullYear()];
+    res.json(await memo('contr:monthly:' + ys.join(','), TTL, () => require('../contracts-calc').getMonthlyByYears(ys)));
   } catch (e) {
     console.error('GET /api/contracts/monthly error:', e.message);
     res.status(500).json({ error: 'Не удалось получить данные по годам: ' + e.message });
