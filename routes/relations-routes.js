@@ -113,8 +113,15 @@ async function syncPlannerEvent(item, itemId, opts = {}) {
       // confirmed (a newer local planner edit may be mid-flight, and this
       // was overwriting a manual "Подтверждено" uncheck on every sync pass);
       // just refresh the read-only fields.
+      // Пишем ТОЛЬКО если что-то из read-only полей реально изменилось.
+      // Иначе фоновая сверка (каждые 10 мин × все заявки) гнала «слепой» UPDATE
+      // на каждую строку каждый проход — 3М пустых записей/мес (dead tuples,
+      // WAL, autovacuum). IS DISTINCT FROM → 0 строк тронуто, когда всё совпало.
       await client.query(
-        `UPDATE ticketsmodule_planner_events SET title=$1, fields=$2, clients=$3, updated_at=NOW() WHERE id=$4`,
+        `UPDATE ticketsmodule_planner_events SET title=$1, fields=$2, clients=$3, updated_at=NOW()
+         WHERE id=$4 AND (title IS DISTINCT FROM $1
+                          OR fields IS DISTINCT FROM $2::jsonb
+                          OR clients IS DISTINCT FROM $3::jsonb)`,
         [title, JSON.stringify(fieldsObj), JSON.stringify(clientsArr), rows[0].id]
       );
     } else if (rows.length) {
