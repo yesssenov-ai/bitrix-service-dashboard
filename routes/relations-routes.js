@@ -73,6 +73,14 @@ async function syncPlannerEvent(item, itemId, opts = {}) {
   const eDate = new Date(endRaw); eDate.setHours(18, 0, 0, 0);
   if (isNaN(sDate) || isNaN(eDate)) return;
 
+  const startLocal = fmtLocalNaive(sDate), endLocal = fmtLocalNaive(eDate);
+  const newHash = computeSyncHash(engineerId, startLocal.slice(0, 10), endLocal.slice(0, 10));
+  // Фоновая сверка передаёт карту известных хэшей (bitrix_item_id → hash).
+  // Если заявка уже есть и инженер+даты не менялись — сверке тут делать нечего:
+  // пропускаем тяжёлые запросы в Битрикс (прибор/компания/договор) и БД целиком.
+  // Живой вебхук карту НЕ передаёт → полный путь как раньше.
+  if (opts.knownHashes && opts.knownHashes.get(Number(itemId)) === newHash) return { skipped: true };
+
   const svcLabel = SERVICE_TYPE_MAP[svcIds[0]] || '';
   const priborIds = Array.isArray(item.ufCrmPribor) ? item.ufCrmPribor : (item.ufCrmPribor ? [item.ufCrmPribor] : []);
   let instrLabel = '';
@@ -91,7 +99,6 @@ async function syncPlannerEvent(item, itemId, opts = {}) {
 
   const fieldsObj = { df1: areaLabel, df2: location, df3: svcLabel, df4: instrLabel };
   const clientsArr = clientName ? [{ name: clientName, type: '' }] : [];
-  const startLocal = fmtLocalNaive(sDate), endLocal = fmtLocalNaive(eDate);
   const title = item.title || '';
 
   const client = await pool.connect();
@@ -104,7 +111,6 @@ async function syncPlannerEvent(item, itemId, opts = {}) {
         to_char(end_at AT TIME ZONE '${PLANNER_TZ}', 'YYYY-MM-DD') AS end_date_old
        FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1`, [itemId]
     );
-    const newHash = computeSyncHash(engineerId, startLocal.slice(0, 10), endLocal.slice(0, 10));
 
     if (rows.length && rows[0].bitrix_sync_hash === newHash) {
       // Bitrix's current engineer+dates match what we last recorded — this
@@ -213,8 +219,18 @@ async function syncPlannerEvent(item, itemId, opts = {}) {
 // exact same sync logic, so any missed webhook is caught and fixed here
 // instead of silently staying wrong until someone notices.
 async function reconcileAllPlannerEvents() {
-  let start = 0, checked = 0, errors = 0;
+  let start = 0, checked = 0, errors = 0, skipped = 0;
   const failedIds = [];
+  // Один запрос вместо SELECT на каждую заявку: карта «bitrix_item_id → hash»
+  // уже синхронизированных строк. Заявки, где инженер+даты не менялись,
+  // пропускаются в syncPlannerEvent без обращения к Битриксу и БД.
+  const knownHashes = new Map();
+  try {
+    const { rows } = await pool.query(
+      "SELECT bitrix_item_id, bitrix_sync_hash FROM ticketsmodule_planner_events WHERE source='bitrix' AND bitrix_item_id IS NOT NULL"
+    );
+    for (const r of rows) knownHashes.set(Number(r.bitrix_item_id), r.bitrix_sync_hash);
+  } catch (e) { console.error('reconcileAllPlannerEvents preload error:', e.message); }
   while (true) {
     let items, next;
     try {
@@ -228,8 +244,9 @@ async function reconcileAllPlannerEvents() {
     if (!items.length) break;
     for (const item of items) {
       checked++;
-      const result = await syncPlannerEvent(item, item.id, { silent: true });
+      const result = await syncPlannerEvent(item, item.id, { silent: true, knownHashes });
       if (result && result.ok === false) { errors++; failedIds.push(item.id); }
+      else if (result && result.skipped) { skipped++; }
     }
     if (next === undefined || items.length < 50) break;
     start = next;
@@ -239,8 +256,8 @@ async function reconcileAllPlannerEvents() {
       await tgOps(`⚠️ Плановая сверка планировщика: ${errors} из ${checked} заявок не удалось синхронизировать (ID: ${failedIds.slice(0,20).join(', ')}${failedIds.length>20?'…':''})`);
     } catch (e) {}
   }
-  console.log(`Planner reconciliation: checked ${checked}, ${errors} error(s)`);
-  return { checked, errors };
+  console.log(`Planner reconciliation: checked ${checked}, skipped ${skipped} (unchanged), ${errors} error(s)`);
+  return { checked, skipped, errors };
 }
 
 // Entity types we track for completion notifications (per user request)
