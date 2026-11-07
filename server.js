@@ -975,6 +975,8 @@ initDB().then(() => {
     // 💸 Дебиторка — событийные алерты (новый долг / переход в просрочку): проверка раз в час.
     setInterval(() => { require('./smart-triggers').checkDebtAlerts().catch(e => console.error('debt alerts error:', e.message)); }, 60 * 60 * 1000);
     setTimeout(() => { require('./smart-triggers').checkDebtAlerts().catch(e => console.error('debt alerts boot error:', e.message)); }, 4 * 60 * 1000);
+    // 📋 Напоминания по задачам доски: проверка каждые 5 минут.
+    setInterval(() => { require('./routes/board-routes').sendDueReminders().catch(e => console.error('board reminders error:', e.message)); }, 5 * 60 * 1000);
   });
 }).catch(err => {
   console.error('DB init failed:', err);

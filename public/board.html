@@ -96,6 +96,15 @@ const esc = s => String(s==null?'':s).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;
 let cards = [];
 const byId = id => cards.find(c=>c.id===id);
 const todayStr = () => new Date().toISOString().slice(0,10);
+let _colleagues = null;
+function compressImage(file, cb){
+  const reader=new FileReader();
+  reader.onload=()=>{ const img=new Image();
+    img.onload=()=>{ let M=1600,w=img.width,h=img.height; if(w>M||h>M){const k=Math.min(M/w,M/h);w=Math.round(w*k);h=Math.round(h*k);}
+      try{const cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').drawImage(img,0,0,w,h);cb(cv.toDataURL('image/jpeg',0.82),'image/jpeg',(file.name||'screenshot').replace(/\.[a-z0-9]+$/i,'')+'.jpg');}catch(e){cb(reader.result,file.type,file.name||'image');} };
+    img.onerror=()=>cb(reader.result,file.type,file.name||'image'); img.src=reader.result; };
+  reader.readAsDataURL(file);
+}
 
 async function api(method, path, body){
   const r = await fetch('/api/board'+path, {method, credentials:'same-origin',
@@ -123,6 +132,9 @@ function cardHTML(c){
       ${dueBadge(c.due)}
       ${prog?`<span class="chk">☑ ${doneN}/${prog}</span>`:''}
       ${c.recur?`<span class="chk" title="повторяется">🔁</span>`:''}
+      ${c.remind?`<span class="chk" title="напоминание ${new Date(c.remind).toLocaleString('ru',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}">🔔</span>`:''}
+      ${c.comments?`<span class="chk">💬 ${c.comments}</span>`:''}
+      ${c.assignedByName?`<span class="chk" title="поручил(а) ${esc(c.assignedByName)}">👤 ${esc(c.assignedByName)}</span>`:''}
       ${c.refUrl?`<a class="reflink" href="${c.refUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗ ${REF_NAME[c.refType]||'ссылка'}</a>`:''}
     </div>
   </div>`;
@@ -230,8 +242,10 @@ function findCardPos(col, phIdx, dir){
 }
 
 // ── Карточка (деталь) ──
+function toLocalInput(iso){ if(!iso) return ''; const d=new Date(iso); const l=new Date(d.getTime()-d.getTimezoneOffset()*60000); return l.toISOString().slice(0,16); }
 function openCard(id){
   const c=byId(id); if(!c) return;
+  const remindLocal = toLocalInput(c.remind);
   const ov=document.createElement('div'); ov.className='ov';
   ov.innerHTML = `<div class="modal">
     <div class="mh"><textarea class="title" rows="1">${esc(c.title)}</textarea><button class="x" title="Закрыть">×</button></div>
@@ -250,6 +264,16 @@ function openCard(id){
         <div class="seg" id="segRecur">${RECUR_OPTS.map(x=>`<button data-r="${x.k}" class="${(c.recur||'none')===x.k?'on':''}">${x.n}</button>`).join('')}</div>
       </div>
       <div class="fieldrow">
+        <span class="lbl-t">Напоминание</span><input type="datetime-local" class="di" id="fRemind" value="${remindLocal}">
+        ${remindLocal?`<button class="btn" id="remindClear" style="padding:4px 8px">× убрать</button>`:''}
+      </div>
+      <div class="fieldrow">
+        <span class="lbl-t">Поручить</span>
+        <select id="assignSel" class="di"><option value="">— коллега —</option></select>
+        <button class="btn" id="assignBtn">Поручить →</button>
+        <span id="assignMsg" style="font-size:12px;color:var(--good)"></span>
+      </div>
+      <div class="fieldrow">
         <span class="lbl-t">Метка</span>
         <div class="swatch" data-l="" style="background:var(--surface-2);border:1px solid var(--line-2)${!c.label?';border-color:var(--text)':''}" title="без метки"></div>
         ${Object.keys(LABEL_COLORS).map(l=>`<div class="swatch ${c.label===l?'on':''}" data-l="${l}" style="background:${LABEL_COLORS[l]}"></div>`).join('')}
@@ -259,6 +283,17 @@ function openCard(id){
         <div class="lbl-t" style="margin-bottom:5px">Чек-лист</div>
         <div id="clList"></div>
         <div class="cl-add"><input id="clInput" placeholder="+ пункт…"><button class="btn" id="clAdd">Добавить</button></div>
+      </div>
+      <div>
+        <div class="lbl-t" style="margin-bottom:5px">Комментарии и файлы</div>
+        <div id="cmList"></div>
+        <div id="cmAttPrev"></div>
+        <div style="display:flex;gap:6px;margin-top:6px;align-items:flex-start">
+          <textarea id="cmInput" rows="1" placeholder="Комментарий…" style="flex:1;background:var(--surface);border:1px solid var(--line);border-radius:8px;color:var(--text);font:inherit;font-size:13px;padding:7px 9px;outline:none;resize:none"></textarea>
+          <button class="btn" id="cmAttach" title="Прикрепить картинку/PDF" style="padding:7px 10px">📎</button>
+          <button class="btn" id="cmSend" style="padding:7px 12px">→</button>
+        </div>
+        <input id="cmFile" type="file" accept="image/*,application/pdf" style="display:none">
       </div>
       <div class="mfoot">
         <button class="btn" id="btnArchive">Архивировать</button>
@@ -308,6 +343,31 @@ function openCard(id){
   const addCl=()=>{ const t=clInput.value.trim(); if(!t)return; c.checklist=c.checklist||[]; c.checklist.push({t,d:false}); clInput.value=''; save({checklist:c.checklist}); renderCL(); clInput.focus(); };
   modal.querySelector('#clAdd').addEventListener('click',addCl);
   clInput.addEventListener('keydown',e=>{ if(e.key==='Enter') addCl(); });
+  // reminder
+  modal.querySelector('#fRemind').addEventListener('change',e=>{ save({remind: e.target.value ? new Date(e.target.value).toISOString() : null}); });
+  const rc=modal.querySelector('#remindClear'); if(rc) rc.addEventListener('click',()=>{ modal.querySelector('#fRemind').value=''; save({remind:null}); rc.remove(); });
+  // assign to colleague
+  const assignSel=modal.querySelector('#assignSel');
+  (async()=>{ if(!_colleagues){ const r=await api('GET','/users'); _colleagues=(r&&r.users)||[]; } assignSel.innerHTML='<option value="">— коллега —</option>'+_colleagues.map(u=>`<option value="${u.id}">${esc(u.name)}</option>`).join(''); })();
+  modal.querySelector('#assignBtn').addEventListener('click',async()=>{ const to=assignSel.value; const msg=modal.querySelector('#assignMsg'); if(!to){ msg.style.color='var(--text-3)'; msg.textContent='выберите коллегу'; return; } msg.style.color='var(--text-3)'; msg.textContent='…'; const d=await api('POST','/'+id+'/assign',{toUserId:Number(to)}); msg.style.color=(d&&d.ok)?'var(--good)':'var(--bad)'; msg.textContent=(d&&d.ok)?('✓ поручено '+(d.to||'')):((d&&d.error)||'ошибка'); });
+  // comments
+  const cmList=modal.querySelector('#cmList'), cmInput=modal.querySelector('#cmInput'), cmFile=modal.querySelector('#cmFile'), cmAttPrev=modal.querySelector('#cmAttPrev');
+  let cmAtt=null;
+  const fmtTime=s=>{ try{return new Date(s).toLocaleString('ru',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return '';} };
+  function renderComments(list){
+    cmList.innerHTML = (list&&list.length) ? list.map(cm=>`<div style="padding:7px 0;border-top:1px solid var(--line)">
+      <div style="font-size:11.5px;color:var(--text-3)"><b style="color:var(--text-2)">${esc(cm.name)}</b> · ${fmtTime(cm.createdAt)}</div>
+      ${cm.text?`<div style="font-size:13px;white-space:pre-wrap;margin-top:2px">${esc(cm.text)}</div>`:''}
+      ${cm.hasAttachment?`<a href="/api/board/comment/${cm.id}/attachment" target="_blank" rel="noopener" style="font-size:12px;color:var(--accent);text-decoration:none">📎 ${esc(cm.attachmentName||'вложение')}</a>`:''}
+    </div>`).join('') : '<div style="font-size:12px;color:var(--text-3);padding:4px 0">Пока нет комментариев</div>';
+  }
+  (async()=>{ const d=await api('GET','/'+id+'/comments'); if(d&&d.ok) renderComments(d.comments); })();
+  function renderAtt(){ cmAttPrev.innerHTML = cmAtt?`<div style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:12px;color:var(--text-3)">📎 ${esc(cmAtt.name)} <button class="btn" id="cmAttX" style="padding:2px 7px">×</button></div>`:''; if(cmAtt){ cmAttPrev.querySelector('#cmAttX').addEventListener('click',()=>{cmAtt=null;cmFile.value='';renderAtt();}); } }
+  modal.querySelector('#cmAttach').addEventListener('click',()=>cmFile.click());
+  cmFile.addEventListener('change',()=>{ const f=cmFile.files&&cmFile.files[0]; if(!f)return; if(/^image\//.test(f.type)) compressImage(f,(data,type,name)=>{cmAtt={data,type,name};renderAtt();}); else if(f.type==='application/pdf'){ if(f.size>6*1024*1024){alert('Файл больше 6 МБ');return;} const fr=new FileReader(); fr.onload=()=>{cmAtt={data:fr.result,type:'application/pdf',name:f.name};renderAtt();}; fr.readAsDataURL(f);} else alert('Можно картинку или PDF'); });
+  async function sendComment(){ const t=cmInput.value.trim(); if(!t&&!cmAtt) return; const btn=modal.querySelector('#cmSend'); btn.disabled=true; const d=await api('POST','/'+id+'/comments',{text:t,attachment:cmAtt}); btn.disabled=false; if(d&&d.ok){ cmInput.value=''; cmAtt=null; renderAtt(); const cur=await api('GET','/'+id+'/comments'); if(cur&&cur.ok) renderComments(cur.comments); c.comments=(c.comments||0)+1; render(); } else if(d&&d.error){ alert(d.error); } }
+  modal.querySelector('#cmSend').addEventListener('click',sendComment);
+  cmInput.addEventListener('keydown',e=>{ if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){ e.preventDefault(); sendComment(); } });
   // archive / delete
   modal.querySelector('#btnArchive').addEventListener('click',()=>{ cards=cards.filter(x=>x.id!==id); render(); api('PATCH','/'+id,{archived:true}); close(); });
   modal.querySelector('#btnDelete').addEventListener('click',()=>{ if(!confirm('Удалить задачу?'))return; cards=cards.filter(x=>x.id!==id); render(); api('DELETE','/'+id); close(); });

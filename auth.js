@@ -406,6 +406,28 @@ async function initDB() {
     -- Повтор задачи: none|daily|weekdays|weekly|monthly. При завершении (→ done)
     -- автоматически создаётся следующая карточка со сдвинутым сроком.
     ALTER TABLE ticketsmodule_board_cards ADD COLUMN IF NOT EXISTS recur VARCHAR(10);
+    -- Напоминание в конкретное время (remind_at) + отметка об отправке (reminded_at).
+    ALTER TABLE ticketsmodule_board_cards ADD COLUMN IF NOT EXISTS remind_at TIMESTAMPTZ;
+    ALTER TABLE ticketsmodule_board_cards ADD COLUMN IF NOT EXISTS reminded_at TIMESTAMPTZ;
+    -- Кто поручил карточку (если это делегированная задача) — user_id автора поручения.
+    ALTER TABLE ticketsmodule_board_cards ADD COLUMN IF NOT EXISTS assigned_by INTEGER;
+    CREATE INDEX IF NOT EXISTS idx_board_remind ON ticketsmodule_board_cards(remind_at)
+      WHERE remind_at IS NOT NULL AND reminded_at IS NULL AND archived = FALSE;
+
+    -- Комментарии и вложения к карточке доски. Вложение (скрин/файл) — base64 data URL,
+    -- как в обратной связи. Комментарий может быть только текстом, только файлом или и тем и другим.
+    CREATE TABLE IF NOT EXISTS ticketsmodule_board_comments (
+      id              SERIAL PRIMARY KEY,
+      card_id         INTEGER NOT NULL,
+      user_id         INTEGER NOT NULL,
+      display_name    VARCHAR(200),
+      text            TEXT,
+      attachment_data TEXT,
+      attachment_name VARCHAR(255),
+      attachment_type VARCHAR(100),
+      created_at      TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_board_comments_card ON ticketsmodule_board_comments(card_id, created_at);
 
     -- ── Фаза 2 Статистики: история стадий сделок ───────────────────────────
     -- Каждая запись = момент входа сделки в стадию (из crm.stagehistory.list).
