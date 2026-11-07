@@ -403,6 +403,9 @@ async function initDB() {
     );
     CREATE INDEX IF NOT EXISTS idx_board_user ON ticketsmodule_board_cards(user_id, archived, column_key, position);
     CREATE INDEX IF NOT EXISTS idx_board_due ON ticketsmodule_board_cards(user_id, due_date) WHERE archived = FALSE;
+    -- Повтор задачи: none|daily|weekdays|weekly|monthly. При завершении (→ done)
+    -- автоматически создаётся следующая карточка со сдвинутым сроком.
+    ALTER TABLE ticketsmodule_board_cards ADD COLUMN IF NOT EXISTS recur VARCHAR(10);
 
     -- ── Фаза 2 Статистики: история стадий сделок ───────────────────────────
     -- Каждая запись = момент входа сделки в стадию (из crm.stagehistory.list).

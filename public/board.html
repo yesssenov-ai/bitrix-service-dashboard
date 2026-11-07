@@ -23,7 +23,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-ui);min
 .col-h{display:flex;align-items:center;gap:8px;padding:4px 6px 10px}
 .col-h b{font-size:13.5px;font-weight:800}
 .col-h .cnt{font-size:11.5px;color:var(--text-3);background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:1px 8px;font-weight:700}
-.col-cards{display:flex;flex-direction:column;gap:8px;overflow-y:auto;padding:2px;min-height:12px;flex:1}
+.col-cards{display:flex;flex-direction:column;gap:8px;overflow-y:auto;padding:2px;min-height:48px;flex:1}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:10px 11px;cursor:pointer;position:relative;box-shadow:0 1px 2px rgba(20,25,35,.05);transition:border-color .12s}
 .card:hover{border-color:var(--line-2)}
 .card.lbl{border-left-width:3px}
@@ -91,6 +91,7 @@ const LABEL_COLORS = {gray:'#9aa3b3',red:'#C53B2F',amber:'#b26c12',green:'#1a7f5
 const PRIO_COLOR = {1:'#9aa3b3',2:'#b26c12',3:'#C53B2F'};
 const PRIO_NAME = {0:'—',1:'низкий',2:'средний',3:'высокий'};
 const REF_NAME = {deal:'сделка',ticket:'заявка',task:'задача',company:'компания'};
+const RECUR_OPTS = [{k:'none',n:'Нет'},{k:'daily',n:'Ежедн.'},{k:'weekdays',n:'Будни'},{k:'weekly',n:'Еженед.'},{k:'monthly',n:'Ежемес.'}];
 const esc = s => String(s==null?'':s).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
 let cards = [];
 const byId = id => cards.find(c=>c.id===id);
@@ -121,6 +122,7 @@ function cardHTML(c){
       ${c.priority?`<span class="prio" style="background:${PRIO_COLOR[c.priority]}" title="приоритет ${PRIO_NAME[c.priority]}"></span>`:''}
       ${dueBadge(c.due)}
       ${prog?`<span class="chk">☑ ${doneN}/${prog}</span>`:''}
+      ${c.recur?`<span class="chk" title="повторяется">🔁</span>`:''}
       ${c.refUrl?`<a class="reflink" href="${c.refUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗ ${REF_NAME[c.refType]||'ссылка'}</a>`:''}
     </div>
   </div>`;
@@ -178,7 +180,8 @@ function onPointerMove(e){
   dragMoved=true;
   clone.style.left=(e.clientX-clone._dx)+'px'; clone.style.top=(e.clientY-clone._dy)+'px';
   const under = document.elementFromPoint(e.clientX, e.clientY);
-  const colCards = under && under.closest('.col-cards');
+  const colEl = under && under.closest('.col');
+  const colCards = under && (under.closest('.col-cards') || (colEl && colEl.querySelector('.col-cards')));
   if(colCards){
     const cardsEls=[...colCards.querySelectorAll('.card')].filter(x=>x!==dragEl);
     let before=null;
@@ -215,7 +218,8 @@ async function onPointerUp(e){
   const movedCol = colKey && colKey!==card.column, movedPos = pos!==card.position;
   if(card && colKey && (movedCol||movedPos)){
     card.column=colKey; card.position=pos; render();
-    await api('PATCH','/'+dragId,{column:colKey, position:pos});
+    const d = await api('PATCH','/'+dragId,{column:colKey, position:pos});
+    if(d&&d.spawned){ cards.push(d.spawned); render(); }
   }
   dragEl=null; dragId=null; clone=null; ph=null;
 }
@@ -242,6 +246,10 @@ function openCard(id){
         <div class="seg" id="segPrio">${[0,1,2,3].map(p=>`<button data-p="${p}" class="${c.priority===p?'on':''}">${p===0?'—':PRIO_NAME[p]}</button>`).join('')}</div>
       </div>
       <div class="fieldrow">
+        <span class="lbl-t">Повтор</span>
+        <div class="seg" id="segRecur">${RECUR_OPTS.map(x=>`<button data-r="${x.k}" class="${(c.recur||'none')===x.k?'on':''}">${x.n}</button>`).join('')}</div>
+      </div>
+      <div class="fieldrow">
         <span class="lbl-t">Метка</span>
         <div class="swatch" data-l="" style="background:var(--surface-2);border:1px solid var(--line-2)${!c.label?';border-color:var(--text)':''}" title="без метки"></div>
         ${Object.keys(LABEL_COLORS).map(l=>`<div class="swatch ${c.label===l?'on':''}" data-l="${l}" style="background:${LABEL_COLORS[l]}"></div>`).join('')}
@@ -264,7 +272,7 @@ function openCard(id){
   ov.addEventListener('mousedown',e=>{ if(e.target===ov) close(); });
   modal.querySelector('.x').addEventListener('click',close);
 
-  const save = patch => { Object.assign(c, patch); render(); api('PATCH','/'+id, patch); };
+  const save = async patch => { Object.assign(c, patch); render(); const d = await api('PATCH','/'+id, patch); if(d&&d.spawned){ cards.push(d.spawned); render(); } };
   // title
   const ta=modal.querySelector('.title');
   const fit=()=>{ ta.style.height='auto'; ta.style.height=ta.scrollHeight+'px'; }; fit();
@@ -276,6 +284,9 @@ function openCard(id){
   // priority
   modal.querySelector('#segPrio').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return;
     modal.querySelectorAll('#segPrio button').forEach(x=>x.classList.toggle('on',x===b)); save({priority:Number(b.getAttribute('data-p'))}); });
+  // recur
+  modal.querySelector('#segRecur').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return;
+    modal.querySelectorAll('#segRecur button').forEach(x=>x.classList.toggle('on',x===b)); save({recur:b.getAttribute('data-r')}); });
   // due
   modal.querySelector('#fDue').addEventListener('change',e=>save({due:e.target.value||null}));
   // label

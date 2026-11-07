@@ -155,6 +155,8 @@
     if (!listBox) return;
     var sur2 = cssVar('--surface-2', '#f1f3f6'), sub = cssVar('--text-3', '#6a7488'), accent = cssVar('--accent', '#C53B2F'), line = cssVar('--line', '#e7eaf0');
     items = localItems.concat(remoteItems);
+    var q = input ? input.value.trim() : '';
+    if (q) items = items.concat([{ group: 'Создать', icon: '➕', label: 'Новая задача: ' + q, create: true, taskTitle: q }]);
     if (sel >= items.length) sel = Math.max(0, items.length - 1);
     if (!items.length) {
       listBox.innerHTML = '<div style="padding:22px 14px;text-align:center;color:' + sub + ';font-size:14px">' +
@@ -206,9 +208,19 @@
     if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
   }
   function openSel() {
-    var it = items[sel]; if (!it || !it.href) return;
+    var it = items[sel]; if (!it) return;
+    if (it.create) { createTask(it.taskTitle); return; }
+    if (!it.href) return;
     if (it.external) { window.open(it.href, '_blank', 'noopener'); closeOverlay(); }
     else { closeOverlay(); window.location.href = it.href; }
+  }
+  function createTask(title) {
+    fetch('/api/board', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title, column: 'todo' }) })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.ok && listBox) { listBox.innerHTML = '<div style="padding:22px 14px;text-align:center;color:' + cssVar('--good', '#1a7f54') + ';font-size:14px">✓ Добавлено в «Мои задачи»</div>'; setTimeout(closeOverlay, 750); }
+        else if (listBox) { listBox.innerHTML = '<div style="padding:22px 14px;text-align:center;color:' + cssVar('--text-3', '#6a7488') + ';font-size:14px">Не удалось создать</div>'; }
+      }).catch(function () {});
   }
   function onKey(e) {
     if (e.key === 'ArrowDown') { e.preventDefault(); if (items.length) { sel = (sel + 1) % items.length; paint(); } }
