@@ -31,6 +31,9 @@ function notConfigured() {
   e.code = 'STORAGE_NOT_CONFIGURED';
   return e;
 }
+// Кодируем КАЖДЫЙ сегмент пути, сохраняя «/» как разделитель (Storage требует
+// корректный путь; сам ключ уже ASCII, но на всякий случай кодируем сегменты).
+function encKey(k) { return String(k).split('/').map(encodeURIComponent).join('/'); }
 
 // Создать приватный бакет, если его ещё нет (идемпотентно).
 let _bucketReady = null;
@@ -57,7 +60,7 @@ async function ensureBucket() {
 async function upload(objectKey, buffer, mime) {
   if (!configured()) throw notConfigured();
   await ensureBucket();
-  const r = await fetchFn(`${baseUrl()}/storage/v1/object/${BUCKET}/${encodeURI(objectKey)}`, {
+  const r = await fetchFn(`${baseUrl()}/storage/v1/object/${BUCKET}/${encKey(objectKey)}`, {
     method: 'POST',
     headers: headers({ 'Content-Type': mime || 'application/octet-stream', 'x-upsert': 'true' }),
     body: buffer,
@@ -69,7 +72,7 @@ async function upload(objectKey, buffer, mime) {
 // Короткоживущая подписанная ссылка на скачивание (по умолчанию 5 минут).
 async function signedUrl(objectKey, expiresIn = 300) {
   if (!configured()) throw notConfigured();
-  const r = await fetchFn(`${baseUrl()}/storage/v1/object/sign/${BUCKET}/${encodeURI(objectKey)}`, {
+  const r = await fetchFn(`${baseUrl()}/storage/v1/object/sign/${BUCKET}/${encKey(objectKey)}`, {
     method: 'POST',
     headers: headers({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ expiresIn }),
@@ -84,7 +87,7 @@ async function signedUrl(objectKey, expiresIn = 300) {
 async function remove(objectKey) {
   if (!configured()) return { ok: false };
   try {
-    const r = await fetchFn(`${baseUrl()}/storage/v1/object/${BUCKET}/${encodeURI(objectKey)}`, {
+    const r = await fetchFn(`${baseUrl()}/storage/v1/object/${BUCKET}/${encKey(objectKey)}`, {
       method: 'DELETE', headers: headers(),
     });
     return { ok: r.ok };

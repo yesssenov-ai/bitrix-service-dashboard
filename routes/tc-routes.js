@@ -359,22 +359,28 @@ router.post('/:entity/:id(\\d+)/files', requireAuth(WRITE), upload.single('file'
     if (!ENTITIES.includes(req.params.entity)) return res.status(404).json({ ok: false, error: 'Неизвестный раздел' });
     if (!storage.configured()) return res.status(503).json({ ok: false, error: 'Хранилище файлов не настроено (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)' });
     if (!req.file) return res.status(400).json({ ok: false, error: 'Файл не передан' });
-    const safe = (req.file.originalname || 'file').replace(/[^\w.\-а-яёА-ЯЁ ]+/g, '_').slice(0, 120);
-    const objectKey = `${req.params.entity}/${req.params.id}/${Date.now()}_${safe}`;
+    // Имя в хранилище — строго ASCII (кириллица/пробелы в ключе ломают Storage,
+    // PGRST125). Оригинальное имя сохраняем в filename — для показа и скачивания.
+    const orig = (req.file.originalname || 'file').slice(0, 200);
+    const ext = ((orig.match(/\.[A-Za-z0-9]{1,8}$/) || [''])[0] || '').toLowerCase();
+    const rand = Math.random().toString(16).slice(2, 8);
+    const objectKey = `${req.params.entity}/${req.params.id}/${Date.now()}-${rand}${ext}`;
     await storage.upload(objectKey, req.file.buffer, req.file.mimetype);
     const by = String(req.user.display_name || req.user.username || '').slice(0, 100);
     const { rows } = await pool.query(
       `INSERT INTO ticketsmodule_tc_files (entity_type, entity_id, object_key, filename, mime, size_bytes, uploaded_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, filename, mime, size_bytes, uploaded_by, created_at`,
-      [req.params.entity, req.params.id, objectKey, safe, req.file.mimetype || '', req.file.size || 0, by]);
+      [req.params.entity, req.params.id, objectKey, orig, req.file.mimetype || '', req.file.size || 0, by]);
     res.json({ ok: true, item: rows[0] });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 router.get('/files/:fid(\\d+)/download', requireAnyModuleApi(TC_CODES), async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT object_key FROM ticketsmodule_tc_files WHERE id=$1', [req.params.fid]);
+    const { rows } = await pool.query('SELECT object_key, filename FROM ticketsmodule_tc_files WHERE id=$1', [req.params.fid]);
     if (!rows.length) return res.status(404).send('Файл не найден');
-    res.redirect(await storage.signedUrl(rows[0].object_key, 300));
+    let url = await storage.signedUrl(rows[0].object_key, 300);
+    url += (url.includes('?') ? '&' : '?') + 'download=' + encodeURIComponent(rows[0].filename || 'file');
+    res.redirect(url);
   } catch (e) { res.status(500).send('Ошибка: ' + e.message); }
 });
 router.delete('/files/:fid(\\d+)', requireAuth(WRITE), async (req, res) => {
