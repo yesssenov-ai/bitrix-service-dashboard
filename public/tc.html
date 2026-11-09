@@ -28,6 +28,18 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-ui);min
 .stat .n{font-size:26px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
 .stat .l{font-size:12px;color:var(--text-3);margin-top:3px;font-weight:600}
 .stat .n.accent{color:var(--accent)}
+/* аналитика */
+.an-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.panel .ph{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:12px}
+.panel .ph .pt{font-size:13.5px;font-weight:800;letter-spacing:-.01em}
+.panel .ph .pn{font-size:12px;color:var(--text-3);font-weight:700}
+.bar-row{display:flex;align-items:center;gap:10px;margin:8px 0;font-size:12.5px}
+.bar-row .bl{width:42%;color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-row .bt{flex:1;background:var(--surface-2);border-radius:6px;height:9px;overflow:hidden}
+.bar-row .bf{height:100%;border-radius:6px;background:var(--accent);min-width:2px}
+.bar-row .bv{width:46px;text-align:right;font-weight:800;color:var(--text)}
+.an-empty{color:var(--text-3);font-size:12.5px;padding:6px 2px}
 .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
 .search{flex:1;min-width:200px;position:relative}
 .search input{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:10px;color:var(--text);font:inherit;font-size:13.5px;padding:9px 12px 9px 34px;outline:none}
@@ -106,7 +118,7 @@ textarea.in{resize:vertical;min-height:54px}
     <button class="sec" data-sec="equipment">Приборы</button>
     <button class="sec" data-sec="stock">Склад</button>
     <button class="sec" data-sec="qms">СМК</button>
-    <button class="sec" data-sec="analytics">Аналитика <span class="soon">скоро</span></button>
+    <button class="sec" data-sec="analytics">Аналитика</button>
   </div>
 
   <div id="view-training">
@@ -202,6 +214,11 @@ textarea.in{resize:vertical;min-height:54px}
     <div class="grid" id="qGrid"></div>
   </div>
 
+  <div id="view-analytics" hidden>
+    <div class="stats" id="anTiles"></div>
+    <div class="an-grid" id="anBody"></div>
+  </div>
+
   <div id="view-soon" hidden></div>
 </div>
 
@@ -265,7 +282,7 @@ function renderGrid(){
   const g=document.getElementById('grid');
   g.innerHTML = list.length?list.map(card).join(''):'<div class="empty">Ничего не найдено</div>';
 }
-function hideViews(){ ['view-training','view-works','view-equipment','view-stock','view-qms','view-soon'].forEach(id=>{const el=document.getElementById(id); if(el) el.hidden=true;}); }
+function hideViews(){ ['view-training','view-works','view-equipment','view-stock','view-qms','view-analytics','view-soon'].forEach(id=>{const el=document.getElementById(id); if(el) el.hidden=true;}); }
 function showSoon(key){
   hideViews();
   const v=document.getElementById('view-soon'); v.hidden=false;
@@ -277,6 +294,19 @@ function showWorks(){ hideViews(); document.getElementById('view-works').hidden=
 function showEquipment(){ hideViews(); document.getElementById('view-equipment').hidden=false; if(!eqLoaded) loadEquip(); }
 function showStock(){ hideViews(); document.getElementById('view-stock').hidden=false; if(!stLoaded) loadStock(); }
 function showQms(){ hideViews(); document.getElementById('view-qms').hidden=false; if(!qLoaded) loadQms(); }
+async function showAnalytics(){
+  hideViews(); document.getElementById('view-analytics').hidden=false;
+  if(anLoaded){ return; }
+  document.getElementById('anBody').innerHTML='<div class="empty">Загрузка сводки…</div>';
+  await Promise.all([
+    TR.length?Promise.resolve():load(),
+    wkLoaded?Promise.resolve():loadWorks(),
+    eqLoaded?Promise.resolve():loadEquip(),
+    stLoaded?Promise.resolve():loadStock(),
+    qLoaded?Promise.resolve():loadQms()
+  ]);
+  anLoaded=true; renderAnalytics();
+}
 
 function partRow(p,i){
   const sub=[p.org,p.pos].filter(Boolean).map(esc).join(' · ');
@@ -362,7 +392,7 @@ async function del(id, ov){
 document.getElementById('secs').addEventListener('click',e=>{
   const b=e.target.closest('.sec'); if(!b)return;
   document.querySelectorAll('.sec').forEach(x=>x.classList.toggle('on',x===b));
-  const sec=b.dataset.sec; if(sec==='training') showTraining(); else if(sec==='works') showWorks(); else if(sec==='equipment') showEquipment(); else if(sec==='stock') showStock(); else if(sec==='qms') showQms(); else showSoon(sec);
+  const sec=b.dataset.sec; if(sec==='training') showTraining(); else if(sec==='works') showWorks(); else if(sec==='equipment') showEquipment(); else if(sec==='stock') showStock(); else if(sec==='qms') showQms(); else if(sec==='analytics') showAnalytics(); else showSoon(sec);
 });
 document.getElementById('fchips').addEventListener('click',e=>{
   const b=e.target.closest('.fchip'); if(!b)return;
@@ -851,6 +881,58 @@ document.getElementById('qGrid').addEventListener('click',e=>{
   const c=e.target.closest('.cc'); if(!c)return;
   const it=QMS.find(x=>String(x.id)===c.dataset.id); if(it) openQmsModal(it);
 });
+
+/* ───────── Аналитика ───────── */
+let anLoaded=false;
+function anBars(rows){
+  const max=Math.max(1,...rows.map(r=>+r.value||0));
+  const html=rows.map(r=>`<div class="bar-row"><span class="bl">${esc(r.label)}</span><span class="bt"><span class="bf" style="width:${Math.round((+r.value||0)/max*100)}%${r.color?`;background:${r.color}`:''}"></span></span><span class="bv">${+r.value||0}</span></div>`).join('');
+  return html||'<div class="an-empty">нет данных</div>';
+}
+function anPanel(title, sub, inner){ return `<div class="panel"><div class="ph"><span class="pt">${esc(title)}</span>${sub?`<span class="pn">${esc(sub)}</span>`:''}</div>${inner}</div>`; }
+function anCountBy(arr, fn){ const m={}; arr.forEach(x=>{const k=fn(x); if(k==null||k==='')return; m[k]=(m[k]||0)+1;}); return m; }
+function renderAnalytics(){
+  const parts=TR.reduce((a,x)=>a+((x.participants||[]).length||0),0);
+  const hours=TR.filter(x=>x.status==='held').reduce((a,x)=>a+(+x.hours||0),0);
+  const samples=WK.reduce((a,w)=>a+(+w.samples||0),0);
+  const lowStock=STK.filter(x=>(+x.qty)<=0).length;
+  document.getElementById('anTiles').innerHTML=[
+    ['n',TR.length,'Курсов'],['n',parts,'Участников'],['n',hours,'Часов'],['n',WK.length,'Работ'],
+    ['n',samples,'Проб'],['n',EQ.length,'Приборов'],['n',STK.length,'Позиций склада'],['n accent',lowStock,'Заканчивается']
+  ].map(([c,n,l])=>`<div class="stat"><div class="${c}">${n}</div><div class="l">${l}</div></div>`).join('');
+  const P=[];
+  P.push(anPanel('Курсы по статусу','всего '+TR.length, anBars([
+    {label:'Проведён',value:TR.filter(x=>x.status==='held').length,color:'#1a7f54'},
+    {label:'Запланирован',value:TR.filter(x=>x.status==='plan').length,color:'#2763d6'},
+    {label:'Заявка',value:TR.filter(x=>x.status==='lead').length,color:'#9aa3b3'}
+  ])));
+  const wt=anCountBy(WK,w=>w.wtype);
+  P.push(anPanel('Работы по видам','всего '+WK.length, anBars(
+    [['demo','Демо'],['paid','Платная'],['train','Обучение'],['rnd','НИОКР'],['acc','17025']].map(([k,l])=>({label:l,value:wt[k]||0}))
+  )));
+  const wdone=WK.filter(w=>stageInfo(w).done).length;
+  P.push(anPanel('Работы: исполнение','', anBars([
+    {label:'В работе',value:WK.length-wdone,color:'#2763d6'},
+    {label:'Завершено',value:wdone,color:'#1a7f54'}
+  ])));
+  const ed=anCountBy(EQ,e=>e.dir);
+  P.push(anPanel('Приборы по направлениям','всего '+EQ.length, anBars(
+    Object.entries(ed).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({label:(DIRMAP[k]&&DIRMAP[k].t)||k,value:v}))
+  )));
+  const sc=anCountBy(STK,x=>x.cat);
+  P.push(anPanel('Склад по категориям','топ-6', anBars(
+    Object.entries(sc).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([k,v])=>({label:(CATLABEL[k]||k),value:v}))
+  )));
+  P.push(anPanel('Склад: наличие','', anBars([
+    {label:'В наличии',value:STK.filter(x=>(+x.qty)>0).length,color:'#1a7f54'},
+    {label:'Заканчивается',value:lowStock,color:'#C53B2F'}
+  ])));
+  const qk=anCountBy(QMS,x=>x.kind);
+  P.push(anPanel('СМК по видам','всего '+QMS.length, anBars(
+    [['proc','Процедуры'],['rk','Руководства'],['form','Формы'],['reg','Реестры'],['other','Прочее']].map(([k,l])=>({label:l,value:qk[k]||0})).filter(r=>r.value>0)
+  )));
+  document.getElementById('anBody').innerHTML=P.join('');
+}
 
 load();
 </script>
