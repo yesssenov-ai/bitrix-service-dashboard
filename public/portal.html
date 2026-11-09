@@ -312,7 +312,12 @@ const MODULES = [
   { code:'OPS', name:'Реализация', desc:'Операционный контроль сделок после подписания: воронка исполнения, смарт-процессы, задачи и сроки.', href:'/operational.html', roles:['admin','coordinator'] },
   { code:'PROC', name:'Закупки', desc:'Дашборд менеджера склада: заявки на закупки, синхронизация со смарт-процессом «Закупки» в Bitrix, привязка к сделке, множественные документы, согласование оплат и приёмка товара.', href:'/procurement.html', roles:['admin','coordinator'] },
   { code:'CAM', name:'Рассылки', desc:'Массовые письма клиентам: выбор компаний по сфере деятельности из Bitrix, выбор адресов галочками, шаблон письма, отправка через Resend с отпиской и стоп-листом.', href:'/campaigns.html', roles:['admin','coordinator','manager'] },
-  { code:'TC', name:'Тренинг-центр', desc:'Лаборатория и обучение ProLabTraining: курсы, участники и сертификаты. Журнал исследований, приборы, склад и записи СМК по ISO/IEC 17025 — следующими шагами.', href:'/tc.html', roles:['admin','coordinator','manager','engineer'] },
+  { code:'TC', name:'Курсы ТЦ', desc:'Тренинг-центр: обучающие курсы — даты, участники, сертификаты, расчёт стоимости.', href:'/tc.html#training', roles:['admin','coordinator','manager','engineer'] },
+  { code:'TC_WK', name:'Исследования', desc:'Журнал исследовательских работ лаборатории: этапы, пробы, методы, оплаты.', href:'/tc.html#works', roles:['admin','coordinator','manager','engineer'] },
+  { code:'TC_EQ', name:'Приборы лаборатории', desc:'Реестр приборов ТЦ: модели, поверка/ТО, комплектующие, методы и направления.', href:'/tc.html#equipment', roles:['admin','coordinator','manager','engineer'] },
+  { code:'TC_ST', name:'Склад лаборатории', desc:'Реактивы, стандартные образцы, посуда и расходники: остатки, категории, что заканчивается.', href:'/tc.html#stock', roles:['admin','coordinator','manager','engineer'] },
+  { code:'TC_QM', name:'СМК (ISO 17025)', desc:'Документы системы менеджмента качества по ISO/IEC 17025: процедуры, руководства, формы.', href:'/tc.html#qms', roles:['admin','coordinator','manager','engineer'] },
+  { code:'TC_AN', name:'Аналитика ТЦ', desc:'Сводка по всем разделам Тренинг-центра: обучение, работы, приборы, склад, СМК.', href:'/tc.html#analytics', roles:['admin','coordinator','manager','engineer'] },
   { code:'ADM', name:'Управление', desc:'Пользователи, роли доступа и журнал действий в системе.', href:'/admin.html', roles:['admin'] },
 ];
 const ACCOUNT_CARD = { code:'КАБ', name:'Мой кабинет', href:'/account.html' };
@@ -323,7 +328,7 @@ const CAT_OF = {
   OPS:'supply', PROC:'supply', LOG:'supply', STOCK:'supply', NKT:'supply',
   DEBT:'finance', ADV:'finance', CASHFLOW:'finance', CONTR:'finance', QUALITY:'finance',
   STATS:'analytics', MAIL:'analytics', CAM:'analytics',
-  TC:'lab',
+  TC:'lab', TC_WK:'lab', TC_EQ:'lab', TC_ST:'lab', TC_QM:'lab', TC_AN:'lab',
   ADM:'system',
 };
 const ICON = {

@@ -3,8 +3,9 @@
 // (requireModuleApi); запись — admin/coordinator, удаление — admin.
 const express = require('express');
 const router = express.Router();
-const { pool, requireAuth, requireModuleApi, isAdminLike } = require('../auth');
+const { pool, requireAuth, requireAnyModuleApi, isAdminLike } = require('../auth');
 
+const TC_CODES = ['TC', 'TC_WK', 'TC_EQ', 'TC_ST', 'TC_QM', 'TC_AN'];
 const WRITE = ['admin', 'coordinator'];
 const STATUSES = ['held', 'plan', 'lead'];
 const WTYPES = ['demo', 'paid', 'train', 'rnd', 'acc'];
@@ -100,7 +101,7 @@ function normTr(b) {
     participants: Array.isArray(b.participants) ? b.participants : [], issued: !!b.issued, note: str(b.note, 4000),
   };
 }
-router.get('/trainings', requireModuleApi('TC'), async (req, res) => {
+router.get('/trainings', requireAnyModuleApi(TC_CODES), async (req, res) => {
   try {
     await ensureSeed();
     const { rows } = await pool.query('SELECT * FROM ticketsmodule_tc_trainings ORDER BY id DESC');
@@ -151,7 +152,7 @@ function normWk(b) {
     due: str(b.due, 40), notes: str(b.notes, 4000),
   };
 }
-router.get('/works', requireModuleApi('TC'), async (req, res) => {
+router.get('/works', requireAnyModuleApi(TC_CODES), async (req, res) => {
   try {
     await ensureSeed();
     const { rows } = await pool.query('SELECT * FROM ticketsmodule_tc_works ORDER BY id DESC');
@@ -203,7 +204,7 @@ function normEq(b) {
     comps_count: int(b.comps_count), resp: str(b.resp, 120), note: str(b.note, 4000),
   };
 }
-router.get('/equipment', requireModuleApi('TC'), async (req, res) => {
+router.get('/equipment', requireAnyModuleApi(TC_CODES), async (req, res) => {
   try {
     await ensureSeed();
     const { rows } = await pool.query('SELECT * FROM ticketsmodule_tc_equipment ORDER BY id DESC');
@@ -255,7 +256,7 @@ function normSt(b) {
     nom: str(b.nom, 120), note: str(b.note, 4000), off_book: !!b.off_book, expiry: str(b.expiry, 40),
   };
 }
-router.get('/stock', requireModuleApi('TC'), async (req, res) => {
+router.get('/stock', requireAnyModuleApi(TC_CODES), async (req, res) => {
   try {
     await ensureSeed();
     const { rows } = await pool.query('SELECT * FROM ticketsmodule_tc_stock ORDER BY id DESC');
@@ -303,7 +304,7 @@ function normQ(b) {
     files_count: int(b.files_count), note: str(b.note, 4000),
   };
 }
-router.get('/qms', requireModuleApi('TC'), async (req, res) => {
+router.get('/qms', requireAnyModuleApi(TC_CODES), async (req, res) => {
   try {
     await ensureSeed();
     const { rows } = await pool.query('SELECT * FROM ticketsmodule_tc_qms ORDER BY id DESC');

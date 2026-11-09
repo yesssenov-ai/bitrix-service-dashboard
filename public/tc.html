@@ -393,6 +393,7 @@ document.getElementById('secs').addEventListener('click',e=>{
   const b=e.target.closest('.sec'); if(!b)return;
   document.querySelectorAll('.sec').forEach(x=>x.classList.toggle('on',x===b));
   const sec=b.dataset.sec; if(sec==='training') showTraining(); else if(sec==='works') showWorks(); else if(sec==='equipment') showEquipment(); else if(sec==='stock') showStock(); else if(sec==='qms') showQms(); else if(sec==='analytics') showAnalytics(); else showSoon(sec);
+  try{ history.replaceState(null,'','#'+sec); }catch(_){}
 });
 document.getElementById('fchips').addEventListener('click',e=>{
   const b=e.target.closest('.fchip'); if(!b)return;
@@ -935,6 +936,13 @@ function renderAnalytics(){
 }
 
 load();
+
+// Открыть раздел из якоря ссылки (плитки портала ведут на /tc.html#<раздел>).
+(function initFromHash(){
+  const valid=['training','works','equipment','stock','qms','analytics'];
+  const h=(location.hash||'').replace('#','').toLowerCase();
+  if(valid.includes(h) && h!=='training'){ const btn=document.querySelector(`.sec[data-sec="${h}"]`); if(btn) btn.click(); }
+})();
 </script>
 </body>
 </html>

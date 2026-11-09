@@ -10,7 +10,9 @@ for (const key of REQUIRED) {
   if (!process.env[key]) { console.error(`❌ Missing env: ${key}`); process.exit(1); }
 }
 const { b24, flattenInto } = require('./bitrix');
-const { initDB, requireAuth, requirePageAuth, requireModule, requireKpPage, auditLog, canEdit, canDelete, pool } = require('./auth');
+const { initDB, requireAuth, requirePageAuth, requireModule, requireAnyModule, requireKpPage, auditLog, canEdit, canDelete, pool } = require('./auth');
+// Коды плиток Тренинг-центра (6 отдельных модулей, одна страница /tc.html).
+const TC_CODES = ['TC', 'TC_WK', 'TC_EQ', 'TC_ST', 'TC_QM', 'TC_AN'];
 const { tgMgt, tgOps, tgBoth, notifyNewTicket, notifyOverdueNew } = require('./notifications');
 const telegramLinkBot = require('./telegram-link-bot');
 const equipmentRoutes = require('./routes/equipment-routes');
@@ -156,7 +158,7 @@ app.get('/login.html', (_, res) => res.sendFile(path.join(__dirname, 'public', '
 app.get('/', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'portal.html')));
 app.get('/portal.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'portal.html')));
 app.get('/board.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'board.html')));
-app.get('/tc.html', requireModule('TC'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'tc.html')));
+app.get('/tc.html', requireAnyModule(TC_CODES), (_, res) => res.sendFile(path.join(__dirname, 'public', 'tc.html')));
 // Доступ к модулям — ПО ВЫДАННЫМ ГРАНТАМ (requireModule), а не по роли: кому
 // выдан модуль, тот может его открыть (в т.ч. viewer — в режиме просмотра).
 // admin видит всё. Роль дальше определяет право правки/удаления внутри модуля.

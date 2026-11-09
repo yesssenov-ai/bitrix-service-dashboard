@@ -1015,6 +1015,35 @@ function requireModuleApi(moduleCode) {
   }];
 }
 
+// Как requireModule, но пускает, если выдан ЛЮБОЙ из codes (или admin). Для
+// модуля из нескольких плиток-кодов (напр. Тренинг-центр: TC/TC_WK/TC_EQ/…).
+function requireAnyModule(moduleCodes) {
+  return async (req, res, next) => {
+    try {
+      const token = req.cookies?.token;
+      if (!token || tokenBlacklist.has(token)) return res.redirect('/login.html');
+      const payload = jwt.verify(token, JWT_SECRET);
+      if (payload.step) return res.redirect('/login.html');
+      const result = await pool.query('SELECT * FROM ticketsmodule_users WHERE id=$1 AND active=true', [payload.userId]);
+      if (!result.rows.length) return res.redirect('/login.html');
+      const user = result.rows[0];
+      if (isKicked(user, payload)) return res.redirect('/login.html');
+      req.user = user; req.token = token;
+      const codes = await userModuleCodes(user);
+      if (codes === null || moduleCodes.some(c => codes.has(c))) return next();
+      return res.redirect('/');
+    } catch (e) { return res.redirect('/login.html'); }
+  };
+}
+// API-вариант: 403, если не выдан ни один из codes.
+function requireAnyModuleApi(moduleCodes) {
+  return [requireAuth(), async (req, res, next) => {
+    const codes = await userModuleCodes(req.user);
+    if (codes === null || moduleCodes.some(c => codes.has(c))) return next();
+    return res.status(403).json({ ok: false, error: 'Нет доступа к модулю' });
+  }];
+}
+
 // Доступ к странице КП: как requireModule('KP'), но дополнительно пускает
 // назначенного эксперта МЛК (есть строка в kp_request_categories), даже если
 // грант KP ему не выдан — «кого назначили исполнителем, тем и доступ».
@@ -1046,7 +1075,7 @@ async function initEquipmentMapDB() {} // no-op, table created in initDB above
 
 module.exports = {
   pool, initDB, initEquipmentMapDB, auditLog, requireAuth, requirePageAuth, canEdit,
-  canDelete, userModuleCodes, requireModule, requireModuleApi, requireKpPage, isAdminLike,
+  canDelete, userModuleCodes, requireModule, requireModuleApi, requireAnyModule, requireAnyModuleApi, requireKpPage, isAdminLike,
   checkLoginRateLimit, recordLoginAttempt, clearLoginAttempts, tokenBlacklist, kickUser,
   bcrypt, jwt, speakeasy, JWT_SECRET, SESSION_HOURS, VALID_ROLES,
 };
