@@ -11,14 +11,18 @@ const BUCKET = process.env.TC_BUCKET || 'tc-files';
 // Адрес проекта Supabase: из SUPABASE_URL, иначе пытаемся вывести из DATABASE_URL
 // (postgres.<ref>:... у пулера или db.<ref>.supabase.co у прямого подключения).
 function baseUrl() {
-  let url = process.env.SUPABASE_URL || '';
+  let url = (process.env.SUPABASE_URL || '').trim();
   if (!url) {
     const db = process.env.DATABASE_URL || '';
     const m = /postgres(?:ql)?:\/\/postgres\.([a-z0-9]+):/i.exec(db)
           || /@db\.([a-z0-9]+)\.supabase\.co/i.exec(db);
     if (m && m[1]) url = `https://${m[1]}.supabase.co`;
   }
-  return url.replace(/\/+$/, '');
+  if (url && !/^https?:\/\//i.test(url)) url = 'https://' + url;
+  // Сворачиваем до origin: что бы ни было в переменной (хвост /rest/v1, /storage/v1,
+  // слэш, путь) — берём только протокол+хост, иначе запрос уходит в Data API (PGRST125).
+  const o = /^(https?:\/\/[^/]+)/i.exec(url);
+  return o ? o[1] : '';
 }
 function key() { return process.env.SUPABASE_SERVICE_ROLE_KEY || ''; }
 function configured() { return !!(baseUrl() && key()); }
@@ -40,6 +44,7 @@ let _bucketReady = null;
 async function ensureBucket() {
   if (!configured()) throw notConfigured();
   if (_bucketReady) return _bucketReady;
+  console.log('ТЦ storage base:', baseUrl(), '| bucket:', BUCKET);
   _bucketReady = (async () => {
     try {
       const r = await fetchFn(`${baseUrl()}/storage/v1/bucket`, {
