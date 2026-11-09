@@ -258,6 +258,26 @@ async function initDB() {
     );
     CREATE INDEX IF NOT EXISTS idx_tm_tc_stock_cat ON ticketsmodule_tc_stock(cat);
 
+    -- Тренинг-центр: СМК (раздел «СМК»): документы системы менеджмента качества
+    -- по ISO/IEC 17025 — процедуры, руководства, формы; версии и статусы.
+    CREATE TABLE IF NOT EXISTS ticketsmodule_tc_qms (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL DEFAULT '',
+      kind TEXT DEFAULT 'proc',
+      status TEXT DEFAULT 'draft',
+      clause TEXT DEFAULT '',
+      code TEXT DEFAULT '',
+      no TEXT DEFAULT '',
+      ver TEXT DEFAULT '',
+      reg TEXT DEFAULT 'doc',
+      files_count INTEGER DEFAULT 0,
+      note TEXT DEFAULT '',
+      created_by VARCHAR(100),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_tc_qms_kind ON ticketsmodule_tc_qms(kind);
+
     -- ── ProLab AI: банк примеров (самообучение агента на удачных запросах) ──────
     CREATE TABLE IF NOT EXISTS ticketsmodule_plsai_examples (
       id SERIAL PRIMARY KEY,
