@@ -156,6 +156,27 @@ async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_tm_notiflog_sent ON ticketsmodule_notification_log(sent_at DESC);
     CREATE INDEX IF NOT EXISTS idx_tm_notiflog_item ON ticketsmodule_notification_log(bitrix_item_id);
 
+    -- Тренинг-центр (модуль TC), Фаза 1 — Курсы. Перенос ProLabOne на стек ЦУП.
+    -- method/participants — JSONB; посев реальными данными в routes/tc-routes.js.
+    CREATE TABLE IF NOT EXISTS ticketsmodule_tc_trainings (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL DEFAULT '',
+      client TEXT DEFAULT '',
+      dates_text TEXT DEFAULT '',
+      hours INTEGER DEFAULT 0,
+      level TEXT DEFAULT '',
+      place TEXT DEFAULT '',
+      method JSONB DEFAULT '[]',
+      status TEXT DEFAULT 'plan',
+      participants JSONB DEFAULT '[]',
+      issued BOOLEAN DEFAULT false,
+      note TEXT DEFAULT '',
+      created_by VARCHAR(100),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_tc_tr_status ON ticketsmodule_tc_trainings(status);
+
     -- ── ProLab AI: банк примеров (самообучение агента на удачных запросах) ──────
     CREATE TABLE IF NOT EXISTS ticketsmodule_plsai_examples (
       id SERIAL PRIMARY KEY,

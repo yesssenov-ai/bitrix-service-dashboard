@@ -156,6 +156,7 @@ app.get('/login.html', (_, res) => res.sendFile(path.join(__dirname, 'public', '
 app.get('/', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'portal.html')));
 app.get('/portal.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'portal.html')));
 app.get('/board.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'board.html')));
+app.get('/tc.html', requireModule('TC'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'tc.html')));
 // Доступ к модулям — ПО ВЫДАННЫМ ГРАНТАМ (requireModule), а не по роли: кому
 // выдан модуль, тот может его открыть (в т.ч. viewer — в режиме просмотра).
 // admin видит всё. Роль дальше определяет право правки/удаления внутри модуля.
@@ -228,6 +229,7 @@ app.use('/api/finance', require('./routes/finance-routes').router);
 app.use('/api/companies', require('./routes/companies-routes').router);
 app.use('/api/notify', require('./routes/notify-routes').router);
 app.use('/api/monitoring', require('./routes/monitoring-routes').router);
+app.use('/api/tc', require('./routes/tc-routes').router);
 const { router: relationsRouter, handleBitrixWebhook } = require('./routes/relations-routes');
 app.use('/relations', relationsRouter);
 app.post('/webhook/bitrix-update', express.urlencoded({ extended: true }), handleBitrixWebhook);
