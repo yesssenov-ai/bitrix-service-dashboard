@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f6f7f9">
+<title>Тренинг-центр — ЦУП</title>
+<script>(function(){try{var m=localStorage.getItem('pls-theme');document.documentElement.setAttribute('data-theme',m==='dark'?'dark':'light');}catch(e){}})();</script>
+<link rel="stylesheet" href="/assets/cup-ui.css">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-ui);min-height:100vh}
+.top{display:flex;align-items:center;gap:12px;padding:14px 18px;max-width:1500px;margin:0 auto}
+.top a.back{color:var(--text-3);text-decoration:none;font-size:13px;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-2);border-radius:9px;padding:7px 11px;background:var(--surface)}
+.top a.back:hover{color:var(--text);border-color:var(--text-3)}
+.top h1{font-size:18px;margin:0;font-weight:800;letter-spacing:-.01em}
+.top .sp{flex:1}
+.hint{color:var(--text-3);font-size:12.5px}
+.wrap{max-width:1500px;margin:0 auto;padding:4px 18px 48px}
+.secs{display:flex;gap:7px;overflow-x:auto;padding:4px 0 14px}
+.sec{flex:none;border:1px solid var(--line);background:var(--surface);color:var(--text-3);font:inherit;font-size:13px;font-weight:700;padding:8px 14px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.sec:hover{color:var(--text);border-color:var(--text-3)}
+.sec.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.sec .soon{font-size:10px;font-weight:700;opacity:.7}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:4px 0 18px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.stat .n{font-size:26px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.stat .l{font-size:12px;color:var(--text-3);margin-top:3px;font-weight:600}
+.stat .n.accent{color:var(--accent)}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.search{flex:1;min-width:200px;position:relative}
+.search input{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:10px;color:var(--text);font:inherit;font-size:13.5px;padding:9px 12px 9px 34px;outline:none}
+.search input:focus{border-color:var(--accent-line)}
+.search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--text-3)}
+.fchips{display:flex;gap:6px}
+.fchip{border:1px solid var(--line);background:var(--surface);color:var(--text-3);font:inherit;font-size:12.5px;font-weight:700;padding:7px 12px;border-radius:9px;cursor:pointer}
+.fchip:hover{color:var(--text);border-color:var(--text-3)}
+.fchip.on{background:var(--accent-weak);color:var(--accent);border-color:var(--accent-line)}
+.btn-primary{border:1px solid var(--accent);background:var(--accent);color:#fff;font:inherit;font-size:13px;font-weight:700;padding:8px 14px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn-primary:hover{filter:brightness(1.06)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.cc{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:15px 16px;display:flex;flex-direction:column;gap:10px;transition:border-color .12s,box-shadow .12s;cursor:pointer}
+.cc:hover{border-color:var(--line-2);box-shadow:0 2px 10px rgba(20,25,35,.06)}
+.cc .ct{font-size:14.5px;font-weight:800;line-height:1.35;letter-spacing:-.01em}
+.cc .row{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.cc .client{font-size:13px;color:var(--text);font-weight:700}
+.cc .sub{font-size:12.5px;color:var(--text-3);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.cc .sub .dot{width:3px;height:3px;border-radius:50%;background:var(--text-faint)}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;border-radius:7px;padding:3px 8px;white-space:nowrap}
+.pill.held{background:color-mix(in srgb,#1a7f54 13%,var(--surface));color:#1a7f54;border:1px solid color-mix(in srgb,#1a7f54 28%,var(--line))}
+.pill.plan{background:color-mix(in srgb,#2763d6 12%,var(--surface));color:#2763d6;border:1px solid color-mix(in srgb,#2763d6 28%,var(--line))}
+.pill.lead{background:var(--surface-2);color:var(--text-3);border:1px solid var(--line)}
+.pill.m{background:var(--surface-2);color:var(--text-3);border:1px solid var(--line)}
+.pill.cert{background:color-mix(in srgb,var(--accent) 12%,var(--surface));color:var(--accent);border:1px solid var(--accent-line)}
+.cc .foot{display:flex;align-items:center;gap:10px;margin-top:2px;padding-top:10px;border-top:1px solid var(--line);font-size:12px;color:var(--text-3)}
+.cc .foot b{color:var(--text);font-weight:800}
+.empty{color:var(--text-3);font-size:13px;text-align:center;padding:40px 10px;border:1.5px dashed var(--line);border-radius:14px}
+.soon-box{color:var(--text-3);font-size:13.5px;text-align:center;padding:52px 16px;border:1.5px dashed var(--line-2);border-radius:16px;background:var(--surface)}
+.soon-box b{color:var(--text);font-weight:800;display:block;font-size:15px;margin-bottom:6px}
+.ov{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.4);display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px 16px}
+.modal{width:100%;max-width:560px;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.3);max-height:86vh;overflow:auto}
+.modal .mh{display:flex;gap:8px;padding:16px 16px 4px;align-items:flex-start}
+.modal .mh h2{font-size:16px;font-weight:800;margin:0;flex:1;letter-spacing:-.01em}
+.modal .x{background:none;border:0;color:var(--text-3);font-size:22px;cursor:pointer;line-height:1;height:28px}
+.modal .body{padding:6px 16px 16px;display:flex;flex-direction:column;gap:12px}
+.fld{display:flex;flex-direction:column;gap:5px}
+.fld.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fld .l{font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.in{background:var(--surface-2);border:1px solid var(--line);border-radius:9px;color:var(--text);font:inherit;font-size:13.5px;padding:8px 10px;outline:none;width:100%}
+.in:focus{border-color:var(--accent-line)}
+textarea.in{resize:vertical;min-height:54px}
+.chk{display:flex;align-items:center;gap:8px;font-size:13.5px}
+.chk input{width:16px;height:16px}
+.parts{display:flex;flex-direction:column;gap:6px}
+.p-item{display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:6px 10px;font-size:12.5px}
+.p-item .pf{flex:1;min-width:0}
+.p-item .pf b{font-weight:700}
+.p-item .pf small{color:var(--text-3)}
+.p-item button{background:none;border:0;color:var(--text-faint);cursor:pointer;font-size:16px;line-height:1}
+.p-add{display:grid;grid-template-columns:1.4fr 1.2fr 1fr auto;gap:6px}
+.p-add .in{font-size:12.5px;padding:7px 9px}
+.p-add button{border:1px dashed var(--line-2);background:none;color:var(--text-3);border-radius:9px;cursor:pointer;font-size:18px;width:38px}
+.p-add button:hover{color:var(--accent);border-color:var(--accent-line)}
+.mfoot{display:flex;align-items:center;gap:10px;border-top:1px solid var(--line);padding:12px 16px;position:sticky;bottom:0;background:var(--surface)}
+.btn{border:1px solid var(--line-2);background:var(--surface);color:var(--text);font:inherit;font-weight:600;font-size:13px;padding:8px 14px;border-radius:9px;cursor:pointer}
+.btn:hover{border-color:var(--text-3)}
+.btn.danger{color:#C53B2F;border-color:color-mix(in srgb,#C53B2F 30%,var(--line))}
+.note{background:var(--accent-weak);border:1px solid var(--accent-line);color:var(--text);border-radius:12px;padding:10px 14px;font-size:12.5px;margin-bottom:14px;display:flex;gap:8px;align-items:flex-start}
+.note b{color:var(--accent)}
+@media(max-width:860px){.stats{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.wrap{padding:4px 12px 48px}.grid{grid-template-columns:1fr}.fld.two{grid-template-columns:1fr}.p-add{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="top">
+  <a class="back" href="/portal.html">&larr; ЦУП</a>
+  <h1>🎓 Тренинг-центр</h1>
+  <span class="sp"></span>
+  <span class="hint">Лаборатория и обучение ProLabTraining</span>
+</div>
+<div class="wrap">
+  <div class="secs" id="secs">
+    <button class="sec on" data-sec="training">Курсы</button>
+    <button class="sec" data-sec="works">Работы</button>
+    <button class="sec" data-sec="equipment">Приборы <span class="soon">скоро</span></button>
+    <button class="sec" data-sec="stock">Склад <span class="soon">скоро</span></button>
+    <button class="sec" data-sec="qms">СМК <span class="soon">скоро</span></button>
+    <button class="sec" data-sec="analytics">Аналитика <span class="soon">скоро</span></button>
+  </div>
+
+  <div id="view-training">
+    <div class="stats" id="stats"></div>
+    <div class="toolbar">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+        <input id="q" placeholder="Поиск по курсу, заказчику, методу…" autocomplete="off">
+      </div>
+      <div class="fchips" id="fchips">
+        <button class="fchip on" data-f="all">Все</button>
+        <button class="fchip" data-f="held">Проведённые</button>
+        <button class="fchip" data-f="plan">Запланированные</button>
+        <button class="fchip" data-f="lead">Заявки</button>
+      </div>
+      <button class="btn-primary" id="addBtn" hidden><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M12 5v14M5 12h14"/></svg>Курс</button>
+    </div>
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <div id="view-works" hidden>
+    <div class="stats" id="wkStats"></div>
+    <div class="toolbar">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+        <input id="wkQ" placeholder="Поиск по работе, клиенту, методу, аналиту…" autocomplete="off">
+      </div>
+      <div class="fchips" id="wkFchips">
+        <button class="fchip on" data-f="all">Все</button>
+        <button class="fchip" data-f="active">В работе</button>
+        <button class="fchip" data-f="done">Завершённые</button>
+      </div>
+      <button class="btn-primary" id="wkAddBtn" hidden><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M12 5v14M5 12h14"/></svg>Работа</button>
+    </div>
+    <div class="grid" id="wkGrid"></div>
+  </div>
+
+  <div id="view-soon" hidden></div>
+</div>
+
+<script>
+const LEVEL = {basic:'Базовый',complex:'Комплексный'};
+const ST = {held:{c:'held',t:'Проведён'},plan:{c:'plan',t:'План'},lead:{c:'lead',t:'Заявка'}};
+const SOON = {
+  equipment:['Оборудование','Приборы, поверка/ТО, комплектующие (47 приборов).'],
+  stock:['Склад','Реактивы, стандарты, расходники, сроки и остатки (514 позиций).'],
+  qms:['СМК','Записи по ISO/IEC 17025: методы, формы, акты.'],
+  analytics:['Аналитика','Объёмы, загрузка, суммы по курсам и работам.']
+};
+const esc = s => String(s==null?'':s).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+let TR=[], canEdit=false, filter='all', query='', editParts=[];
+
+async function api(method, path, body){
+  const r = await fetch('/api/tc'+path, {method, credentials:'same-origin',
+    headers: body?{'Content-Type':'application/json'}:undefined, body: body?JSON.stringify(body):undefined});
+  if (r.status===401){ location.href='/login.html'; return null; }
+  return r.json().catch(()=>({ok:false}));
+}
+function methodsOf(t){ return Array.isArray(t.method)?t.method:(t.method?[t.method]:[]); }
+
+async function load(){
+  const d = await api('GET','/trainings');
+  if(!d||!d.ok){ document.getElementById('grid').innerHTML='<div class="empty">Не удалось загрузить курсы</div>'; return; }
+  TR = d.items||[]; canEdit = !!d.canEdit;
+  document.getElementById('addBtn').hidden = !canEdit;
+  renderStats(); renderGrid();
+}
+function renderStats(){
+  const total=TR.length;
+  const parts=TR.reduce((a,x)=>a+((x.participants||[]).length||0),0);
+  const hours=TR.filter(x=>x.status==='held').reduce((a,x)=>a+(+x.hours||0),0);
+  const cert=TR.filter(x=>x.issued).length;
+  document.getElementById('stats').innerHTML=[
+    ['n',total,'Курсов всего'],['n',parts,'Участников'],
+    ['n',hours,'Часов проведено'],['n accent',cert,'Сертификатов выдано']
+  ].map(([c,n,l])=>`<div class="stat"><div class="${c}">${n}</div><div class="l">${l}</div></div>`).join('');
+}
+function card(t){
+  const st=ST[t.status]||{c:'lead',t:t.status||'—'};
+  const methods=methodsOf(t).map(m=>`<span class="pill m">${esc(m)}</span>`).join('');
+  const lvl=LEVEL[t.level]||t.level||'';
+  const sub=[t.dates_text,lvl,t.place].filter(Boolean).map(esc);
+  const pn=(t.participants||[]).length;
+  return `<div class="cc" data-id="${t.id}">
+    <div class="row" style="justify-content:space-between;align-items:flex-start">
+      <div class="ct">${esc(t.title)}</div><span class="pill ${st.c}">${st.t}</span>
+    </div>
+    <div class="row"><span class="client">${esc(t.client||'—')}</span>${t.issued?'<span class="pill cert">🏅 Сертификат</span>':''}</div>
+    <div class="sub">${sub.join(' <span class="dot"></span> ')}</div>
+    <div class="row">${methods}</div>
+    <div class="foot"><span>👥 <b>${pn}</b> участн.</span><span>⏱ <b>${t.hours||'—'}</b> ч.</span></div>
+  </div>`;
+}
+function renderGrid(){
+  let list=TR.slice();
+  if(filter!=='all') list=list.filter(t=>t.status===filter);
+  if(query){const q=query.toLowerCase();list=list.filter(t=>(t.title+' '+t.client+' '+methodsOf(t).join(' ')+' '+(t.place||'')).toLowerCase().includes(q));}
+  const order={held:0,plan:1,lead:2};
+  list.sort((a,b)=>(order[a.status]??9)-(order[b.status]??9));
+  const g=document.getElementById('grid');
+  g.innerHTML = list.length?list.map(card).join(''):'<div class="empty">Ничего не найдено</div>';
+}
+function hideViews(){ ['view-training','view-works','view-soon'].forEach(id=>{const el=document.getElementById(id); if(el) el.hidden=true;}); }
+function showSoon(key){
+  hideViews();
+  const v=document.getElementById('view-soon'); v.hidden=false;
+  const s=SOON[key]||['Раздел','Скоро'];
+  v.innerHTML=`<div class="soon-box"><b>${esc(s[0])}</b>${esc(s[1])}<br><br>Переносим следующими шагами — сначала бэкенд, затем раздел.</div>`;
+}
+function showTraining(){ hideViews(); document.getElementById('view-training').hidden=false; }
+function showWorks(){ hideViews(); document.getElementById('view-works').hidden=false; if(!wkLoaded) loadWorks(); }
+
+function partRow(p,i){
+  const sub=[p.org,p.pos].filter(Boolean).map(esc).join(' · ');
+  const badges=[p.pay==='paid'?'оплачено':'',p.cert?('№'+esc(p.cert)):''].filter(Boolean).join(' · ');
+  return `<div class="p-item"><div class="pf"><b>${esc(p.fio||'—')}</b>${sub?` <small>${sub}</small>`:''}${badges?`<br><small>${badges}</small>`:''}</div>${canEdit?`<button data-rm="${i}" title="Убрать">✕</button>`:''}</div>`;
+}
+function renderParts(){
+  const box=document.getElementById('mParts');
+  box.innerHTML = editParts.length?editParts.map(partRow).join(''):'<div style="color:var(--text-3);font-size:12.5px;padding:4px 2px">Пока нет участников</div>';
+}
+function openModal(t){
+  t = t || {status:'plan',method:[],participants:[],hours:0};
+  editParts = JSON.parse(JSON.stringify(t.participants||[]));
+  const ro = !canEdit;
+  const sel=(v,opts)=>opts.map(([k,l])=>`<option value="${k}"${v===k?' selected':''}>${l}</option>`).join('');
+  const ov=document.createElement('div'); ov.className='ov'; ov.id='ov';
+  ov.innerHTML=`<div class="modal"><div class="mh"><h2>${t.id?'Курс':'Новый курс'}</h2><button class="x" data-x>×</button></div>
+    <div class="body">
+      <div class="fld"><span class="l">Название</span><input class="in" id="f_title" value="${esc(t.title||'')}" ${ro?'disabled':''}></div>
+      <div class="fld two">
+        <div class="fld"><span class="l">Заказчик</span><input class="in" id="f_client" value="${esc(t.client||'')}" ${ro?'disabled':''}></div>
+        <div class="fld"><span class="l">Даты</span><input class="in" id="f_dates" value="${esc(t.dates_text||'')}" ${ro?'disabled':''}></div>
+      </div>
+      <div class="fld two">
+        <div class="fld"><span class="l">Статус</span><select class="in" id="f_status" ${ro?'disabled':''}>${sel(t.status,[['held','Проведён'],['plan','План'],['lead','Заявка']])}</select></div>
+        <div class="fld"><span class="l">Уровень</span><select class="in" id="f_level" ${ro?'disabled':''}>${sel(t.level,[['','—'],['basic','Базовый'],['complex','Комплексный']])}</select></div>
+      </div>
+      <div class="fld two">
+        <div class="fld"><span class="l">Часов</span><input class="in" id="f_hours" type="number" min="0" value="${t.hours||0}" ${ro?'disabled':''}></div>
+        <div class="fld"><span class="l">Методы (через запятую)</span><input class="in" id="f_method" value="${esc(methodsOf(t).join(', '))}" ${ro?'disabled':''}></div>
+      </div>
+      <div class="fld"><span class="l">Место</span><input class="in" id="f_place" value="${esc(t.place||'')}" ${ro?'disabled':''}></div>
+      <label class="chk"><input type="checkbox" id="f_issued" ${t.issued?'checked':''} ${ro?'disabled':''}> Сертификаты выданы</label>
+      <div class="fld"><span class="l">Участники (<span id="pCount">${editParts.length}</span>)</span>
+        <div class="parts" id="mParts"></div>
+        ${ro?'':`<div class="p-add"><input class="in" id="pf_fio" placeholder="ФИО"><input class="in" id="pf_org" placeholder="Организация"><input class="in" id="pf_pos" placeholder="Должность"><button type="button" id="pAdd" title="Добавить">+</button></div>`}
+      </div>
+      <div class="fld"><span class="l">Заметки</span><textarea class="in" id="f_note" ${ro?'disabled':''}>${esc(t.note||'')}</textarea></div>
+    </div>
+    ${ro?'':`<div class="mfoot"><button class="btn btn-primary" id="mSave">Сохранить</button>${t.id?'<button class="btn danger" id="mDel">Удалить</button>':''}<span style="flex:1"></span><button class="btn" data-x>Отмена</button></div>`}
+  </div>`;
+  document.body.appendChild(ov);
+  renderParts();
+  ov.addEventListener('click',e=>{
+    if(e.target===ov||e.target.hasAttribute('data-x')){ ov.remove(); return; }
+    const rm=e.target.getAttribute && e.target.getAttribute('data-rm');
+    if(rm!=null){ editParts.splice(+rm,1); renderParts(); document.getElementById('pCount').textContent=editParts.length; }
+  });
+  if(!ro){
+    document.getElementById('pAdd').onclick=()=>{
+      const fio=document.getElementById('pf_fio').value.trim();
+      if(!fio) return;
+      editParts.push({fio, org:document.getElementById('pf_org').value.trim(), pos:document.getElementById('pf_pos').value.trim(), pay:'', cert:''});
+      document.getElementById('pf_fio').value=document.getElementById('pf_org').value=document.getElementById('pf_pos').value='';
+      renderParts(); document.getElementById('pCount').textContent=editParts.length;
+    };
+    document.getElementById('mSave').onclick=()=>save(t.id, ov);
+    if(t.id) document.getElementById('mDel').onclick=()=>del(t.id, ov);
+  }
+}
+async function save(id, ov){
+  const g=id=>document.getElementById(id);
+  const body={
+    title:g('f_title').value.trim(), client:g('f_client').value.trim(), dates_text:g('f_dates').value.trim(),
+    status:g('f_status').value, level:g('f_level').value, hours:+g('f_hours').value||0,
+    method:g('f_method').value.split(',').map(s=>s.trim()).filter(Boolean),
+    place:g('f_place').value.trim(), issued:g('f_issued').checked, note:g('f_note').value.trim(),
+    participants:editParts
+  };
+  if(!body.title){ alert('Укажите название курса'); return; }
+  const btn=g('mSave'); btn.disabled=true; btn.textContent='Сохранение…';
+  const d = id ? await api('PUT','/trainings/'+id, body) : await api('POST','/trainings', body);
+  if(!d||!d.ok){ alert((d&&d.error)||'Не удалось сохранить'); btn.disabled=false; btn.textContent='Сохранить'; return; }
+  ov.remove(); await load();
+}
+async function del(id, ov){
+  if(!confirm('Удалить курс безвозвратно?')) return;
+  const d = await api('DELETE','/trainings/'+id);
+  if(!d||!d.ok){ alert((d&&d.error)||'Не удалось удалить (нужны права администратора)'); return; }
+  ov.remove(); await load();
+}
+
+document.getElementById('secs').addEventListener('click',e=>{
+  const b=e.target.closest('.sec'); if(!b)return;
+  document.querySelectorAll('.sec').forEach(x=>x.classList.toggle('on',x===b));
+  const sec=b.dataset.sec; if(sec==='training') showTraining(); else if(sec==='works') showWorks(); else showSoon(sec);
+});
+document.getElementById('fchips').addEventListener('click',e=>{
+  const b=e.target.closest('.fchip'); if(!b)return;
+  filter=b.dataset.f; document.querySelectorAll('#fchips .fchip').forEach(x=>x.classList.toggle('on',x===b)); renderGrid();
+});
+document.getElementById('q').addEventListener('input',e=>{query=e.target.value.trim();renderGrid();});
+document.getElementById('addBtn').addEventListener('click',()=>openModal(null));
+document.getElementById('grid').addEventListener('click',e=>{
+  const c=e.target.closest('.cc'); if(!c)return;
+  const t=TR.find(x=>String(x.id)===c.dataset.id); if(t) openModal(t);
+});
+
+/* ───────── Работы ───────── */
+const WTYPE={demo:{t:'Демо',c:'m'},paid:{t:'Платная',c:'held'},train:{t:'Обучение',c:'plan'},rnd:{t:'НИОКР',c:'lead'},acc:{t:'17025',c:'cert'}};
+const TYPE_STAGES={
+  demo:['Приём проб','Пробоподготовка','Анализ','Отчёт клиенту','Передано в продажи'],
+  paid:['Приём проб','Пробоподготовка','Анализ','Отчёт','Оплата и закрытие'],
+  train:['Пробы получены','Анализ на курсе','Отчёт'],
+  rnd:['Постановка задачи','План работ','Эксперименты','Отчёт','Решение по контракту'],
+  acc:['Анализ заявки и приём проб','Пробоподготовка','Испытания','Протокол испытаний','Выдача и оплата']
+};
+let WK=[], wkCanEdit=false, wkLoaded=false, wkFilter='all', wkQuery='', wkEditId=null;
+function stageInfo(w){
+  const st=TYPE_STAGES[w.wtype]||[]; const done=st.length>0 && w.stage>=st.length;
+  return {done, label: done?'Завершена':(st[w.stage]||('Этап '+w.stage)), cls: done?'held':'plan'};
+}
+function money(w){ return w.price>0?(Number(w.price).toLocaleString('ru-RU')+' '+(w.currency||'KZT')):''; }
+async function loadWorks(){
+  wkLoaded=true;
+  const d=await api('GET','/works');
+  if(!d||!d.ok){ document.getElementById('wkGrid').innerHTML='<div class="empty">Не удалось загрузить работы</div>'; return; }
+  WK=d.items||[]; wkCanEdit=!!d.canEdit; document.getElementById('wkAddBtn').hidden=!wkCanEdit;
+  renderWkStats(); renderWkGrid();
+}
+function renderWkStats(){
+  const total=WK.length;
+  const active=WK.filter(w=>!stageInfo(w).done).length;
+  const samples=WK.reduce((a,w)=>a+(+w.samples||0),0);
+  const paidSum=WK.reduce((a,w)=>a+(+w.price||0),0);
+  document.getElementById('wkStats').innerHTML=[
+    ['n',total,'Работ всего'],['n',active,'В работе'],
+    ['n',samples,'Проб'],['n accent',paidSum?Number(paidSum).toLocaleString('ru-RU')+' ₸':'0','Сумма платных']
+  ].map(([c,n,l])=>`<div class="stat"><div class="${c}" style="font-size:${String(n).length>8?'19px':'26px'}">${n}</div><div class="l">${l}</div></div>`).join('');
+}
+function workCard(w){
+  const wt=WTYPE[w.wtype]||{t:w.wtype,c:'m'}; const si=stageInfo(w);
+  const methods=methodsOf(w).map(m=>`<span class="pill m">${esc(m)}</span>`).join('');
+  const sub=[w.matrix, w.analytes].filter(Boolean).map(esc);
+  const foot=[`🧪 <b>${w.samples||0}</b> проб`]; if(money(w))foot.push(`<b>${esc(money(w))}</b>`); if(w.report_at)foot.push(`📄 ${esc(w.report_at)}`);
+  return `<div class="cc" data-id="${w.id}">
+    <div class="row" style="justify-content:space-between;align-items:flex-start">
+      <div class="ct">${w.code?`<span style="color:var(--text-3);font-weight:700">${esc(w.code)}</span> · `:''}${esc(w.title||'—')}</div>
+      <span class="pill ${si.cls}">${esc(si.label)}</span>
+    </div>
+    <div class="row"><span class="client">${esc(w.client||'—')}</span><span class="pill ${wt.c}">${esc(wt.t)}</span></div>
+    ${sub.length?`<div class="sub">${sub.join(' <span class="dot"></span> ')}</div>`:''}
+    <div class="row">${methods}</div>
+    <div class="foot">${foot.map(x=>`<span>${x}</span>`).join('')}</div>
+  </div>`;
+}
+function renderWkGrid(){
+  let list=WK.slice();
+  if(wkFilter==='active') list=list.filter(w=>!stageInfo(w).done);
+  else if(wkFilter==='done') list=list.filter(w=>stageInfo(w).done);
+  if(wkQuery){const q=wkQuery.toLowerCase();list=list.filter(w=>((w.code||'')+' '+(w.title||'')+' '+(w.client||'')+' '+methodsOf(w).join(' ')+' '+(w.analytes||'')).toLowerCase().includes(q));}
+  const g=document.getElementById('wkGrid');
+  g.innerHTML=list.length?list.map(workCard).join(''):'<div class="empty">Ничего не найдено</div>';
+}
+function stageOptions(wtype,cur){
+  const st=TYPE_STAGES[wtype]||[];
+  let o=st.map((s,i)=>`<option value="${i}"${cur===i?' selected':''}>${esc(s)}</option>`).join('');
+  o+=`<option value="${st.length}"${cur>=st.length?' selected':''}>Завершена</option>`;
+  return o;
+}
+function openWorkModal(w){
+  w=w||{wtype:'demo',stage:0,methods:[],samples:0,price:0,currency:'KZT'};
+  const ro=!wkCanEdit;
+  const sel=(v,opts)=>opts.map(([k,l])=>`<option value="${k}"${v===k?' selected':''}>${l}</option>`).join('');
+  const ov=document.createElement('div'); ov.className='ov';
+  ov.innerHTML=`<div class="modal"><div class="mh"><h2>${w.id?'Работа':'Новая работа'}</h2><button class="x" data-x>×</button></div>
+    <div class="body">
+      <div class="fld two">
+        <div class="fld"><span class="l">Код</span><input class="in" id="w_code" value="${esc(w.code||'')}" ${ro?'disabled':''}></div>
+        <div class="fld"><span class="l">Вид работы</span><select class="in" id="w_wtype" ${ro?'disabled':''}>${sel(w.wtype,[['demo','Демо'],['paid','Платная'],['train','Обучение'],['rnd','НИОКР'],['acc','ISO/IEC 17025']])}</select></div>
+      </div>
+      <div class="fld"><span class="l">Название</span><input class="in" id="w_title" value="${esc(w.title||'')}" ${ro?'disabled':''}></div>
+      <div class="fld two">
+        <div class="fld"><span class="l">Клиент</span><input class="in" id="w_client" value="${esc(w.client||'')}" ${ro?'disabled':''}></div>
+        <div class="fld"><span class="l">Этап</span><select class="in" id="w_stage" ${ro?'disabled':''}>${stageOptions(w.wtype,+w.stage||0)}</select></div>
+      </div>
+      <div class="fld two">
+        <div class="fld"><span class="l">Матрица</span><input class="in" id="w_matrix" value="${esc(w.matrix||'')}" placeholder="Твердый / Жидкий / Газ" ${ro?'disabled':''}></div>
+        <div class="fld"><span class="l">Проб</span><input class="in" id="w_samples" type="number" min="0" value="${w.samples||0}" ${ro?'disabled':''}></div>
+      </div>
+      <div class="fld"><span class="l">Методы (через запятую)</span><input class="in" id="w_methods" value="${esc(methodsOf(w).join(', '))}" ${ro?'disabled':''}></div>
+      <div class="fld"><span class="l">Аналиты / показатели</span><input class="in" id="w_analytes" value="${esc(w.analytes||'')}" ${ro?'disabled':''}></div>
+      <div class="fld two">
+        <div class="fld"><span class="l">Стоимость</span><input class="in" id="w_price" type="number" min="0" value="${w.price||0}" ${ro?'disabled':''}></div>
+        <div class="fld"><span class="l">Исполнитель</span><input class="in" id="w_assignee" value="${esc(w.assignee||'')}" ${ro?'disabled':''}></div>
+      </div>
+      <div class="fld two">
+        <div class="fld"><span class="l">Приём проб</span><input class="in" id="w_recv" value="${esc(w.recv_at||'')}" placeholder="ГГГГ-ММ-ДД" ${ro?'disabled':''}></div>
+        <div class="fld"><span class="l">Отчёт / протокол</span><input class="in" id="w_report" value="${esc(w.report_at||'')}" placeholder="ГГГГ-ММ-ДД" ${ro?'disabled':''}></div>
+      </div>
+      <div class="fld"><span class="l">Заметки</span><textarea class="in" id="w_notes" ${ro?'disabled':''}>${esc(w.notes||'')}</textarea></div>
+    </div>
+    ${ro?'':`<div class="mfoot"><button class="btn btn-primary" id="wSave">Сохранить</button>${w.id?'<button class="btn danger" id="wDel">Удалить</button>':''}<span style="flex:1"></span><button class="btn" data-x>Отмена</button></div>`}
+  </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click',e=>{ if(e.target===ov||e.target.hasAttribute('data-x')) ov.remove(); });
+  if(!ro){
+    document.getElementById('w_wtype').onchange=e=>{ document.getElementById('w_stage').innerHTML=stageOptions(e.target.value,0); };
+    document.getElementById('wSave').onclick=()=>saveWork(w.id, ov);
+    if(w.id) document.getElementById('wDel').onclick=()=>delWork(w.id, ov);
+  }
+}
+async function saveWork(id, ov){
+  const g=id=>document.getElementById(id);
+  const body={
+    code:g('w_code').value.trim(), wtype:g('w_wtype').value, title:g('w_title').value.trim(),
+    client:g('w_client').value.trim(), stage:+g('w_stage').value||0, matrix:g('w_matrix').value.trim(),
+    samples:+g('w_samples').value||0, methods:g('w_methods').value.split(',').map(s=>s.trim()).filter(Boolean),
+    analytes:g('w_analytes').value.trim(), price:+g('w_price').value||0, assignee:g('w_assignee').value.trim(),
+    recv_at:g('w_recv').value.trim(), report_at:g('w_report').value.trim(), notes:g('w_notes').value.trim()
+  };
+  if(!body.title){ alert('Укажите название работы'); return; }
+  const btn=g('wSave'); btn.disabled=true; btn.textContent='Сохранение…';
+  const d=id?await api('PUT','/works/'+id,body):await api('POST','/works',body);
+  if(!d||!d.ok){ alert((d&&d.error)||'Не удалось сохранить'); btn.disabled=false; btn.textContent='Сохранить'; return; }
+  ov.remove(); await loadWorks();
+}
+async function delWork(id, ov){
+  if(!confirm('Удалить работу безвозвратно?')) return;
+  const d=await api('DELETE','/works/'+id);
+  if(!d||!d.ok){ alert((d&&d.error)||'Не удалось удалить (нужны права администратора)'); return; }
+  ov.remove(); await loadWorks();
+}
+document.getElementById('wkFchips').addEventListener('click',e=>{
+  const b=e.target.closest('.fchip'); if(!b)return;
+  wkFilter=b.dataset.f; document.querySelectorAll('#wkFchips .fchip').forEach(x=>x.classList.toggle('on',x===b)); renderWkGrid();
+});
+document.getElementById('wkQ').addEventListener('input',e=>{wkQuery=e.target.value.trim();renderWkGrid();});
+document.getElementById('wkAddBtn').addEventListener('click',()=>openWorkModal(null));
+document.getElementById('wkGrid').addEventListener('click',e=>{
+  const c=e.target.closest('.cc'); if(!c)return;
+  const w=WK.find(x=>String(x.id)===c.dataset.id); if(w) openWorkModal(w);
+});
+
+load();
+</script>
+</body>
+</html>
