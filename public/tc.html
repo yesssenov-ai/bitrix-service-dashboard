@@ -103,7 +103,7 @@ textarea.in{resize:vertical;min-height:54px}
   <div class="secs" id="secs">
     <button class="sec on" data-sec="training">Курсы</button>
     <button class="sec" data-sec="works">Работы</button>
-    <button class="sec" data-sec="equipment">Приборы <span class="soon">скоро</span></button>
+    <button class="sec" data-sec="equipment">Приборы</button>
     <button class="sec" data-sec="stock">Склад <span class="soon">скоро</span></button>
     <button class="sec" data-sec="qms">СМК <span class="soon">скоро</span></button>
     <button class="sec" data-sec="analytics">Аналитика <span class="soon">скоро</span></button>
@@ -144,6 +144,25 @@ textarea.in{resize:vertical;min-height:54px}
     <div class="grid" id="wkGrid"></div>
   </div>
 
+  <div id="view-equipment" hidden>
+    <div class="stats" id="eqStats"></div>
+    <div class="toolbar">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+        <input id="eqQ" placeholder="Поиск по прибору, модели, производителю, методу…" autocomplete="off">
+      </div>
+      <div class="fchips" id="eqFchips">
+        <button class="fchip on" data-f="all">Все</button>
+        <button class="fchip" data-f="spec">Спектрометрия</button>
+        <button class="fchip" data-f="chrom">Хроматография</button>
+        <button class="fchip" data-f="xray">Рентген</button>
+        <button class="fchip" data-f="prep">Пробоподготовка</button>
+      </div>
+      <button class="btn-primary" id="eqAddBtn" hidden><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M12 5v14M5 12h14"/></svg>Прибор</button>
+    </div>
+    <div class="grid" id="eqGrid"></div>
+  </div>
+
   <div id="view-soon" hidden></div>
 </div>
 
@@ -151,7 +170,6 @@ textarea.in{resize:vertical;min-height:54px}
 const LEVEL = {basic:'Базовый',complex:'Комплексный'};
 const ST = {held:{c:'held',t:'Проведён'},plan:{c:'plan',t:'План'},lead:{c:'lead',t:'Заявка'}};
 const SOON = {
-  equipment:['Оборудование','Приборы, поверка/ТО, комплектующие (47 приборов).'],
   stock:['Склад','Реактивы, стандарты, расходники, сроки и остатки (514 позиций).'],
   qms:['СМК','Записи по ISO/IEC 17025: методы, формы, акты.'],
   analytics:['Аналитика','Объёмы, загрузка, суммы по курсам и работам.']
@@ -165,7 +183,7 @@ async function api(method, path, body){
   if (r.status===401){ location.href='/login.html'; return null; }
   return r.json().catch(()=>({ok:false}));
 }
-function methodsOf(t){ return Array.isArray(t.method)?t.method:(t.method?[t.method]:[]); }
+function methodsOf(t){ const m = (t.methods!=null?t.methods:t.method); return Array.isArray(m)?m:(m?[m]:[]); }
 
 async function load(){
   const d = await api('GET','/trainings');
@@ -209,7 +227,7 @@ function renderGrid(){
   const g=document.getElementById('grid');
   g.innerHTML = list.length?list.map(card).join(''):'<div class="empty">Ничего не найдено</div>';
 }
-function hideViews(){ ['view-training','view-works','view-soon'].forEach(id=>{const el=document.getElementById(id); if(el) el.hidden=true;}); }
+function hideViews(){ ['view-training','view-works','view-equipment','view-soon'].forEach(id=>{const el=document.getElementById(id); if(el) el.hidden=true;}); }
 function showSoon(key){
   hideViews();
   const v=document.getElementById('view-soon'); v.hidden=false;
@@ -218,6 +236,7 @@ function showSoon(key){
 }
 function showTraining(){ hideViews(); document.getElementById('view-training').hidden=false; }
 function showWorks(){ hideViews(); document.getElementById('view-works').hidden=false; if(!wkLoaded) loadWorks(); }
+function showEquipment(){ hideViews(); document.getElementById('view-equipment').hidden=false; if(!eqLoaded) loadEquip(); }
 
 function partRow(p,i){
   const sub=[p.org,p.pos].filter(Boolean).map(esc).join(' · ');
@@ -303,7 +322,7 @@ async function del(id, ov){
 document.getElementById('secs').addEventListener('click',e=>{
   const b=e.target.closest('.sec'); if(!b)return;
   document.querySelectorAll('.sec').forEach(x=>x.classList.toggle('on',x===b));
-  const sec=b.dataset.sec; if(sec==='training') showTraining(); else if(sec==='works') showWorks(); else showSoon(sec);
+  const sec=b.dataset.sec; if(sec==='training') showTraining(); else if(sec==='works') showWorks(); else if(sec==='equipment') showEquipment(); else showSoon(sec);
 });
 document.getElementById('fchips').addEventListener('click',e=>{
   const b=e.target.closest('.fchip'); if(!b)return;
@@ -450,6 +469,129 @@ document.getElementById('wkAddBtn').addEventListener('click',()=>openWorkModal(n
 document.getElementById('wkGrid').addEventListener('click',e=>{
   const c=e.target.closest('.cc'); if(!c)return;
   const w=WK.find(x=>String(x.id)===c.dataset.id); if(w) openWorkModal(w);
+});
+
+/* ───────── Приборы ───────── */
+const DIRMAP={spec:{t:'Спектрометрия',c:'held'},chrom:{t:'Хроматография',c:'plan'},xray:{t:'Рентген',c:'lead'},prep:{t:'Пробоподготовка',c:'m'},gen:{t:'Общее',c:'m'},io:{t:'Хим. анализ',c:'m'}};
+let EQ=[], eqCanEdit=false, eqLoaded=false, eqFilter='all', eqQuery='';
+async function loadEquip(){
+  eqLoaded=true;
+  const d=await api('GET','/equipment');
+  if(!d||!d.ok){ document.getElementById('eqGrid').innerHTML='<div class="empty">Не удалось загрузить приборы</div>'; return; }
+  EQ=d.items||[]; eqCanEdit=!!d.canEdit; document.getElementById('eqAddBtn').hidden=!eqCanEdit;
+  renderEqStats(); renderEqGrid();
+}
+function renderEqStats(){
+  const total=EQ.length;
+  const methods=new Set(); EQ.forEach(e=>methodsOf(e).forEach(m=>methods.add(m)));
+  const comps=EQ.reduce((a,e)=>a+(+e.comps_count||0),0);
+  const dirs=new Set(EQ.map(e=>e.dir).filter(Boolean)).size;
+  document.getElementById('eqStats').innerHTML=[
+    ['n',total,'Приборов'],['n',methods.size,'Методов'],
+    ['n',comps,'Комплектующих'],['n accent',dirs,'Направлений']
+  ].map(([c,n,l])=>`<div class="stat"><div class="${c}">${n}</div><div class="l">${l}</div></div>`).join('');
+}
+function equipCard(e){
+  const dm=DIRMAP[e.dir]||{t:e.dir,c:'m'};
+  const methods=methodsOf(e).map(m=>`<span class="pill m">${esc(m)}</span>`).join('');
+  const sub=[e.maker, e.country, e.year].filter(Boolean).map(esc);
+  const foot=[]; if(e.ser)foot.push(`S/N ${esc(e.ser)}`); if(e.comps_count>0)foot.push(`🔧 <b>${e.comps_count}</b> компл.`); if(e.verify_next)foot.push(`📅 поверка ${esc(e.verify_next)}`);
+  return `<div class="cc" data-id="${e.id}">
+    <div class="row" style="justify-content:space-between;align-items:flex-start">
+      <div class="ct">${e.short?`<span style="color:var(--text-3);font-weight:700">${esc(e.short)}</span> · `:''}${esc(e.name||'—')}</div>
+      ${e.dir?`<span class="pill ${dm.c}">${esc(dm.t)}</span>`:''}
+    </div>
+    ${e.model?`<div class="row"><span class="client">${esc(e.model)}</span></div>`:''}
+    <div class="sub">${sub.join(' <span class="dot"></span> ')}</div>
+    <div class="row">${methods}</div>
+    ${foot.length?`<div class="foot">${foot.map(x=>`<span>${x}</span>`).join('')}</div>`:''}
+  </div>`;
+}
+function renderEqGrid(){
+  let list=EQ.slice();
+  if(eqFilter!=='all') list=list.filter(e=>e.dir===eqFilter);
+  if(eqQuery){const q=eqQuery.toLowerCase();list=list.filter(e=>((e.short||'')+' '+(e.name||'')+' '+(e.model||'')+' '+(e.maker||'')+' '+methodsOf(e).join(' ')+' '+(e.objects||'')).toLowerCase().includes(q));}
+  const g=document.getElementById('eqGrid');
+  g.innerHTML=list.length?list.map(equipCard).join(''):'<div class="empty">Ничего не найдено</div>';
+}
+function openEquipModal(e){
+  e=e||{methods:[],comps_count:0};
+  const ro=!eqCanEdit;
+  const sel=(v,opts)=>opts.map(([k,l])=>`<option value="${k}"${v===k?' selected':''}>${l}</option>`).join('');
+  const ov=document.createElement('div'); ov.className='ov';
+  ov.innerHTML=`<div class="modal"><div class="mh"><h2>${e.id?'Прибор':'Новый прибор'}</h2><button class="x" data-x>×</button></div>
+    <div class="body">
+      <div class="fld two">
+        <div class="fld"><span class="l">Короткое имя</span><input class="in" id="e_short" value="${esc(e.short||'')}" ${ro?'disabled':''}></div>
+        <div class="fld"><span class="l">Направление</span><select class="in" id="e_dir" ${ro?'disabled':''}>${sel(e.dir,[['','—'],['spec','Спектрометрия'],['chrom','Хроматография'],['xray','Рентген'],['prep','Пробоподготовка'],['gen','Общее'],['io','Хим. анализ']])}</select></div>
+      </div>
+      <div class="fld"><span class="l">Название</span><input class="in" id="e_name" value="${esc(e.name||'')}" ${ro?'disabled':''}></div>
+      <div class="fld"><span class="l">Модель</span><input class="in" id="e_model" value="${esc(e.model||'')}" ${ro?'disabled':''}></div>
+      <div class="fld two">
+        <div class="fld"><span class="l">Производитель</span><input class="in" id="e_maker" value="${esc(e.maker||'')}" ${ro?'disabled':''}></div>
+        <div class="fld"><span class="l">Страна</span><input class="in" id="e_country" value="${esc(e.country||'')}" ${ro?'disabled':''}></div>
+      </div>
+      <div class="fld two">
+        <div class="fld"><span class="l">Год</span><input class="in" id="e_year" value="${esc(e.year||'')}" ${ro?'disabled':''}></div>
+        <div class="fld"><span class="l">Серийный №</span><input class="in" id="e_ser" value="${esc(e.ser||'')}" ${ro?'disabled':''}></div>
+      </div>
+      <div class="fld two">
+        <div class="fld"><span class="l">Инвентарный №</span><input class="in" id="e_inv" value="${esc(e.inv||'')}" ${ro?'disabled':''}></div>
+        <div class="fld"><span class="l">Помещение</span><input class="in" id="e_room" value="${esc(e.room||'')}" ${ro?'disabled':''}></div>
+      </div>
+      <div class="fld"><span class="l">Методы (через запятую)</span><input class="in" id="e_methods" value="${esc(methodsOf(e).join(', '))}" ${ro?'disabled':''}></div>
+      <div class="fld"><span class="l">Объекты анализа</span><input class="in" id="e_objects" value="${esc(e.objects||'')}" ${ro?'disabled':''}></div>
+      <div class="fld two">
+        <div class="fld"><span class="l">Поверка до</span><input class="in" id="e_verify" value="${esc(e.verify_next||'')}" placeholder="ГГГГ-ММ-ДД" ${ro?'disabled':''}></div>
+        <div class="fld"><span class="l">ТО до</span><input class="in" id="e_to" value="${esc(e.to_next||'')}" placeholder="ГГГГ-ММ-ДД" ${ro?'disabled':''}></div>
+      </div>
+      <div class="fld two">
+        <div class="fld"><span class="l">Гарантия до</span><input class="in" id="e_warranty" value="${esc(e.warranty||'')}" ${ro?'disabled':''}></div>
+        <div class="fld"><span class="l">Комплектующих</span><input class="in" id="e_comps" type="number" min="0" value="${e.comps_count||0}" ${ro?'disabled':''}></div>
+      </div>
+      <div class="fld"><span class="l">Ответственный</span><input class="in" id="e_resp" value="${esc(e.resp||'')}" ${ro?'disabled':''}></div>
+      <div class="fld"><span class="l">Заметки</span><textarea class="in" id="e_note" ${ro?'disabled':''}>${esc(e.note||'')}</textarea></div>
+    </div>
+    ${ro?'':`<div class="mfoot"><button class="btn btn-primary" id="eSave">Сохранить</button>${e.id?'<button class="btn danger" id="eDel">Удалить</button>':''}<span style="flex:1"></span><button class="btn" data-x>Отмена</button></div>`}
+  </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click',ev=>{ if(ev.target===ov||ev.target.hasAttribute('data-x')) ov.remove(); });
+  if(!ro){
+    document.getElementById('eSave').onclick=()=>saveEquip(e.id, ov);
+    if(e.id) document.getElementById('eDel').onclick=()=>delEquip(e.id, ov);
+  }
+}
+async function saveEquip(id, ov){
+  const g=id=>document.getElementById(id);
+  const body={
+    short:g('e_short').value.trim(), dir:g('e_dir').value, name:g('e_name').value.trim(), model:g('e_model').value.trim(),
+    maker:g('e_maker').value.trim(), country:g('e_country').value.trim(), year:g('e_year').value.trim(),
+    ser:g('e_ser').value.trim(), inv:g('e_inv').value.trim(), room:g('e_room').value.trim(),
+    methods:g('e_methods').value.split(',').map(s=>s.trim()).filter(Boolean), objects:g('e_objects').value.trim(),
+    verify_next:g('e_verify').value.trim(), to_next:g('e_to').value.trim(), warranty:g('e_warranty').value.trim(),
+    comps_count:+g('e_comps').value||0, resp:g('e_resp').value.trim(), note:g('e_note').value.trim()
+  };
+  if(!body.name){ alert('Укажите название прибора'); return; }
+  const btn=g('eSave'); btn.disabled=true; btn.textContent='Сохранение…';
+  const d=id?await api('PUT','/equipment/'+id,body):await api('POST','/equipment',body);
+  if(!d||!d.ok){ alert((d&&d.error)||'Не удалось сохранить'); btn.disabled=false; btn.textContent='Сохранить'; return; }
+  ov.remove(); await loadEquip();
+}
+async function delEquip(id, ov){
+  if(!confirm('Удалить прибор безвозвратно?')) return;
+  const d=await api('DELETE','/equipment/'+id);
+  if(!d||!d.ok){ alert((d&&d.error)||'Не удалось удалить (нужны права администратора)'); return; }
+  ov.remove(); await loadEquip();
+}
+document.getElementById('eqFchips').addEventListener('click',e=>{
+  const b=e.target.closest('.fchip'); if(!b)return;
+  eqFilter=b.dataset.f; document.querySelectorAll('#eqFchips .fchip').forEach(x=>x.classList.toggle('on',x===b)); renderEqGrid();
+});
+document.getElementById('eqQ').addEventListener('input',e=>{eqQuery=e.target.value.trim();renderEqGrid();});
+document.getElementById('eqAddBtn').addEventListener('click',()=>openEquipModal(null));
+document.getElementById('eqGrid').addEventListener('click',e=>{
+  const c=e.target.closest('.cc'); if(!c)return;
+  const it=EQ.find(x=>String(x.id)===c.dataset.id); if(it) openEquipModal(it);
 });
 
 load();

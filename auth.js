@@ -204,6 +204,37 @@ async function initDB() {
     );
     CREATE INDEX IF NOT EXISTS idx_tm_tc_wk_wtype ON ticketsmodule_tc_works(wtype);
 
+    -- Тренинг-центр: приборы лаборатории (раздел «Приборы»). Поверка/ТО — даты
+    -- verify_next/to_next; methods — JSONB; comps_count — число комплектующих.
+    CREATE TABLE IF NOT EXISTS ticketsmodule_tc_equipment (
+      id SERIAL PRIMARY KEY,
+      short TEXT DEFAULT '',
+      name TEXT NOT NULL DEFAULT '',
+      model TEXT DEFAULT '',
+      maker TEXT DEFAULT '',
+      country TEXT DEFAULT '',
+      year TEXT DEFAULT '',
+      ser TEXT DEFAULT '',
+      inv TEXT DEFAULT '',
+      methods JSONB DEFAULT '[]',
+      objects TEXT DEFAULT '',
+      room TEXT DEFAULT '',
+      dir TEXT DEFAULT '',
+      cls TEXT DEFAULT '',
+      verify_next TEXT DEFAULT '',
+      verify_last TEXT DEFAULT '',
+      to_next TEXT DEFAULT '',
+      to_last TEXT DEFAULT '',
+      warranty TEXT DEFAULT '',
+      comps_count INTEGER DEFAULT 0,
+      resp TEXT DEFAULT '',
+      note TEXT DEFAULT '',
+      created_by VARCHAR(100),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_tc_eq_dir ON ticketsmodule_tc_equipment(dir);
+
     -- ── ProLab AI: банк примеров (самообучение агента на удачных запросах) ──────
     CREATE TABLE IF NOT EXISTS ticketsmodule_plsai_examples (
       id SERIAL PRIMARY KEY,
