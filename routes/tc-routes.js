@@ -361,7 +361,10 @@ router.post('/:entity/:id(\\d+)/files', requireAuth(WRITE), upload.single('file'
     if (!req.file) return res.status(400).json({ ok: false, error: 'Файл не передан' });
     // Имя в хранилище — строго ASCII (кириллица/пробелы в ключе ломают Storage,
     // PGRST125). Оригинальное имя сохраняем в filename — для показа и скачивания.
-    const orig = (req.file.originalname || 'file').slice(0, 200);
+    // multer отдаёт originalname как latin1 → для кириллицы кракозябры; перекодируем.
+    let orig = req.file.originalname || 'file';
+    try { orig = Buffer.from(orig, 'latin1').toString('utf8'); } catch (_) {}
+    orig = orig.slice(0, 200);
     const ext = ((orig.match(/\.[A-Za-z0-9]{1,8}$/) || [''])[0] || '').toLowerCase();
     const rand = Math.random().toString(16).slice(2, 8);
     const objectKey = `${req.params.entity}/${req.params.id}/${Date.now()}-${rand}${ext}`;
