@@ -177,6 +177,33 @@ async function initDB() {
     );
     CREATE INDEX IF NOT EXISTS idx_tm_tc_tr_status ON ticketsmodule_tc_trainings(status);
 
+    -- Тренинг-центр: журнал исследовательских работ (раздел «Работы»).
+    -- stage — числовой этап (список стадий зависит от wtype); methods — JSONB.
+    CREATE TABLE IF NOT EXISTS ticketsmodule_tc_works (
+      id SERIAL PRIMARY KEY,
+      code TEXT DEFAULT '',
+      title TEXT NOT NULL DEFAULT '',
+      client TEXT DEFAULT '',
+      client_type TEXT DEFAULT '',
+      wtype TEXT DEFAULT 'demo',
+      stage INTEGER DEFAULT 0,
+      matrix TEXT DEFAULT '',
+      methods JSONB DEFAULT '[]',
+      analytes TEXT DEFAULT '',
+      samples INTEGER DEFAULT 0,
+      price BIGINT DEFAULT 0,
+      currency TEXT DEFAULT 'KZT',
+      assignee TEXT DEFAULT '',
+      report_at TEXT DEFAULT '',
+      recv_at TEXT DEFAULT '',
+      due TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      created_by VARCHAR(100),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_tc_wk_wtype ON ticketsmodule_tc_works(wtype);
+
     -- ── ProLab AI: банк примеров (самообучение агента на удачных запросах) ──────
     CREATE TABLE IF NOT EXISTS ticketsmodule_plsai_examples (
       id SERIAL PRIMARY KEY,
