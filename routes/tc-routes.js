@@ -3,8 +3,12 @@
 // (requireModuleApi); запись — admin/coordinator, удаление — admin.
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const storage = require('../storage-lib');
 const { pool, requireAuth, requireAnyModuleApi, isAdminLike } = require('../auth');
 
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+const ENTITIES = ['training', 'work', 'equipment', 'stock', 'qms'];
 const TC_CODES = ['TC', 'TC_WK', 'TC_EQ', 'TC_ST', 'TC_QM', 'TC_AN'];
 const WRITE = ['admin', 'coordinator'];
 const STATUSES = ['held', 'plan', 'lead'];
@@ -338,6 +342,48 @@ router.put('/qms/:id(\\d+)', requireAuth(WRITE), express.json({ limit: '1mb' }),
 router.delete('/qms/:id(\\d+)', requireAuth(['admin']), async (req, res) => {
   try { await pool.query('DELETE FROM ticketsmodule_tc_qms WHERE id=$1', [req.params.id]); res.json({ ok: true }); }
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── Файлы (вложения) — байты в Supabase Storage, карточки в Postgres ─────────
+router.get('/:entity/:id(\\d+)/files', requireAnyModuleApi(TC_CODES), async (req, res) => {
+  try {
+    if (!ENTITIES.includes(req.params.entity)) return res.status(404).json({ ok: false, error: 'Неизвестный раздел' });
+    const { rows } = await pool.query(
+      'SELECT id, filename, mime, size_bytes, uploaded_by, created_at FROM ticketsmodule_tc_files WHERE entity_type=$1 AND entity_id=$2 ORDER BY id DESC',
+      [req.params.entity, req.params.id]);
+    res.json({ ok: true, storageReady: storage.configured(), canEdit: canEditOf(req.user), items: rows });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+router.post('/:entity/:id(\\d+)/files', requireAuth(WRITE), upload.single('file'), async (req, res) => {
+  try {
+    if (!ENTITIES.includes(req.params.entity)) return res.status(404).json({ ok: false, error: 'Неизвестный раздел' });
+    if (!storage.configured()) return res.status(503).json({ ok: false, error: 'Хранилище файлов не настроено (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)' });
+    if (!req.file) return res.status(400).json({ ok: false, error: 'Файл не передан' });
+    const safe = (req.file.originalname || 'file').replace(/[^\w.\-а-яёА-ЯЁ ]+/g, '_').slice(0, 120);
+    const objectKey = `${req.params.entity}/${req.params.id}/${Date.now()}_${safe}`;
+    await storage.upload(objectKey, req.file.buffer, req.file.mimetype);
+    const by = String(req.user.display_name || req.user.username || '').slice(0, 100);
+    const { rows } = await pool.query(
+      `INSERT INTO ticketsmodule_tc_files (entity_type, entity_id, object_key, filename, mime, size_bytes, uploaded_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, filename, mime, size_bytes, uploaded_by, created_at`,
+      [req.params.entity, req.params.id, objectKey, safe, req.file.mimetype || '', req.file.size || 0, by]);
+    res.json({ ok: true, item: rows[0] });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+router.get('/files/:fid(\\d+)/download', requireAnyModuleApi(TC_CODES), async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT object_key FROM ticketsmodule_tc_files WHERE id=$1', [req.params.fid]);
+    if (!rows.length) return res.status(404).send('Файл не найден');
+    res.redirect(await storage.signedUrl(rows[0].object_key, 300));
+  } catch (e) { res.status(500).send('Ошибка: ' + e.message); }
+});
+router.delete('/files/:fid(\\d+)', requireAuth(WRITE), async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT object_key FROM ticketsmodule_tc_files WHERE id=$1', [req.params.fid]);
+    if (rows.length) await storage.remove(rows[0].object_key);
+    await pool.query('DELETE FROM ticketsmodule_tc_files WHERE id=$1', [req.params.fid]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
 module.exports = { router };

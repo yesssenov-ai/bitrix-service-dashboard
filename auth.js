@@ -278,6 +278,21 @@ async function initDB() {
     );
     CREATE INDEX IF NOT EXISTS idx_tm_tc_qms_kind ON ticketsmodule_tc_qms(kind);
 
+    -- Тренинг-центр: карточки файлов (байты — в Supabase Storage, тут метаданные).
+    -- entity_type: training|work|equipment|stock|qms; object_key — путь в бакете.
+    CREATE TABLE IF NOT EXISTS ticketsmodule_tc_files (
+      id SERIAL PRIMARY KEY,
+      entity_type TEXT NOT NULL,
+      entity_id INTEGER NOT NULL,
+      object_key TEXT NOT NULL,
+      filename TEXT NOT NULL DEFAULT '',
+      mime TEXT DEFAULT '',
+      size_bytes BIGINT DEFAULT 0,
+      uploaded_by VARCHAR(100),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_tc_files_ent ON ticketsmodule_tc_files(entity_type, entity_id);
+
     -- ── ProLab AI: банк примеров (самообучение агента на удачных запросах) ──────
     CREATE TABLE IF NOT EXISTS ticketsmodule_plsai_examples (
       id SERIAL PRIMARY KEY,

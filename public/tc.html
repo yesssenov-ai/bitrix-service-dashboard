@@ -349,6 +349,7 @@ function openModal(t){
     ${ro?'':`<div class="mfoot"><button class="btn btn-primary" id="mSave">Сохранить</button>${t.id?'<button class="btn danger" id="mDel">Удалить</button>':''}<span style="flex:1"></span><button class="btn" data-x>Отмена</button></div>`}
   </div>`;
   document.body.appendChild(ov);
+  attachFiles(ov,'training',t.id,!ro);
   renderParts();
   ov.addEventListener('click',e=>{
     if(e.target===ov||e.target.hasAttribute('data-x')){ ov.remove(); return; }
@@ -503,6 +504,7 @@ function openWorkModal(w){
     ${ro?'':`<div class="mfoot"><button class="btn btn-primary" id="wSave">Сохранить</button>${w.id?'<button class="btn danger" id="wDel">Удалить</button>':''}<span style="flex:1"></span><button class="btn" data-x>Отмена</button></div>`}
   </div>`;
   document.body.appendChild(ov);
+  attachFiles(ov,'work',w.id,!ro);
   ov.addEventListener('click',e=>{ if(e.target===ov||e.target.hasAttribute('data-x')) ov.remove(); });
   if(!ro){
     document.getElementById('w_wtype').onchange=e=>{ document.getElementById('w_stage').innerHTML=stageOptions(e.target.value,0); };
@@ -626,6 +628,7 @@ function openEquipModal(e){
     ${ro?'':`<div class="mfoot"><button class="btn btn-primary" id="eSave">Сохранить</button>${e.id?'<button class="btn danger" id="eDel">Удалить</button>':''}<span style="flex:1"></span><button class="btn" data-x>Отмена</button></div>`}
   </div>`;
   document.body.appendChild(ov);
+  attachFiles(ov,'equipment',e.id,!ro);
   ov.addEventListener('click',ev=>{ if(ev.target===ov||ev.target.hasAttribute('data-x')) ov.remove(); });
   if(!ro){
     document.getElementById('eSave').onclick=()=>saveEquip(e.id, ov);
@@ -749,6 +752,7 @@ function openStockModal(it){
     ${ro?'':`<div class="mfoot"><button class="btn btn-primary" id="sSave">Сохранить</button>${it.id?'<button class="btn danger" id="sDel">Удалить</button>':''}<span style="flex:1"></span><button class="btn" data-x>Отмена</button></div>`}
   </div>`;
   document.body.appendChild(ov);
+  attachFiles(ov,'stock',it.id,!ro);
   ov.addEventListener('click',ev=>{ if(ev.target===ov||ev.target.hasAttribute('data-x')) ov.remove(); });
   if(!ro){
     document.getElementById('sSave').onclick=()=>saveStock(it.id, ov);
@@ -844,11 +848,11 @@ function openQmsModal(x){
         <div class="fld"><span class="l">Версия</span><input class="in" id="q_ver" value="${esc(x.ver||'')}" ${ro?'disabled':''}></div>
       </div>
       <div class="fld"><span class="l">Заметки</span><textarea class="in" id="q_note" ${ro?'disabled':''}>${esc(x.note||'')}</textarea></div>
-      <div class="note" style="margin:0"><b>Файлы.</b><span>Прикрепление документов (сам текст процедуры, бланк) появится вместе с хранилищем файлов — следующим шагом.</span></div>
     </div>
     ${ro?'':`<div class="mfoot"><button class="btn btn-primary" id="qSave">Сохранить</button>${x.id?'<button class="btn danger" id="qDel">Удалить</button>':''}<span style="flex:1"></span><button class="btn" data-x>Отмена</button></div>`}
   </div>`;
   document.body.appendChild(ov);
+  attachFiles(ov,'qms',x.id,!ro);
   ov.addEventListener('click',ev=>{ if(ev.target===ov||ev.target.hasAttribute('data-x')) ov.remove(); });
   if(!ro){
     document.getElementById('qSave').onclick=()=>saveQms(x.id, ov);
@@ -933,6 +937,51 @@ function renderAnalytics(){
     [['proc','Процедуры'],['rk','Руководства'],['form','Формы'],['reg','Реестры'],['other','Прочее']].map(([k,l])=>({label:l,value:qk[k]||0})).filter(r=>r.value>0)
   )));
   document.getElementById('anBody').innerHTML=P.join('');
+}
+
+/* ───────── Файлы (вложения в карточках) ───────── */
+let _fEntity=null,_fId=null,_fCanEdit=false;
+function fmtBytes(n){ n=+n||0; if(n<1024)return n+' Б'; if(n<1048576)return (n/1024).toFixed(0)+' КБ'; return (n/1048576).toFixed(1)+' МБ'; }
+function attachFiles(ov, entity, id, canEdit){
+  if(!id) return;
+  const body=ov.querySelector('.body'); if(!body) return;
+  const fb=document.createElement('div'); fb.className='fld';
+  fb.innerHTML='<span class="l">Файлы</span><div id="tcFilesBox" class="parts"></div>';
+  body.appendChild(fb);
+  _fEntity=entity; _fId=id; _fCanEdit=canEdit; loadFilesList();
+}
+async function loadFilesList(){
+  const box=document.getElementById('tcFilesBox'); if(!box) return;
+  box.innerHTML='<div class="an-empty">Загрузка…</div>';
+  const d=await api('GET',`/${_fEntity}/${_fId}/files`);
+  if(!d||!d.ok){ box.innerHTML='<div class="an-empty">Не удалось загрузить файлы</div>'; return; }
+  const list=(d.items||[]).map(f=>`<div class="p-item"><div class="pf"><a href="/api/tc/files/${f.id}/download" target="_blank" rel="noopener" style="color:var(--accent);font-weight:700;text-decoration:none">${esc(f.filename)}</a> <small>${fmtBytes(f.size_bytes)}</small></div>${_fCanEdit?`<button data-fdel="${f.id}" title="Удалить">✕</button>`:''}</div>`).join('');
+  let html=list||'<div class="an-empty">Файлов пока нет</div>';
+  if(_fCanEdit){
+    if(d.storageReady===false) html+='<div class="an-empty" style="color:#C53B2F">Хранилище не настроено — загрузка недоступна (нужны SUPABASE_URL и SUPABASE_SERVICE_ROLE_KEY)</div>';
+    else html+=`<div class="p-add" style="grid-template-columns:1fr auto;margin-top:6px"><input type="file" id="tcFileInput" class="in" style="padding:5px"><button type="button" id="tcFileUp" title="Загрузить">⬆</button></div>`;
+  }
+  box.innerHTML=html;
+  box.querySelectorAll('[data-fdel]').forEach(b=>b.onclick=()=>deleteFile(+b.getAttribute('data-fdel')));
+  const up=document.getElementById('tcFileUp'); if(up) up.onclick=uploadFile;
+}
+async function uploadFile(){
+  const inp=document.getElementById('tcFileInput'); if(!inp||!inp.files||!inp.files[0]) return;
+  if(inp.files[0].size>25*1024*1024){ alert('Файл больше 25 МБ'); return; }
+  const up=document.getElementById('tcFileUp'); up.disabled=true; up.textContent='…';
+  const fd=new FormData(); fd.append('file', inp.files[0]);
+  try{
+    const r=await fetch(`/api/tc/${_fEntity}/${_fId}/files`,{method:'POST',credentials:'same-origin',body:fd});
+    const d=await r.json().catch(()=>({ok:false}));
+    if(!d.ok) alert(d.error||'Не удалось загрузить файл');
+  }catch(e){ alert('Ошибка загрузки'); }
+  await loadFilesList();
+}
+async function deleteFile(fid){
+  if(!confirm('Удалить файл безвозвратно?')) return;
+  const d=await api('DELETE','/files/'+fid);
+  if(!d||!d.ok){ alert((d&&d.error)||'Не удалось удалить'); return; }
+  await loadFilesList();
 }
 
 load();
