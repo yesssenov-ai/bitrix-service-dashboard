@@ -104,7 +104,7 @@ textarea.in{resize:vertical;min-height:54px}
     <button class="sec on" data-sec="training">Курсы</button>
     <button class="sec" data-sec="works">Работы</button>
     <button class="sec" data-sec="equipment">Приборы</button>
-    <button class="sec" data-sec="stock">Склад <span class="soon">скоро</span></button>
+    <button class="sec" data-sec="stock">Склад</button>
     <button class="sec" data-sec="qms">СМК <span class="soon">скоро</span></button>
     <button class="sec" data-sec="analytics">Аналитика <span class="soon">скоро</span></button>
   </div>
@@ -163,6 +163,26 @@ textarea.in{resize:vertical;min-height:54px}
     <div class="grid" id="eqGrid"></div>
   </div>
 
+  <div id="view-stock" hidden>
+    <div class="stats" id="stStats"></div>
+    <div class="toolbar">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+        <input id="stQ" placeholder="Поиск по наименованию, группе, партномеру…" autocomplete="off">
+      </div>
+      <div class="fchips" id="stFchips">
+        <button class="fchip on" data-f="all">Все</button>
+        <button class="fchip" data-f="chem">Химия</button>
+        <button class="fchip" data-f="std">Стандарты</button>
+        <button class="fchip" data-f="glass">Посуда</button>
+        <button class="fchip" data-f="cons">Расходники</button>
+        <button class="fchip" data-f="low">Заканчивается</button>
+      </div>
+      <button class="btn-primary" id="stAddBtn" hidden><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M12 5v14M5 12h14"/></svg>Позиция</button>
+    </div>
+    <div class="grid" id="stGrid"></div>
+  </div>
+
   <div id="view-soon" hidden></div>
 </div>
 
@@ -170,7 +190,6 @@ textarea.in{resize:vertical;min-height:54px}
 const LEVEL = {basic:'Базовый',complex:'Комплексный'};
 const ST = {held:{c:'held',t:'Проведён'},plan:{c:'plan',t:'План'},lead:{c:'lead',t:'Заявка'}};
 const SOON = {
-  stock:['Склад','Реактивы, стандарты, расходники, сроки и остатки (514 позиций).'],
   qms:['СМК','Записи по ISO/IEC 17025: методы, формы, акты.'],
   analytics:['Аналитика','Объёмы, загрузка, суммы по курсам и работам.']
 };
@@ -227,7 +246,7 @@ function renderGrid(){
   const g=document.getElementById('grid');
   g.innerHTML = list.length?list.map(card).join(''):'<div class="empty">Ничего не найдено</div>';
 }
-function hideViews(){ ['view-training','view-works','view-equipment','view-soon'].forEach(id=>{const el=document.getElementById(id); if(el) el.hidden=true;}); }
+function hideViews(){ ['view-training','view-works','view-equipment','view-stock','view-soon'].forEach(id=>{const el=document.getElementById(id); if(el) el.hidden=true;}); }
 function showSoon(key){
   hideViews();
   const v=document.getElementById('view-soon'); v.hidden=false;
@@ -237,6 +256,7 @@ function showSoon(key){
 function showTraining(){ hideViews(); document.getElementById('view-training').hidden=false; }
 function showWorks(){ hideViews(); document.getElementById('view-works').hidden=false; if(!wkLoaded) loadWorks(); }
 function showEquipment(){ hideViews(); document.getElementById('view-equipment').hidden=false; if(!eqLoaded) loadEquip(); }
+function showStock(){ hideViews(); document.getElementById('view-stock').hidden=false; if(!stLoaded) loadStock(); }
 
 function partRow(p,i){
   const sub=[p.org,p.pos].filter(Boolean).map(esc).join(' · ');
@@ -322,7 +342,7 @@ async function del(id, ov){
 document.getElementById('secs').addEventListener('click',e=>{
   const b=e.target.closest('.sec'); if(!b)return;
   document.querySelectorAll('.sec').forEach(x=>x.classList.toggle('on',x===b));
-  const sec=b.dataset.sec; if(sec==='training') showTraining(); else if(sec==='works') showWorks(); else if(sec==='equipment') showEquipment(); else showSoon(sec);
+  const sec=b.dataset.sec; if(sec==='training') showTraining(); else if(sec==='works') showWorks(); else if(sec==='equipment') showEquipment(); else if(sec==='stock') showStock(); else showSoon(sec);
 });
 document.getElementById('fchips').addEventListener('click',e=>{
   const b=e.target.closest('.fchip'); if(!b)return;
@@ -592,6 +612,127 @@ document.getElementById('eqAddBtn').addEventListener('click',()=>openEquipModal(
 document.getElementById('eqGrid').addEventListener('click',e=>{
   const c=e.target.closest('.cc'); if(!c)return;
   const it=EQ.find(x=>String(x.id)===c.dataset.id); if(it) openEquipModal(it);
+});
+
+/* ───────── Склад ───────── */
+const CATLABEL={reag:'Реактивы',acid:'Кислоты',salt:'Соли',solv:'Растворители',gas:'Газы',std:'Стандарты (СО)',glass:'Посуда',parts:'Запчасти',cons:'Расходники',ppe:'СИЗ',lab:'Лаб. оборуд.',office:'Офис',merch:'Мерч',kitchen:'Кухня',other:'Прочее'};
+const CHEM=['reag','acid','salt','solv','gas'], CONS=['parts','cons','ppe'];
+let STK=[], stCanEdit=false, stLoaded=false, stFilter='all', stQuery='';
+function stState(it){
+  if((+it.qty)<=0) return {t:'Нет',c:'#C53B2F'};
+  if((+it.min_qty)>0 && (+it.qty)<=(+it.min_qty)) return {t:'Мало',c:'#b26c12'};
+  return null;
+}
+async function loadStock(){
+  stLoaded=true;
+  const d=await api('GET','/stock');
+  if(!d||!d.ok){ document.getElementById('stGrid').innerHTML='<div class="empty">Не удалось загрузить склад</div>'; return; }
+  STK=d.items||[]; stCanEdit=!!d.canEdit; document.getElementById('stAddBtn').hidden=!stCanEdit;
+  renderStStats(); renderStGrid();
+}
+function renderStStats(){
+  const total=STK.length;
+  const chem=STK.filter(x=>CHEM.includes(x.cat)).length;
+  const std=STK.filter(x=>x.cat==='std').length;
+  const low=STK.filter(x=>(+x.qty)<=0).length;
+  document.getElementById('stStats').innerHTML=[
+    ['n',total,'Позиций'],['n',chem,'Химия'],['n',std,'Стандартов'],['n accent',low,'Заканчивается']
+  ].map(([c,n,l])=>`<div class="stat"><div class="${c}">${n}</div><div class="l">${l}</div></div>`).join('');
+}
+function fmtQty(q){ const n=+q; return (Math.round(n*1000)/1000).toString(); }
+function stockCard(it){
+  const lbl=CATLABEL[it.cat]||it.cat||'—'; const stt=stState(it);
+  const sub=[it.grp, it.loc].filter(Boolean).map(esc);
+  const foot=[`<b>${fmtQty(it.qty)}</b> ${esc(it.unit||'')}`]; if(it.pn)foot.push(`PN ${esc(it.pn)}`);
+  return `<div class="cc" data-id="${it.id}">
+    <div class="row" style="justify-content:space-between;align-items:flex-start">
+      <div class="ct">${esc(it.name||'—')}</div>
+      ${stt?`<span class="pill" style="background:color-mix(in srgb,${stt.c} 12%,var(--surface));color:${stt.c};border:1px solid color-mix(in srgb,${stt.c} 30%,var(--line))">${stt.t}</span>`:''}
+    </div>
+    <div class="row"><span class="pill m">${esc(lbl)}</span>${it.off_book?'<span class="pill lead">вне баланса</span>':''}</div>
+    ${sub.length?`<div class="sub">${sub.join(' <span class="dot"></span> ')}</div>`:''}
+    <div class="foot">${foot.map(x=>`<span>${x}</span>`).join('')}</div>
+  </div>`;
+}
+function renderStGrid(){
+  let list=STK.slice();
+  if(stFilter==='chem') list=list.filter(x=>CHEM.includes(x.cat));
+  else if(stFilter==='std') list=list.filter(x=>x.cat==='std');
+  else if(stFilter==='glass') list=list.filter(x=>x.cat==='glass');
+  else if(stFilter==='cons') list=list.filter(x=>CONS.includes(x.cat));
+  else if(stFilter==='low') list=list.filter(x=>(+x.qty)<=0);
+  if(stQuery){const q=stQuery.toLowerCase();list=list.filter(x=>((x.name||'')+' '+(x.grp||'')+' '+(x.pn||'')+' '+(x.nom||'')+' '+(x.loc||'')).toLowerCase().includes(q));}
+  const g=document.getElementById('stGrid');
+  g.innerHTML=list.length?list.slice(0,600).map(stockCard).join(''):'<div class="empty">Ничего не найдено</div>';
+}
+function openStockModal(it){
+  it=it||{cat:'reag',unit:'шт',qty:0,min_qty:0};
+  const ro=!stCanEdit;
+  const sel=(v,opts)=>opts.map(([k,l])=>`<option value="${k}"${v===k?' selected':''}>${l}</option>`).join('');
+  const catOpts=Object.entries(CATLABEL).map(([k,l])=>[k,l]);
+  const ov=document.createElement('div'); ov.className='ov';
+  ov.innerHTML=`<div class="modal"><div class="mh"><h2>${it.id?'Позиция склада':'Новая позиция'}</h2><button class="x" data-x>×</button></div>
+    <div class="body">
+      <div class="fld"><span class="l">Наименование</span><input class="in" id="s_name" value="${esc(it.name||'')}" ${ro?'disabled':''}></div>
+      <div class="fld two">
+        <div class="fld"><span class="l">Категория</span><select class="in" id="s_cat" ${ro?'disabled':''}>${sel(it.cat,catOpts)}</select></div>
+        <div class="fld"><span class="l">Группа</span><input class="in" id="s_grp" value="${esc(it.grp||'')}" ${ro?'disabled':''}></div>
+      </div>
+      <div class="fld two" style="grid-template-columns:1fr 1fr 1fr">
+        <div class="fld"><span class="l">Количество</span><input class="in" id="s_qty" type="number" step="any" value="${+it.qty||0}" ${ro?'disabled':''}></div>
+        <div class="fld"><span class="l">Ед.</span><input class="in" id="s_unit" value="${esc(it.unit||'шт')}" ${ro?'disabled':''}></div>
+        <div class="fld"><span class="l">Мин. остаток</span><input class="in" id="s_min" type="number" step="any" value="${+it.min_qty||0}" ${ro?'disabled':''}></div>
+      </div>
+      <div class="fld"><span class="l">Место хранения</span><input class="in" id="s_loc" value="${esc(it.loc||'')}" ${ro?'disabled':''}></div>
+      <div class="fld two">
+        <div class="fld"><span class="l">Партномер</span><input class="in" id="s_pn" value="${esc(it.pn||'')}" ${ro?'disabled':''}></div>
+        <div class="fld"><span class="l">Номенкл. код</span><input class="in" id="s_nom" value="${esc(it.nom||'')}" ${ro?'disabled':''}></div>
+      </div>
+      <div class="fld two">
+        <div class="fld"><span class="l">Упаковка</span><input class="in" id="s_pack" value="${esc(it.pack||'')}" ${ro?'disabled':''}></div>
+        <div class="fld"><span class="l">Срок годности</span><input class="in" id="s_exp" value="${esc(it.expiry||'')}" placeholder="ГГГГ-ММ-ДД" ${ro?'disabled':''}></div>
+      </div>
+      <label class="chk"><input type="checkbox" id="s_off" ${it.off_book?'checked':''} ${ro?'disabled':''}> Вне баланса (неучтёнка)</label>
+      <div class="fld"><span class="l">Заметки</span><textarea class="in" id="s_note" ${ro?'disabled':''}>${esc(it.note||'')}</textarea></div>
+    </div>
+    ${ro?'':`<div class="mfoot"><button class="btn btn-primary" id="sSave">Сохранить</button>${it.id?'<button class="btn danger" id="sDel">Удалить</button>':''}<span style="flex:1"></span><button class="btn" data-x>Отмена</button></div>`}
+  </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click',ev=>{ if(ev.target===ov||ev.target.hasAttribute('data-x')) ov.remove(); });
+  if(!ro){
+    document.getElementById('sSave').onclick=()=>saveStock(it.id, ov);
+    if(it.id) document.getElementById('sDel').onclick=()=>delStock(it.id, ov);
+  }
+}
+async function saveStock(id, ov){
+  const g=id=>document.getElementById(id);
+  const body={
+    name:g('s_name').value.trim(), cat:g('s_cat').value, grp:g('s_grp').value.trim(),
+    qty:+g('s_qty').value||0, unit:g('s_unit').value.trim()||'шт', min_qty:+g('s_min').value||0,
+    loc:g('s_loc').value.trim(), pn:g('s_pn').value.trim(), nom:g('s_nom').value.trim(),
+    pack:g('s_pack').value.trim(), expiry:g('s_exp').value.trim(), off_book:g('s_off').checked, note:g('s_note').value.trim()
+  };
+  if(!body.name){ alert('Укажите наименование'); return; }
+  const btn=g('sSave'); btn.disabled=true; btn.textContent='Сохранение…';
+  const d=id?await api('PUT','/stock/'+id,body):await api('POST','/stock',body);
+  if(!d||!d.ok){ alert((d&&d.error)||'Не удалось сохранить'); btn.disabled=false; btn.textContent='Сохранить'; return; }
+  ov.remove(); await loadStock();
+}
+async function delStock(id, ov){
+  if(!confirm('Удалить позицию безвозвратно?')) return;
+  const d=await api('DELETE','/stock/'+id);
+  if(!d||!d.ok){ alert((d&&d.error)||'Не удалось удалить (нужны права администратора)'); return; }
+  ov.remove(); await loadStock();
+}
+document.getElementById('stFchips').addEventListener('click',e=>{
+  const b=e.target.closest('.fchip'); if(!b)return;
+  stFilter=b.dataset.f; document.querySelectorAll('#stFchips .fchip').forEach(x=>x.classList.toggle('on',x===b)); renderStGrid();
+});
+document.getElementById('stQ').addEventListener('input',e=>{stQuery=e.target.value.trim();renderStGrid();});
+document.getElementById('stAddBtn').addEventListener('click',()=>openStockModal(null));
+document.getElementById('stGrid').addEventListener('click',e=>{
+  const c=e.target.closest('.cc'); if(!c)return;
+  const it=STK.find(x=>String(x.id)===c.dataset.id); if(it) openStockModal(it);
 });
 
 load();

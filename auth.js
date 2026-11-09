@@ -235,6 +235,29 @@ async function initDB() {
     );
     CREATE INDEX IF NOT EXISTS idx_tm_tc_eq_dir ON ticketsmodule_tc_equipment(dir);
 
+    -- Тренинг-центр: склад (раздел «Склад»): реактивы, стандарты, расходники.
+    -- qty/min_qty — числовые остатки; cat — категория; off_book — не на балансе.
+    CREATE TABLE IF NOT EXISTS ticketsmodule_tc_stock (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL DEFAULT '',
+      cat TEXT DEFAULT 'other',
+      unit TEXT DEFAULT 'шт',
+      qty REAL DEFAULT 0,
+      min_qty REAL DEFAULT 0,
+      grp TEXT DEFAULT '',
+      loc TEXT DEFAULT '',
+      pack TEXT DEFAULT '',
+      pn TEXT DEFAULT '',
+      nom TEXT DEFAULT '',
+      note TEXT DEFAULT '',
+      off_book BOOLEAN DEFAULT false,
+      expiry TEXT DEFAULT '',
+      created_by VARCHAR(100),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_tc_stock_cat ON ticketsmodule_tc_stock(cat);
+
     -- ── ProLab AI: банк примеров (самообучение агента на удачных запросах) ──────
     CREATE TABLE IF NOT EXISTS ticketsmodule_plsai_examples (
       id SERIAL PRIMARY KEY,
