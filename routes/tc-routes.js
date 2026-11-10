@@ -411,6 +411,7 @@ const _normName = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim()
 
 let _tcDept = { id: null, at: 0 };
 async function _tcDeptId() {
+  if (process.env.TC_DEPARTMENT_ID) return process.env.TC_DEPARTMENT_ID;
   if (_tcDept.id && Date.now() - _tcDept.at < 6 * 3600 * 1000) return _tcDept.id;
   try { const r = await b24('department.get', {}); const list = (r && r.result) || [];
     const d = list.find(x => /тренинг|training|учебн/i.test(x.NAME || '')); _tcDept = { id: d ? d.ID : null, at: Date.now() };
@@ -444,7 +445,7 @@ router.get('/staff', requireAnyModuleApi(TC_CODES), async (req, res) => {
            email=EXCLUDED.email, phone=EXCLUDED.phone, updated_at=NOW()`,
         [p.bitrix_id, p.name, p.role_title, p.email, p.phone]); } catch (e) {}
     }
-    const { rows } = await pool.query('SELECT * FROM ticketsmodule_tc_staff WHERE active IS NOT FALSE ORDER BY name');
+    const { rows } = await pool.query("SELECT * FROM ticketsmodule_tc_staff WHERE active IS NOT FALSE AND COALESCE(name,'') NOT LIKE '%(пример)%' ORDER BY name");
     const now = new Date(); const wdays = _nextWorkDays(now, 5); const todayISO = _isoLocal(now);
     let trips = []; try { trips = await require('../portal-today').smartAbsences(now); } catch (e) {}
     const byName = {}; for (const t of trips) { const k = _normName(t.name); (byName[k] = byName[k] || []).push(t); }
@@ -484,6 +485,19 @@ router.put('/staff/:bid(\\d+)', requireAuth(WRITE), express.json({ limit: '256kb
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
+router.get('/staff-debug', requireAuth(['admin', 'superadmin']), async (req, res) => {
+  const out = { ok: true };
+  try { const r = await b24('department.get', {}); out.departments = ((r && r.result) || []).map(d => ({ id: d.ID, name: d.NAME })); }
+  catch (e) { out.department_error = e.message; }
+  try {
+    const dept = await _tcDeptId(); out.matchedDeptId = dept || null;
+    if (dept) { const u = await b24('user.get', { FILTER: { UF_DEPARTMENT: dept, ACTIVE: true }, start: 0 });
+      const us = (u && u.result) || []; out.usersInDept = us.length;
+      out.sampleUser = us[0] ? { ID: us[0].ID, NAME: us[0].NAME, LAST_NAME: us[0].LAST_NAME, WORK_POSITION: us[0].WORK_POSITION } : null; }
+  } catch (e) { out.user_error = e.message; }
+  try { const s = await pool.query('SELECT bitrix_id, name FROM ticketsmodule_tc_staff'); out.staffRows = s.rows.length; out.staffSample = s.rows.slice(0, 8); } catch (e) {}
+  res.json(out);
+});
 router.get('/absences', requireAnyModuleApi(TC_CODES), async (req, res) => {
   try { const { rows } = await pool.query('SELECT * FROM ticketsmodule_tc_absences ORDER BY from_date DESC, id DESC');
     res.json({ ok: true, canEdit: canEditOf(req.user), items: rows }); }
