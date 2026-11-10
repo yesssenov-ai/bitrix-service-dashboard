@@ -439,7 +439,7 @@ router.get('/staff', requireAnyModuleApi(TC_CODES), async (req, res) => {
       try { await pool.query(
         `INSERT INTO ticketsmodule_tc_staff (bitrix_id,name,role_title,email,phone)
            VALUES ($1,$2,$3,$4,$5)
-         ON CONFLICT (bitrix_id) DO UPDATE SET
+         ON CONFLICT (bitrix_id) WHERE bitrix_id IS NOT NULL DO UPDATE SET
            name=EXCLUDED.name,
            role_title=CASE WHEN COALESCE(ticketsmodule_tc_staff.role_title,'')='' THEN EXCLUDED.role_title ELSE ticketsmodule_tc_staff.role_title END,
            email=EXCLUDED.email, phone=EXCLUDED.phone, updated_at=NOW()`,
