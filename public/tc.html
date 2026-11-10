@@ -1269,9 +1269,12 @@ function mkEntity(cfg){
     const ov=document.createElement('div'); ov.className='ov';
     const ro = !S.canEdit;
     const canDel = idv && !cfg.noDelete;
+    const canProcure = cfg.procure && idv && !it.proc_item_id && !ro;
+    const procuredHtml = (cfg.procure && it.proc_url)
+      ? `<div class="note"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M20 6 9 17l-5-5"/></svg>Закупка оформлена в Битриксе — <a href="${esc(it.proc_url)}" target="_blank" rel="noopener" style="color:var(--accent);font-weight:700;text-decoration:none">открыть заявку #${esc(it.proc_item_id)}</a></div>` : '';
     ov.innerHTML=`<div class="modal"><div class="mh"><h2>${isNew?'Новая запись — '+esc(cfg.one):esc(it.name||cfg.one)}</h2><button class="x" data-x>×</button></div>
-      <div class="body">${body}</div>
-      ${ro?'':`<div class="mfoot"><button class="btn btn-primary" id="efSave">Сохранить</button>${canDel?'<button class="btn danger" id="efDel">Удалить</button>':''}<span style="flex:1"></span><button class="btn" data-x>Отмена</button></div>`}
+      <div class="body">${procuredHtml}${body}</div>
+      ${ro?'':`<div class="mfoot"><button class="btn btn-primary" id="efSave">Сохранить</button>${canProcure?'<button class="btn" id="efProcure" title="Создать закупку в процессе «Закупки» (Битрикс)">Оформить закупку</button>':''}${canDel?'<button class="btn danger" id="efDel">Удалить</button>':''}<span style="flex:1"></span><button class="btn" data-x>Отмена</button></div>`}
     </div>`;
     document.body.appendChild(ov);
     ov.addEventListener('click',e=>{ if(e.target===ov||e.target.hasAttribute('data-x')) ov.remove(); });
@@ -1291,6 +1294,14 @@ function mkEntity(cfg){
         const d=await api('DELETE', cfg.ep+'/'+idv);
         if(!d||!d.ok){ alert((d&&d.error)||'Не удалось удалить (нужны права администратора)'); return; }
         ov.remove(); await load();
+      }; }
+      if(canProcure){ const pb=document.getElementById('efProcure'); if(pb) pb.onclick=async()=>{
+        if(!confirm('Создать закупку в Битриксе по этой потребности?\nЗаявка попадёт в единый процесс «Закупки» с видом «Для нужд тренинг-центра».')) return;
+        pb.disabled=true; pb.textContent='Оформляю…';
+        const d=await api('POST', cfg.ep+'/'+idv+'/procure', {});
+        if(!d||!d.ok){ alert((d&&d.error)||'Не удалось оформить закупку'); pb.disabled=false; pb.textContent='Оформить закупку'; return; }
+        ov.remove(); await load();
+        if(d.itemUrl){ try{ window.open(d.itemUrl,'_blank','noopener'); }catch(_){}}
       }; }
     }
   }
@@ -1387,7 +1398,7 @@ const entAbs = mkEntity({
 function nameStaff(S, id){ if(!id) return ''; const s=(S.rel.staff||[]).find(x=>+x.bitrix_id===+id||+x.id===+id); return s?s.name:('#'+id); }
 
 const entNeeds = mkEntity({
-  key:'needs', ep:'/needs', one:'Потребность', required:'title',
+  key:'needs', ep:'/needs', one:'Потребность', required:'title', procure:true,
   search:['title','reason','link_ref','assignee'],
   stats:(l)=>[['n',l.length,'Потребностей'],['n accent',l.filter(x=>x.priority==='urgent').length,'Срочных'],['n',l.filter(x=>x.status==='new').length,'Новых']]
     .map(([c,n,t])=>`<div class="stat"><div class="${c}">${n}</div><div class="l">${t}</div></div>`).join(''),
@@ -1401,6 +1412,7 @@ const entNeeds = mkEntity({
     <div class="row" style="justify-content:space-between;align-items:flex-start"><div class="ct">${ESCV(it.title)}</div>${pill(it.priority)}</div>
     <div class="row"><span class="client">${ESCV(it.qty)} ${ESCV(it.unit)}</span><span class="pill m">${lbl(it.link_type)}${it.link_ref?': '+ESCV(it.link_ref):''}</span>${pill(it.status)}</div>
     ${it.reason?`<div class="sub">${ESCV(it.reason)}</div>`:''}
+    ${it.proc_url?`<div class="row"><a class="pill cert" href="${ESCV(it.proc_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Открыть закупку в Битриксе" style="text-decoration:none"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg>Закупка #${ESCV(it.proc_item_id)}</a></div>`:''}
     <div class="foot"><span>${it.est_price?('≈ '+Number(it.est_price).toLocaleString('ru-RU')+' '+ESCV(it.currency)):'—'}</span><span>${ESCV(it.assignee)}</span></div>
   </div>`,
   fields:[

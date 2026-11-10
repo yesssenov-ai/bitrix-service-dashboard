@@ -7,6 +7,7 @@ const multer = require('multer');
 const storage = require('../storage-lib');
 const { pool, requireAuth, requireAnyModuleApi, isAdminLike } = require('../auth');
 const { b24 } = require('../bitrix');
+const procurement = require('../procurement-calc'); // переиспользуем готовый процесс «Закупки» (1066)
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 const ENTITIES = ['training', 'work', 'equipment', 'stock', 'qms'];
@@ -593,6 +594,57 @@ function tcCrud(path, table, cols, opts) {
   });
 }
 tcCrud('needs', 'ticketsmodule_tc_needs', [['title','s'],['qty','n'],['unit','s'],['link_type','s'],['link_ref','s'],['reason','s'],['priority','s'],['status','s'],['est_price','n'],['currency','s'],['assignee','s'],['note','s']], { required: 'title' });
+
+// ── Потребность → Закупка в Битриксе (смарт «Закупки» 1066) ──────────────────
+// Переиспользуем готовый процесс закупок: тот же createRequest, что и у дашборда
+// склада. Сотрудник ТЦ оформляет закупку прямо из своего модуля; заявка падает
+// в единый процесс «Закупки» с видом «Для нужд тренинг-центра» и ссылкой назад.
+let _tcProcCols = false;
+async function ensureNeedProcCols() {
+  if (_tcProcCols) return;
+  try { await pool.query('ALTER TABLE ticketsmodule_tc_needs ADD COLUMN IF NOT EXISTS proc_item_id bigint, ADD COLUMN IF NOT EXISTS proc_url text, ADD COLUMN IF NOT EXISTS proc_at timestamptz'); _tcProcCols = true; } catch (e) {}
+}
+ensureNeedProcCols().catch(() => {});
+let _tcVidTc = null;
+async function tcVidZakupki() {
+  if (_tcVidTc) return _tcVidTc;
+  let vid = '130'; // «Для нужд тренинг-центра» (fallback)
+  try { const meta = await procurement.getMeta(); const list = (meta && meta.vidZakupki) || [];
+    const v = list.find(x => /тренинг/i.test(x.label || x.name || '')); if (v && v.id) vid = String(v.id); } catch (e) {}
+  _tcVidTc = vid; return vid;
+}
+router.post('/needs/:id(\\d+)/procure', requireAuth(WRITE), express.json({ limit: '1mb' }), async (req, res) => {
+  try {
+    await ensureNeedProcCols();
+    const { rows } = await pool.query('SELECT * FROM ticketsmodule_tc_needs WHERE id=$1', [req.params.id]);
+    const need = rows[0];
+    if (!need) return res.status(404).json({ ok: false, error: 'Потребность не найдена' });
+    if (need.proc_item_id) return res.json({ ok: true, already: true, bitrixItemId: need.proc_item_id, itemUrl: need.proc_url || procurement.itemUrl(need.proc_item_id) });
+    const bid = req.user.bitrix_user_id || null;
+    const vid = await tcVidZakupki();
+    const parts = [];
+    if (need.qty) parts.push('Количество: ' + need.qty + (need.unit ? (' ' + need.unit) : ''));
+    if (need.reason) parts.push('Обоснование: ' + need.reason);
+    if (need.link_type || need.link_ref) parts.push('Связано: ' + [need.link_type, need.link_ref].filter(Boolean).join(' '));
+    if (need.priority) parts.push('Приоритет: ' + (need.priority === 'urgent' ? 'срочно' : need.priority));
+    parts.push('Источник: модуль «Тренинг-центр» → Потребности #' + need.id);
+    const by = str(req.user.display_name || req.user.username, 100);
+    const payload = {
+      title: need.title,
+      vidZakupki: vid,
+      assigned: bid || undefined,
+      opportunity: (need.est_price != null && need.est_price !== '') ? need.est_price : undefined,
+      currency: need.currency || undefined,
+      comment: parts.join('\n'),
+      _createdBy: by, _createdByName: by,
+    };
+    const out = await procurement.createRequest(payload, bid);
+    const newStatus = (need.status === 'new' || !need.status) ? 'ordered' : need.status;
+    await pool.query('UPDATE ticketsmodule_tc_needs SET proc_item_id=$1, proc_url=$2, proc_at=NOW(), status=$3 WHERE id=$4',
+      [out.bitrixItemId, out.itemUrl, newStatus, need.id]);
+    res.json({ ok: true, bitrixItemId: out.bitrixItemId, itemUrl: out.itemUrl, status: newStatus });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 tcCrud('samples', 'ticketsmodule_tc_samples', [['code','s'],['client','s'],['matrix','s'],['work_code','s'],['received_at','s'],['storage','s'],['status','s'],['barcode','s'],['disposed_act','s'],['note','s']]);
 tcCrud('methods', 'ticketsmodule_tc_methods', [['code','s'],['name','s'],['analytes','j'],['demand','i'],['restrictions','s'],['instruction','s'],['note','s']]);
 tcCrud('routines', 'ticketsmodule_tc_routines', [['title','s'],['freq','s'],['next_at','s'],['last_done','s'],['needs_doc','b'],['assignee','s'],['status','s'],['note','s']], { required: 'title' });
