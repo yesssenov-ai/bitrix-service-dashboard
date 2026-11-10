@@ -630,14 +630,14 @@ router.get('/calendar', requireAnyModuleApi(TC_CODES), async (req, res) => {
       items.push({ date: iso, raw: iso.slice(8, 10) + '.' + iso.slice(5, 7), kind, title: title || '', sub: sub || '' }); };
     // Курсы ТЦ — одно событие с интервалом {date:start, end}, чтобы фронт рисовал
     // многодневный курс одной непрерывной линией (а не чипом в каждом дне).
-    try { const { rows } = await pool.query('SELECT title,client,dates_text,place,participants FROM ticketsmodule_tc_trainings');
+    try { const { rows } = await pool.query('SELECT id,title,client,dates_text,place,participants FROM ticketsmodule_tc_trainings');
       for (const t of rows) {
         const pr = parseDatesText(t.dates_text); if (!pr) continue;
         const s = dISO(pr.start); if (!s) continue;
         let e = dISO(pr.end) || s; if (e < s) e = s;
         let pc = 0; try { const a = typeof t.participants === 'string' ? JSON.parse(t.participants) : t.participants; pc = Array.isArray(a) ? a.length : 0; } catch (_) {}
         const sub = [t.client, pc ? `${pc} уч.` : '', t.place].filter(Boolean).join(' · ');
-        items.push({ date: s, end: e, raw: s.slice(8, 10) + '.' + s.slice(5, 7), kind: 'course', title: t.title || '', sub });
+        items.push({ date: s, end: e, raw: s.slice(8, 10) + '.' + s.slice(5, 7), kind: 'course', rid: t.id, title: t.title || '', sub });
       } } catch (e) {}
     try { const { rows } = await pool.query('SELECT title,client,due,report_at FROM ticketsmodule_tc_works');
       for (const w of rows) { push(w.due, 'work', w.title, w.client); push(w.report_at, 'report', w.title, w.client); } } catch (e) {}
@@ -645,11 +645,15 @@ router.get('/calendar', requireAnyModuleApi(TC_CODES), async (req, res) => {
       for (const e of rows) { const nm = e.name || e.short || ''; push(e.verify_next, 'verify', nm, e.ser ? ('S/N ' + e.ser) : ''); push(e.to_next, 'to', nm, ''); } } catch (e) {}
     try { const { rows } = await pool.query('SELECT title,freq,next_at FROM ticketsmodule_tc_routines');
       for (const r of rows) push(r.next_at, 'routine', r.title, r.freq); } catch (e) {}
+    // Отсутствия/командировки — интервалом {date:from, end:to}, непрерывной линией на весь период.
+    const pushSpan = (from, to, kind, title, sub, extra) => { const s = dISO(from); if (!s) return;
+      let e = dISO(to) || s; if (e < s) e = s;
+      items.push(Object.assign({ date: s, end: e, raw: s.slice(8, 10) + '.' + s.slice(5, 7), kind, title: title || '', sub: sub || '' }, extra || {})); };
     try { const { rows } = await pool.query(`SELECT a.from_date,a.to_date,a.kind,s.name FROM ticketsmodule_tc_absences a LEFT JOIN ticketsmodule_tc_staff s ON s.bitrix_id=a.staff_id WHERE a.status='approved'`);
       const KL = { vacation: 'Отпуск', remote: 'Удалёнка', sick: 'Больничный', unpaid: 'Без содержания' };
-      for (const a of rows) push(a.from_date, 'absence', a.name || 'Сотрудник', (KL[a.kind] || a.kind) + (a.to_date ? (' до ' + a.to_date) : '')); } catch (e) {}
+      for (const a of rows) pushSpan(a.from_date, a.to_date, 'absence', a.name || 'Сотрудник', KL[a.kind] || a.kind); } catch (e) {}
     try { const trips = await require('../portal-today').smartAbsences(new Date());
-      for (const t of trips) push(t.from_date, 'absence', t.name, (t.kind === 'trip' ? 'Командировка' : 'Отпуск') + (t.dest ? (': ' + t.dest) : '')); } catch (e) {}
+      for (const t of trips) pushSpan(t.from_date, t.to_date, 'absence', t.name, (t.kind === 'trip' ? 'Командировка' : 'Отпуск') + (t.dest ? (': ' + t.dest) : ''), { companyId: t.companyId || null, trip: t.kind === 'trip' }); } catch (e) {}
     items.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
     res.json({ ok: true, items });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }

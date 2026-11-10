@@ -132,22 +132,26 @@ textarea.in{resize:vertical;min-height:48px}
 .cal-leg i{width:9px;height:9px;border-radius:3px;display:inline-block}
 .cal-dow-row{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:4px}
 .cal-weeks{display:flex;flex-direction:column;gap:5px}
-.cal-week{display:flex;flex-direction:column;gap:3px}
-.cal-bars{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;align-content:start;row-gap:3px}
-.cal-bar{height:15px;display:flex;align-items:center;gap:3px;font-size:10px;font-weight:700;line-height:1;padding:0 8px;border-radius:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;text-decoration:none;background:color-mix(in srgb,var(--accent) 16%,var(--surface));color:var(--accent);border:1px solid var(--accent-line)}
-.cal-bar:hover{background:color-mix(in srgb,var(--accent) 24%,var(--surface))}
-.cal-bar.cl{border-top-left-radius:0;border-bottom-left-radius:0;border-left-style:dashed}
-.cal-bar.cr{border-top-right-radius:0;border-bottom-right-radius:0;border-right-style:dashed}
+.cal-week{position:relative}
 .cal-days{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+/* Полосы курсов/командировок — слой поверх дней, выровнен по колонкам недели */
+.cal-bars{position:absolute;top:23px;left:0;right:0;display:grid;grid-template-columns:repeat(7,1fr);gap:5px;row-gap:2px;pointer-events:none;z-index:3}
+.cal-bar{pointer-events:auto;height:15px;display:flex;align-items:center;gap:3px;font-size:10px;font-weight:700;line-height:1;padding:0 8px;border-radius:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;text-decoration:none;border:1px solid transparent}
+.cal-bar.course{background:color-mix(in srgb,var(--accent) 16%,var(--surface));color:var(--accent);border-color:var(--accent-line)}
+.cal-bar.course:hover{background:color-mix(in srgb,var(--accent) 26%,var(--surface))}
+.cal-bar.absence{background:color-mix(in srgb,#6a7488 15%,var(--surface));color:var(--text-2);border-color:color-mix(in srgb,#6a7488 30%,var(--line))}
+.cal-bar.absence:hover{background:color-mix(in srgb,#6a7488 24%,var(--surface))}
+.cal-bar.cl{border-top-left-radius:0;border-bottom-left-radius:0}
+.cal-bar.cr{border-top-right-radius:0;border-bottom-right-radius:0}
 .cal-dow{font-size:10.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.03em;text-align:center;padding:2px 0 4px}
-.cal-cell{min-height:86px;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:5px 5px 6px;display:flex;flex-direction:column;gap:3px;cursor:pointer;overflow:hidden;transition:border-color .12s,box-shadow .12s}
+.cal-cell{position:relative;min-height:92px;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:calc(var(--lanes,0)*17px + 23px) 5px 6px;display:flex;flex-direction:column;gap:3px;cursor:pointer;overflow:hidden;transition:border-color .12s,box-shadow .12s}
 .cal-cell:hover{border-color:var(--line-2);box-shadow:0 2px 8px rgba(20,25,35,.05)}
-.cal-cell.out{background:var(--surface-2);opacity:.5}
+.cal-cell.out{background:var(--surface-2);opacity:.55}
 .cal-cell.out .cal-dnum{color:var(--text-3)}
 .cal-cell.today{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
 .cal-cell.sel{border-color:var(--accent);background:var(--accent-weak)}
 .cal-cell.has .cal-dnum{font-weight:800}
-.cal-dnum{font-size:11.5px;font-weight:600;color:var(--text);align-self:flex-end}
+.cal-dnum{position:absolute;top:5px;right:8px;font-size:11.5px;font-weight:600;color:var(--text)}
 .cal-cell.today .cal-dnum{color:var(--accent)}
 .cal-chip{font-size:10px;font-weight:600;line-height:1.3;border-radius:5px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;border:1px solid transparent}
 .cal-more{font-size:9.5px;color:var(--text-3);font-weight:600;padding-left:3px}
@@ -1653,7 +1657,7 @@ const CAL_KIND = { course:['Курс','course'], work:['Срок работы','
 const CAL_MON=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 const CAL_DOW=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 const cpad=n=>String(n).padStart(2,'0');
-let _calBuilt=false,_calItems=null,_calFocus=null,_calSel=null;
+let _calBuilt=false,_calItems=null,_calFocus=null,_calSel=null,_calBars=[];
 async function mountCalendar(){
   const host=document.getElementById('view-cal'); if(!host) return;
   if(!_calBuilt){ _calBuilt=true; host.innerHTML='<div id="calBody"><div class="empty">Загрузка…</div></div>'; }
@@ -1675,8 +1679,15 @@ async function mountCalendar(){
   }
   renderCalGrid();
 }
-const calCourseEnd=e=>e.end||e.date;
-const calCovers=(e,iso)=> e.kind==='course' ? (iso>=e.date && iso<=calCourseEnd(e)) : e.date===iso;
+const calSpanEnd=e=>e.end||e.date;
+const calIsBar=e=> e.kind==='course' || e.kind==='absence';
+const calCovers=(e,iso)=> calIsBar(e) ? (iso>=e.date && iso<=calSpanEnd(e)) : e.date===iso;
+// Клик по курсу → открыть карточку курса во вкладке «Курсы».
+function calOpenCourse(rid){
+  try{ const btn=document.querySelector('.sec[data-sec="training"]'); if(btn) btn.click(); }catch(_){}
+  let n=0; (function wait(){ let t=null; try{ t=(typeof TR!=='undefined'?TR:[]).find(x=>String(x.id)===String(rid)); }catch(_){}
+    if(t){ try{ openModal(t); }catch(_){} return; } if(n++<40) setTimeout(wait,100); })();
+}
 function renderCalGrid(){
   const body=document.getElementById('calBody'); if(!body) return;
   const {y,m}=_calFocus;
@@ -1685,11 +1696,11 @@ function renderCalGrid(){
   const prevDays=new Date(y,m,0).getDate();
   const now=new Date(), todayISO=`${now.getFullYear()}-${cpad(now.getMonth()+1)}-${cpad(now.getDate())}`;
   const monKey=`${y}-${cpad(m+1)}`;
-  // Курсы — непрерывной линией; остальные события — чипами в дне.
-  const courses=[], byDate={};
-  for(const e of _calItems){ if(e.kind==='course') courses.push(e); else (byDate[e.date]=byDate[e.date]||[]).push(e); }
-  const monthCount=_calItems.filter(e=> e.kind==='course'
-      ? (e.date.slice(0,7)===monKey || calCourseEnd(e).slice(0,7)===monKey || (e.date.slice(0,7)<monKey && calCourseEnd(e).slice(0,7)>monKey))
+  // Курсы и командировки/отсутствия — непрерывной линией поверх дней; остальные — чипами.
+  const barEv=[], byDate={};
+  for(const e of _calItems){ if(calIsBar(e)) barEv.push(e); else (byDate[e.date]=byDate[e.date]||[]).push(e); }
+  const monthCount=_calItems.filter(e=> calIsBar(e)
+      ? (e.date.slice(0,7)===monKey || calSpanEnd(e).slice(0,7)===monKey || (e.date.slice(0,7)<monKey && calSpanEnd(e).slice(0,7)>monKey))
       : e.date.slice(0,7)===monKey).length;
   const totalCells=Math.ceil((startDow+daysInMonth)/7)*7;
   const cellISO=[];
@@ -1698,29 +1709,32 @@ function renderCalGrid(){
     else if(dn>daysInMonth){ cm=m+1; cd=dn-daysInMonth; if(cm>11){cm=0;cy=y+1;} }
     cellISO.push(`${cy}-${cpad(cm+1)}-${cpad(cd)}`); }
   const weeks=totalCells/7; let wkHtml='';
+  _calBars=[];  // для делегированного клика
   for(let w=0; w<weeks; w++){
     const wStart=cellISO[w*7], wEnd=cellISO[w*7+6];
-    // сегменты курсов, пересекающих неделю
+    // сегменты событий-линий, пересекающих неделю
     const segs=[];
-    for(const c of courses){ const cs=c.date, ce=calCourseEnd(c); if(cs>wEnd||ce<wStart) continue;
+    for(const c of barEv){ const cs=c.date, ce=calSpanEnd(c); if(cs>wEnd||ce<wStart) continue;
       let s=0; while(s<6 && cellISO[w*7+s]<cs) s++;
       let e2=6; while(e2>0 && cellISO[w*7+e2]>ce) e2--; if(e2<s) e2=s;
-      segs.push({s, e:e2, span:e2-s+1, title:c.title, sub:c.sub, contL:cs<wStart, contR:ce>wEnd, iso:cellISO[w*7+s]}); }
-    segs.sort((a,b)=>a.s-b.s || b.span-a.span);
+      segs.push({s, e:e2, span:e2-s+1, ev:c, contL:cs<wStart, contR:ce>wEnd, iso:cellISO[w*7+s]}); }
+    segs.sort((a,b)=> (a.ev.kind===b.ev.kind?0:(a.ev.kind==='course'?-1:1)) || a.s-b.s || b.span-a.span);
     const laneEnd=[];
     for(const sg of segs){ let ln=0; while(ln<laneEnd.length && laneEnd[ln]>=sg.s) ln++; laneEnd[ln]=sg.e; sg.lane=ln; }
     let bars='';
-    if(laneEnd.length){ bars=`<div class="cal-bars" style="grid-template-rows:repeat(${laneEnd.length},16px)">`+
-      segs.map(sg=>`<a class="cal-bar${sg.contL?' cl':''}${sg.contR?' cr':''}" style="grid-column:${sg.s+1}/span ${sg.span};grid-row:${sg.lane+1}" title="${esc('Курс: '+sg.title+(sg.sub?' — '+sg.sub:''))}" onclick="calPick('${sg.iso}')">${sg.contL?'‹ ':''}${esc(sg.title)}${sg.contR?' ›':''}</a>`).join('')+`</div>`; }
+    if(laneEnd.length){ bars=`<div class="cal-bars" style="grid-template-rows:repeat(${laneEnd.length},15px)">`+
+      segs.map(sg=>{ const c=sg.ev, isCourse=c.kind==='course'; const bi=_calBars.push(c)-1;
+        const lbl=isCourse?'Курс':(c.trip?'Командировка':'Отсутствие');
+        return `<a class="cal-bar ${isCourse?'course':'absence'}${sg.contL?' cl':''}${sg.contR?' cr':''}" style="grid-column:${sg.s+1}/span ${sg.span};grid-row:${sg.lane+1}" title="${esc(lbl+': '+c.title+(c.sub?' — '+c.sub:''))}" onclick="calBarClick(${bi},event)">${sg.contL?'‹ ':''}${esc(c.title)}${sg.contR?' ›':''}</a>`; }).join('')+`</div>`; }
     let cells='';
     for(let i=0;i<7;i++){ const iso=cellISO[w*7+i], out=iso.slice(0,7)!==monKey, cd=+iso.slice(8,10), evs=byDate[iso]||[];
       const chips=evs.slice(0,3).map(e=>{ const k=CAL_KIND[e.kind]||['Событие','absence'];
         return `<span class="cal-chip k-${k[1]}" title="${esc(k[0]+': '+e.title+(e.sub?' — '+e.sub:''))}">${esc(e.title||k[0])}</span>`; }).join('');
       const more=evs.length>3?`<span class="cal-more">ещё ${evs.length-3}</span>`:'';
-      const sel=iso===_calSel, hasC=courses.some(c=>iso>=c.date&&iso<=calCourseEnd(c));
-      cells+=`<div class="cal-cell${out?' out':''}${iso===todayISO?' today':''}${sel?' sel':''}${(evs.length||hasC)?' has':''}" onclick="calPick('${iso}')"><span class="cal-dnum">${cd}</span>${chips}${more}</div>`;
+      const sel=iso===_calSel, hasBar=barEv.some(c=>iso>=c.date&&iso<=calSpanEnd(c));
+      cells+=`<div class="cal-cell${out?' out':''}${iso===todayISO?' today':''}${sel?' sel':''}${(evs.length||hasBar)?' has':''}" onclick="calPick('${iso}')"><span class="cal-dnum">${cd}</span>${chips}${more}</div>`;
     }
-    wkHtml+=`<div class="cal-week">${bars}<div class="cal-days">${cells}</div></div>`;
+    wkHtml+=`<div class="cal-week"><div class="cal-days" style="--lanes:${laneEnd.length}">${cells}</div>${bars}</div>`;
   }
   const legend=Object.values(CAL_KIND).map(v=>`<span class="cal-leg"><i class="k-${v[1]}"></i>${esc(v[0])}</span>`).join('');
   body.innerHTML=`
@@ -1740,14 +1754,19 @@ function renderCalGrid(){
 }
 function calMove(delta){ let {y,m}=_calFocus; m+=delta; if(m<0){m=11;y--;} else if(m>11){m=0;y++;} _calFocus={y,m}; renderCalGrid(); }
 function calToday(){ const n=new Date(); _calFocus={y:n.getFullYear(),m:n.getMonth()}; renderCalGrid(); }
-function calPick(iso){ _calSel=(_calSel===iso?null:iso); renderCalGrid(); }
+function calPick(iso){ _calSel=(_calSel===iso?null:iso); renderCalGrid(); const p=document.getElementById('calDay'); if(p&&_calSel) try{p.scrollIntoView({behavior:'smooth',block:'nearest'});}catch(_){}
+}
+function calBarClick(i,ev){ if(ev)ev.stopPropagation(); const c=_calBars[i]; if(!c) return;
+  if(c.kind==='course' && c.rid!=null){ calOpenCourse(c.rid); return; }
+  calPick(c.date);   // командировка/отсутствие → инфо в нижней панели за день начала
+}
 function renderCalDay(iso){
   const host=document.getElementById('calDay'); if(!host) return;
   const evs=_calItems.filter(e=>calCovers(e,iso)).sort((a,b)=> (a.kind==='course'?0:1)-(b.kind==='course'?0:1));
   const dd=new Date(iso+'T00:00:00'), h=`${dd.getDate()} ${CAL_MON[dd.getMonth()].toLowerCase()} ${dd.getFullYear()}`;
   if(!evs.length){ host.innerHTML=`<div class="cal-dayh">${h}</div><div class="empty">В этот день событий нет</div>`; return; }
   host.innerHTML=`<div class="cal-dayh">${h} · ${evs.length}</div>`+evs.map(e=>{ const k=CAL_KIND[e.kind]||['Событие','absence'];
-    const span=e.kind==='course'&&e.end&&e.end!==e.date?`<span class="cal-daysub">${e.date.slice(8,10)}.${e.date.slice(5,7)}–${e.end.slice(8,10)}.${e.end.slice(5,7)}</span>`:'';
+    const span=calIsBar(e)&&e.end&&e.end!==e.date?`<span class="cal-daysub">${e.date.slice(8,10)}.${e.date.slice(5,7)}–${e.end.slice(8,10)}.${e.end.slice(5,7)}</span>`:'';
     return `<div class="cal-dayrow"><span class="cal-chip k-${k[1]}">${esc(k[0])}</span><b>${esc(e.title)}</b>${span}${e.sub?`<span class="cal-daysub">${esc(e.sub)}</span>`:''}</div>`; }).join('');
 }
 
