@@ -218,6 +218,13 @@ footer{text-align:center;color:var(--text-faint);font-size:11.5px;padding:20px;f
 .pt-pulse .m b{font-size:17px;font-weight:800}
 .pt-pulse .m b.up{color:#1a7f54}
 .pt-pulse .m span{font-size:11px;color:var(--text-3)}
+/* KPI-строка в стиле AN (крупные числа + «›», тап) */
+.pt-kpi{display:flex;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin:2px 12px 10px}
+.pt-kpi .k{flex:1;background:var(--surface);padding:12px 13px;text-decoration:none;color:var(--text);display:flex;flex-direction:column;gap:3px;min-width:0}
+.pt-kpi .k b{font-size:23px;font-weight:800;letter-spacing:-.6px;line-height:1}
+.pt-kpi .k span{font-size:11px;color:var(--text-3);line-height:1.2}
+.pt-kpi .k:hover{background:var(--surface-2)}
+.pt-kpi .k:active{background:var(--surface-2)}
 .pt-fact{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);font-size:12.2px;color:var(--text-3);font-style:italic}
 </style>
 </head>
@@ -671,15 +678,14 @@ function renderToday(d){
       return `<span class="pt-pill">${k[0]} ${esc(a.name)}${dest}${perH}</span>`; }).join('')+'</div>';
   } else abs='<div class="pt-none">Сегодня все на месте 👍</div>';
   const bAbs=`<div class="pt-blk"><div class="bh"><span class="ic">🌴</span>Сегодня отсутствуют</div>${abs}</div>`;
-  const P=d.pulse||{}; const metric=(v,l,up)=>v==null?'':`<div class="m"><b${up?' class="up"':''}>${typeof v==='number'?v.toLocaleString('ru-RU'):esc(v)}</b><span>${l}</span></div>`;
+  const P=d.pulse||{};
+  const kpi=(v,l,href)=>v==null?'':`<a class="k" href="${href}"><b>${typeof v==='number'?v.toLocaleString('ru-RU'):esc(v)}</b><span>${esc(l)} ›</span></a>`;
   const hasPulse=(P.inWork!=null||P.closedMonth!=null||P.leadsToday!=null);
+  const bKpi = hasPulse ? `<div class="pt-kpi">${kpi(P.inWork,'сделок в работе','/plansales.html')}${kpi(P.closedMonth,'закрыто за месяц','/stats.html')}${kpi(P.leadsToday,'новых лидов','/stats.html')}</div>` : '';
   let bPulse='';
-  if(hasPulse||d.fact){
-    const m=[metric(P.inWork,'сделок в работе'),metric(P.closedMonth,'закрыто в этом месяце',true),metric(P.leadsToday,'новых лидов сегодня')].join('');
-    bPulse=`<div class="pt-blk"><div class="bh"><span class="ic">📈</span>Пульс компании</div>${hasPulse?`<div class="pt-pulse">${m}</div>`:''}${d.fact?`<div class="pt-fact">💡 ${esc(d.fact)}</div>`:''}</div>`;
-  }
+  if(d.fact){ bPulse=`<div class="pt-blk"><div class="bh"><span class="ic">💡</span>Факт дня</div><div class="pt-fact" style="border:0;padding:0;margin:0">${esc(d.fact)}</div></div>`; }
   return `<div class="pt-card"><div class="pt-head"><span>✨</span><span class="cap">Сегодня в компании</span><span class="date">${esc(dateStr)}</span><span class="tog">▾</span></div>
-    <div class="pt-blocks">${bBirth}${bOtd}${bAbs}${bPulse}</div></div>`;
+    ${bKpi}<div class="pt-blocks">${bBirth}${bOtd}${bAbs}${bPulse}</div></div>`;
 }
 
 async function init(){

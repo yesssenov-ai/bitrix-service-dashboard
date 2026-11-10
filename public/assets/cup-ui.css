@@ -368,3 +368,10 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-ui);
 .cup-allov-foot button{flex:1;border:1px solid var(--line-2);background:var(--surface-2);border-radius:11px;
   padding:11px 4px;font-family:inherit;font-size:12.5px;font-weight:650;color:var(--text-2);cursor:pointer}
 .cup-allov-foot button:active{background:var(--surface-3)}
+.cup-allov-user{flex:none;display:flex;align-items:center;gap:11px;margin:0 14px;padding:11px 13px;
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;text-decoration:none;color:var(--text)}
+.cup-allov-user .cup-allov-av{width:38px;height:38px;border-radius:50%;flex:none;display:flex;align-items:center;
+  justify-content:center;font-weight:700;font-size:14px;color:#fff;background:var(--accent)}
+.cup-allov-user .cup-allov-un{display:flex;flex-direction:column;line-height:1.25}
+.cup-allov-user .cup-allov-un b{font-size:14px;font-weight:700}
+.cup-allov-user .cup-allov-un small{font-size:11.5px;color:var(--text-3);text-transform:uppercase;letter-spacing:.3px}
