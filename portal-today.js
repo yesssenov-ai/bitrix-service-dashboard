@@ -318,7 +318,14 @@ async function spActive(now, opts) {
     // только первую страницу (≈50) по id desc, и активная командировка со старой
     // карточкой (как у Нурхата) не попадает в выборку из-за сотен свежих «Отчётов».
     const listBase = { entityTypeId: etid, select: ['*', 'uf_*'], order: { id: 'desc' } };
-    if (opts.reStage && stageIds.size) listBase.filter = { '@stageId': [...stageIds] };
+    if (opts.all) {
+      // Режим «все записи» (для календаря ТЦ): без этапа и без «активно сегодня»,
+      // фильтр по окну дат на стороне Bitrix (начало ≤ конца окна и конец ≥ начала окна).
+      const f = {}, win = opts.window || {};
+      if (df.start && win.to) f['<=' + df.start] = win.to;
+      if (df.end && win.from) f['>=' + df.end] = win.from;
+      if (Object.keys(f).length) listBase.filter = f;
+    } else if (opts.reStage && stageIds.size) listBase.filter = { '@stageId': [...stageIds] };
     let items = [], start = 0, guard = 0;
     while (guard++ < 8) {
       const r = await b24('crm.item.list', Object.assign({ start }, listBase));
@@ -347,8 +354,13 @@ async function spActive(now, opts) {
       if (deadIds.size && deadIds.has(String(it.stageId))) continue;
       // Активно сегодня (from ≤ today ≤ to). Для командировок дополнительно требуем
       // этап «В командировке» — только он означает, что человек в поездке прямо сейчас.
-      let include = (from <= todayISO && todayISO <= to);
-      if (opts.reStage && stageIds.size) include = include && stageIds.has(String(it.stageId));
+      let include;
+      if (opts.all) { const win = opts.window || {};
+        include = (!win.to || from <= win.to) && (!win.from || to >= win.from);   // перекрытие с окном
+      } else {
+        include = (from <= todayISO && todayISO <= to);
+        if (opts.reStage && stageIds.size) include = include && stageIds.has(String(it.stageId));
+      }
       if (!include) continue;
       const who = USERS[String(it.assignedById)] || _descrFromTitle(it.title) || 'Сотрудник';
       // Для командировок: «вид работ - город» из заголовка + компания (резолвим позже).
@@ -385,6 +397,33 @@ async function smartAbsences(now) {
   const seen = new Set(); const data = [];
   for (const a of trips.concat(vac)) { const key = a.kind + '|' + a.name; if (seen.has(key)) continue; seen.add(key); data.push(a); }
   _smart = { at: Date.now(), data };
+  return data;
+}
+// Все командировки/отпуска в окне [fromISO..toISO] — без фильтра «активно сегодня»
+// и без фильтра по этапу (для календаря ТЦ, где нужен весь период, а не только сейчас).
+// Дедуп НЕ делаем: у человека может быть несколько поездок в разные даты.
+let _allAbs = { at: 0, key: '', data: null };
+async function allAbsences(fromISO, toISO) {
+  const now = new Date();
+  const win = { from: fromISO || '0000-01-01', to: toISO || '9999-12-31' };
+  const ckey = win.from + '…' + win.to;
+  if (_allAbs.data && _allAbs.key === ckey && Date.now() - _allAbs.at < 15 * 60 * 1000) return _allAbs.data;
+  const [trips, vac] = await Promise.all([
+    spActive(now, { reName: /командиров/i, key: 'trip_all', kind: 'trip',
+      reDomain: /команди?ровк/i, reDead: /провал|fail|отклон|не\s*состоя/i, all: true, window: win }),
+    spActive(now, { reName: /отпуск/i, key: 'vac_all', kind: 'vacation',
+      reDomain: /отпуск/i, reDead: /провал|fail|отклон|не\s*состоя/i, all: true, window: win }),
+  ]);
+  try {
+    const ids = [...new Set(trips.map(t => t.companyId).filter(Boolean))];
+    if (ids.length) {
+      const r = await b24('crm.company.list', { filter: { '@ID': ids }, select: ['ID', 'TITLE'] });
+      const comp = {}; for (const c of (r && r.result) || []) comp[String(c.ID)] = c.TITLE;
+      for (const t of trips) { const nm = comp[String(t.companyId)]; if (nm) t.dest = (t.dest ? t.dest + ' · ' : '') + nm; }
+    }
+  } catch (e) { /* компании не критичны */ }
+  const data = trips.concat(vac);
+  _allAbs = { at: Date.now(), key: ckey, data };
   return data;
 }
 // Дебаг обоих смарт-процессов для сверки полей/этапов.
@@ -442,4 +481,4 @@ async function build(pool, now) {
   return res;
 }
 
-module.exports = { build, birthdays, onThisDay, pulse, dailyFact, smartAbsences, tripsDebug, BIRTHDAYS };
+module.exports = { build, birthdays, onThisDay, pulse, dailyFact, smartAbsences, allAbsences, tripsDebug, BIRTHDAYS };

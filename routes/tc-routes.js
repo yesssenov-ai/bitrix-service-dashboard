@@ -652,7 +652,8 @@ router.get('/calendar', requireAnyModuleApi(TC_CODES), async (req, res) => {
     try { const { rows } = await pool.query(`SELECT a.from_date,a.to_date,a.kind,s.name FROM ticketsmodule_tc_absences a LEFT JOIN ticketsmodule_tc_staff s ON s.bitrix_id=a.staff_id WHERE a.status='approved'`);
       const KL = { vacation: 'Отпуск', remote: 'Удалёнка', sick: 'Больничный', unpaid: 'Без содержания' };
       for (const a of rows) pushSpan(a.from_date, a.to_date, 'absence', a.name || 'Сотрудник', KL[a.kind] || a.kind); } catch (e) {}
-    try { const trips = await require('../portal-today').smartAbsences(new Date());
+    try { const ny = new Date().getFullYear();
+      const trips = await require('../portal-today').allAbsences(`${ny - 1}-01-01`, `${ny + 1}-12-31`);
       for (const t of trips) pushSpan(t.from_date, t.to_date, 'absence', t.name, (t.kind === 'trip' ? 'Командировка' : 'Отпуск') + (t.dest ? (': ' + t.dest) : ''), { companyId: t.companyId || null, trip: t.kind === 'trip' }); } catch (e) {}
     items.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
     res.json({ ok: true, items });
