@@ -223,7 +223,9 @@ const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').rep
 const fmt=n=>Math.round(Number(n)||0).toLocaleString('ru-RU').replace(/,/g,' ');
 async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.href='/login.html';return{ok:false,d:{}}}let d={};try{d=await r.json()}catch(e){}return{ok:r.ok,d}}
 
-async function boot(){const r=await fetch('/auth/me');if(!r.ok){location.href='/login.html';return;}await load();}
+async function boot(){const r=await fetch('/auth/me');if(!r.ok){location.href='/login.html';return;}
+  try{const _q=new URLSearchParams(location.search).get('q');if(_q){const _i=document.getElementById('fSearch');if(_i)_i.value=_q;}}catch(e){}
+  await load();}
 async function load(){
   const {ok,d}=await api('/api/companies');
   if(!ok){document.getElementById('body').innerHTML='<tr><td class="hint" colspan="9">Ошибка загрузки</td></tr>';return;}

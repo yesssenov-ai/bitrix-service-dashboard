@@ -61,6 +61,8 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--tc-sans);
 .cc .ct{font-size:14px;font-weight:700;line-height:1.3;letter-spacing:-.01em}
 .cc .row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .cc .client{font-size:12.5px;color:var(--text);font-weight:700}
+a.client{text-decoration:none;cursor:pointer}
+a.client:hover{color:var(--accent);text-decoration:underline}
 .cc .sub{font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 .cc .sub .dot{width:3px;height:3px;border-radius:50%;background:var(--text-faint)}
 .pill{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;border-radius:6px;padding:2px 7px;white-space:nowrap}
@@ -333,7 +335,7 @@ function card(t){
     <div class="row" style="justify-content:space-between;align-items:flex-start">
       <div class="ct">${esc(t.title)}</div><span class="pill ${st.c}">${st.t}</span>
     </div>
-    <div class="row"><span class="client">${esc(t.client||'—')}</span>${t.issued?'<span class="pill cert">'+tIc(TI.award)+'Сертификат</span>':''}</div>
+    <div class="row">${coLink(t.client)}${t.issued?'<span class="pill cert">'+tIc(TI.award)+'Сертификат</span>':''}</div>
     <div class="sub">${sub.join(' <span class="dot"></span> ')}</div>
     <div class="row">${methods}</div>
     <div class="foot"><span>${tIc(TI.users)}<b>${pn}</b> участн.</span><span>${tIc(TI.clock)}<b>${t.hours||'—'}</b> ч.</span></div>
@@ -523,7 +525,7 @@ function workCard(w){
       <div class="ct">${w.code?`<span style="color:var(--text-3);font-weight:700">${esc(w.code)}</span> · `:''}${esc(w.title||'—')}</div>
       <span class="pill ${si.cls}">${esc(si.label)}</span>
     </div>
-    <div class="row"><span class="client">${esc(w.client||'—')}</span><span class="pill ${wt.c}">${esc(wt.t)}</span></div>
+    <div class="row">${coLink(w.client)}<span class="pill ${wt.c}">${esc(wt.t)}</span></div>
     ${sub.length?`<div class="sub">${sub.join(' <span class="dot"></span> ')}</div>`:''}
     <div class="row">${methods}</div>
     <div class="foot">${foot.map(x=>`<span>${x}</span>`).join('')}</div>
@@ -1238,6 +1240,11 @@ function loadBar(pct){
     <b style="font-size:12px;color:${col};min-width:34px;text-align:right">${pct}%</b></div>`;
 }
 const admitsText = it => (it.admits||[]).map(a=>a.method||a).filter(Boolean).join(', ');
+// Клиент ТЦ → открывает карточку в модуле «Компании» ЦУП (переиспользуем, не дублируем).
+function coLink(name){ name=String(name==null?'':name).trim();
+  return (name && name!=='—')
+    ? `<a class="client" href="/companies.html?q=${encodeURIComponent(name)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Открыть в «Компаниях»">${esc(name)}</a>`
+    : '<span class="client">—</span>'; }
 
 const entStaff = mkEntity({
   key:'staff', ep:'/staff', one:'Сотрудник',
