@@ -430,8 +430,19 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-ui);
   body.cup-home .topbar .clock{margin-left:auto}
 }
 
-/* ── Бургер и блок «Часто» на главной ─────────────────────────────────────────── */
+/* ── Бургер, поиск и блок «Часто» на главной ──────────────────────────────────── */
 .cup-burger{display:none}
+.cup-hsearch{display:none}
+@media (max-width:640px){
+  .cup-hsearch{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
+    margin:14px 0 2px;padding:13px 16px;border:1px solid var(--line);border-radius:14px;
+    background:var(--surface);color:var(--text-3);font:inherit;font-size:15px;text-align:left;
+    cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .cup-hsearch:active{background:var(--bg)}
+  .cup-hsearch-i{flex:none;display:inline-flex;color:var(--text-3)}
+  .cup-hsearch-i svg{width:19px;height:19px}
+  .cup-hsearch-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
 .cup-homefav{margin:16px 0 2px}
 .cup-homefav .cup-allgrid{grid-template-columns:repeat(auto-fill,minmax(92px,1fr))}
 @media (max-width:640px){

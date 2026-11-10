@@ -325,8 +325,23 @@
     if(TOP===null) loadTop(render);
   }
 
+  // ── Поиск на главной: открывает глобальный поиск (модули, клиенты, сделки) ────
+  function buildHomeSearch(){
+    if(!isHome) return;
+    if(document.getElementById('cupHomeSearch')) return;
+    var box=document.createElement('button');
+    box.id='cupHomeSearch'; box.className='cup-hsearch'; box.type='button';
+    box.innerHTML='<span class="cup-hsearch-i">'+nsvg('search')+'</span>'+
+      '<span class="cup-hsearch-t">Модуль, клиент, сделка, заявка…</span>';
+    box.onclick=function(){ if(!clickId('pls-sr-btn')) openSearch(); };
+    var anchor=document.getElementById('today');
+    var mn=document.querySelector('main');
+    if(anchor && anchor.parentNode) anchor.parentNode.insertBefore(box, anchor);
+    else if(mn) mn.insertBefore(box, mn.firstChild);
+  }
+
   function start(){ if(isHome) document.body.classList.add('cup-home');
-    loadAccess(function(){}); build(); buildTopbar(); buildBurger(); buildHomeFav(); track(); loadTop(); }
+    loadAccess(function(){}); build(); buildTopbar(); buildBurger(); buildHomeSearch(); buildHomeFav(); track(); loadTop(); }
   if(document.body) start();
   else document.addEventListener('DOMContentLoaded', start);
 })();
