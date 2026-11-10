@@ -106,7 +106,7 @@ const SEARCH = '<script src="/assets/search.js?v=1" defer></script>';
 const TOUR = '<script src="/assets/tour.js?v=1" defer></script>';
 // Мобильная нижняя навигация (app-shell). На всех страницах дизайн-системы,
 // кроме входа; видна только на узких экранах (≤640px).
-const MOBILE_NAV = '<script src="/assets/cup-mobile.js?v=2" defer></script>';
+const MOBILE_NAV = '<script src="/assets/cup-mobile.js?v=3" defer></script>';
 app.use((req, res, next) => {
   const orig = res.sendFile.bind(res);
   res.sendFile = (fp, opts, cb) => {
@@ -585,6 +585,29 @@ app.get('/api/portal/today', requireAuth(), async (req, res) => {
     console.error('GET /api/portal/today error:', e.message);
     res.json({ ok: true, birthdays: { today: [], upcoming: [] }, onThisDay: [], absences: [], pulse: {}, fact: '' });
   }
+});
+// ── Персонализация: учёт открытий модулей (блок «Часто») ─────────────────────
+app.post('/api/portal/track-module', requireAuth(), express.json({ limit: '8kb' }), async (req, res) => {
+  try {
+    const code = String((req.body && req.body.code) || '').trim().slice(0, 32);
+    if (!code || !/^[A-Za-z0-9_]+$/.test(code)) return res.json({ ok: false });
+    await pool.query(
+      `INSERT INTO ticketsmodule_module_usage (user_id, code, hits, last_at)
+       VALUES ($1, $2, 1, NOW())
+       ON CONFLICT (user_id, code) DO UPDATE
+         SET hits = ticketsmodule_module_usage.hits + 1, last_at = NOW()`,
+      [req.user.id, code]);
+    res.json({ ok: true });
+  } catch (e) { res.json({ ok: false }); }
+});
+// Топ-модули пользователя (для блока «Часто» в мобильном «Все разделы»).
+app.get('/api/portal/my-top-modules', requireAuth(), async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT code FROM ticketsmodule_module_usage WHERE user_id=$1 AND hits>0 ORDER BY hits DESC, last_at DESC LIMIT 8',
+      [req.user.id]);
+    res.json({ ok: true, items: rows.map(r => r.code) });
+  } catch (e) { res.json({ ok: true, items: [] }); }
 });
 // Дебаг смарт-процесса «Командировки» — сверить поля дат/сотрудника на реальных данных.
 app.get('/api/portal/trips-debug', requireAuth(['admin', 'superadmin']), async (req, res) => {

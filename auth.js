@@ -492,6 +492,16 @@ async function initDB() {
     );
     CREATE INDEX IF NOT EXISTS idx_tm_portal_abs_dates ON ticketsmodule_portal_absences(from_date, to_date);
 
+    -- ── Портал: счётчик открытий модулей по пользователю (персонализация «Часто») ──
+    CREATE TABLE IF NOT EXISTS ticketsmodule_module_usage (
+      user_id INTEGER NOT NULL,
+      code VARCHAR(32) NOT NULL,
+      hits INTEGER DEFAULT 0,
+      last_at TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (user_id, code)
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_modusage_user ON ticketsmodule_module_usage(user_id, hits DESC);
+
     -- ── ProLab AI: банк примеров (самообучение агента на удачных запросах) ──────
     CREATE TABLE IF NOT EXISTS ticketsmodule_plsai_examples (
       id SERIAL PRIMARY KEY,

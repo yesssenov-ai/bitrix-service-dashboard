@@ -107,6 +107,29 @@
   function micon(code, g){ var p=MICON[code]||CICON[g]||CICON.system;
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>'; }
 
+  // ── Персонализация: «Часто» (топ модулей пользователя) ──────────────────────
+  var TOP = null;
+  function currentCode(){
+    var p=(location.pathname||'').toLowerCase();
+    var h=(location.hash||'').toLowerCase().replace(/^#/,'');
+    var same=MODULES.filter(function(m){return m.h.split('#')[0].toLowerCase()===p;});
+    if(!same.length) return null;
+    if(same.length===1) return same[0].c;
+    var byHash=same.filter(function(m){return (m.h.split('#')[1]||'').toLowerCase()===h;});
+    return byHash.length ? byHash[0].c : same[0].c;
+  }
+  function track(){
+    var c=currentCode(); if(!c) return;
+    try{ fetch('/api/portal/track-module',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({code:c})}).catch(function(){}); }catch(e){}
+  }
+  function loadTop(cb){
+    try{ fetch('/api/portal/my-top-modules').then(function(r){return r.json();})
+      .then(function(d){ TOP=(d&&d.items)||[]; if(cb)cb(); })
+      .catch(function(){ TOP=TOP||[]; if(cb)cb(); }); }
+    catch(e){ TOP=TOP||[]; if(cb)cb(); }
+  }
+
   // Доступ: admin → всё; иначе — выданные коды; ADM только суперадмину.
   var ALLOWED = null, ROLE = '', NAME = '';
   var ROLE_RU = { superadmin:'Суперадмин', admin:'Администратор', coordinator:'Координатор',
@@ -157,9 +180,22 @@
       else if(a==='ai'){ closeAll(); clickId('pai-fab'); }
       else if(a==='help'){ closeAll(); clickId('pls-help-btn'); }
       else if(a==='fb'){ closeAll(); clickId('pls-fb-btn'); } });
+    function topSection(q){
+      if(q || !TOP || !TOP.length) return '';
+      var byCode={}; mods.forEach(function(m){byCode[m.c]=m;});
+      var catc={}; CATS.forEach(function(x){catc[x.id]=x.c;});
+      var list=TOP.map(function(c){return byCode[c];}).filter(Boolean).slice(0,6);
+      if(list.length<2) return '';          // показываем, только когда реально есть что подтянуть
+      return '<div class="cup-allsec cup-allsec-top"><div class="cup-allsec-h">Часто</div><div class="cup-allgrid">'+
+        list.map(function(m){ var cc=catc[m.g]||'#6a7488';
+          return '<a class="cup-alltile" href="'+m.h+'">'+
+            '<span class="cup-alltile-i" style="color:'+cc+';background:color-mix(in srgb,'+cc+' 12%,var(--surface))">'+micon(m.c,m.g)+'</span>'+
+            '<span class="cup-alltile-n">'+esc(m.n)+'</span></a>'; }).join('')+
+        '</div></div>';
+    }
     function render(q){
       q=(q||'').toLowerCase().trim();
-      var body=document.getElementById('cupAllBody'); var out='';
+      var body=document.getElementById('cupAllBody'); var out=topSection(q);
       CATS.forEach(function(cat){
         var list=mods.filter(function(m){return m.g===cat.id && (!q || m.n.toLowerCase().indexOf(q)>=0);});
         if(!list.length) return;
@@ -172,6 +208,7 @@
       body.innerHTML = out || '<div class="cup-allov-empty">Ничего не найдено</div>';
     }
     render('');
+    if(TOP===null) loadTop(function(){ if(allov){ var q=document.getElementById('cupAllQ'); render(q?q.value:''); } });
     allov.querySelector('.cup-allov-x').onclick=closeAll;
     var qi=document.getElementById('cupAllQ'); if(qi) qi.addEventListener('input',function(){render(qi.value);});
     allov.addEventListener('click',function(e){ if(e.target===allov) closeAll(); });
@@ -199,7 +236,7 @@
     a[3].onclick=openAll;
   }
 
-  function start(){ loadAccess(function(){}); build(); }
+  function start(){ loadAccess(function(){}); build(); track(); loadTop(); }
   if(document.body) start();
   else document.addEventListener('DOMContentLoaded', start);
 })();
