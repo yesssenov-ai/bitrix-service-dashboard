@@ -375,3 +375,13 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-ui);
 .cup-allov-user .cup-allov-un{display:flex;flex-direction:column;line-height:1.25}
 .cup-allov-user .cup-allov-un b{font-size:14px;font-weight:700}
 .cup-allov-user .cup-allov-un small{font-size:11.5px;color:var(--text-3);text-transform:uppercase;letter-spacing:.3px}
+
+/* ── Шапки модулей на мобиле: переносим содержимое в строки, не наезжаем ──────
+   Страницы верстают свою шапку по-разному (header/.header/.hdr/.topbar/.bar-row),
+   но беда одна — одна строка не влезает в телефон. Разрешаем перенос и авто-высоту. */
+@media (max-width:640px){
+  header,.header,.hdr,.topbar,.bar-row,.appbar{
+    flex-wrap:wrap!important;height:auto!important;min-height:0!important;row-gap:8px!important}
+  /* длинные статус-подписи финансовых модулей не распирают строку */
+  .asof{font-size:11px;white-space:normal}
+}
