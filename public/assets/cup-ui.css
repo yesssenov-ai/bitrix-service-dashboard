@@ -404,15 +404,19 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-ui);
     height:calc(53px + env(safe-area-inset-top,0px));
     padding:env(safe-area-inset-top,0px) 12px 0;
     background:var(--surface);border-bottom:1px solid var(--line)}
-  .cup-tb-ic{flex:none;width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;
-    border:1px solid var(--line);border-radius:11px;background:var(--surface);color:var(--text-3);
-    padding:0;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
-  .cup-tb-ic svg{width:19px;height:19px}
+  .cup-tb-ic{flex:none;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;
+    border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--text-3);
+    padding:0;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent;position:relative}
+  .cup-tb-ic svg{width:18px;height:18px}
   .cup-tb-ic:active{background:var(--bg)}
   .cup-tb-back{color:var(--text)}
-  .cup-tb-title{flex:1;min-width:0;font-size:16.5px;font-weight:800;letter-spacing:-.01em;color:var(--text);
+  .cup-tb-title{flex:1;min-width:0;font-size:16px;font-weight:800;letter-spacing:-.01em;color:var(--text);
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .cup-tb-act{flex:none;display:flex;gap:7px}
+  .cup-tb-act{flex:none;display:flex;gap:6px}
+  /* бейдж на колокольчике */
+  .cup-bell-badge{position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;padding:0 4px;box-sizing:border-box;
+    border-radius:9px;background:var(--accent,#C53B2F);color:#fff;font-size:10px;font-weight:800;line-height:16px;
+    text-align:center;box-shadow:0 0 0 2px var(--surface)}
   /* Все плавающие кнопки переехали в шапку/навигацию — на телефоне прячем
      (клик по ним всё ещё проксируется из статичных иконок шапки). */
   #pai-fab,#themeToggle,#pls-sr-btn,#pls-fb-btn,#pls-help-btn{display:none!important}
@@ -467,5 +471,28 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-ui);
   .cup-burger svg{width:20px;height:20px}
   .cup-burger:active{background:var(--bg)}
   .cup-burger-float{position:fixed;top:12px;left:12px;z-index:8900}
-  .cup-topacts{display:flex;gap:7px;margin-left:auto}
+  .cup-topacts{display:flex;gap:6px;margin-left:auto}
 }
+/* ── Панель уведомлений (колокольчик) ─────────────────────────────────────────── */
+.cup-bell-ov{position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.42);
+  display:flex;align-items:flex-start;justify-content:center;padding:64px 14px 14px}
+.cup-bell-card{width:100%;max-width:520px;max-height:76vh;overflow:auto;background:var(--surface);
+  border:1px solid var(--line);border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+.cup-bell-h{display:flex;align-items:center;gap:9px;padding:14px 16px;border-bottom:1px solid var(--line);
+  position:sticky;top:0;background:var(--surface)}
+.cup-bell-h b{font-size:15px}
+.cup-bell-cnt{background:var(--accent,#C53B2F);color:#fff;font-size:11px;font-weight:800;border-radius:9px;padding:1px 7px}
+.cup-bell-x{margin-left:auto;width:32px;height:32px;border:1px solid var(--line);border-radius:9px;background:var(--surface);
+  color:var(--text-3);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.cup-bell-x svg{width:16px;height:16px}
+.cup-bell-rows{padding:9px 10px 2px}
+.cup-bell-row{display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--line);border-radius:11px;
+  text-decoration:none;color:var(--text);margin-bottom:7px}
+.cup-bell-row span{flex:1}
+.cup-bell-row b{font-variant-numeric:tabular-nums;color:var(--accent,#C53B2F)}
+.cup-bell-list{padding:0 10px 10px}
+.cup-bell-it{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-top:1px solid var(--line);
+  text-decoration:none;color:var(--text)}
+.cup-bell-it-t{font-size:13.5px}
+.cup-bell-it-s{font-size:12px;color:var(--text-3)}
+.cup-bell-empty{padding:42px 16px;text-align:center;color:var(--text-3);font-size:14px}

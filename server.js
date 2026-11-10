@@ -106,7 +106,7 @@ const SEARCH = '<script src="/assets/search.js?v=1" defer></script>';
 const TOUR = '<script src="/assets/tour.js?v=1" defer></script>';
 // Мобильная нижняя навигация (app-shell). На всех страницах дизайн-системы,
 // кроме входа; видна только на узких экранах (≤640px).
-const MOBILE_NAV = '<script src="/assets/cup-mobile.js?v=8" defer></script>';
+const MOBILE_NAV = '<script src="/assets/cup-mobile.js?v=9" defer></script>';
 app.use((req, res, next) => {
   const orig = res.sendFile.bind(res);
   res.sendFile = (fp, opts, cb) => {

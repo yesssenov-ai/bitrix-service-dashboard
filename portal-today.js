@@ -166,15 +166,37 @@ function dayInsight(pulse, absences) {
 // генерация в фоне (не блокирует ответ). Без ключа/при ошибке — пустая строка.
 let _ai = { date: '', text: '', pending: false };
 const _aiKey = now => now.toISOString().slice(0, 10);
+// Сводка по дебиторке для ИИ-вывода (читается только при генерации — раз в день).
+async function debtRisk() {
+  try {
+    const { getDebtBoard } = require('./finance-debt-calc');
+    const b = await getDebtBoard({});
+    const rows = (b && b.rows) || [];
+    const over = rows.filter(r => Number(r.overdue_days) > 0);
+    const top = over.slice().sort((a, c) => (c.overdue_days - a.overdue_days) || (c.debt - a.debt)).slice(0, 5)
+      .map(r => ({ contractor: r.contractor, debt: Math.round(r.debt), overdueDays: r.overdue_days }));
+    return {
+      totalDebt: Math.round((b.totals && b.totals.debt) || 0),
+      totalOverdue: Math.round((b.totals && b.totals.overdue) || 0),
+      overdueSharePct: (b.totals && b.totals.debt) ? Math.round(b.totals.overdue / b.totals.debt * 100) : 0,
+      maxOverdueDays: over.reduce((m, r) => Math.max(m, Number(r.overdue_days) || 0), 0),
+      debtorsOver90: over.filter(r => r.overdue_days > 90).length,
+      debtorsOver180: over.filter(r => r.overdue_days > 180).length,
+      topOverdue: top, isDemo: !!(b && b.mock),
+    };
+  } catch (e) { return null; }
+}
 async function _genAi(ctx) {
   const key = process.env.ANTHROPIC_API_KEY; if (!key) return '';
-  const sys = 'Ты — ассистент руководителя лабораторной компании ProLabSupport (сервис и продажи аналитического оборудования). По цифрам дня дай один короткий деловой вывод на русском (1–2 предложения, максимум 30 слов): на что обратить внимание сегодня. Строго, по делу, без приветствий, без воды, без эмодзи.';
+  let debt = null; try { debt = await debtRisk(); } catch (e) {}
+  const full = debt ? Object.assign({}, ctx, { debt }) : ctx;
+  const sys = 'Ты — ассистент технического директора лабораторной компании ProLabSupport (сервис и продажи аналитического оборудования). По цифрам дня дай один короткий деловой вывод на русском (1–2 предложения, максимум 35 слов): на что обратить внимание сегодня. ПРИОРИТЕТ — риски по дебиторской задолженности: если есть просрочка с большими сроками (свыше 90–180 дней) или крупными суммами, предупреди в первую очередь — назови контрагента и срок/сумму и порекомендуй действие (напоминание, эскалация). Суммы в млн ₸. Строго, по делу, без приветствий, без воды, без эмодзи. Если данные помечены isDemo, пиши нейтрально без тревоги.';
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-3-5-haiku-latest', max_tokens: 160, system: sys,
-        messages: [{ role: 'user', content: 'Цифры на сегодня:\n' + JSON.stringify(ctx) }] }),
+      body: JSON.stringify({ model: 'claude-3-5-haiku-latest', max_tokens: 220, system: sys,
+        messages: [{ role: 'user', content: 'Цифры на сегодня:\n' + JSON.stringify(full) }] }),
     });
     const d = await r.json();
     if (!r.ok) return '';

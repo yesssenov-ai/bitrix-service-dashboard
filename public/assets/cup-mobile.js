@@ -27,22 +27,59 @@
   // Статичные действия в шапке: Ассистент / Тема / Обратная связь (проксируют
   // клик на свои плавающие кнопки, которые на телефоне скрыты).
   var TACT = {
+    bell:'<path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
     ai:'<rect x="4.5" y="8" width="15" height="11" rx="3"/><path d="M12 8V4.5M8.5 4.5h7"/><circle cx="9.5" cy="13.3" r="1.1"/><circle cx="14.5" cy="13.3" r="1.1"/>',
     theme:'<path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.6 6.6 0 0 0 9.8 9.8z"/>',
     fb:'<path d="M21 15a2 2 0 0 1-2 2H8l-4 3V6a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/>'
   };
   function tactSvg(n){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+TACT[n]+'</svg>'; }
   function clusterHTML(){
-    return '<button class="cup-tb-ic" data-act="ai" aria-label="Ассистент">'+tactSvg('ai')+'</button>'+
+    return '<button class="cup-tb-ic cup-tb-bell" data-act="bell" aria-label="Уведомления">'+tactSvg('bell')+'</button>'+
+           '<button class="cup-tb-ic" data-act="ai" aria-label="Ассистент">'+tactSvg('ai')+'</button>'+
            '<button class="cup-tb-ic" data-act="theme" aria-label="Тема">'+tactSvg('theme')+'</button>'+
            '<button class="cup-tb-ic" data-act="fb" aria-label="Обратная связь">'+tactSvg('fb')+'</button>';
   }
   function wireCluster(root){
     root.addEventListener('click',function(e){ var b=e.target.closest('button[data-act]'); if(!b) return;
       var a=b.getAttribute('data-act');
-      if(a==='ai') clickId('pai-fab');
+      if(a==='bell') openBell();
+      else if(a==='ai') clickId('pai-fab');
       else if(a==='theme') clickId('themeToggle');
       else if(a==='fb') clickId('pls-fb-btn'); });
+  }
+  // ── Колокольчик: невыполненные действия пользователя (задачи + закупки) ───────
+  var BELL={count:0,breakdown:{},items:[]};
+  function refreshBells(){
+    var bs=document.querySelectorAll('.cup-tb-bell');
+    for(var i=0;i<bs.length;i++){ var b=bs[i]; var old=b.querySelector('.cup-bell-badge'); if(old) old.remove();
+      if(BELL.count>0){ var s=document.createElement('span'); s.className='cup-bell-badge';
+        s.textContent=BELL.count>99?'99+':String(BELL.count); b.appendChild(s); } }
+  }
+  function loadPending(){
+    try{ fetch('/api/notify/pending-count').then(function(r){return r.json();}).then(function(d){
+      BELL={count:(d&&d.count)||0, breakdown:(d&&d.breakdown)||{}, items:(d&&d.items)||[]}; refreshBells();
+    }).catch(function(){}); }catch(e){}
+  }
+  function closeBell(){ var e=document.getElementById('cupBellOv'); if(e) e.remove(); }
+  function openBell(){
+    closeBell();
+    var bd=BELL.breakdown||{}; var rows='';
+    if(bd.tasks) rows+='<a class="cup-bell-row" href="/board.html"><span>Мои задачи</span><b>'+bd.tasks+'</b></a>';
+    if(bd.procurement) rows+='<a class="cup-bell-row" href="/procurement.html"><span>Закупки — действия</span><b>'+bd.procurement+'</b></a>';
+    var items=(BELL.items&&BELL.items.length)?BELL.items.slice(0,12).map(function(it){
+      var t=esc(it.title||it.label||it.name||'Действие'); var href=it.url||it.href||'';
+      var sub=it.subtitle||it.module||it.stage||'';
+      return '<a class="cup-bell-it" href="'+(href||'#')+'"><span class="cup-bell-it-t">'+t+'</span>'+(sub?'<span class="cup-bell-it-s">'+esc(sub)+'</span>':'')+'</a>';
+    }).join(''):'';
+    var body = BELL.count ? (rows?'<div class="cup-bell-rows">'+rows+'</div>':'')+(items?'<div class="cup-bell-list">'+items+'</div>':'')
+                          : '<div class="cup-bell-empty">Новых действий нет</div>';
+    var ov=document.createElement('div'); ov.id='cupBellOv'; ov.className='cup-bell-ov';
+    ov.innerHTML='<div class="cup-bell-card"><div class="cup-bell-h"><b>Уведомления</b>'+
+      (BELL.count?'<span class="cup-bell-cnt">'+BELL.count+'</span>':'')+
+      '<button class="cup-bell-x" aria-label="Закрыть">'+nsvg('close')+'</button></div>'+body+'</div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click',function(e){ if(e.target===ov) closeBell(); });
+    ov.querySelector('.cup-bell-x').onclick=closeBell;
   }
 
   // ── Каталог модулей (снято с портала) ───────────────────────────────────────
@@ -395,7 +432,9 @@
   }
 
   function start(){ if(isHome) document.body.classList.add('cup-home');
-    loadAccess(function(){ setGreetName(); }); build(); buildTopbar(); buildBurger(); buildHomeActions(); buildHomeGreet(); buildHomeFav(); track(); loadTop(); }
+    loadAccess(function(){ setGreetName(); }); build(); buildTopbar(); buildBurger(); buildHomeActions(); buildHomeGreet(); buildHomeFav(); track(); loadTop(); loadPending();
+    setInterval(loadPending, 60000);
+    document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible') loadPending(); }); }
   if(document.body) start();
   else document.addEventListener('DOMContentLoaded', start);
 })();
