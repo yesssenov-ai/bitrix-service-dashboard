@@ -732,8 +732,15 @@ function renderToday(d){
     const det=grp('Командировки',trips)+grp('Отпуска',vacs)+grp('Прочее',other);
     rowAbs=ptRow('suitcase','#c98a1e','Сегодня отсутствуют',sum,det);
   } else rowAbs=ptRow('suitcase','#13a08a','Сегодня отсутствуют','Все на месте','');
-  // ── Факт дня ──
-  const rowFact=d.fact?ptRow('bulb','#7a5cd0','Факт дня',esc(d.fact),''):'';
+  // ── Факт дня: живая сводка (строка) + ИИ-вывод (раскрытие) ──
+  const F=d.fact||{};
+  const fSum=(typeof F==='string')?F:(F.insight||F.ai||F.tip||'');
+  let fDet='';
+  if(typeof F==='object'){
+    if(F.ai) fDet+=`<div class="pt-d-row">${esc(F.ai)}</div>`;
+    if(F.tip) fDet+=`<div class="pt-d-row pt-d-mut" style="margin-top:4px">${esc(F.tip)}</div>`;
+  }
+  const rowFact=fSum?ptRow('bulb','#7a5cd0','Факт дня',esc(fSum),fDet):'';
   // ── Пульс ──
   const P=d.pulse||{};
   const kpi=(v,l,href)=>v==null?'':`<a class="k" href="${href}"><b>${typeof v==='number'?v.toLocaleString('ru-RU'):esc(v)}</b><span>${esc(l)} ›</span></a>`;

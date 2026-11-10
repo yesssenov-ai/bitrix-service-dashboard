@@ -152,6 +152,45 @@ function dailyFact(now) {
   return FACTS[doy % FACTS.length];
 }
 
+// ── «Факт дня»: живая сводка по данным + ежедневный ИИ-вывод (Claude Haiku) ─────
+// Живая строка — из уже собранных цифр (без доп. запросов).
+function dayInsight(pulse, absences) {
+  const p = pulse || {}; const parts = [];
+  if (p.inWork != null) parts.push(`в работе ${Number(p.inWork).toLocaleString('ru-RU')} сделок`);
+  if (p.closedMonth != null) parts.push(`за месяц закрыто ${p.closedMonth}`);
+  const n = (absences || []).length; if (n) parts.push(`вне офиса ${n}`);
+  const s = parts.join(' · ');
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+}
+// ИИ-вывод: 1–2 деловых предложения от Claude по цифрам дня. Кэш на сутки,
+// генерация в фоне (не блокирует ответ). Без ключа/при ошибке — пустая строка.
+let _ai = { date: '', text: '', pending: false };
+const _aiKey = now => now.toISOString().slice(0, 10);
+async function _genAi(ctx) {
+  const key = process.env.ANTHROPIC_API_KEY; if (!key) return '';
+  const sys = 'Ты — ассистент руководителя лабораторной компании ProLabSupport (сервис и продажи аналитического оборудования). По цифрам дня дай один короткий деловой вывод на русском (1–2 предложения, максимум 30 слов): на что обратить внимание сегодня. Строго, по делу, без приветствий, без воды, без эмодзи.';
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-3-5-haiku-latest', max_tokens: 160, system: sys,
+        messages: [{ role: 'user', content: 'Цифры на сегодня:\n' + JSON.stringify(ctx) }] }),
+    });
+    const d = await r.json();
+    if (!r.ok) return '';
+    return ((d.content && d.content[0] && d.content[0].text) || '').trim();
+  } catch (e) { return ''; }
+}
+function aiDigest(now, ctx) {
+  const k = _aiKey(now);
+  if (_ai.date === k && _ai.text) return _ai.text;
+  if (!_ai.pending) {
+    _ai.pending = true;
+    _genAi(ctx).then(t => { _ai = { date: k, text: t || '', pending: false }; }).catch(() => { _ai.pending = false; });
+  }
+  return _ai.date === k ? _ai.text : '';
+}
+
 // Кто сегодня отсутствует (таблица ЦУП — отпуск/больничный, ручной ввод).
 async function absencesToday(pool, now) {
   try {
@@ -362,7 +401,7 @@ async function tripsDebug() {
 async function build(pool, now) {
   now = now || new Date();
   const res = { date: { d: now.getDate(), m: now.getMonth() + 1 },
-    birthdays: birthdays(now), onThisDay: [], absences: [], pulse: {}, fact: dailyFact(now) };
+    birthdays: birthdays(now), onThisDay: [], absences: [], pulse: {}, fact: {} };
   const [otd, pls, absM, smart] = await Promise.allSettled([
     onThisDay(now), pulse(now), absencesToday(pool, now), smartAbsences(now)]);
   if (otd.status === 'fulfilled') res.onThisDay = otd.value;
@@ -370,6 +409,11 @@ async function build(pool, now) {
   let abs = (absM.status === 'fulfilled' && absM.value) ? absM.value : [];
   if (smart.status === 'fulfilled' && smart.value) abs = abs.concat(smart.value);
   res.absences = abs;
+  // «Факт дня»: живая сводка + ИИ-вывод (кэш на день, генерится в фоне) + резервный факт.
+  const ctx = { inWork: res.pulse.inWork, closedMonth: res.pulse.closedMonth, leadsToday: res.pulse.leadsToday,
+    absent: (res.absences || []).map(a => ({ name: a.name, kind: a.kind, dest: a.dest })),
+    birthdaysToday: (res.birthdays.today || []), topDeal: res.onThisDay[0] || null };
+  res.fact = { insight: dayInsight(res.pulse, res.absences), ai: aiDigest(now, ctx), tip: dailyFact(now) };
   return res;
 }
 
