@@ -384,7 +384,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-ui);
    Страницы верстают свою шапку по-разному (header/.header/.hdr/.topbar/.bar-row),
    но беда одна — одна строка не влезает в телефон. Разрешаем перенос и авто-высоту. */
 @media (max-width:640px){
-  header,.header,.hdr,.topbar,.bar-row,.appbar{
+  header,.header,.hdr,.bar-row,.appbar{
     flex-wrap:wrap!important;height:auto!important;min-height:0!important;row-gap:8px!important}
   /* длинные статус-подписи финансовых модулей не распирают строку */
   .asof{font-size:11px;white-space:normal}
@@ -428,9 +428,12 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-ui);
   body.cup-home #empty,
   body.cup-home #emptyNote,
   body.cup-home .sys{display:none!important}
-  /* Бургер + статичные иконки на главной рядом с брендом */
-  body.cup-home .topbar{gap:9px;justify-content:flex-start}
+  /* Бургер + статичные иконки на главной рядом с брендом — строго одна строка */
+  body.cup-home .topbar{gap:8px;justify-content:flex-start;flex-wrap:nowrap!important;height:auto;min-height:0}
   body.cup-home .topbar .clock{display:none}
+  body.cup-home .brand{min-width:0;flex:0 1 auto;overflow:hidden}
+  body.cup-home .brand-name{white-space:nowrap}
+  .brand-sfx{display:none}   /* в шапке телефона — только «ЦУП» с иконкой */
 }
 
 /* ── Бургер, поиск и блок «Часто» на главной ──────────────────────────────────── */

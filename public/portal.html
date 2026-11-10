@@ -253,7 +253,7 @@ footer{text-align:center;color:var(--text-faint);font-size:11.5px;padding:20px;f
 <body>
 
 <div class="topbar">
-  <div class="brand"><img src="/assets/logo-icon.png" alt=""><span class="brand-name"><b>ЦУП</b> · ProLabSupport</span></div>
+  <div class="brand"><img src="/assets/logo-icon.png" alt=""><span class="brand-name"><b>ЦУП</b><span class="brand-sfx"> · ProLabSupport</span></span></div>
   <div class="clock"><span class="dot"></span><span id="clockText">—</span></div>
 </div>
 
@@ -668,12 +668,18 @@ function ptMoney(v,cur){ v=+v||0; const s=v>=1e6?(Math.round(v/1e5)/10+' млн'
 function ptPeriod(f,t){ const dm=s=>s?(String(s).slice(8,10)+'.'+String(s).slice(5,7)):'';
   if(f&&t){ if(f===t) return dm(f); if(String(f).slice(0,7)===String(t).slice(0,7)) return String(f).slice(8,10)+'–'+dm(t); return dm(f)+'–'+dm(t); }
   if(t) return 'до '+dm(t); if(f) return 'с '+dm(f); return ''; }
+let _todayAiRetry=0;
 async function loadToday(){
   try{
     const r=await fetch('/api/portal/today'); if(!r.ok) return;
     const d=await r.json(); if(!d||!d.ok) return;
     const el=document.getElementById('today'); if(!el) return;
     el.innerHTML=renderToday(d); el.style.display='';
+    // ИИ-вывод генерится в фоне: если ещё не готов — тихо перезапрашиваем.
+    const F=d.fact||{};
+    if(typeof F==='object' && !F.ai && (!F.aiState || F.aiState==='pending') && _todayAiRetry<3){
+      _todayAiRetry++; setTimeout(loadToday, 4000);
+    }
   }catch(e){}
 }
 const PT_CHEV='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
@@ -732,15 +738,18 @@ function renderToday(d){
     const det=grp('Командировки',trips)+grp('Отпуска',vacs)+grp('Прочее',other);
     rowAbs=ptRow('suitcase','#c98a1e','Сегодня отсутствуют',sum,det);
   } else rowAbs=ptRow('suitcase','#13a08a','Сегодня отсутствуют','Все на месте','');
-  // ── Факт дня: живая сводка (строка) + ИИ-вывод (раскрытие) ──
+  // ── Факт дня: ИИ-вывод в строке (если готов), сводка+факт в раскрытии ──
   const F=d.fact||{};
-  const fSum=(typeof F==='string')?F:(F.insight||F.ai||F.tip||'');
+  const hasObj=(typeof F==='object');
+  const fAi=hasObj?(F.ai||''):'';
+  const fIns=hasObj?(F.insight||''):(typeof F==='string'?F:'');
+  const fSum=fAi || fIns || (hasObj?(F.tip||''):'') || 'Собираю сводку…';
   let fDet='';
-  if(typeof F==='object'){
-    if(F.ai) fDet+=`<div class="pt-d-row">${esc(F.ai)}</div>`;
-    if(F.tip) fDet+=`<div class="pt-d-row pt-d-mut" style="margin-top:4px">${esc(F.tip)}</div>`;
-  }
-  const rowFact=fSum?ptRow('bulb','#7a5cd0','Факт дня',esc(fSum),fDet):'';
+  if(fAi) fDet+=`<div class="pt-d-row">${esc(fAi)}</div>`;
+  if(fIns) fDet+=`<div class="pt-d-row pt-d-mut"${fAi?' style="margin-top:4px"':''}>${esc(fIns)}</div>`;
+  if(hasObj&&F.tip) fDet+=`<div class="pt-d-row pt-d-mut" style="margin-top:4px">${esc(F.tip)}</div>`;
+  if((typeof IS_ADMIN!=='undefined'&&IS_ADMIN)&&hasObj&&!fAi&&F.aiState) fDet+=`<div class="pt-d-row pt-d-mut" style="margin-top:6px;font-size:11px">ИИ: ${esc(F.aiState)}</div>`;
+  const rowFact=ptRow('bulb','#7a5cd0','Факт дня',esc(fSum),fDet);
   // ── Пульс ──
   const P=d.pulse||{};
   const kpi=(v,l,href)=>v==null?'':`<a class="k" href="${href}"><b>${typeof v==='number'?v.toLocaleString('ru-RU'):esc(v)}</b><span>${esc(l)} ›</span></a>`;

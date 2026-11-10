@@ -164,7 +164,7 @@ function dayInsight(pulse, absences) {
 }
 // ИИ-вывод: 1–2 деловых предложения от Claude по цифрам дня. Кэш на сутки,
 // генерация в фоне (не блокирует ответ). Без ключа/при ошибке — пустая строка.
-let _ai = { date: '', text: '', pending: false };
+let _ai = { date: '', text: '', pending: false, state: '' };
 const _aiKey = now => now.toISOString().slice(0, 10);
 // Сводка по дебиторке для ИИ-вывода (читается только при генерации — раз в день).
 async function debtRisk() {
@@ -187,7 +187,7 @@ async function debtRisk() {
   } catch (e) { return null; }
 }
 async function _genAi(ctx) {
-  const key = process.env.ANTHROPIC_API_KEY; if (!key) return '';
+  const key = process.env.ANTHROPIC_API_KEY; if (!key) { _ai.state = 'no-key'; return ''; }
   let debt = null; try { debt = await debtRisk(); } catch (e) {}
   const full = debt ? Object.assign({}, ctx, { debt }) : ctx;
   const sys = 'Ты — ассистент технического директора лабораторной компании ProLabSupport (сервис и продажи аналитического оборудования). По цифрам дня дай один короткий деловой вывод на русском (1–2 предложения, максимум 35 слов): на что обратить внимание сегодня. ПРИОРИТЕТ — риски по дебиторской задолженности: если есть просрочка с большими сроками (свыше 90–180 дней) или крупными суммами, предупреди в первую очередь — назови контрагента и срок/сумму и порекомендуй действие (напоминание, эскалация). Суммы в млн ₸. Строго, по делу, без приветствий, без воды, без эмодзи. Если данные помечены isDemo, пиши нейтрально без тревоги.';
@@ -199,19 +199,22 @@ async function _genAi(ctx) {
         messages: [{ role: 'user', content: 'Цифры на сегодня:\n' + JSON.stringify(full) }] }),
     });
     const d = await r.json();
-    if (!r.ok) return '';
-    return ((d.content && d.content[0] && d.content[0].text) || '').trim();
-  } catch (e) { return ''; }
+    if (!r.ok) { _ai.state = 'api-error: ' + ((d && d.error && d.error.message) || ('HTTP ' + r.status)); return ''; }
+    const t = ((d.content && d.content[0] && d.content[0].text) || '').trim();
+    _ai.state = t ? 'ok' : 'empty-response';
+    return t;
+  } catch (e) { _ai.state = 'fetch-error: ' + e.message; return ''; }
 }
 function aiDigest(now, ctx) {
   const k = _aiKey(now);
   if (_ai.date === k && _ai.text) return _ai.text;
   if (!_ai.pending) {
-    _ai.pending = true;
-    _genAi(ctx).then(t => { _ai = { date: k, text: t || '', pending: false }; }).catch(() => { _ai.pending = false; });
+    _ai.pending = true; if (!_ai.state) _ai.state = 'pending';
+    _genAi(ctx).then(t => { _ai.date = k; _ai.text = t || ''; _ai.pending = false; }).catch(() => { _ai.pending = false; });
   }
   return _ai.date === k ? _ai.text : '';
 }
+function aiState() { return _ai.state || ''; }
 
 // Кто сегодня отсутствует (таблица ЦУП — отпуск/больничный, ручной ввод).
 async function absencesToday(pool, now) {
@@ -435,7 +438,7 @@ async function build(pool, now) {
   const ctx = { inWork: res.pulse.inWork, closedMonth: res.pulse.closedMonth, leadsToday: res.pulse.leadsToday,
     absent: (res.absences || []).map(a => ({ name: a.name, kind: a.kind, dest: a.dest })),
     birthdaysToday: (res.birthdays.today || []), topDeal: res.onThisDay[0] || null };
-  res.fact = { insight: dayInsight(res.pulse, res.absences), ai: aiDigest(now, ctx), tip: dailyFact(now) };
+  res.fact = { insight: dayInsight(res.pulse, res.absences), ai: aiDigest(now, ctx), tip: dailyFact(now), aiState: aiState() };
   return res;
 }
 
