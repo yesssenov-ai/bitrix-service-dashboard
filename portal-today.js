@@ -182,8 +182,29 @@ async function spTypeId(reName, key) {
     const t = types.find(x => reName.test(x.title || ''));
     if (t) id = t.entityTypeId;
   } catch (e) { /* нет доступа */ }
-  _sp[key] = { at: Date.now(), id, stages: null, stageKey: '' };
+  _sp[key] = { at: Date.now(), id, stages: null, stageKey: '', fields: null };
   return id;
+}
+// Коды полей «дата начала» и «дата окончания» процесса — по названию поля
+// (напр. «Начало командировки» / «Окончание командировки»). Берём только date-поля.
+async function spDateFields(etid, key) {
+  const c = _sp[key];
+  if (c && c.fields) return c.fields;
+  let start = null, end = null;
+  try {
+    const r = await b24('crm.item.fields', { entityTypeId: etid });
+    const fields = (r && r.result && r.result.fields) || {};
+    for (const code in fields) {
+      const f = fields[code] || {};
+      if (!/date/i.test(String(f.type || ''))) continue;
+      const title = String(f.title || '').toLowerCase();
+      if (!start && /нача/.test(title)) start = code;         // «Начало…», «Дата начала…»
+      if (!end && /оконч|конец/.test(title)) end = code;      // «Окончание…», «Дата окончания…»
+    }
+  } catch (e) { /* нет доступа — сработает фолбэк */ }
+  const ff = { start, end };
+  if (c) c.fields = ff;
+  return ff;
 }
 async function spStageIds(etid, key, reStage) {
   const c = _sp[key];
@@ -210,23 +231,31 @@ async function spActive(now, opts) {
     const etid = await spTypeId(opts.reName, opts.key);
     if (!etid) return out;
     const stageIds = opts.reStage ? await spStageIds(etid, opts.key, opts.reStage) : new Set();
+    const df = await spDateFields(etid, opts.key);
     const r = await b24('crm.item.list', { entityTypeId: etid, order: { id: 'desc' }, start: 0 });
     const items = (r && r.result && r.result.items) || [];
-    for (const it of items.slice(0, 150)) {
-      const dates = [];
-      for (const k in it) { if (/creat|updat|mov|activ|communicat/i.test(k)) continue;
-        const d = _pdate(it[k]); if (d) dates.push(d); }
-      dates.sort();
-      const from = dates[0] || '', to = dates[dates.length - 1] || '';
-      // Показываем ТОЛЬКО если даты активны сегодня (from ≤ today ≤ to). Этап
-      // «В командировке», если определился, дополнительно сужает выборку.
-      const dateActive = !!(from && from <= todayISO && (!to || todayISO <= to));
-      let include = dateActive;
+    for (const it of items.slice(0, 200)) {
+      // Приоритет — конкретные поля начала/окончания. Фолбэк (если поля не нашлись)
+      // — эвристика мин/макс с защитой по длине диапазона.
+      let from = df.start ? _pdate(it[df.start]) : null;
+      let to = df.end ? _pdate(it[df.end]) : null;
+      if (!from || !to) {
+        const dates = [];
+        for (const k in it) { if (/creat|updat|mov|activ|communicat/i.test(k)) continue;
+          const d = _pdate(it[k]); if (d) dates.push(d); }
+        dates.sort();
+        const hf = dates[0] || '', ht = dates[dates.length - 1] || '';
+        const span = hf && ht ? (Date.parse(ht + 'T00:00:00') - Date.parse(hf + 'T00:00:00')) / 864e5 : -1;
+        if (hf && ht && span >= 0 && span <= 62) { from = from || hf; to = to || ht; }
+      }
+      if (!from || !to) continue;
+      // Активно сегодня (from ≤ today ≤ to). Этап «В командировке», если
+      // распознан, дополнительно сужает выборку.
+      let include = (from <= todayISO && todayISO <= to);
       if (opts.reStage && stageIds.size) include = include && stageIds.has(String(it.stageId));
       if (!include) continue;
-      const who = USERS[String(it.assignedById)] || '';
-      out.push({ name: who || it.title || 'Сотрудник', kind: opts.kind,
-        from_date: from, to_date: to, dest: (opts.kind === 'trip' && who && it.title) ? String(it.title) : '' });
+      const who = USERS[String(it.assignedById)] || it.title || 'Сотрудник';
+      out.push({ name: who, kind: opts.kind, from_date: from, to_date: to, dest: '' });
     }
   } catch (e) { /* процесс недоступен */ }
   return out;
@@ -239,7 +268,10 @@ async function smartAbsences(now) {
     spActive(now, { reName: /командиров/i, key: 'trip', kind: 'trip', reStage: /команди?ровк/i }),
     spActive(now, { reName: /отпуск/i, key: 'vac', kind: 'vacation' }),
   ]);
-  const data = trips.concat(vac);
+  // Дедуп: одна строка на человека в рамках типа (у сотрудника может быть
+  // несколько записей — для сводки «кто отсутствует» достаточно одной).
+  const seen = new Set(); const data = [];
+  for (const a of trips.concat(vac)) { const key = a.kind + '|' + a.name; if (seen.has(key)) continue; seen.add(key); data.push(a); }
   _smart = { at: Date.now(), data };
   return data;
 }
@@ -256,7 +288,19 @@ async function tripsDebug() {
       try { const r = await b24('crm.item.list', { entityTypeId: etid, order: { id: 'desc' }, start: 0 });
         const items = (r && r.result && r.result.items) || []; count = items.length; sample = items[0] || null; } catch (e) {}
     }
-    return { entityTypeId: etid, count, matchStages, stages, sample };
+    // Найденные коды полей начала/окончания + их названия.
+    let dateFields = { start: null, end: null, startTitle: '', endTitle: '' };
+    if (etid) {
+      try {
+        const r = await b24('crm.item.fields', { entityTypeId: etid });
+        const fields = (r && r.result && r.result.fields) || {};
+        for (const code in fields) { const f = fields[code] || {}; if (!/date/i.test(String(f.type || ''))) continue;
+          const t = String(f.title || '').toLowerCase();
+          if (!dateFields.start && /нача/.test(t)) { dateFields.start = code; dateFields.startTitle = f.title; }
+          if (!dateFields.end && /оконч|конец/.test(t)) { dateFields.end = code; dateFields.endTitle = f.title; } }
+      } catch (e) {}
+    }
+    return { entityTypeId: etid, count, matchStages, stages, dateFields, sample };
   };
   let types = [];
   try { const tl = await b24('crm.type.list', {}); types = ((tl && tl.result && tl.result.types) || []).map(t => ({ id: t.entityTypeId, title: t.title })); } catch (e) {}
