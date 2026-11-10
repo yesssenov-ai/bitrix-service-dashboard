@@ -24,6 +24,26 @@
     logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>'
   };
   function ticon(n){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'+TBIC[n]+'</svg>'; }
+  // Статичные действия в шапке: Ассистент / Тема / Обратная связь (проксируют
+  // клик на свои плавающие кнопки, которые на телефоне скрыты).
+  var TACT = {
+    ai:'<rect x="4.5" y="8" width="15" height="11" rx="3"/><path d="M12 8V4.5M8.5 4.5h7"/><circle cx="9.5" cy="13.3" r="1.1"/><circle cx="14.5" cy="13.3" r="1.1"/>',
+    theme:'<path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.6 6.6 0 0 0 9.8 9.8z"/>',
+    fb:'<path d="M21 15a2 2 0 0 1-2 2H8l-4 3V6a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/>'
+  };
+  function tactSvg(n){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+TACT[n]+'</svg>'; }
+  function clusterHTML(){
+    return '<button class="cup-tb-ic" data-act="ai" aria-label="Ассистент">'+tactSvg('ai')+'</button>'+
+           '<button class="cup-tb-ic" data-act="theme" aria-label="Тема">'+tactSvg('theme')+'</button>'+
+           '<button class="cup-tb-ic" data-act="fb" aria-label="Обратная связь">'+tactSvg('fb')+'</button>';
+  }
+  function wireCluster(root){
+    root.addEventListener('click',function(e){ var b=e.target.closest('button[data-act]'); if(!b) return;
+      var a=b.getAttribute('data-act');
+      if(a==='ai') clickId('pai-fab');
+      else if(a==='theme') clickId('themeToggle');
+      else if(a==='fb') clickId('pls-fb-btn'); });
+  }
 
   // ── Каталог модулей (снято с портала) ───────────────────────────────────────
   var MODULES = [
@@ -174,18 +194,16 @@
         '<span class="cup-allov-un"><b>'+esc(NAME)+'</b><small>'+esc(ROLE_RU[ROLE]||ROLE||'')+'</small></span></a>' : '')+
       '<div class="cup-allov-foot">'+
         '<button data-a="acc">Кабинет</button>'+
-        '<button data-a="ai">Ассистент</button>'+
         '<button data-a="help">Помощь</button>'+
-        '<button data-a="fb">Связь</button>'+
+        '<button data-a="out">Выйти</button>'+
       '</div>';
     allov.innerHTML=html;
     document.body.appendChild(allov);
     var foot=allov.querySelector('.cup-allov-foot');
     foot.addEventListener('click',function(e){ var b=e.target.closest('button'); if(!b) return; var a=b.getAttribute('data-a');
       if(a==='acc'){ closeAll(); go('/account.html'); }
-      else if(a==='ai'){ closeAll(); clickId('pai-fab'); }
       else if(a==='help'){ closeAll(); clickId('pls-help-btn'); }
-      else if(a==='fb'){ closeAll(); clickId('pls-fb-btn'); } });
+      else if(a==='out'){ closeAll(); doLogout(); } });
     function topSection(q){
       if(q || !TOP || !TOP.length) return '';
       var byCode={}; mods.forEach(function(m){byCode[m.c]=m;});
@@ -266,23 +284,22 @@
     var native=back ? (back.closest('header,.header,.hdr,.top,.topbar,.appbar') || back.parentElement)
                     : document.querySelector('header,.header,.hdr,.top');
     if(native) native.classList.add('cup-nativehdr-hide');
-    var ref=nativeRefresh(), lo=nativeLogout();
+    var ref=nativeRefresh();
     var bar=document.createElement('header'); bar.id='cupTopbar'; bar.className='cup-topbar';
     bar.innerHTML=
       '<button class="cup-tb-ic cup-tb-back" aria-label="Назад">'+ticon('back')+'</button>'+
       '<div class="cup-tb-title">'+esc(moduleTitle())+'</div>'+
       '<div class="cup-tb-act">'+
+        clusterHTML()+
         (ref?'<button class="cup-tb-ic" data-a="refresh" aria-label="Обновить">'+ticon('refresh')+'</button>':'')+
-        (lo?'<button class="cup-tb-ic" data-a="logout" aria-label="Выйти">'+ticon('logout')+'</button>':'')+
       '</div>';
     document.body.appendChild(bar);
     document.body.classList.add('cup-has-topbar');
     bar.querySelector('.cup-tb-back').onclick=function(){ go('/portal.html'); };
     var act=bar.querySelector('.cup-tb-act');
-    if(act) act.addEventListener('click',function(e){ var b=e.target.closest('button'); if(!b) return;
-      var a=b.getAttribute('data-a');
-      if(a==='refresh' && ref){ try{ref.click();}catch(_){} }
-      else if(a==='logout' && lo){ try{lo.click();}catch(_){} } });
+    wireCluster(act);
+    if(act) act.addEventListener('click',function(e){ var b=e.target.closest('button[data-a]'); if(!b) return;
+      if(b.getAttribute('data-a')==='refresh' && ref){ try{ref.click();}catch(_){} } });
   }
 
   // ── Бургер на главной: открывает экран «Все разделы» ─────────────────────────
@@ -340,8 +357,25 @@
     else if(mn) mn.insertBefore(box, mn.firstChild);
   }
 
+  // Статичные иконки (Ассистент/Тема/Связь) в шапке главной — рядом с брендом.
+  function buildHomeActions(){
+    if(!isHome) return;
+    var bar=document.querySelector('.topbar'); if(!bar) return;
+    if(bar.querySelector('.cup-topacts')) return;
+    var box=document.createElement('div'); box.className='cup-topacts';
+    box.innerHTML=clusterHTML();
+    bar.appendChild(box);
+    wireCluster(box);
+  }
+  function doLogout(){
+    var b=document.querySelector('[onclick*="logout"]')||findByText('button,a',/^выйти$/i);
+    if(b){ try{ b.click(); return; }catch(_){} }
+    try{ fetch('/auth/logout',{method:'POST'}).finally(function(){ location.href='/login.html'; }); }
+    catch(e){ location.href='/login.html'; }
+  }
+
   function start(){ if(isHome) document.body.classList.add('cup-home');
-    loadAccess(function(){}); build(); buildTopbar(); buildBurger(); buildHomeSearch(); buildHomeFav(); track(); loadTop(); }
+    loadAccess(function(){}); build(); buildTopbar(); buildBurger(); buildHomeActions(); buildHomeSearch(); buildHomeFav(); track(); loadTop(); }
   if(document.body) start();
   else document.addEventListener('DOMContentLoaded', start);
 })();

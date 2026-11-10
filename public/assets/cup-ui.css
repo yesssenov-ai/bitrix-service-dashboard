@@ -413,25 +413,25 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-ui);
   .cup-tb-title{flex:1;min-width:0;font-size:16.5px;font-weight:800;letter-spacing:-.01em;color:var(--text);
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .cup-tb-act{flex:none;display:flex;gap:7px}
-  /* Плавающие кнопки: поиск/помощь/связь дублируются в нижней навигации и в
-     «Все разделы» — на телефоне прячем (клик всё ещё проксируется). Остаются
-     только Ассистент и Тема — разносим по углам, чтобы не сливались. */
-  #pls-sr-btn,#pls-fb-btn,#pls-help-btn{display:none!important}
-  #themeToggle{top:68px!important;bottom:auto!important;right:14px!important}
-  #pai-fab{top:auto!important;bottom:76px!important;right:14px!important}
+  /* Все плавающие кнопки переехали в шапку/навигацию — на телефоне прячем
+     (клик по ним всё ещё проксируется из статичных иконок шапки). */
+  #pai-fab,#themeToggle,#pls-sr-btn,#pls-fb-btn,#pls-help-btn{display:none!important}
+  /* Слайдшоу-фото на главной не показываем на телефоне (скорость) */
+  .hero .ph{display:none!important}
   /* Главная: каталог модулей (поиск + группы + плитки) переехал в «Ещё» → «Все разделы» */
   body.cup-home .controls,
   body.cup-home #cats,
   body.cup-home #empty,
   body.cup-home #emptyNote,
   body.cup-home .sys{display:none!important}
-  /* Бургер на главной рядом с брендом */
-  body.cup-home .topbar{gap:10px}
-  body.cup-home .topbar .clock{margin-left:auto}
+  /* Бургер + статичные иконки на главной рядом с брендом */
+  body.cup-home .topbar{gap:9px;justify-content:flex-start}
+  body.cup-home .topbar .clock{display:none}
 }
 
 /* ── Бургер, поиск и блок «Часто» на главной ──────────────────────────────────── */
 .cup-burger{display:none}
+.cup-topacts{display:none}
 .cup-hsearch{display:none}
 @media (max-width:640px){
   .cup-hsearch{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
@@ -452,4 +452,5 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-ui);
   .cup-burger svg{width:20px;height:20px}
   .cup-burger:active{background:var(--bg)}
   .cup-burger-float{position:fixed;top:12px;left:12px;z-index:8900}
+  .cup-topacts{display:flex;gap:7px;margin-left:auto}
 }
