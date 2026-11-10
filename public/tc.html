@@ -100,8 +100,19 @@ textarea.in{resize:vertical;min-height:48px}
 .btn.danger{color:#C53B2F;border-color:color-mix(in srgb,#C53B2F 30%,var(--line))}
 .note{background:var(--accent-weak);border:1px solid var(--accent-line);color:var(--text);border-radius:10px;padding:9px 12px;font-size:12px;margin-bottom:12px;display:flex;gap:8px;align-items:flex-start}
 .note b{color:var(--accent)}
+/* строчный вид */
+.tc-tbl{width:100%;border-collapse:separate;border-spacing:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:12.5px}
+.tc-tbl thead th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--text-3);font-weight:700;padding:8px 11px;background:var(--surface-2);border-bottom:1px solid var(--line);white-space:nowrap}
+.tc-tbl tbody td{padding:7px 11px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tc-tbl tbody td:first-child{font-weight:700;max-width:420px}
+.tc-tbl tbody tr:last-child td{border-bottom:0}
+.tc-tbl tbody tr{cursor:pointer}
+.tc-tbl tbody tr:hover{background:var(--surface-2)}
+.vw-seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:2px}
+.vw-seg button{border:0;background:none;color:var(--text-3);font:inherit;font-size:11.5px;font-weight:700;padding:4px 9px;border-radius:6px;cursor:pointer}
+.vw-seg button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(20,25,35,.08)}
 @media(max-width:860px){.stats{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:640px){.wrap{padding:4px 12px 48px}.grid{grid-template-columns:1fr}.fld.two{grid-template-columns:1fr}.p-add{grid-template-columns:1fr 1fr}}
+@media(max-width:640px){.wrap{padding:4px 12px 48px}.grid{grid-template-columns:1fr}.fld.two{grid-template-columns:1fr}.p-add{grid-template-columns:1fr 1fr}.tc-tbl{font-size:12px}}
 </style>
 </head>
 <body>
@@ -109,7 +120,8 @@ textarea.in{resize:vertical;min-height:48px}
   <a class="back" href="/portal.html">&larr; ЦУП</a>
   <h1>🎓 Тренинг-центр</h1>
   <span class="sp"></span>
-  <span class="hint">Лаборатория и обучение ProLabTraining</span>
+  <span class="vw-seg" id="vwSeg"><button data-vw="cards">Карточки</button><button data-vw="rows">Строки</button></span>
+  <span class="hint" style="margin-left:10px">Лаборатория и обучение ProLabTraining</span>
 </div>
 <div class="wrap">
   <div class="secs" id="secs">
@@ -119,6 +131,13 @@ textarea.in{resize:vertical;min-height:48px}
     <button class="sec" data-sec="stock">Склад</button>
     <button class="sec" data-sec="qms">СМК</button>
     <button class="sec" data-sec="analytics">Аналитика</button>
+    <span style="width:1px;align-self:stretch;background:var(--line);margin:4px 4px"></span>
+    <button class="sec" data-sec="team">Команда</button>
+    <button class="sec" data-sec="cal">Календарь</button>
+    <button class="sec" data-sec="needs">Потребности</button>
+    <button class="sec" data-sec="lab">Лаборатория</button>
+    <button class="sec" data-sec="ops">Операции</button>
+    <button class="sec" data-sec="edu">Обучение</button>
   </div>
 
   <div id="view-training">
@@ -220,6 +239,12 @@ textarea.in{resize:vertical;min-height:48px}
   </div>
 
   <div id="view-soon" hidden></div>
+  <div id="view-team" hidden></div>
+  <div id="view-cal" hidden></div>
+  <div id="view-needs" hidden></div>
+  <div id="view-lab" hidden></div>
+  <div id="view-ops" hidden></div>
+  <div id="view-edu" hidden></div>
 </div>
 
 <script>
@@ -230,6 +255,24 @@ const SOON = {
   analytics:['Аналитика','Объёмы, загрузка, суммы по курсам и работам.']
 };
 const esc = s => String(s==null?'':s).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+/* ── Вид: карточки / строки (таблица) ── */
+let VIEW=(()=>{try{return localStorage.getItem('tc-view')||'cards'}catch(e){return 'cards'}})();
+function tcTable(list, cols){
+  return `<table class="tc-tbl"><thead><tr>${cols.map(c=>`<th>${c.h}</th>`).join('')}</tr></thead><tbody>${
+    list.map(it=>`<tr data-id="${it.id}">${cols.map(c=>`<td>${c.c(it)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+}
+function tcRender(g, list, cardFn, cols){
+  if(!list.length){ g.style.display=''; g.innerHTML='<div class="empty">Ничего не найдено</div>'; return; }
+  if(VIEW==='rows' && cols){ g.style.display='block'; g.innerHTML=tcTable(list, cols); }
+  else { g.style.display=''; g.innerHTML=list.map(cardFn).join(''); }
+}
+function rerenderAll(){
+  try{renderGrid()}catch(e){} try{if(typeof wkLoaded!=='undefined'&&wkLoaded)renderWkGrid()}catch(e){}
+  try{if(typeof eqLoaded!=='undefined'&&eqLoaded)renderEqGrid()}catch(e){} try{if(typeof stLoaded!=='undefined'&&stLoaded)renderStGrid()}catch(e){}
+  try{if(typeof qLoaded!=='undefined'&&qLoaded)renderQGrid()}catch(e){}
+}
+function setView(v){ VIEW=v; try{localStorage.setItem('tc-view',v)}catch(e){}
+  document.querySelectorAll('#vwSeg button').forEach(b=>b.classList.toggle('on',b.dataset.vw===v)); rerenderAll(); }
 let TR=[], canEdit=false, filter='all', query='', editParts=[];
 
 async function api(method, path, body){
@@ -273,6 +316,14 @@ function card(t){
     <div class="foot"><span>👥 <b>${pn}</b> участн.</span><span>⏱ <b>${t.hours||'—'}</b> ч.</span></div>
   </div>`;
 }
+const TR_COLS=[
+  {h:'Курс',c:t=>esc(t.title)},
+  {h:'Заказчик',c:t=>esc(t.client||'—')},
+  {h:'Даты',c:t=>esc(t.dates_text||'')},
+  {h:'Статус',c:t=>{const s=ST[t.status]||{c:'lead',t:t.status};return `<span class="pill ${s.c}">${s.t}</span>`}},
+  {h:'Участн.',c:t=>(t.participants||[]).length},
+  {h:'Часы',c:t=>t.hours||'—'}
+];
 function renderGrid(){
   let list=TR.slice();
   if(filter!=='all') list=list.filter(t=>t.status===filter);
@@ -280,7 +331,7 @@ function renderGrid(){
   const order={held:0,plan:1,lead:2};
   list.sort((a,b)=>(order[a.status]??9)-(order[b.status]??9));
   const g=document.getElementById('grid');
-  g.innerHTML = list.length?list.map(card).join(''):'<div class="empty">Ничего не найдено</div>';
+  tcRender(g, list, card, TR_COLS);
 }
 function hideViews(){ ['view-training','view-works','view-equipment','view-stock','view-qms','view-analytics','view-soon'].forEach(id=>{const el=document.getElementById(id); if(el) el.hidden=true;}); }
 function showSoon(key){
@@ -403,7 +454,7 @@ document.getElementById('fchips').addEventListener('click',e=>{
 document.getElementById('q').addEventListener('input',e=>{query=e.target.value.trim();renderGrid();});
 document.getElementById('addBtn').addEventListener('click',()=>openModal(null));
 document.getElementById('grid').addEventListener('click',e=>{
-  const c=e.target.closest('.cc'); if(!c)return;
+  const c=e.target.closest('[data-id]'); if(!c)return;
   const t=TR.find(x=>String(x.id)===c.dataset.id); if(t) openModal(t);
 });
 
@@ -455,13 +506,22 @@ function workCard(w){
     <div class="foot">${foot.map(x=>`<span>${x}</span>`).join('')}</div>
   </div>`;
 }
+const WK_COLS=[
+  {h:'Код',c:w=>esc(w.code||'')},
+  {h:'Название',c:w=>esc(w.title||'—')},
+  {h:'Клиент',c:w=>esc(w.client||'')},
+  {h:'Вид',c:w=>{const x=WTYPE[w.wtype]||{t:w.wtype,c:'m'};return `<span class="pill ${x.c}">${x.t}</span>`}},
+  {h:'Этап',c:w=>{const si=stageInfo(w);return `<span class="pill ${si.cls}">${esc(si.label)}</span>`}},
+  {h:'Проб',c:w=>w.samples||0},
+  {h:'Отчёт',c:w=>esc(w.report_at||'')}
+];
 function renderWkGrid(){
   let list=WK.slice();
   if(wkFilter==='active') list=list.filter(w=>!stageInfo(w).done);
   else if(wkFilter==='done') list=list.filter(w=>stageInfo(w).done);
   if(wkQuery){const q=wkQuery.toLowerCase();list=list.filter(w=>((w.code||'')+' '+(w.title||'')+' '+(w.client||'')+' '+methodsOf(w).join(' ')+' '+(w.analytes||'')).toLowerCase().includes(q));}
   const g=document.getElementById('wkGrid');
-  g.innerHTML=list.length?list.map(workCard).join(''):'<div class="empty">Ничего не найдено</div>';
+  tcRender(g, list, workCard, WK_COLS);
 }
 function stageOptions(wtype,cur){
   const st=TYPE_STAGES[wtype]||[];
@@ -540,7 +600,7 @@ document.getElementById('wkFchips').addEventListener('click',e=>{
 document.getElementById('wkQ').addEventListener('input',e=>{wkQuery=e.target.value.trim();renderWkGrid();});
 document.getElementById('wkAddBtn').addEventListener('click',()=>openWorkModal(null));
 document.getElementById('wkGrid').addEventListener('click',e=>{
-  const c=e.target.closest('.cc'); if(!c)return;
+  const c=e.target.closest('[data-id]'); if(!c)return;
   const w=WK.find(x=>String(x.id)===c.dataset.id); if(w) openWorkModal(w);
 });
 
@@ -580,12 +640,20 @@ function equipCard(e){
     ${foot.length?`<div class="foot">${foot.map(x=>`<span>${x}</span>`).join('')}</div>`:''}
   </div>`;
 }
+const EQ_COLS=[
+  {h:'Прибор',c:e=>`${e.short?esc(e.short)+' · ':''}${esc(e.name||'—')}`},
+  {h:'Направление',c:e=>{const d=DIRMAP[e.dir];return d?`<span class="pill ${d.c}">${d.t}</span>`:''}},
+  {h:'Модель',c:e=>esc(e.model||'')},
+  {h:'Производитель',c:e=>esc(e.maker||'')},
+  {h:'Поверка',c:e=>esc(e.verify_next||'')},
+  {h:'Компл.',c:e=>e.comps_count||0}
+];
 function renderEqGrid(){
   let list=EQ.slice();
   if(eqFilter!=='all') list=list.filter(e=>e.dir===eqFilter);
   if(eqQuery){const q=eqQuery.toLowerCase();list=list.filter(e=>((e.short||'')+' '+(e.name||'')+' '+(e.model||'')+' '+(e.maker||'')+' '+methodsOf(e).join(' ')+' '+(e.objects||'')).toLowerCase().includes(q));}
   const g=document.getElementById('eqGrid');
-  g.innerHTML=list.length?list.map(equipCard).join(''):'<div class="empty">Ничего не найдено</div>';
+  tcRender(g, list, equipCard, EQ_COLS);
 }
 function openEquipModal(e){
   e=e||{methods:[],comps_count:0};
@@ -664,7 +732,7 @@ document.getElementById('eqFchips').addEventListener('click',e=>{
 document.getElementById('eqQ').addEventListener('input',e=>{eqQuery=e.target.value.trim();renderEqGrid();});
 document.getElementById('eqAddBtn').addEventListener('click',()=>openEquipModal(null));
 document.getElementById('eqGrid').addEventListener('click',e=>{
-  const c=e.target.closest('.cc'); if(!c)return;
+  const c=e.target.closest('[data-id]'); if(!c)return;
   const it=EQ.find(x=>String(x.id)===c.dataset.id); if(it) openEquipModal(it);
 });
 
@@ -708,6 +776,14 @@ function stockCard(it){
     <div class="foot">${foot.map(x=>`<span>${x}</span>`).join('')}</div>
   </div>`;
 }
+const STK_COLS=[
+  {h:'Наименование',c:x=>esc(x.name||'—')},
+  {h:'Категория',c:x=>`<span class="pill m">${esc(CATLABEL[x.cat]||x.cat)}</span>`},
+  {h:'Остаток',c:x=>{const s=stState(x);return `<b>${fmtQty(x.qty)}</b> ${esc(x.unit||'')}`+(s?` <span class="pill" style="background:color-mix(in srgb,${s.c} 12%,var(--surface));color:${s.c};border:1px solid color-mix(in srgb,${s.c} 30%,var(--line))">${s.t}</span>`:'')}},
+  {h:'Группа',c:x=>esc(x.grp||'')},
+  {h:'Место',c:x=>esc(x.loc||'')},
+  {h:'Партномер',c:x=>esc(x.pn||'')}
+];
 function renderStGrid(){
   let list=STK.slice();
   if(stFilter==='chem') list=list.filter(x=>CHEM.includes(x.cat));
@@ -717,7 +793,7 @@ function renderStGrid(){
   else if(stFilter==='low') list=list.filter(x=>(+x.qty)<=0);
   if(stQuery){const q=stQuery.toLowerCase();list=list.filter(x=>((x.name||'')+' '+(x.grp||'')+' '+(x.pn||'')+' '+(x.nom||'')+' '+(x.loc||'')).toLowerCase().includes(q));}
   const g=document.getElementById('stGrid');
-  g.innerHTML=list.length?list.slice(0,600).map(stockCard).join(''):'<div class="empty">Ничего не найдено</div>';
+  tcRender(g, list.slice(0,600), stockCard, STK_COLS);
 }
 function openStockModal(it){
   it=it||{cat:'reag',unit:'шт',qty:0,min_qty:0};
@@ -786,7 +862,7 @@ document.getElementById('stFchips').addEventListener('click',e=>{
 document.getElementById('stQ').addEventListener('input',e=>{stQuery=e.target.value.trim();renderStGrid();});
 document.getElementById('stAddBtn').addEventListener('click',()=>openStockModal(null));
 document.getElementById('stGrid').addEventListener('click',e=>{
-  const c=e.target.closest('.cc'); if(!c)return;
+  const c=e.target.closest('[data-id]'); if(!c)return;
   const it=STK.find(x=>String(x.id)===c.dataset.id); if(it) openStockModal(it);
 });
 
@@ -821,13 +897,20 @@ function qmsCard(x){
     ${foot.length?`<div class="foot">${foot.map(z=>`<span>${z}</span>`).join('')}</div>`:''}
   </div>`;
 }
+const QMS_COLS=[
+  {h:'Документ',c:x=>esc(x.title||'—')},
+  {h:'Вид',c:x=>{const k=QKIND[x.kind]||{t:x.kind,c:'m'};return `<span class="pill ${k.c}">${k.t}</span>`}},
+  {h:'Пункт ISO',c:x=>esc(x.clause||'')},
+  {h:'Статус',c:x=>{const s=QSTAT[x.status]||{t:x.status,c:'lead'};return `<span class="pill ${s.c}">${s.t}</span>`}},
+  {h:'Версия',c:x=>esc(x.ver||'')}
+];
 function renderQGrid(){
   let list=QMS.slice();
   if(['proc','rk','form'].includes(qFilter)) list=list.filter(x=>x.kind===qFilter);
   else if(qFilter==='draft') list=list.filter(x=>x.status==='draft'||x.status==='plan');
   if(qQuery){const q=qQuery.toLowerCase();list=list.filter(x=>((x.title||'')+' '+(x.clause||'')+' '+(x.code||'')+' '+(x.no||'')).toLowerCase().includes(q));}
   const g=document.getElementById('qGrid');
-  g.innerHTML=list.length?list.map(qmsCard).join(''):'<div class="empty">Ничего не найдено</div>';
+  tcRender(g, list, qmsCard, QMS_COLS);
 }
 function openQmsModal(x){
   x=x||{kind:'proc',status:'draft',reg:'doc',files_count:0};
@@ -883,7 +966,7 @@ document.getElementById('qFchips').addEventListener('click',e=>{
 document.getElementById('qQ').addEventListener('input',e=>{qQuery=e.target.value.trim();renderQGrid();});
 document.getElementById('qAddBtn').addEventListener('click',()=>openQmsModal(null));
 document.getElementById('qGrid').addEventListener('click',e=>{
-  const c=e.target.closest('.cc'); if(!c)return;
+  const c=e.target.closest('[data-id]'); if(!c)return;
   const it=QMS.find(x=>String(x.id)===c.dataset.id); if(it) openQmsModal(it);
 });
 
@@ -984,6 +1067,9 @@ async function deleteFile(fid){
   await loadFilesList();
 }
 
+document.getElementById('vwSeg').addEventListener('click',e=>{const b=e.target.closest('button[data-vw]');if(b)setView(b.dataset.vw);});
+document.querySelectorAll('#vwSeg button').forEach(b=>b.classList.toggle('on',b.dataset.vw===VIEW));
+
 load();
 
 // Открыть раздел из якоря ссылки (плитки портала ведут на /tc.html#<раздел>).
@@ -991,6 +1077,501 @@ load();
   const valid=['training','works','equipment','stock','qms','analytics'];
   const h=(location.hash||'').replace('#','').toLowerCase();
   if(valid.includes(h) && h!=='training'){ const btn=document.querySelector(`.sec[data-sec="${h}"]`); if(btn) btn.click(); }
+})();
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ТЦ Фазы 1–7 — универсальный движок разделов (лёгкий CRUD поверх /api/tc).
+   Один код на все новые разделы: Команда, Календарь, Потребности,
+   Лаборатория (пробы/методики/регламенты), Операции (колонки/логгеры),
+   Обучение (заявки/сертификаты).
+   ══════════════════════════════════════════════════════════════════════════ */
+const PILL = { // статус → класс пилюли
+  free:'held', busy:'cert', leave:'lead', remote:'plan', sick:'lead', off:'lead',
+  received:'plan', in_work:'cert', done:'held', returned:'lead', disposed:'lead',
+  'new':'plan', approved:'held', ordered:'cert', rejected:'lead', pending:'plan',
+  active:'held', paused:'lead', urgent:'cert', normal:'m', checked:'held', closed:'lead',
+};
+const LBL = {
+  free:'Свободен', busy:'Занят', leave:'Отпуск', remote:'Удалёнка', sick:'Больничный', off:'Нет на месте',
+  vacation:'Отпуск', unpaid:'Без содержания',
+  received:'Принята', in_work:'В работе', done:'Готова', returned:'Возвращена', disposed:'Утилизирована',
+  'new':'Новая', approved:'Согласовано', ordered:'Заказано', rejected:'Отклонено', pending:'На согласовании',
+  active:'Активен', paused:'Пауза', urgent:'Срочно', normal:'Обычно', checked:'Проверено', closed:'Закрыто',
+  daily:'Ежедневно', weekly:'Еженедельно', monthly:'Ежемесячно',
+  apply:'Заявка', test_pre:'Тест до', test_post:'Тест после', survey:'Анкета', reg:'Регистрация',
+  work:'Работа', course:'Курс', equipment:'Прибор', office:'Офис',
+};
+const lbl = v => LBL[v] || v || '—';
+const pill = (v) => `<span class="pill ${PILL[v]||'m'}">${esc(lbl(v))}</span>`;
+const ESCV = s => esc(s==null?'':s);
+
+/* Универсальный контроллер раздела. cfg:
+   { key, ep, one, mount(elId), search:[keys], cols:[{h,c}], card(it),
+     fields:[{k,l,t,opts,optsFn,ph}], required, stats(list), pillKey,
+     rowActions(it), onAction(act,it) } */
+function mkEntity(cfg){
+  const S = { list:[], canEdit:false, q:'', loaded:false, rel:{} };
+  const gid = cfg.key+'Grid', qid = cfg.key+'Q', aid = cfg.key+'Add';
+  function toolbar(){
+    return `<div class="toolbar">
+      <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+        <input id="${qid}" placeholder="Поиск…" autocomplete="off"></div>
+      <span style="flex:1"></span>
+      <button class="btn-primary" id="${aid}" hidden><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M12 5v14M5 12h14"/></svg>${esc(cfg.one)}</button>
+    </div>`;
+  }
+  function filtered(){
+    const q = S.q.toLowerCase();
+    if(!q) return S.list;
+    const keys = cfg.search||[];
+    return S.list.filter(it => keys.some(k => String(it[k]==null?'':it[k]).toLowerCase().includes(q)));
+  }
+  function render(){
+    const g = document.getElementById(gid); if(!g) return;
+    const list = filtered();
+    if(cfg.stats){ const st=document.getElementById(cfg.key+'Stats'); if(st) st.innerHTML = cfg.stats(S.list)||''; }
+    tcRender(g, list, cfg.card, cfg.cols);
+  }
+  async function load(){
+    const d = await api('GET', cfg.ep);
+    const g = document.getElementById(gid);
+    if(!d||!d.ok){ if(g) g.innerHTML='<div class="empty">Не удалось загрузить</div>'; return; }
+    S.list = d.items||[]; S.canEdit = !!d.canEdit; S.loaded = true;
+    const ab=document.getElementById(aid); if(ab) ab.hidden = !S.canEdit;
+    if(cfg.afterLoad) await cfg.afterLoad(S);
+    render();
+  }
+  function build(host){
+    host.innerHTML = (cfg.stats?`<div class="stats" id="${cfg.key}Stats"></div>`:'')
+      + (cfg.head?cfg.head():'') + toolbar() + `<div class="grid" id="${gid}"></div>`;
+    const qel=document.getElementById(qid); if(qel) qel.addEventListener('input',e=>{S.q=e.target.value.trim();render();});
+    const ab=document.getElementById(aid); if(ab) ab.addEventListener('click',()=>openForm(null));
+    const g=document.getElementById(gid);
+    g.addEventListener('click',e=>{
+      const act=e.target.closest('[data-act]');
+      if(act){ e.stopPropagation(); cfg.onAction && cfg.onAction(act.getAttribute('data-act'), itemOf(act), reload); return; }
+      const row=e.target.closest('[data-id]'); if(row) openForm(itemOf(row));
+    });
+  }
+  function itemOf(el){ const id=+el.getAttribute('data-id'); return S.list.find(x=>x.id===id); }
+  async function reload(){ await load(); }
+  function fieldHtml(f, v){
+    const ro = !S.canEdit ? 'disabled' : '';
+    const val = v==null?'':v;
+    if(f.t==='select'){ const opts=(f.optsFn?f.optsFn(S):f.opts)||[]; return `<select class="in" id="ef_${f.k}" ${ro}>${opts.map(([k,l])=>`<option value="${esc(k)}"${String(val)===String(k)?' selected':''}>${esc(l)}</option>`).join('')}</select>`; }
+    if(f.t==='textarea') return `<textarea class="in" id="ef_${f.k}" ${ro}>${ESCV(val)}</textarea>`;
+    if(f.t==='check') return `<label class="chk"><input type="checkbox" id="ef_${f.k}" ${v?'checked':''} ${ro}> ${esc(f.l)}</label>`;
+    const tp = f.t==='number'?'number':f.t==='date'?'text':'text';
+    return `<input class="in" id="ef_${f.k}" type="${tp}" value="${ESCV(val)}" placeholder="${esc(f.ph||'')}" ${ro}>`;
+  }
+  function openForm(it){
+    const isNew = !it; it = it || {};
+    const ov=document.createElement('div'); ov.className='ov';
+    const body = cfg.fields.map(f => f.t==='check'
+      ? `<div class="fld">${fieldHtml(f, it[f.k])}</div>`
+      : `<div class="fld"><span class="l">${esc(f.l)}</span>${fieldHtml(f, it[f.k])}</div>`).join('');
+    const ro = !S.canEdit;
+    ov.innerHTML=`<div class="modal"><div class="mh"><h2>${isNew?'Новая запись — '+esc(cfg.one):esc(cfg.one)}</h2><button class="x" data-x>×</button></div>
+      <div class="body">${body}</div>
+      ${ro?'':`<div class="mfoot"><button class="btn btn-primary" id="efSave">Сохранить</button>${it.id?'<button class="btn danger" id="efDel">Удалить</button>':''}<span style="flex:1"></span><button class="btn" data-x>Отмена</button></div>`}
+    </div>`;
+    document.body.appendChild(ov);
+    ov.addEventListener('click',e=>{ if(e.target===ov||e.target.hasAttribute('data-x')) ov.remove(); });
+    if(!ro){
+      document.getElementById('efSave').onclick=async()=>{
+        const b={};
+        for(const f of cfg.fields){ const el=document.getElementById('ef_'+f.k); if(!el) continue;
+          b[f.k] = f.t==='check'?el.checked : f.t==='number'?(+el.value||0) : el.value.trim(); }
+        if(cfg.required && !b[cfg.required]){ alert('Заполните обязательное поле'); return; }
+        const btn=document.getElementById('efSave'); btn.disabled=true; btn.textContent='Сохранение…';
+        const d = it.id ? await api('PUT', cfg.ep+'/'+it.id, b) : await api('POST', cfg.ep, b);
+        if(!d||!d.ok){ alert((d&&d.error)||'Не удалось сохранить'); btn.disabled=false; btn.textContent='Сохранить'; return; }
+        ov.remove(); await load();
+      };
+      if(it.id){ const del=document.getElementById('efDel'); if(del) del.onclick=async()=>{
+        if(!confirm('Удалить запись безвозвратно?')) return;
+        const d=await api('DELETE', cfg.ep+'/'+it.id);
+        if(!d||!d.ok){ alert((d&&d.error)||'Не удалось удалить (нужны права администратора)'); return; }
+        ov.remove(); await load();
+      }; }
+    }
+  }
+  return { S, load, render, build, reload, openForm };
+}
+
+/* ── Конфиги разделов ─────────────────────────────────────────────────────── */
+const STATUS_WORK = [['free','Свободен'],['busy','Занят'],['leave','Отпуск'],['remote','Удалёнка'],['sick','Больничный'],['off','Нет на месте']];
+
+const entStaff = mkEntity({
+  key:'staff', ep:'/staff', one:'Сотрудник', required:'name',
+  search:['name','role_title','dir','busy_on'],
+  stats:(l)=>{ const by=k=>l.filter(x=>x.status===k).length;
+    return [['n',l.length,'Сотрудников'],['n',by('free'),'Свободны'],['n accent',by('busy'),'Заняты'],['n',by('leave')+by('sick')+by('remote'),'Отсутствуют/удал.']]
+      .map(([c,n,t])=>`<div class="stat"><div class="${c}">${n}</div><div class="l">${t}</div></div>`).join(''); },
+  cols:[
+    {h:'Сотрудник',c:it=>ESCV(it.name)},{h:'Должность',c:it=>ESCV(it.role_title)},{h:'Направление',c:it=>ESCV(it.dir)},
+    {h:'Занятость',c:it=>pill(it.status)},{h:'Загрузка',c:it=>(it.load_pct||0)+'%'},{h:'Чем занят',c:it=>ESCV(it.busy_on)},
+  ],
+  card:it=>`<div class="cc" data-id="${it.id}">
+    <div class="row" style="justify-content:space-between;align-items:flex-start"><div class="ct">${ESCV(it.name)}</div>${pill(it.status)}</div>
+    <div class="row"><span class="client">${ESCV(it.role_title||'—')}</span>${it.dir?`<span class="pill m">${ESCV(it.dir)}</span>`:''}</div>
+    ${it.busy_on?`<div class="sub">▶ ${ESCV(it.busy_on)}</div>`:''}
+    <div class="foot"><span>Загрузка <b>${it.load_pct||0}%</b></span>${(it.admits&&it.admits.length)?`<span>🎓 допусков: <b>${it.admits.length}</b></span>`:'<span></span>'}</div>
+  </div>`,
+  fields:[
+    {k:'name',l:'Имя / ФИО',t:'text'},{k:'role_title',l:'Должность',t:'text'},{k:'dir',l:'Направление / группа',t:'text'},
+    {k:'status',l:'Занятость',t:'select',opts:STATUS_WORK},{k:'load_pct',l:'Загрузка, %',t:'number'},
+    {k:'busy_on',l:'Чем занят (работа/курс)',t:'text'},{k:'email',l:'E-mail',t:'text'},{k:'phone',l:'Телефон',t:'text'},
+    {k:'hired_at',l:'В штате с',t:'date',ph:'ГГГГ-ММ-ДД'},{k:'bonus_idx',l:'Индекс для премии',t:'number'},
+    {k:'note',l:'Заметки',t:'textarea'},{k:'active',l:'Активен (работает сейчас)',t:'check'},
+  ],
+});
+
+const entAbs = mkEntity({
+  key:'abs', ep:'/absences', one:'Заявка на отсутствие',
+  search:['reason','kind'],
+  afterLoad: async (S)=>{ const d=await api('GET','/staff'); S.rel.staff = (d&&d.items)||[]; },
+  stats:(l)=>{ const p=l.filter(x=>x.status==='pending').length;
+    return [['n',l.length,'Заявок'],['n accent',p,'На согласовании'],['n',l.filter(x=>x.status==='approved').length,'Согласовано']]
+      .map(([c,n,t])=>`<div class="stat"><div class="${c}">${n}</div><div class="l">${t}</div></div>`).join(''); },
+  cols:[
+    {h:'Сотрудник',c:it=>ESCV(nameStaff(entAbs.S,it.staff_id))},{h:'Тип',c:it=>lbl(it.kind)},
+    {h:'С',c:it=>ESCV(it.from_date)},{h:'По',c:it=>ESCV(it.to_date)},{h:'Статус',c:it=>pill(it.status)},
+    {h:'Замена',c:it=>ESCV(nameStaff(entAbs.S,it.substitute_id))},
+  ],
+  card:it=>`<div class="cc" data-id="${it.id}">
+    <div class="row" style="justify-content:space-between;align-items:flex-start"><div class="ct">${ESCV(nameStaff(entAbs.S,it.staff_id))} — ${lbl(it.kind)}</div>${pill(it.status)}</div>
+    <div class="sub">${ESCV(it.from_date)} — ${ESCV(it.to_date)}${it.reason?' <span class="dot"></span> '+ESCV(it.reason):''}</div>
+    ${it.substitute_id?`<div class="row"><span class="pill m">Замена: ${ESCV(nameStaff(entAbs.S,it.substitute_id))}</span></div>`:''}
+    ${(it.status==='pending'&&entAbs.S.canEdit)?`<div class="foot"><button class="btn btn-primary" data-act="approve" style="padding:3px 10px;font-size:12px">Согласовать</button><button class="btn danger" data-act="reject" style="padding:3px 10px;font-size:12px">Отклонить</button></div>`:(it.decided_by?`<div class="foot"><span>Решил: ${ESCV(it.decided_by)}</span><span></span></div>`:'')}
+  </div>`,
+  onAction: async (act, it, reload)=>{
+    if(act==='approve'||act==='reject'){
+      let sub=null;
+      if(act==='approve' && confirm('Назначить замену исполнителя? (ОК — выбрать, Отмена — без замены)')){
+        const names=(entAbs.S.rel.staff||[]).map(s=>`${s.id}: ${s.name}`).join('\n');
+        const v=prompt('ID сотрудника-замены:\n'+names); if(v) sub=+v;
+      }
+      const d=await api('PUT','/absences/'+it.id+'/decide',{decision:act==='approve'?'approved':'rejected',substitute_id:sub});
+      if(!d||!d.ok){ alert((d&&d.error)||'Нет прав на согласование'); return; }
+      await reload();
+    }
+  },
+  fields:[
+    {k:'staff_id',l:'Сотрудник',t:'select',optsFn:(S)=>[['','—']].concat((S.rel.staff||[]).map(s=>[s.id,s.name]))},
+    {k:'kind',l:'Тип',t:'select',opts:[['vacation','Отпуск'],['remote','Удалёнка'],['sick','Больничный'],['unpaid','Без содержания']]},
+    {k:'from_date',l:'С даты',t:'date',ph:'ГГГГ-ММ-ДД'},{k:'to_date',l:'По дату',t:'date',ph:'ГГГГ-ММ-ДД'},
+    {k:'reason',l:'Причина / комментарий',t:'textarea'},
+  ],
+  required:null,
+});
+function nameStaff(S, id){ if(!id) return ''; const s=(S.rel.staff||[]).find(x=>x.id===+id); return s?s.name:('#'+id); }
+
+const entNeeds = mkEntity({
+  key:'needs', ep:'/needs', one:'Потребность', required:'title',
+  search:['title','reason','link_ref','assignee'],
+  stats:(l)=>[['n',l.length,'Потребностей'],['n accent',l.filter(x=>x.priority==='urgent').length,'Срочных'],['n',l.filter(x=>x.status==='new').length,'Новых']]
+    .map(([c,n,t])=>`<div class="stat"><div class="${c}">${n}</div><div class="l">${t}</div></div>`).join(''),
+  cols:[
+    {h:'Что нужно',c:it=>ESCV(it.title)},{h:'Кол-во',c:it=>ESCV(it.qty)+' '+ESCV(it.unit)},
+    {h:'Привязка',c:it=>lbl(it.link_type)+(it.link_ref?': '+ESCV(it.link_ref):'')},
+    {h:'Приоритет',c:it=>pill(it.priority)},{h:'Статус',c:it=>pill(it.status)},
+    {h:'Оценка',c:it=>it.est_price?(Number(it.est_price).toLocaleString('ru-RU')+' '+ESCV(it.currency)):'—'},
+  ],
+  card:it=>`<div class="cc" data-id="${it.id}">
+    <div class="row" style="justify-content:space-between;align-items:flex-start"><div class="ct">${ESCV(it.title)}</div>${pill(it.priority)}</div>
+    <div class="row"><span class="client">${ESCV(it.qty)} ${ESCV(it.unit)}</span><span class="pill m">${lbl(it.link_type)}${it.link_ref?': '+ESCV(it.link_ref):''}</span>${pill(it.status)}</div>
+    ${it.reason?`<div class="sub">${ESCV(it.reason)}</div>`:''}
+    <div class="foot"><span>${it.est_price?('≈ '+Number(it.est_price).toLocaleString('ru-RU')+' '+ESCV(it.currency)):'—'}</span><span>${ESCV(it.assignee)}</span></div>
+  </div>`,
+  fields:[
+    {k:'title',l:'Что нужно',t:'text'},{k:'qty',l:'Количество',t:'number'},{k:'unit',l:'Ед.',t:'text',ph:'шт/л/кг'},
+    {k:'link_type',l:'Привязка',t:'select',opts:[['office','Офис/общее'],['work','Работа'],['course','Курс'],['equipment','Прибор']]},
+    {k:'link_ref',l:'К чему (код/имя)',t:'text'},{k:'reason',l:'Обоснование',t:'textarea'},
+    {k:'priority',l:'Приоритет',t:'select',opts:[['normal','Обычно (общий закуп)'],['urgent','Срочно (отдельно)']]},
+    {k:'status',l:'Статус',t:'select',opts:[['new','Новая'],['approved','Согласована'],['ordered','Заказана'],['done','Закрыта']]},
+    {k:'est_price',l:'Оценка стоимости',t:'number'},{k:'currency',l:'Валюта',t:'text',ph:'KZT'},
+    {k:'assignee',l:'Ответственный',t:'text'},{k:'note',l:'Заметки',t:'textarea'},
+  ],
+});
+
+const entSamples = mkEntity({
+  key:'samples', ep:'/samples', one:'Проба', required:'client',
+  search:['code','client','matrix','work_code','barcode'],
+  stats:(l)=>[['n',l.length,'Проб'],['n accent',l.filter(x=>x.status==='in_work').length,'В работе'],['n',l.filter(x=>x.status==='received').length,'Принято'],['n',l.filter(x=>x.status==='done').length,'Готово']]
+    .map(([c,n,t])=>`<div class="stat"><div class="${c}">${n}</div><div class="l">${t}</div></div>`).join(''),
+  cols:[
+    {h:'№ PLS',c:it=>ESCV(it.code)},{h:'Клиент',c:it=>ESCV(it.client)},{h:'Матрица',c:it=>ESCV(it.matrix)},
+    {h:'Принята',c:it=>ESCV(it.received_at)},{h:'Хранение',c:it=>ESCV(it.storage)},{h:'Статус',c:it=>pill(it.status)},
+  ],
+  card:it=>`<div class="cc" data-id="${it.id}">
+    <div class="row" style="justify-content:space-between;align-items:flex-start"><div class="ct">${ESCV(it.code||'без №')}</div>${pill(it.status)}</div>
+    <div class="row"><span class="client">${ESCV(it.client)}</span>${it.matrix?`<span class="pill m">${ESCV(it.matrix)}</span>`:''}</div>
+    <div class="sub">${it.received_at?'Принята '+ESCV(it.received_at):''}${it.storage?' <span class="dot"></span> '+ESCV(it.storage):''}</div>
+    ${it.work_code?`<div class="foot"><span>Работа: ${ESCV(it.work_code)}</span><span>${it.barcode?'▦ '+ESCV(it.barcode):''}</span></div>`:''}
+  </div>`,
+  fields:[
+    {k:'code',l:'Номер PLS',t:'text',ph:'PLS-2026-0001'},{k:'client',l:'Клиент',t:'text'},{k:'matrix',l:'Матрица/объект',t:'text'},
+    {k:'work_code',l:'Код работы',t:'text'},{k:'received_at',l:'Дата приёма',t:'date',ph:'ГГГГ-ММ-ДД'},
+    {k:'storage',l:'Место хранения',t:'text'},
+    {k:'status',l:'Статус',t:'select',opts:[['received','Принята'],['in_work','В работе'],['done','Готова'],['returned','Возвращена'],['disposed','Утилизирована']]},
+    {k:'barcode',l:'Штрихкод',t:'text'},{k:'disposed_act',l:'Акт утилизации',t:'text'},{k:'note',l:'Заметки',t:'textarea'},
+  ],
+});
+
+const entMethods = mkEntity({
+  key:'methods', ep:'/methods', one:'Методика', required:'name',
+  search:['code','name','restrictions'],
+  cols:[
+    {h:'Код',c:it=>ESCV(it.code)},{h:'Методика',c:it=>ESCV(it.name)},
+    {h:'Аналиты',c:it=>((it.analytes||[]).map(a=>a.name).filter(Boolean).join(', ')||'—')},
+    {h:'Спрос',c:it=>ESCV(it.demand)},{h:'Ограничения',c:it=>ESCV(it.restrictions)},
+  ],
+  card:it=>`<div class="cc" data-id="${it.id}">
+    <div class="row" style="justify-content:space-between;align-items:flex-start"><div class="ct">${ESCV(it.name)}</div>${it.code?`<span class="pill m">${ESCV(it.code)}</span>`:''}</div>
+    <div class="row">${(it.analytes||[]).slice(0,6).map(a=>`<span class="pill m">${ESCV(a.name)}${a.unit?' · '+ESCV(a.unit):''}</span>`).join('')}</div>
+    ${it.restrictions?`<div class="sub">⚠ ${ESCV(it.restrictions)}</div>`:''}
+    <div class="foot"><span>Спрос: <b>${it.demand||0}</b></span><span></span></div>
+  </div>`,
+  fields:[
+    {k:'code',l:'Код',t:'text'},{k:'name',l:'Название методики',t:'text'},{k:'demand',l:'Спрос (кол-во работ)',t:'number'},
+    {k:'restrictions',l:'Ограничения',t:'textarea'},{k:'instruction',l:'Инструкция / ссылка',t:'textarea'},{k:'note',l:'Заметки',t:'textarea'},
+  ],
+});
+
+const entRoutines = mkEntity({
+  key:'routines', ep:'/routines', one:'Регламент', required:'title',
+  search:['title','assignee'],
+  stats:(l)=>[['n',l.length,'Регламентов'],['n accent',l.filter(x=>x.needs_doc).length,'С документом'],['n',l.filter(x=>x.status==='active').length,'Активных']]
+    .map(([c,n,t])=>`<div class="stat"><div class="${c}">${n}</div><div class="l">${t}</div></div>`).join(''),
+  cols:[
+    {h:'Регламент',c:it=>ESCV(it.title)},{h:'Периодичность',c:it=>lbl(it.freq)},{h:'Следующий',c:it=>ESCV(it.next_at)},
+    {h:'Исполнитель',c:it=>ESCV(it.assignee)},{h:'Документ',c:it=>it.needs_doc?'нужен':'—'},{h:'Статус',c:it=>pill(it.status)},
+  ],
+  card:it=>`<div class="cc" data-id="${it.id}">
+    <div class="row" style="justify-content:space-between;align-items:flex-start"><div class="ct">${ESCV(it.title)}</div>${pill(it.status)}</div>
+    <div class="row"><span class="pill m">${lbl(it.freq)}</span>${it.next_at?`<span class="pill plan">след. ${ESCV(it.next_at)}</span>`:''}${it.needs_doc?'<span class="pill cert">нужен документ</span>':''}</div>
+    <div class="foot"><span>${ESCV(it.assignee||'—')}</span><span>${it.last_done?'выполнен '+ESCV(it.last_done):''}</span></div>
+  </div>`,
+  fields:[
+    {k:'title',l:'Регламент / регулярное дело',t:'text'},
+    {k:'freq',l:'Периодичность',t:'select',opts:[['daily','Ежедневно'],['weekly','Еженедельно'],['monthly','Ежемесячно']]},
+    {k:'next_at',l:'Следующий срок',t:'date',ph:'ГГГГ-ММ-ДД'},{k:'last_done',l:'Последнее выполнение',t:'date',ph:'ГГГГ-ММ-ДД'},
+    {k:'assignee',l:'Исполнитель',t:'text'},{k:'needs_doc',l:'Закрытие только с документом/комментарием',t:'check'},
+    {k:'status',l:'Статус',t:'select',opts:[['active','Активен'],['paused','Пауза']]},{k:'note',l:'Заметки',t:'textarea'},
+  ],
+});
+
+const entColumns = mkEntity({
+  key:'columns', ep:'/columns', one:'Запись о колонке', required:'column_name',
+  search:['equipment_name','column_name','method','used_by'],
+  cols:[
+    {h:'Колонка',c:it=>ESCV(it.column_name)},{h:'Прибор',c:it=>ESCV(it.equipment_name)},{h:'Метод',c:it=>ESCV(it.method)},
+    {h:'Инжекций',c:it=>ESCV(it.injections)},{h:'Оставлена в',c:it=>ESCV(it.left_in)},{h:'Когда',c:it=>ESCV(it.used_at)},
+  ],
+  card:it=>`<div class="cc" data-id="${it.id}">
+    <div class="row" style="justify-content:space-between;align-items:flex-start"><div class="ct">${ESCV(it.column_name)}</div>${it.injections?`<span class="pill m">${ESCV(it.injections)} инж.</span>`:''}</div>
+    <div class="row"><span class="client">${ESCV(it.equipment_name||'—')}</span>${it.method?`<span class="pill m">${ESCV(it.method)}</span>`:''}</div>
+    <div class="sub">${it.left_in?'Оставлена в: '+ESCV(it.left_in):''}${it.used_at?' <span class="dot"></span> '+ESCV(it.used_at):''}</div>
+    <div class="foot"><span>${ESCV(it.used_by)}</span><span></span></div>
+  </div>`,
+  fields:[
+    {k:'column_name',l:'Колонка',t:'text'},{k:'equipment_name',l:'Прибор',t:'text'},{k:'method',l:'Метод',t:'text'},
+    {k:'injections',l:'Число инжекций',t:'number'},{k:'left_in',l:'В чём оставили (растворитель)',t:'text'},
+    {k:'used_at',l:'Дата',t:'date',ph:'ГГГГ-ММ-ДД'},{k:'used_by',l:'Кто',t:'text'},{k:'note',l:'Заметки',t:'textarea'},
+  ],
+});
+
+const entLoggers = mkEntity({
+  key:'loggers', ep:'/loggers', one:'Замер T/φ', required:'room',
+  search:['room','measured_by'],
+  cols:[
+    {h:'Помещение',c:it=>ESCV(it.room)},{h:'T, °C',c:it=>ESCV(it.temp)},{h:'Влажность, %',c:it=>ESCV(it.humidity)},
+    {h:'Когда',c:it=>ESCV(it.measured_at)},{h:'Кто',c:it=>ESCV(it.measured_by)},
+  ],
+  card:it=>`<div class="cc" data-id="${it.id}">
+    <div class="row" style="justify-content:space-between;align-items:flex-start"><div class="ct">${ESCV(it.room)}</div></div>
+    <div class="row"><span class="pill ${(+it.temp>25||+it.temp<15)?'cert':'held'}">🌡 ${ESCV(it.temp)} °C</span><span class="pill ${(+it.humidity>60||+it.humidity<30)?'cert':'held'}">💧 ${ESCV(it.humidity)} %</span></div>
+    <div class="foot"><span>${ESCV(it.measured_at)}</span><span>${ESCV(it.measured_by)}</span></div>
+  </div>`,
+  fields:[
+    {k:'room',l:'Помещение',t:'text'},{k:'temp',l:'Температура, °C',t:'number'},{k:'humidity',l:'Влажность, %',t:'number'},
+    {k:'measured_at',l:'Дата/время',t:'text',ph:'ГГГГ-ММ-ДД ЧЧ:ММ'},{k:'measured_by',l:'Кто измерил',t:'text'},{k:'note',l:'Заметки',t:'textarea'},
+  ],
+});
+
+const entForms = mkEntity({
+  key:'forms', ep:'/forms', one:'Заявка / анкета', required:'person',
+  search:['person','company','bin','training_title','title'],
+  stats:(l)=>[['n',l.length,'Записей'],['n accent',l.filter(x=>x.kind==='apply').length,'Заявок на курс'],['n',l.filter(x=>x.kind&&x.kind.indexOf('test')===0).length,'Тестов']]
+    .map(([c,n,t])=>`<div class="stat"><div class="${c}">${n}</div><div class="l">${t}</div></div>`).join(''),
+  cols:[
+    {h:'Тип',c:it=>lbl(it.kind)},{h:'ФИО',c:it=>ESCV(it.person)},{h:'Компания',c:it=>ESCV(it.company)},
+    {h:'БИН',c:it=>ESCV(it.bin)},{h:'Курс',c:it=>ESCV(it.training_title)},{h:'Балл',c:it=>it.score==null?'—':ESCV(it.score)},{h:'Статус',c:it=>pill(it.status)},
+  ],
+  card:it=>`<div class="cc" data-id="${it.id}">
+    <div class="row" style="justify-content:space-between;align-items:flex-start"><div class="ct">${ESCV(it.person)}</div><span class="pill m">${lbl(it.kind)}</span></div>
+    <div class="row"><span class="client">${ESCV(it.company||'—')}</span>${it.bin?`<span class="pill m">БИН ${ESCV(it.bin)}</span>`:''}${pill(it.status)}</div>
+    ${it.training_title?`<div class="sub">Курс: ${ESCV(it.training_title)}</div>`:''}
+    ${it.score!=null?`<div class="foot"><span>Балл: <b>${ESCV(it.score)}</b></span><span></span></div>`:''}
+  </div>`,
+  fields:[
+    {k:'kind',l:'Тип',t:'select',opts:[['apply','Заявка на курс'],['reg','Регистрация'],['test_pre','Тест до'],['test_post','Тест после'],['survey','Анкета/опрос']]},
+    {k:'person',l:'ФИО',t:'text'},{k:'company',l:'Компания',t:'text'},{k:'bin',l:'БИН',t:'text'},
+    {k:'training_title',l:'Курс',t:'text'},{k:'score',l:'Балл (для теста)',t:'number'},
+    {k:'status',l:'Статус',t:'select',opts:[['new','Новая'],['checked','Проверена'],['closed','Закрыта']]},{k:'note',l:'Заметки',t:'textarea'},
+  ],
+});
+
+const entCerts = mkEntity({
+  key:'certs', ep:'/certs', one:'Сертификат', required:'person',
+  search:['cert_no','person','company','bin','training_title'],
+  stats:(l)=>[['n',l.length,'Сертификатов'],['n accent',new Set(l.map(x=>x.company).filter(Boolean)).size,'Компаний'],['n',l.reduce((a,x)=>a+(+x.hours||0),0),'Часов суммарно']]
+    .map(([c,n,t])=>`<div class="stat"><div class="${c}">${n}</div><div class="l">${t}</div></div>`).join(''),
+  cols:[
+    {h:'№',c:it=>ESCV(it.cert_no)},{h:'ФИО',c:it=>ESCV(it.person)},{h:'Компания',c:it=>ESCV(it.company)},
+    {h:'Курс',c:it=>ESCV(it.training_title)},{h:'Часов',c:it=>ESCV(it.hours)},{h:'Выдан',c:it=>ESCV(it.issued_at)},
+    {h:'Печать',c:it=>`<button class="btn" data-act="print" style="padding:2px 8px;font-size:11px">🖨</button>`},
+  ],
+  card:it=>`<div class="cc" data-id="${it.id}">
+    <div class="row" style="justify-content:space-between;align-items:flex-start"><div class="ct">${ESCV(it.person)}</div>${it.cert_no?`<span class="pill cert">№ ${ESCV(it.cert_no)}</span>`:''}</div>
+    <div class="row"><span class="client">${ESCV(it.company||'—')}</span>${it.bin?`<span class="pill m">БИН ${ESCV(it.bin)}</span>`:''}</div>
+    ${it.training_title?`<div class="sub">${ESCV(it.training_title)}${it.hours?' · '+ESCV(it.hours)+' ч':''}</div>`:''}
+    <div class="foot"><span>Выдан ${ESCV(it.issued_at||'—')}</span><button class="btn" data-act="print" style="padding:2px 10px;font-size:11px">🖨 Печать</button></div>
+  </div>`,
+  onAction:(act,it)=>{ if(act==='print') printCertificate(it); },
+  fields:[
+    {k:'cert_no',l:'Номер сертификата',t:'text'},{k:'person',l:'ФИО',t:'text'},{k:'company',l:'Компания',t:'text'},
+    {k:'bin',l:'БИН',t:'text'},{k:'training_title',l:'Курс',t:'text'},{k:'hours',l:'Часов',t:'number'},
+    {k:'issued_at',l:'Дата выдачи',t:'date',ph:'ГГГГ-ММ-ДД'},{k:'issued_by',l:'Выдал',t:'text'},{k:'note',l:'Заметки',t:'textarea'},
+  ],
+});
+
+/* ── Фаза 4: печать документов (сертификат) — печать → PDF из браузера ──────── */
+function printCertificate(it){
+  it = it||{};
+  const w = window.open('', '_blank'); if(!w){ alert('Разрешите всплывающие окна для печати'); return; }
+  const today = new Date().toISOString().slice(0,10);
+  w.document.write(`<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Сертификат ${esc(it.cert_no||'')}</title>
+    <style>
+      @page{size:A4 landscape;margin:0}
+      body{font-family:'Times New Roman',Georgia,serif;margin:0;color:#1a2330}
+      .cert{width:277mm;height:190mm;margin:0 auto;padding:18mm 22mm;box-sizing:border-box;border:3px double #1a7f54;position:relative}
+      .cert:after{content:'';position:absolute;inset:6mm;border:1px solid #c9d6cf;pointer-events:none}
+      h1{font-size:40px;letter-spacing:2px;color:#1a7f54;text-align:center;margin:6mm 0 2mm}
+      .sub{text-align:center;color:#55636e;font-size:15px;margin-bottom:12mm}
+      .who{text-align:center;font-size:30px;font-weight:bold;margin:4mm 0}
+      .for{text-align:center;font-size:16px;margin:2mm 0}
+      .course{text-align:center;font-size:22px;color:#13452f;margin:3mm 0 2mm;font-style:italic}
+      .meta{display:flex;justify-content:space-between;margin-top:16mm;font-size:13px;color:#33414c}
+      .sig{border-top:1px solid #33414c;padding-top:3px;width:60mm;text-align:center}
+      .no{position:absolute;top:10mm;right:14mm;font-size:12px;color:#8a97a0}
+    </style></head><body onload="window.print()">
+    <div class="cert">
+      <div class="no">№ ${esc(it.cert_no||'—')}</div>
+      <h1>СЕРТИФИКАТ</h1>
+      <div class="sub">Учебный центр ProLabTraining · настоящим подтверждает, что</div>
+      <div class="who">${esc(it.person||'____________________')}</div>
+      <div class="for">${it.company?('представитель: '+esc(it.company)+(it.bin?' (БИН '+esc(it.bin)+')':'')):''}</div>
+      <div class="for">прошёл(а) обучение по программе:</div>
+      <div class="course">«${esc(it.training_title||'____________________')}»</div>
+      <div class="for">${it.hours?('в объёме '+esc(it.hours)+' академических часов'):''}</div>
+      <div class="meta">
+        <div class="sig">Дата выдачи: ${esc(it.issued_at||today)}</div>
+        <div class="sig">${esc(it.issued_by||'Руководитель ТЦ')}<br><small>подпись</small></div>
+      </div>
+    </div></body></html>`);
+  w.document.close();
+}
+
+/* ── Хосты разделов с под-вкладками ────────────────────────────────────────── */
+const SUBVIEWS = {
+  'view-team':   { subs:[['Сотрудники',entStaff],['Отсутствия',entAbs]] },
+  'view-needs':  { subs:[['Потребности',entNeeds]] },
+  'view-lab':    { subs:[['Пробы',entSamples],['Методики',entMethods],['Регламенты',entRoutines]] },
+  'view-ops':    { subs:[['История колонок',entColumns],['Логгеры T/φ',entLoggers]] },
+  'view-edu':    { subs:[['Заявки и анкеты',entForms],['Сертификаты',entCerts]] },
+};
+const _hostBuilt = {};
+function mountHost(viewId){
+  const host = document.getElementById(viewId); if(!host) return;
+  const cfg = SUBVIEWS[viewId]; if(!cfg) return;
+  if(!_hostBuilt[viewId]){
+    _hostBuilt[viewId] = true;
+    if(viewId==='view-team') host.innerHTML = '<div id="teamNow" class="an-grid" style="margin-bottom:12px"></div>';
+    else host.innerHTML='';
+    // панель под-вкладок
+    const bar=document.createElement('div'); bar.className='secs'; bar.style.marginTop='0';
+    const bodies=[];
+    cfg.subs.forEach(([label,ent],i)=>{
+      const b=document.createElement('button'); b.className='sec'+(i===0?' on':''); b.textContent=label; bar.appendChild(b);
+      const body=document.createElement('div'); if(i!==0) body.hidden=true; bodies.push(body);
+      b.addEventListener('click',()=>{
+        bar.querySelectorAll('.sec').forEach((x,j)=>x.classList.toggle('on',j===i));
+        bodies.forEach((bd,j)=>bd.hidden=j!==i);
+        if(!ent.S.loaded) ent.load();
+      });
+    });
+    host.appendChild(bar);
+    cfg.subs.forEach(([label,ent],i)=>{ host.appendChild(bodies[i]); ent.build(bodies[i]); });
+    // первая под-вкладка грузится сразу
+    cfg.subs[0][1].load();
+    if(viewId==='view-team') loadTeamNow();
+  }
+}
+async function loadTeamNow(){
+  const box=document.getElementById('teamNow'); if(!box) return;
+  const d=await api('GET','/team-now'); if(!d||!d.ok){ box.innerHTML=''; return; }
+  const by=d.by||{};
+  const cell=(n,l,c)=>`<div class="stat"><div class="n${c?' '+c:''}">${n||0}</div><div class="l">${l}</div></div>`;
+  box.innerHTML=`<div class="stats" style="margin:0">
+    ${cell(d.total,'Команда ТЦ')}
+    ${cell(by.free,'Свободны')}
+    ${cell(by.busy,'Заняты','accent')}
+    ${cell((by.leave||0)+(by.sick||0)+(by.remote||0),'Отпуск/удал./больн.')}
+    ${cell(d.pending,'Заявок на согласование','accent')}
+  </div>`;
+}
+
+/* ── Календарь ТЦ ──────────────────────────────────────────────────────────── */
+const CAL_KIND = { work:['Срок работы','cert'], report:['Отчёт','plan'], verify:['Поверка','held'], to:['ТО','plan'], routine:['Регламент','m'], absence:['Отсутствие','lead'] };
+let _calBuilt=false;
+async function mountCalendar(){
+  const host=document.getElementById('view-cal'); if(!host) return;
+  if(!_calBuilt){ _calBuilt=true; host.innerHTML='<div id="calBody"><div class="empty">Загрузка…</div></div>'; }
+  const d=await api('GET','/calendar');
+  const body=document.getElementById('calBody'); if(!body) return;
+  if(!d||!d.ok){ body.innerHTML='<div class="empty">Не удалось загрузить календарь</div>'; return; }
+  const items=d.items||[];
+  if(!items.length){ body.innerHTML='<div class="empty">Событий нет. Заполните сроки работ, поверки, регламенты.</div>'; return; }
+  const groups={}; const order=[];
+  for(const e of items){ const g=e.date?e.date.slice(0,7):'Без даты'; if(!groups[g]){groups[g]=[];order.push(g);} groups[g].push(e); }
+  const MON=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+  const title=g=>{ const m=/^(\d{4})-(\d{2})$/.exec(g); return m?`${MON[+m[2]-1]} ${m[1]}`:g; };
+  body.innerHTML = order.map(g=>`<div class="panel" style="margin-bottom:12px"><div class="ph"><span class="pt">${esc(title(g))}</span><span class="pn">${groups[g].length}</span></div>
+    <table class="tc-tbl"><tbody>${groups[g].map(e=>{ const k=CAL_KIND[e.kind]||['Событие','m'];
+      return `<tr><td style="width:92px;color:var(--text-3)">${esc(e.raw||'')}</td><td style="width:120px"><span class="pill ${k[1]}">${esc(k[0])}</span></td><td>${esc(e.title)}</td><td style="color:var(--text-3)">${esc(e.sub||'')}</td></tr>`;
+    }).join('')}</tbody></table></div>`).join('');
+}
+
+/* ── Регистрация новых разделов в переключателе вкладок ─────────────────────── */
+(function registerTcPhases(){
+  const extra=['team','cal','needs','lab','ops','edu'];
+  // расширяем hideViews: добавляем новые view-* в список скрываемых
+  const origHide = hideViews;
+  window.hideViews = function(){ origHide();
+    extra.forEach(k=>{ const el=document.getElementById('view-'+k); if(el) el.hidden=true; }); };
+  // маршрутизация кликов по новым вкладкам
+  document.getElementById('secs').addEventListener('click',e=>{
+    const b=e.target.closest('.sec'); if(!b) return; const sec=b.dataset.sec;
+    if(!extra.includes(sec)) return;
+    window.hideViews(); const v=document.getElementById('view-'+sec); if(v) v.hidden=false;
+    if(sec==='cal') mountCalendar(); else mountHost('view-'+sec);
+    try{ history.replaceState(null,'','#'+sec); }catch(_){}
+  });
+  // дип-линк из плиток портала
+  const h=(location.hash||'').replace('#','').toLowerCase();
+  if(extra.includes(h)){ const btn=document.querySelector(`.sec[data-sec="${h}"]`); if(btn) btn.click(); }
 })();
 </script>
 </body>

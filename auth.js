@@ -293,6 +293,186 @@ async function initDB() {
     );
     CREATE INDEX IF NOT EXISTS idx_tm_tc_files_ent ON ticketsmodule_tc_files(entity_type, entity_id);
 
+    -- ── ТЦ Фаза 1: Команда и занятость ────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS ticketsmodule_tc_staff (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      role_title TEXT DEFAULT '',          -- должность
+      dir TEXT DEFAULT '',                 -- направление/группа
+      email TEXT DEFAULT '',
+      phone TEXT DEFAULT '',
+      status TEXT DEFAULT 'free',          -- free|busy|leave|remote|sick|off
+      load_pct INTEGER DEFAULT 0,          -- текущая загрузка, %
+      busy_on TEXT DEFAULT '',             -- чем занят (работа/курс)
+      admits JSONB DEFAULT '[]',           -- допуски: [{method, until}]
+      hired_at TEXT DEFAULT '',
+      bonus_idx INTEGER DEFAULT 0,         -- индекс для премии
+      note TEXT DEFAULT '',
+      active BOOLEAN DEFAULT TRUE,
+      created_by VARCHAR(100),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_tc_staff_status ON ticketsmodule_tc_staff(status);
+
+    CREATE TABLE IF NOT EXISTS ticketsmodule_tc_absences (
+      id SERIAL PRIMARY KEY,
+      staff_id INTEGER NOT NULL,
+      kind TEXT DEFAULT 'vacation',        -- vacation|remote|sick|unpaid
+      from_date TEXT DEFAULT '',
+      to_date TEXT DEFAULT '',
+      reason TEXT DEFAULT '',
+      status TEXT DEFAULT 'pending',       -- pending|approved|rejected
+      substitute_id INTEGER,               -- замена исполнителя
+      decided_by VARCHAR(100),
+      decided_at TIMESTAMPTZ,
+      created_by VARCHAR(100),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_tc_abs_staff ON ticketsmodule_tc_absences(staff_id);
+    CREATE INDEX IF NOT EXISTS idx_tm_tc_abs_status ON ticketsmodule_tc_absences(status);
+
+    -- ── ТЦ Фаза 3: Потребности ────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS ticketsmodule_tc_needs (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      qty NUMERIC DEFAULT 1,
+      unit TEXT DEFAULT 'шт',
+      link_type TEXT DEFAULT 'office',     -- work|course|equipment|office
+      link_ref TEXT DEFAULT '',            -- к чему привязана (код/имя)
+      reason TEXT DEFAULT '',
+      priority TEXT DEFAULT 'normal',      -- urgent|normal
+      status TEXT DEFAULT 'new',           -- new|approved|ordered|done
+      est_price NUMERIC DEFAULT 0,
+      currency TEXT DEFAULT 'KZT',
+      assignee TEXT DEFAULT '',
+      note TEXT DEFAULT '',
+      created_by VARCHAR(100),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_tc_needs_status ON ticketsmodule_tc_needs(status);
+
+    -- ── ТЦ Фаза 5: Лабораторный цикл ──────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS ticketsmodule_tc_samples (
+      id SERIAL PRIMARY KEY,
+      code TEXT DEFAULT '',                -- номер PLS
+      client TEXT DEFAULT '',
+      matrix TEXT DEFAULT '',
+      work_code TEXT DEFAULT '',
+      received_at TEXT DEFAULT '',
+      storage TEXT DEFAULT '',             -- место хранения
+      status TEXT DEFAULT 'received',      -- received|in_work|done|returned|disposed
+      barcode TEXT DEFAULT '',
+      disposed_act TEXT DEFAULT '',        -- акт утилизации
+      note TEXT DEFAULT '',
+      created_by VARCHAR(100),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_tc_samples_status ON ticketsmodule_tc_samples(status);
+
+    CREATE TABLE IF NOT EXISTS ticketsmodule_tc_methods (
+      id SERIAL PRIMARY KEY,
+      code TEXT DEFAULT '',
+      name TEXT NOT NULL,
+      analytes JSONB DEFAULT '[]',         -- [{name, unit, limit}]
+      demand INTEGER DEFAULT 0,            -- спрос (кол-во работ)
+      restrictions TEXT DEFAULT '',
+      instruction TEXT DEFAULT '',
+      note TEXT DEFAULT '',
+      created_by VARCHAR(100),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS ticketsmodule_tc_routines (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      freq TEXT DEFAULT 'weekly',          -- daily|weekly|monthly
+      next_at TEXT DEFAULT '',
+      last_done TEXT DEFAULT '',
+      needs_doc BOOLEAN DEFAULT FALSE,     -- закрытие только с документом
+      assignee TEXT DEFAULT '',
+      status TEXT DEFAULT 'active',        -- active|paused
+      note TEXT DEFAULT '',
+      created_by VARCHAR(100),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_tc_routines_status ON ticketsmodule_tc_routines(status);
+
+    -- ── ТЦ Фаза 6: Операционка приборов ───────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS ticketsmodule_tc_columns (
+      id SERIAL PRIMARY KEY,
+      equipment_id INTEGER,
+      equipment_name TEXT DEFAULT '',
+      column_name TEXT DEFAULT '',
+      method TEXT DEFAULT '',
+      injections INTEGER DEFAULT 0,
+      left_in TEXT DEFAULT '',             -- в чём оставили (растворитель)
+      used_at TEXT DEFAULT '',
+      used_by TEXT DEFAULT '',
+      note TEXT DEFAULT '',
+      created_by VARCHAR(100),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_tc_columns_eq ON ticketsmodule_tc_columns(equipment_id);
+
+    CREATE TABLE IF NOT EXISTS ticketsmodule_tc_loggers (
+      id SERIAL PRIMARY KEY,
+      room TEXT DEFAULT '',
+      temp NUMERIC,
+      humidity NUMERIC,
+      measured_at TEXT DEFAULT '',
+      measured_by TEXT DEFAULT '',
+      note TEXT DEFAULT '',
+      created_by VARCHAR(100),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_tc_loggers_room ON ticketsmodule_tc_loggers(room);
+
+    -- ── ТЦ Фаза 7: Обучение — операционка ─────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS ticketsmodule_tc_forms (
+      id SERIAL PRIMARY KEY,
+      kind TEXT DEFAULT 'reg',             -- apply|test_pre|test_post|survey|reg
+      training_id INTEGER,
+      training_title TEXT DEFAULT '',
+      title TEXT DEFAULT '',
+      bin TEXT DEFAULT '',
+      company TEXT DEFAULT '',
+      person TEXT DEFAULT '',
+      payload JSONB DEFAULT '{}',
+      score INTEGER,
+      status TEXT DEFAULT 'new',           -- new|checked|closed
+      note TEXT DEFAULT '',
+      created_by VARCHAR(100),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_tc_forms_kind ON ticketsmodule_tc_forms(kind);
+
+    CREATE TABLE IF NOT EXISTS ticketsmodule_tc_certs (
+      id SERIAL PRIMARY KEY,
+      cert_no TEXT DEFAULT '',
+      training_id INTEGER,
+      training_title TEXT DEFAULT '',
+      person TEXT DEFAULT '',
+      company TEXT DEFAULT '',
+      bin TEXT DEFAULT '',
+      hours INTEGER DEFAULT 0,
+      issued_at TEXT DEFAULT '',
+      issued_by TEXT DEFAULT '',
+      note TEXT DEFAULT '',
+      created_by VARCHAR(100),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_tc_certs_no ON ticketsmodule_tc_certs(cert_no);
+
     -- ── ProLab AI: банк примеров (самообучение агента на удачных запросах) ──────
     CREATE TABLE IF NOT EXISTS ticketsmodule_plsai_examples (
       id SERIAL PRIMARY KEY,
@@ -1032,7 +1212,9 @@ function requireModuleApi(moduleCode) {
 
 // Как requireModule, но пускает, если выдан ЛЮБОЙ из codes (или admin). Для
 // модуля из нескольких плиток-кодов (напр. Тренинг-центр: TC/TC_WK/TC_EQ/…).
-function requireAnyModule(moduleCodes) {
+// Пускает, если выдан хотя бы один из moduleCodes ИЛИ роль пользователя входит в
+// roles (роль-«быстрый грант», напр. 'tc' = тренинг-центр → все плитки ТЦ сразу).
+function requireAnyModule(moduleCodes, roles = []) {
   return async (req, res, next) => {
     try {
       const token = req.cookies?.token;
@@ -1044,15 +1226,17 @@ function requireAnyModule(moduleCodes) {
       const user = result.rows[0];
       if (isKicked(user, payload)) return res.redirect('/login.html');
       req.user = user; req.token = token;
+      if (roles.length && roles.includes(user.role)) return next();
       const codes = await userModuleCodes(user);
       if (codes === null || moduleCodes.some(c => codes.has(c))) return next();
       return res.redirect('/');
     } catch (e) { return res.redirect('/login.html'); }
   };
 }
-// API-вариант: 403, если не выдан ни один из codes.
-function requireAnyModuleApi(moduleCodes) {
+// API-вариант: 403, если не выдан ни один из codes и роль не в roles.
+function requireAnyModuleApi(moduleCodes, roles = []) {
   return [requireAuth(), async (req, res, next) => {
+    if (roles.length && roles.includes(req.user.role)) return next();
     const codes = await userModuleCodes(req.user);
     if (codes === null || moduleCodes.some(c => codes.has(c))) return next();
     return res.status(403).json({ ok: false, error: 'Нет доступа к модулю' });

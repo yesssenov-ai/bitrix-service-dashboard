@@ -158,7 +158,7 @@ app.get('/login.html', (_, res) => res.sendFile(path.join(__dirname, 'public', '
 app.get('/', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'portal.html')));
 app.get('/portal.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'portal.html')));
 app.get('/board.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'board.html')));
-app.get('/tc.html', requireAnyModule(TC_CODES), (_, res) => res.sendFile(path.join(__dirname, 'public', 'tc.html')));
+app.get('/tc.html', requireAnyModule(TC_CODES, ['tc']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'tc.html')));
 // Доступ к модулям — ПО ВЫДАННЫМ ГРАНТАМ (requireModule), а не по роли: кому
 // выдан модуль, тот может его открыть (в т.ч. viewer — в режиме просмотра).
 // admin видит всё. Роль дальше определяет право правки/удаления внутри модуля.
@@ -553,6 +553,8 @@ app.get('/api/users', requireAuth(), (_, res) => {
 app.get('/api/portal/my-access', requireAuth(), async (req, res) => {
   try {
     if (req.user.role === 'admin' || req.user.role === 'superadmin') return res.json({ ok: true, admin: true });
+    // Роль «тренинг-центр»: видит ровно плитки ТЦ, без привязки к Bitrix и грантам.
+    if (req.user.role === 'tc') return res.json({ ok: true, enforced: true, modules: TC_CODES.slice() });
     let bitrixUserId = req.user.bitrix_user_id || null;
     if (!bitrixUserId && req.user.engineer_name) {
       const found = Object.entries(USERS).find(([, name]) => name === req.user.engineer_name);

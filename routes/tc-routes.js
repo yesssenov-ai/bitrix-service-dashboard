@@ -10,7 +10,7 @@ const { pool, requireAuth, requireAnyModuleApi, isAdminLike } = require('../auth
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 const ENTITIES = ['training', 'work', 'equipment', 'stock', 'qms'];
 const TC_CODES = ['TC', 'TC_WK', 'TC_EQ', 'TC_ST', 'TC_QM', 'TC_AN'];
-const WRITE = ['admin', 'coordinator'];
+const WRITE = ['admin', 'coordinator', 'tc'];
 const STATUSES = ['held', 'plan', 'lead'];
 const WTYPES = ['demo', 'paid', 'train', 'rnd', 'acc'];
 const canEditOf = u => isAdminLike(u.role) || WRITE.includes(u.role);
@@ -105,7 +105,7 @@ function normTr(b) {
     participants: Array.isArray(b.participants) ? b.participants : [], issued: !!b.issued, note: str(b.note, 4000),
   };
 }
-router.get('/trainings', requireAnyModuleApi(TC_CODES), async (req, res) => {
+router.get('/trainings', requireAnyModuleApi(TC_CODES, ['tc']), async (req, res) => {
   try {
     await ensureSeed();
     const { rows } = await pool.query('SELECT * FROM ticketsmodule_tc_trainings ORDER BY id DESC');
@@ -156,7 +156,7 @@ function normWk(b) {
     due: str(b.due, 40), notes: str(b.notes, 4000),
   };
 }
-router.get('/works', requireAnyModuleApi(TC_CODES), async (req, res) => {
+router.get('/works', requireAnyModuleApi(TC_CODES, ['tc']), async (req, res) => {
   try {
     await ensureSeed();
     const { rows } = await pool.query('SELECT * FROM ticketsmodule_tc_works ORDER BY id DESC');
@@ -208,7 +208,7 @@ function normEq(b) {
     comps_count: int(b.comps_count), resp: str(b.resp, 120), note: str(b.note, 4000),
   };
 }
-router.get('/equipment', requireAnyModuleApi(TC_CODES), async (req, res) => {
+router.get('/equipment', requireAnyModuleApi(TC_CODES, ['tc']), async (req, res) => {
   try {
     await ensureSeed();
     const { rows } = await pool.query('SELECT * FROM ticketsmodule_tc_equipment ORDER BY id DESC');
@@ -260,7 +260,7 @@ function normSt(b) {
     nom: str(b.nom, 120), note: str(b.note, 4000), off_book: !!b.off_book, expiry: str(b.expiry, 40),
   };
 }
-router.get('/stock', requireAnyModuleApi(TC_CODES), async (req, res) => {
+router.get('/stock', requireAnyModuleApi(TC_CODES, ['tc']), async (req, res) => {
   try {
     await ensureSeed();
     const { rows } = await pool.query('SELECT * FROM ticketsmodule_tc_stock ORDER BY id DESC');
@@ -308,7 +308,7 @@ function normQ(b) {
     files_count: int(b.files_count), note: str(b.note, 4000),
   };
 }
-router.get('/qms', requireAnyModuleApi(TC_CODES), async (req, res) => {
+router.get('/qms', requireAnyModuleApi(TC_CODES, ['tc']), async (req, res) => {
   try {
     await ensureSeed();
     const { rows } = await pool.query('SELECT * FROM ticketsmodule_tc_qms ORDER BY id DESC');
@@ -344,8 +344,282 @@ router.delete('/qms/:id(\\d+)', requireAuth(['admin']), async (req, res) => {
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
+// ══════════════════════════════════════════════════════════════════════════
+// Фазы 1,3,5,6,7 — новые разделы ТЦ. Единый генератор CRUD поверх таблиц.
+// ══════════════════════════════════════════════════════════════════════════
+const numf = v => (v === '' || v == null || !Number.isFinite(+v)) ? null : +v;
+const boolf = v => !!v && v !== 'false' && v !== '0' && v !== 0;
+
+function pickFields(fields, b) {
+  const o = {};
+  for (const f of fields) {
+    let v = b[f.k];
+    if (f.t === 'int') v = int(v);
+    else if (f.t === 'num') v = numf(v);
+    else if (f.t === 'bool') v = boolf(v);
+    else if (f.t === 'json') v = JSON.stringify(v == null ? (f.def != null ? f.def : []) : v);
+    else v = str(v, f.n || 500);
+    o[f.k] = v;
+  }
+  return o;
+}
+
+// Монтирует GET /p, POST /p, PUT /p/:id, DELETE /p/:id для таблицы table.
+function mountCrud(p, table, fields, opts) {
+  opts = opts || {};
+  const cols = fields.map(f => f.k);
+  const order = opts.order || 'id DESC';
+  const required = opts.required;
+  router.get('/' + p, requireAnyModuleApi(TC_CODES, ['tc']), async (req, res) => {
+    try {
+      await ensureSeed2();
+      const { rows } = await pool.query(`SELECT * FROM ${table} ORDER BY ${order}`);
+      res.json({ ok: true, canEdit: canEditOf(req.user), items: rows });
+    } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+  router.post('/' + p, requireAuth(WRITE), express.json({ limit: '1mb' }), async (req, res) => {
+    try {
+      const v = pickFields(fields, req.body || {});
+      if (required && !v[required]) return res.status(400).json({ ok: false, error: 'Заполните обязательное поле' });
+      const by = str(req.user.display_name || req.user.username, 100);
+      const names = cols.concat('created_by');
+      const ph = names.map((_, i) => '$' + (i + 1)).join(',');
+      const vals = cols.map(c => v[c]).concat(by);
+      const { rows } = await pool.query(`INSERT INTO ${table} (${names.join(',')}) VALUES (${ph}) RETURNING *`, vals);
+      res.json({ ok: true, item: rows[0] });
+    } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+  router.put('/' + p + '/:id(\\d+)', requireAuth(WRITE), express.json({ limit: '1mb' }), async (req, res) => {
+    try {
+      const v = pickFields(fields, req.body || {});
+      if (required && !v[required]) return res.status(400).json({ ok: false, error: 'Заполните обязательное поле' });
+      const sets = cols.map((c, i) => `${c}=$${i + 1}`).join(', ');
+      const vals = cols.map(c => v[c]).concat(req.params.id);
+      const { rows } = await pool.query(
+        `UPDATE ${table} SET ${sets}, updated_at=NOW() WHERE id=$${cols.length + 1} RETURNING *`, vals);
+      if (!rows.length) return res.status(404).json({ ok: false, error: 'Не найдено' });
+      res.json({ ok: true, item: rows[0] });
+    } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+  router.delete('/' + p + '/:id(\\d+)', requireAuth(['admin']), async (req, res) => {
+    try { await pool.query(`DELETE FROM ${table} WHERE id=$1`, [req.params.id]); res.json({ ok: true }); }
+    catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+}
+
+// ── Фаза 1: Сотрудники ────────────────────────────────────────────────────
+mountCrud('staff', 'ticketsmodule_tc_staff', [
+  { k: 'name', t: 'str', n: 300 }, { k: 'role_title', t: 'str', n: 200 }, { k: 'dir', t: 'str', n: 120 },
+  { k: 'email', t: 'str', n: 200 }, { k: 'phone', t: 'str', n: 80 }, { k: 'status', t: 'str', n: 20 },
+  { k: 'load_pct', t: 'int' }, { k: 'busy_on', t: 'str', n: 300 }, { k: 'admits', t: 'json' },
+  { k: 'hired_at', t: 'str', n: 40 }, { k: 'bonus_idx', t: 'int' }, { k: 'note', t: 'str', n: 2000 },
+  { k: 'active', t: 'bool' },
+], { required: 'name', order: 'active DESC, id ASC' });
+
+// ── Фаза 1: Отсутствия (+ согласование директора, замена исполнителя) ──────
+mountCrud('absences', 'ticketsmodule_tc_absences', [
+  { k: 'staff_id', t: 'int' }, { k: 'kind', t: 'str', n: 20 }, { k: 'from_date', t: 'str', n: 40 },
+  { k: 'to_date', t: 'str', n: 40 }, { k: 'reason', t: 'str', n: 1000 }, { k: 'status', t: 'str', n: 20 },
+  { k: 'substitute_id', t: 'int' },
+], { order: 'id DESC' });
+// Решение по заявке: approve/reject + замена. Только руководитель.
+router.put('/absences/:id(\\d+)/decide', requireAuth(['admin', 'coordinator']), express.json({ limit: '256kb' }), async (req, res) => {
+  try {
+    const d = str((req.body || {}).decision, 20);
+    const st = d === 'approved' ? 'approved' : d === 'rejected' ? 'rejected' : null;
+    if (!st) return res.status(400).json({ ok: false, error: 'decision: approved|rejected' });
+    const sub = numf((req.body || {}).substitute_id);
+    const by = str(req.user.display_name || req.user.username, 100);
+    const { rows } = await pool.query(
+      `UPDATE ticketsmodule_tc_absences SET status=$1, substitute_id=$2, decided_by=$3, decided_at=NOW(), updated_at=NOW()
+       WHERE id=$4 RETURNING *`, [st, sub, by, req.params.id]);
+    if (!rows.length) return res.status(404).json({ ok: false, error: 'Заявка не найдена' });
+    res.json({ ok: true, item: rows[0] });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── Фаза 3: Потребности ───────────────────────────────────────────────────
+mountCrud('needs', 'ticketsmodule_tc_needs', [
+  { k: 'title', t: 'str', n: 500 }, { k: 'qty', t: 'num' }, { k: 'unit', t: 'str', n: 40 },
+  { k: 'link_type', t: 'str', n: 40 }, { k: 'link_ref', t: 'str', n: 200 }, { k: 'reason', t: 'str', n: 1000 },
+  { k: 'priority', t: 'str', n: 20 }, { k: 'status', t: 'str', n: 20 }, { k: 'est_price', t: 'num' },
+  { k: 'currency', t: 'str', n: 10 }, { k: 'assignee', t: 'str', n: 120 }, { k: 'note', t: 'str', n: 2000 },
+], { required: 'title' });
+
+// ── Фаза 5: Пробы/образцы ─────────────────────────────────────────────────
+mountCrud('samples', 'ticketsmodule_tc_samples', [
+  { k: 'code', t: 'str', n: 60 }, { k: 'client', t: 'str', n: 300 }, { k: 'matrix', t: 'str', n: 120 },
+  { k: 'work_code', t: 'str', n: 40 }, { k: 'received_at', t: 'str', n: 40 }, { k: 'storage', t: 'str', n: 200 },
+  { k: 'status', t: 'str', n: 20 }, { k: 'barcode', t: 'str', n: 80 }, { k: 'disposed_act', t: 'str', n: 200 },
+  { k: 'note', t: 'str', n: 2000 },
+], { required: 'client' });
+
+// ── Фаза 5: Методики ──────────────────────────────────────────────────────
+mountCrud('methods', 'ticketsmodule_tc_methods', [
+  { k: 'code', t: 'str', n: 60 }, { k: 'name', t: 'str', n: 300 }, { k: 'analytes', t: 'json' },
+  { k: 'demand', t: 'int' }, { k: 'restrictions', t: 'str', n: 1000 }, { k: 'instruction', t: 'str', n: 4000 },
+  { k: 'note', t: 'str', n: 2000 },
+], { required: 'name' });
+
+// ── Фаза 5: Регламенты ────────────────────────────────────────────────────
+mountCrud('routines', 'ticketsmodule_tc_routines', [
+  { k: 'title', t: 'str', n: 300 }, { k: 'freq', t: 'str', n: 20 }, { k: 'next_at', t: 'str', n: 40 },
+  { k: 'last_done', t: 'str', n: 40 }, { k: 'needs_doc', t: 'bool' }, { k: 'assignee', t: 'str', n: 120 },
+  { k: 'status', t: 'str', n: 20 }, { k: 'note', t: 'str', n: 2000 },
+], { required: 'title' });
+
+// ── Фаза 6: История колонок ───────────────────────────────────────────────
+mountCrud('columns', 'ticketsmodule_tc_columns', [
+  { k: 'equipment_id', t: 'int' }, { k: 'equipment_name', t: 'str', n: 200 }, { k: 'column_name', t: 'str', n: 200 },
+  { k: 'method', t: 'str', n: 200 }, { k: 'injections', t: 'int' }, { k: 'left_in', t: 'str', n: 200 },
+  { k: 'used_at', t: 'str', n: 40 }, { k: 'used_by', t: 'str', n: 120 }, { k: 'note', t: 'str', n: 1000 },
+], { required: 'column_name' });
+
+// ── Фаза 6: Логгеры T/влажности ───────────────────────────────────────────
+mountCrud('loggers', 'ticketsmodule_tc_loggers', [
+  { k: 'room', t: 'str', n: 120 }, { k: 'temp', t: 'num' }, { k: 'humidity', t: 'num' },
+  { k: 'measured_at', t: 'str', n: 40 }, { k: 'measured_by', t: 'str', n: 120 }, { k: 'note', t: 'str', n: 1000 },
+], { required: 'room' });
+
+// ── Фаза 7: Формы/тесты/анкеты и регистрации ──────────────────────────────
+mountCrud('forms', 'ticketsmodule_tc_forms', [
+  { k: 'kind', t: 'str', n: 20 }, { k: 'training_id', t: 'int' }, { k: 'training_title', t: 'str', n: 300 },
+  { k: 'title', t: 'str', n: 300 }, { k: 'bin', t: 'str', n: 20 }, { k: 'company', t: 'str', n: 300 },
+  { k: 'person', t: 'str', n: 200 }, { k: 'payload', t: 'json', def: {} }, { k: 'score', t: 'int' },
+  { k: 'status', t: 'str', n: 20 }, { k: 'note', t: 'str', n: 2000 },
+], { required: 'person' });
+
+// ── Фаза 7: Реестр сертификатов ───────────────────────────────────────────
+mountCrud('certs', 'ticketsmodule_tc_certs', [
+  { k: 'cert_no', t: 'str', n: 60 }, { k: 'training_id', t: 'int' }, { k: 'training_title', t: 'str', n: 300 },
+  { k: 'person', t: 'str', n: 200 }, { k: 'company', t: 'str', n: 300 }, { k: 'bin', t: 'str', n: 20 },
+  { k: 'hours', t: 'int' }, { k: 'issued_at', t: 'str', n: 40 }, { k: 'issued_by', t: 'str', n: 120 },
+  { k: 'note', t: 'str', n: 2000 },
+], { required: 'person' });
+
+// ── Фаза 2: Календарь ТЦ (агрегат: работы, поверки/ТО, регламенты, отсутствия) ──
+const parseDate = s => {
+  s = String(s || '').trim(); if (!s) return null;
+  let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = /^(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})/.exec(s);
+  if (m) return `${m[3]}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`;
+  return null;
+};
+router.get('/calendar', requireAnyModuleApi(TC_CODES, ['tc']), async (req, res) => {
+  try {
+    await ensureSeed(); await ensureSeed2();
+    const ev = [];
+    const push = (raw, kind, title, sub) => { if (raw) ev.push({ date: parseDate(raw), raw: String(raw), kind, title, sub }); };
+    const w = await pool.query("SELECT code,title,client,due,report_at,recv_at FROM ticketsmodule_tc_works");
+    for (const r of w.rows) {
+      push(r.due, 'work', `Срок работы: ${r.title || r.code}`, r.client);
+      push(r.report_at, 'report', `Отчёт: ${r.title || r.code}`, r.client);
+    }
+    const eq = await pool.query("SELECT short,name,verify_next,to_next FROM ticketsmodule_tc_equipment");
+    for (const r of eq.rows) {
+      push(r.verify_next, 'verify', `Поверка: ${r.short || r.name}`, r.name);
+      push(r.to_next, 'to', `ТО: ${r.short || r.name}`, r.name);
+    }
+    const rt = await pool.query("SELECT title,next_at,freq FROM ticketsmodule_tc_routines WHERE status='active'");
+    for (const r of rt.rows) push(r.next_at, 'routine', `Регламент: ${r.title}`, r.freq);
+    const ab = await pool.query(`SELECT a.from_date,a.to_date,a.kind,a.status,s.name FROM ticketsmodule_tc_absences a
+      LEFT JOIN ticketsmodule_tc_staff s ON s.id=a.staff_id WHERE a.status='approved'`);
+    const KIND = { vacation: 'отпуск', remote: 'удалёнка', sick: 'больничный', unpaid: 'без содержания' };
+    for (const r of ab.rows) push(r.from_date, 'absence', `${KIND[r.kind] || r.kind}: ${r.name || ''}`, r.to_date ? `по ${r.to_date}` : '');
+    ev.sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999'));
+    res.json({ ok: true, items: ev });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── Сводка «Команда сейчас» для шапки раздела ──────────────────────────────
+router.get('/team-now', requireAnyModuleApi(TC_CODES, ['tc']), async (req, res) => {
+  try {
+    await ensureSeed2();
+    const { rows } = await pool.query(
+      `SELECT status, COUNT(*)::int AS n FROM ticketsmodule_tc_staff WHERE active=true GROUP BY status`);
+    const by = {}; let total = 0;
+    for (const r of rows) { by[r.status] = r.n; total += r.n; }
+    const pend = await pool.query(`SELECT COUNT(*)::int AS n FROM ticketsmodule_tc_absences WHERE status='pending'`);
+    res.json({ ok: true, total, by, pending: pend.rows[0].n });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── Лёгкий посев демо-данных для новых разделов (идемпотентно) ─────────────
+let _seeded2 = null;
+function ensureSeed2() {
+  if (_seeded2) return _seeded2;
+  _seeded2 = (async () => {
+    try {
+      const seedIf = async (table, rows, sql, map) => {
+        const { rows: c } = await pool.query(`SELECT COUNT(*)::int AS n FROM ${table}`);
+        if (c[0].n > 0) return;
+        for (const r of rows) await pool.query(sql, map(r));
+        console.log(`✅ ТЦ (фазы 1–7): посев ${table} — ${rows.length}`);
+      };
+      await seedIf('ticketsmodule_tc_staff', SEED2.staff,
+        `INSERT INTO ticketsmodule_tc_staff (name,role_title,dir,status,load_pct,busy_on,admits,note,created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'seed')`,
+        r => [r.name, r.role_title, r.dir, r.status, r.load_pct || 0, r.busy_on || '', JSON.stringify(r.admits || []), r.note || '']);
+      await seedIf('ticketsmodule_tc_methods', SEED2.methods,
+        `INSERT INTO ticketsmodule_tc_methods (code,name,analytes,demand,restrictions,note,created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,'seed')`,
+        r => [r.code, r.name, JSON.stringify(r.analytes || []), r.demand || 0, r.restrictions || '', r.note || '']);
+      await seedIf('ticketsmodule_tc_routines', SEED2.routines,
+        `INSERT INTO ticketsmodule_tc_routines (title,freq,next_at,needs_doc,assignee,status,note,created_by)
+         VALUES ($1,$2,$3,$4,$5,'active',$6,'seed')`,
+        r => [r.title, r.freq, r.next_at || '', !!r.needs_doc, r.assignee || '', r.note || '']);
+      await seedIf('ticketsmodule_tc_loggers', SEED2.loggers,
+        `INSERT INTO ticketsmodule_tc_loggers (room,temp,humidity,measured_at,measured_by,created_by)
+         VALUES ($1,$2,$3,$4,$5,'seed')`,
+        r => [r.room, r.temp, r.humidity, r.measured_at || '', r.measured_by || '']);
+      await seedIf('ticketsmodule_tc_samples', SEED2.samples,
+        `INSERT INTO ticketsmodule_tc_samples (code,client,matrix,work_code,received_at,storage,status,note,created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'seed')`,
+        r => [r.code, r.client, r.matrix, r.work_code || '', r.received_at || '', r.storage || '', r.status || 'received', r.note || '']);
+      await seedIf('ticketsmodule_tc_needs', SEED2.needs,
+        `INSERT INTO ticketsmodule_tc_needs (title,qty,unit,link_type,link_ref,reason,priority,status,est_price,currency,created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'KZT','seed')`,
+        r => [r.title, r.qty || 1, r.unit || 'шт', r.link_type || 'office', r.link_ref || '', r.reason || '', r.priority || 'normal', r.status || 'new', r.est_price || 0]);
+    } catch (e) { console.error('ТЦ seed2 error:', e.message); _seeded2 = null; }
+  })();
+  return _seeded2;
+}
+
+const SEED2 = {
+  staff: [
+    { name: 'Руководитель ТЦ (пример)', role_title: 'Руководитель', dir: 'Управление', status: 'free', load_pct: 40, admits: [] },
+    { name: 'Инженер-химик (пример)', role_title: 'Инженер-химик', dir: 'ВЭЖХ/ГХ', status: 'busy', load_pct: 85, busy_on: 'Работа TC-012', admits: [{ method: 'ВЭЖХ', until: '2026-12-31' }] },
+    { name: 'Инженер-аналитик (пример)', role_title: 'Инженер-аналитик', dir: 'Спектроскопия', status: 'remote', load_pct: 60, admits: [{ method: 'ИК-Фурье', until: '2026-10-01' }] },
+    { name: 'Лаборант (пример)', role_title: 'Лаборант', dir: 'Пробоподготовка', status: 'free', load_pct: 20, admits: [] },
+  ],
+  methods: [
+    { code: 'М-01', name: 'ВЭЖХ (жидкостная хроматография)', analytes: [{ name: 'Витамины', unit: 'мг/кг', limit: '0.1' }], demand: 12, restrictions: 'Колонка C18' },
+    { code: 'М-02', name: 'ГХ-МС (газовая хром.-масс-спектр.)', analytes: [{ name: 'Пестициды', unit: 'мкг/кг', limit: '1' }], demand: 9 },
+    { code: 'М-03', name: 'ИК-Фурье спектроскопия', analytes: [{ name: 'Идентификация', unit: '-', limit: '-' }], demand: 5 },
+    { code: 'М-04', name: 'Титриметрия', analytes: [{ name: 'Кислотность', unit: '%', limit: '0.01' }], demand: 7 },
+  ],
+  routines: [
+    { title: 'Поверка аналитических весов', freq: 'monthly', next_at: '2026-12-01', needs_doc: true, assignee: 'Лаборант' },
+    { title: 'Контроль температуры холодильника', freq: 'daily', next_at: '', needs_doc: false, assignee: 'Дежурный' },
+    { title: 'Калибровка pH-метра', freq: 'weekly', next_at: '2026-11-14', needs_doc: true, assignee: 'Инженер-химик' },
+  ],
+  loggers: [
+    { room: 'Лаборатория ВЭЖХ', temp: 22.4, humidity: 41, measured_at: '2026-11-09 09:00', measured_by: 'seed' },
+    { room: 'Прекурсорная', temp: 20.1, humidity: 38, measured_at: '2026-11-09 09:00', measured_by: 'seed' },
+  ],
+  samples: [
+    { code: 'PLS-2026-0001', client: 'АО «Пример»', matrix: 'Вода питьевая', work_code: '', received_at: '2026-11-05', storage: 'Холодильник №2', status: 'in_work' },
+    { code: 'PLS-2026-0002', client: 'ТОО «Образец»', matrix: 'Почва', received_at: '2026-11-06', storage: 'Стеллаж А', status: 'received' },
+    { code: 'PLS-2026-0003', client: 'АО «Пример»', matrix: 'Пищевой продукт', received_at: '2026-11-02', storage: 'Архив проб', status: 'done' },
+  ],
+  needs: [
+    { title: 'Ацетонитрил, HPLC-grade', qty: 4, unit: 'л', link_type: 'equipment', link_ref: 'ВЭЖХ', reason: 'Заканчивается элюент', priority: 'urgent', est_price: 120000 },
+    { title: 'Виалы 2 мл с крышками', qty: 500, unit: 'шт', link_type: 'office', reason: 'Расходник', priority: 'normal', est_price: 85000 },
+  ],
+};
+
 // ── Файлы (вложения) — байты в Supabase Storage, карточки в Postgres ─────────
-router.get('/:entity/:id(\\d+)/files', requireAnyModuleApi(TC_CODES), async (req, res) => {
+router.get('/:entity/:id(\\d+)/files', requireAnyModuleApi(TC_CODES, ['tc']), async (req, res) => {
   try {
     if (!ENTITIES.includes(req.params.entity)) return res.status(404).json({ ok: false, error: 'Неизвестный раздел' });
     const { rows } = await pool.query(
@@ -377,7 +651,7 @@ router.post('/:entity/:id(\\d+)/files', requireAuth(WRITE), upload.single('file'
     res.json({ ok: true, item: rows[0] });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-router.get('/files/:fid(\\d+)/download', requireAnyModuleApi(TC_CODES), async (req, res) => {
+router.get('/files/:fid(\\d+)/download', requireAnyModuleApi(TC_CODES, ['tc']), async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT object_key, filename FROM ticketsmodule_tc_files WHERE id=$1', [req.params.fid]);
     if (!rows.length) return res.status(404).send('Файл не найден');
