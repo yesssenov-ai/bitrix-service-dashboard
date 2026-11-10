@@ -171,6 +171,19 @@ async function absencesToday(pool, now) {
 // иначе заголовок. Даты полей определяем эвристически (кроме системных).
 const _DATE_RE = /^(\d{4})-(\d{2})-(\d{2})/;
 const _pdate = v => { const m = _DATE_RE.exec(String(v || '')); return m ? (m[1] + '-' + m[2] + '-' + m[3]) : null; };
+// Значение поля по коду с учётом расхождения регистра/подчёркиваний между
+// crm.item.fields (напр. UF_CRM_..) и crm.item.list (ufCrm..).
+const _normKey = k => String(k).toLowerCase().replace(/_/g, '');
+function itemVal(it, code) {
+  if (code == null) return undefined;
+  if (it[code] !== undefined) return it[code];
+  const nk = _normKey(code);
+  for (const k in it) { if (_normKey(k) === nk) return it[k]; }
+  return undefined;
+}
+// Из заголовка «ФИО - ДД.ММ.ГГГГ ЧЧ:ММ:СС - вид работ - город» вырезаем префикс
+// (ФИО + дата-время), оставляя «вид работ - город».
+const _descrFromTitle = t => String(t || '').replace(/^.*?\d{1,2}\.\d{1,2}\.\d{4}[\s\d:]*[-–]\s*/, '').trim();
 const _sp = {};   // key → { at, id, stages:Set, stageKey }
 async function spTypeId(reName, key) {
   const c = _sp[key];
@@ -237,8 +250,8 @@ async function spActive(now, opts) {
     for (const it of items.slice(0, 200)) {
       // Приоритет — конкретные поля начала/окончания. Фолбэк (если поля не нашлись)
       // — эвристика мин/макс с защитой по длине диапазона.
-      let from = df.start ? _pdate(it[df.start]) : null;
-      let to = df.end ? _pdate(it[df.end]) : null;
+      let from = df.start ? _pdate(itemVal(it, df.start)) : null;
+      let to = df.end ? _pdate(itemVal(it, df.end)) : null;
       if (!from || !to) {
         const dates = [];
         for (const k in it) { if (/creat|updat|mov|activ|communicat/i.test(k)) continue;
@@ -254,8 +267,10 @@ async function spActive(now, opts) {
       let include = (from <= todayISO && todayISO <= to);
       if (opts.reStage && stageIds.size) include = include && stageIds.has(String(it.stageId));
       if (!include) continue;
-      const who = USERS[String(it.assignedById)] || it.title || 'Сотрудник';
-      out.push({ name: who, kind: opts.kind, from_date: from, to_date: to, dest: '' });
+      const who = USERS[String(it.assignedById)] || _descrFromTitle(it.title) || 'Сотрудник';
+      // Для командировок: «вид работ - город» из заголовка + компания (резолвим позже).
+      const descr = opts.kind === 'trip' ? _descrFromTitle(it.title) : '';
+      out.push({ name: who, kind: opts.kind, from_date: from, to_date: to, dest: descr, companyId: it.companyId || null });
     }
   } catch (e) { /* процесс недоступен */ }
   return out;
@@ -268,6 +283,16 @@ async function smartAbsences(now) {
     spActive(now, { reName: /командиров/i, key: 'trip', kind: 'trip', reStage: /команди?ровк/i }),
     spActive(now, { reName: /отпуск/i, key: 'vac', kind: 'vacation' }),
   ]);
+  // Компании командировок — одним запросом по companyId.
+  try {
+    const ids = [...new Set(trips.map(t => t.companyId).filter(Boolean))];
+    if (ids.length) {
+      const r = await b24('crm.company.list', { filter: { '@ID': ids }, select: ['ID', 'TITLE'] });
+      const comp = {}; for (const c of (r && r.result) || []) comp[String(c.ID)] = c.TITLE;
+      for (const t of trips) { const nm = comp[String(t.companyId)]; if (nm) t.dest = (t.dest ? t.dest + ' · ' : '') + nm; }
+    }
+  } catch (e) { /* компании не критичны */ }
+  for (const t of trips) delete t.companyId;
   // Дедуп: одна строка на человека в рамках типа (у сотрудника может быть
   // несколько записей — для сводки «кто отсутствует» достаточно одной).
   const seen = new Set(); const data = [];
