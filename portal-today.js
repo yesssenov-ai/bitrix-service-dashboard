@@ -164,116 +164,116 @@ async function absencesToday(pool, now) {
   } catch (e) { return []; }
 }
 
-// ── Командировки из смарт-процесса Bitrix «Командировки» ───────────────────────
-// Автоопределяем entityTypeId по названию типа, берём элементы, активные на
-// сегодня (today в диапазоне дат записи). Поля дат определяем эвристически —
-// любые дата-поля, кроме системных (created/updated/moved/...). Сотрудник —
-// ответственный (assignedById → USERS), иначе заголовок.
-let _tripType = { at: 0, id: null, stages: null };
-async function tripsEntityTypeId() {
-  if (_tripType.id && Date.now() - _tripType.at < 6 * 3600 * 1000) return _tripType.id;
+// ── Смарт-процессы Bitrix: «Командировки» и «Отпуска» ──────────────────────────
+// Для каждого процесса автоопределяем entityTypeId по названию. Командировки —
+// строго по этапу «В командировке»; отпуска — актуальные на сегодня по датам
+// (today в диапазоне дат записи). Сотрудник = ответственный (assignedById→USERS),
+// иначе заголовок. Даты полей определяем эвристически (кроме системных).
+const _DATE_RE = /^(\d{4})-(\d{2})-(\d{2})/;
+const _pdate = v => { const m = _DATE_RE.exec(String(v || '')); return m ? (m[1] + '-' + m[2] + '-' + m[3]) : null; };
+const _sp = {};   // key → { at, id, stages:Set, stageKey }
+async function spTypeId(reName, key) {
+  const c = _sp[key];
+  if (c && c.id != null && Date.now() - c.at < 6 * 3600 * 1000) return c.id;
   let id = null;
   try {
     const r = await b24('crm.type.list', {});
     const types = (r && r.result && r.result.types) || [];
-    const t = types.find(x => /командиров/i.test(x.title || ''));
+    const t = types.find(x => reName.test(x.title || ''));
     if (t) id = t.entityTypeId;
   } catch (e) { /* нет доступа */ }
-  _tripType = { at: Date.now(), id, stages: null };
+  _sp[key] = { at: Date.now(), id, stages: null, stageKey: '' };
   return id;
 }
-// STATUS_ID этапов «В командировке» именно этого смарт-процесса.
-async function tripStageIds(etid) {
-  if (_tripType.stages && _tripType.id === etid) return _tripType.stages;
+async function spStageIds(etid, key, reStage) {
+  const c = _sp[key];
+  if (c && c.stages && c.stageKey === String(reStage)) return c.stages;
   const ids = new Set();
   try {
     let start = 0, guard = 0;
     while (guard++ < 20) {
       const r = await b24('crm.status.list', { start });
-      const rows = (r && r.result) || [];
-      for (const s of rows) {
-        const ent = String(s.ENTITY_ID || '');
-        if (ent.indexOf('DYNAMIC_' + etid + '_') === -1) continue;   // только этот процесс
-        if (/команди?ровк/i.test(s.NAME || '')) ids.add(String(s.STATUS_ID));
+      for (const s of (r && r.result) || []) {
+        if (String(s.ENTITY_ID || '').indexOf('DYNAMIC_' + etid + '_') === -1) continue;
+        if (reStage.test(s.NAME || '')) ids.add(String(s.STATUS_ID));
       }
       const next = r && r.next; if (next === undefined || next === null) break; start = next;
     }
-  } catch (e) { /* нет доступа — вернём пустой набор, сработает фолбэк по датам */ }
-  _tripType.stages = ids;
+  } catch (e) { /* нет доступа — пустой набор, сработает фолбэк по датам */ }
+  if (c) { c.stages = ids; c.stageKey = String(reStage); }
   return ids;
 }
-const _DATE_RE = /^(\d{4})-(\d{2})-(\d{2})/;
-const _pdate = v => { const m = _DATE_RE.exec(String(v || '')); return m ? (m[1] + '-' + m[2] + '-' + m[3]) : null; };
-let _trips = { at: 0, data: null };
-async function bitrixTrips(now) {
-  now = now || new Date();
-  if (_trips.data && Date.now() - _trips.at < 15 * 60 * 1000) return _trips.data;
-  const out = [];
+// Активные записи процесса на сегодня. opts: { reName, key, kind, reStage? }.
+async function spActive(now, opts) {
+  const out = []; const todayISO = now.toISOString().slice(0, 10);
   try {
-    const etid = await tripsEntityTypeId();
-    if (etid) {
-      const stageIds = await tripStageIds(etid);
-      const r = await b24('crm.item.list', { entityTypeId: etid, order: { id: 'desc' }, start: 0 });
-      const items = (r && r.result && r.result.items) || [];
-      const todayISO = now.toISOString().slice(0, 10);
-      for (const it of items.slice(0, 120)) {
-        // Даты для показа (любые дата-поля, кроме системных).
-        const dates = [];
-        for (const k in it) { if (/creat|updat|mov|activ|communicat/i.test(k)) continue;
-          const d = _pdate(it[k]); if (d) dates.push(d); }
-        dates.sort();
-        const from = dates[0] || '', to = dates[dates.length - 1] || '';
-        // Включаем СТРОГО по этапу «В командировке». Если этапы не определились —
-        // фолбэк по датам (today в диапазоне), чтобы блок не пустовал.
-        let include;
-        if (stageIds.size) include = stageIds.has(String(it.stageId));
-        else include = !!(from && to && from <= todayISO && todayISO <= to);
-        if (!include) continue;
-        const who = USERS[String(it.assignedById)] || '';
-        out.push({ name: who || it.title || 'Сотрудник', kind: 'trip',
-          from_date: from, to_date: to, dest: (who && it.title) ? String(it.title) : '' });
-      }
+    const etid = await spTypeId(opts.reName, opts.key);
+    if (!etid) return out;
+    const stageIds = opts.reStage ? await spStageIds(etid, opts.key, opts.reStage) : new Set();
+    const r = await b24('crm.item.list', { entityTypeId: etid, order: { id: 'desc' }, start: 0 });
+    const items = (r && r.result && r.result.items) || [];
+    for (const it of items.slice(0, 150)) {
+      const dates = [];
+      for (const k in it) { if (/creat|updat|mov|activ|communicat/i.test(k)) continue;
+        const d = _pdate(it[k]); if (d) dates.push(d); }
+      dates.sort();
+      const from = dates[0] || '', to = dates[dates.length - 1] || '';
+      // Командировки — по этапу; отпуска (и фолбэк) — по датам «актуально сегодня».
+      let include;
+      if (opts.reStage && stageIds.size) include = stageIds.has(String(it.stageId));
+      else include = !!(from && to && from <= todayISO && todayISO <= to);
+      if (!include) continue;
+      const who = USERS[String(it.assignedById)] || '';
+      out.push({ name: who || it.title || 'Сотрудник', kind: opts.kind,
+        from_date: from, to_date: to, dest: (opts.kind === 'trip' && who && it.title) ? String(it.title) : '' });
     }
-  } catch (e) { /* смарт-процесс недоступен — блок просто без командировок */ }
-  _trips = { at: Date.now(), data: out };
+  } catch (e) { /* процесс недоступен */ }
   return out;
 }
-// Сырые данные смарт-процесса для сверки полей/этапов (дебаг).
+let _smart = { at: 0, data: null };
+async function smartAbsences(now) {
+  now = now || new Date();
+  if (_smart.data && Date.now() - _smart.at < 15 * 60 * 1000) return _smart.data;
+  const [trips, vac] = await Promise.all([
+    spActive(now, { reName: /командиров/i, key: 'trip', kind: 'trip', reStage: /команди?ровк/i }),
+    spActive(now, { reName: /отпуск/i, key: 'vac', kind: 'vacation' }),
+  ]);
+  const data = trips.concat(vac);
+  _smart = { at: Date.now(), data };
+  return data;
+}
+// Дебаг обоих смарт-процессов для сверки полей/этапов.
 async function tripsDebug() {
-  const etid = await tripsEntityTypeId();
-  let sample = null, count = 0, types = [], stages = [], tripStages = [];
+  const dbg = async (reName, reStage) => {
+    const etid = await spTypeId(reName, 'dbg_' + reName.source);
+    let sample = null, count = 0, stages = [], matchStages = [];
+    if (etid) {
+      try { let start = 0, g = 0; while (g++ < 20) { const r = await b24('crm.status.list', { start });
+        for (const s of (r && r.result) || []) { if (String(s.ENTITY_ID || '').indexOf('DYNAMIC_' + etid + '_') === -1) continue;
+          stages.push({ id: s.STATUS_ID, name: s.NAME }); if (reStage && reStage.test(s.NAME || '')) matchStages.push(s.STATUS_ID); }
+        const n = r && r.next; if (n == null) break; start = n; } } catch (e) {}
+      try { const r = await b24('crm.item.list', { entityTypeId: etid, order: { id: 'desc' }, start: 0 });
+        const items = (r && r.result && r.result.items) || []; count = items.length; sample = items[0] || null; } catch (e) {}
+    }
+    return { entityTypeId: etid, count, matchStages, stages, sample };
+  };
+  let types = [];
   try { const tl = await b24('crm.type.list', {}); types = ((tl && tl.result && tl.result.types) || []).map(t => ({ id: t.entityTypeId, title: t.title })); } catch (e) {}
-  if (etid) {
-    try {
-      let start = 0, guard = 0;
-      while (guard++ < 20) {
-        const r = await b24('crm.status.list', { start });
-        for (const s of (r && r.result) || []) {
-          if (String(s.ENTITY_ID || '').indexOf('DYNAMIC_' + etid + '_') === -1) continue;
-          stages.push({ id: s.STATUS_ID, name: s.NAME });
-          if (/команди?ровк/i.test(s.NAME || '')) tripStages.push(s.STATUS_ID);
-        }
-        const next = r && r.next; if (next === undefined || next === null) break; start = next;
-      }
-    } catch (e) {}
-    try { const r = await b24('crm.item.list', { entityTypeId: etid, order: { id: 'desc' }, start: 0 });
-      const items = (r && r.result && r.result.items) || []; count = items.length; sample = items[0] || null; } catch (e) {}
-  }
-  return { entityTypeId: etid, count, tripStages, stages, sample, types };
+  return { types, trips: await dbg(/командиров/i, /команди?ровк/i), vacations: await dbg(/отпуск/i, null) };
 }
 
 async function build(pool, now) {
   now = now || new Date();
   const res = { date: { d: now.getDate(), m: now.getMonth() + 1 },
     birthdays: birthdays(now), onThisDay: [], absences: [], pulse: {}, fact: dailyFact(now) };
-  const [otd, pls, absM, trips] = await Promise.allSettled([
-    onThisDay(now), pulse(now), absencesToday(pool, now), bitrixTrips(now)]);
+  const [otd, pls, absM, smart] = await Promise.allSettled([
+    onThisDay(now), pulse(now), absencesToday(pool, now), smartAbsences(now)]);
   if (otd.status === 'fulfilled') res.onThisDay = otd.value;
   if (pls.status === 'fulfilled') res.pulse = pls.value;
   let abs = (absM.status === 'fulfilled' && absM.value) ? absM.value : [];
-  if (trips.status === 'fulfilled' && trips.value) abs = abs.concat(trips.value);
+  if (smart.status === 'fulfilled' && smart.value) abs = abs.concat(smart.value);
   res.absences = abs;
   return res;
 }
 
-module.exports = { build, birthdays, onThisDay, pulse, dailyFact, bitrixTrips, tripsDebug, BIRTHDAYS };
+module.exports = { build, birthdays, onThisDay, pulse, dailyFact, smartAbsences, tripsDebug, BIRTHDAYS };

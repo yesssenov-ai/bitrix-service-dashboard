@@ -205,6 +205,7 @@ footer{text-align:center;color:var(--text-faint);font-size:11.5px;padding:20px;f
 .pt-otd .tx b{color:var(--text)}
 .pt-pills{display:flex;flex-wrap:wrap;gap:7px}
 .pt-pill{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:12px;color:var(--text-2)}
+.pt-per{color:var(--text-3);font-size:11px;font-variant-numeric:tabular-nums}
 .pt-pulse{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end}
 .pt-pulse .m{display:flex;flex-direction:column}
 .pt-pulse .m b{font-size:17px;font-weight:800}
@@ -616,6 +617,9 @@ async function loadMyDay(user){
 const PT_KIND = { vacation:['🌴','отпуск'], trip:['🧳','командировка'], sick:['🤒','больничный'] };
 function ptYears(n){ const a=n%10, b=n%100; const w=(a===1&&b!==11)?'год':(a>=2&&a<=4&&(b<10||b>=20))?'года':'лет'; return `${n}<br>${w} назад`; }
 function ptMoney(v,cur){ v=+v||0; const s=v>=1e6?(Math.round(v/1e5)/10+' млн'):v.toLocaleString('ru-RU'); return s+' '+((cur==='KZT'||!cur)?'₸':esc(cur)); }
+function ptPeriod(f,t){ const dm=s=>s?(String(s).slice(8,10)+'.'+String(s).slice(5,7)):'';
+  if(f&&t){ if(f===t) return dm(f); if(String(f).slice(0,7)===String(t).slice(0,7)) return String(f).slice(8,10)+'–'+dm(t); return dm(f)+'–'+dm(t); }
+  if(t) return 'до '+dm(t); if(f) return 'с '+dm(f); return ''; }
 async function loadToday(){
   try{
     const r=await fetch('/api/portal/today'); if(!r.ok) return;
@@ -655,9 +659,9 @@ function renderToday(d){
   let abs='';
   if(d.absences&&d.absences.length){
     abs='<div class="pt-pills">'+d.absences.map(a=>{ const k=PT_KIND[a.kind]||['•',a.kind];
-      const till=a.to_date?(' до '+esc(String(a.to_date).slice(8,10)+'.'+String(a.to_date).slice(5,7))):'';
       const dest=a.dest?(' · '+esc(a.dest)):'';
-      return `<span class="pt-pill">${k[0]} ${esc(a.name)}${dest}${till}</span>`; }).join('')+'</div>';
+      const per=ptPeriod(a.from_date,a.to_date); const perH=per?` <span class="pt-per">${esc(per)}</span>`:'';
+      return `<span class="pt-pill">${k[0]} ${esc(a.name)}${dest}${perH}</span>`; }).join('')+'</div>';
   } else abs='<div class="pt-none">Сегодня все на месте 👍</div>';
   const bAbs=`<div class="pt-blk"><div class="bh"><span class="ic">🌴</span>Сегодня отсутствуют</div>${abs}</div>`;
   const P=d.pulse||{}; const metric=(v,l,up)=>v==null?'':`<div class="m"><b${up?' class="up"':''}>${typeof v==='number'?v.toLocaleString('ru-RU'):esc(v)}</b><span>${l}</span></div>`;
