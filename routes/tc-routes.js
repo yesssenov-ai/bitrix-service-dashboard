@@ -601,15 +601,44 @@ tcCrud('loggers', 'ticketsmodule_tc_loggers', [['room','s'],['temp','n'],['humid
 tcCrud('forms', 'ticketsmodule_tc_forms', [['kind','s'],['training_id','i'],['training_title','s'],['title','s'],['bin','s'],['company','s'],['person','s'],['payload','j'],['score','i'],['status','s'],['note','s']]);
 tcCrud('certs', 'ticketsmodule_tc_certs', [['cert_no','s'],['training_id','i'],['training_title','s'],['person','s'],['company','s'],['bin','s'],['hours','i'],['issued_at','s'],['issued_by','s'],['note','s']]);
 
-// ── Календарь ТЦ (Фаза 2): собирает события из работ, приборов, регламентов и
-// отсутствий в единый список {date,kind,title,sub,raw}. Курсы пока не включаем —
-// у них даты свободным текстом (dates_text).
+// ── Разбор свободного текста дат курсов (dates_text) → {start,end} в ISO.
+// Поддерживает: 2025-03-12 · 12.03.2025 / 12.03.25 · 12–14.03.2025 ·
+// «12 марта 2025», «12–14 марта 2025». Иначе — null (курс без даты в сетку не ставим).
+const _p2 = n => String(n).padStart(2, '0');
+const _RUM = { 'январ': 1, 'феврал': 2, 'март': 3, 'апрел': 4, 'мая': 5, 'май': 5, 'июн': 6, 'июл': 7, 'август': 8, 'сентябр': 9, 'октябр': 10, 'ноябр': 11, 'декабр': 12 };
+function parseDatesText(s) {
+  s = String(s || '').trim(); if (!s) return null;
+  const iso = s.match(/\d{4}-\d{2}-\d{2}/g);
+  if (iso && iso.length) return { start: iso[0], end: iso[iso.length - 1] };
+  let m = s.match(/(\d{1,2})\s*[-–—]\s*(\d{1,2})[.\/](\d{1,2})[.\/](\d{2,4})/);  // 12–14.03.2025
+  if (m) { let y = +m[4]; if (y < 100) y += 2000; const mo = +m[3]; return { start: `${y}-${_p2(mo)}-${_p2(+m[1])}`, end: `${y}-${_p2(mo)}-${_p2(+m[2])}` }; }
+  m = s.match(/(\d{1,2})[.\/](\d{1,2})[.\/](\d{2,4})/);                            // 12.03.2025
+  if (m) { let y = +m[3]; if (y < 100) y += 2000; const d = `${y}-${_p2(+m[2])}-${_p2(+m[1])}`; return { start: d, end: d }; }
+  m = s.match(/(\d{1,2})\s*(?:[-–—]\s*(\d{1,2}))?\s+([а-яё]{3,})\.?\s*(\d{4})?/i); // 12–14 марта 2025
+  if (m) { const mon = m[3].toLowerCase(); let mo = 0; for (const k in _RUM) { if (mon.startsWith(k)) { mo = _RUM[k]; break; } }
+    if (mo) { const y = m[4] ? +m[4] : new Date().getFullYear(); const d1 = +m[1], d2 = m[2] ? +m[2] : d1;
+      return { start: `${y}-${_p2(mo)}-${_p2(d1)}`, end: `${y}-${_p2(mo)}-${_p2(d2)}` }; } }
+  return null;
+}
+// ── Календарь ТЦ (Фаза 2): события курсов (по датам из dates_text), работ,
+// приборов, регламентов и отсутствий в единый список {date,kind,title,sub,raw}.
 router.get('/calendar', requireAnyModuleApi(TC_CODES), async (req, res) => {
   try {
     const items = [];
     const dISO = v => { const m = /(\d{4})-(\d{2})-(\d{2})/.exec(String(v || '')); return m ? `${m[1]}-${m[2]}-${m[3]}` : ''; };
     const push = (date, kind, title, sub) => { const iso = dISO(date); if (!iso) return;
       items.push({ date: iso, raw: iso.slice(8, 10) + '.' + iso.slice(5, 7), kind, title: title || '', sub: sub || '' }); };
+    // Курсы ТЦ — раскрываем диапазон дат по дням (курс может идти несколько дней).
+    try { const { rows } = await pool.query('SELECT title,client,dates_text,place,participants FROM ticketsmodule_tc_trainings');
+      for (const t of rows) {
+        const pr = parseDatesText(t.dates_text); if (!pr) continue;
+        let pc = 0; try { const a = typeof t.participants === 'string' ? JSON.parse(t.participants) : t.participants; pc = Array.isArray(a) ? a.length : 0; } catch (_) {}
+        const sub = [t.client, pc ? `${pc} уч.` : '', t.place].filter(Boolean).join(' · ');
+        let s = new Date(pr.start + 'T00:00:00'), e = new Date(pr.end + 'T00:00:00');
+        if (isNaN(+s)) continue; if (isNaN(+e) || e < s) e = new Date(+s);
+        for (let dt = new Date(+s), g = 0; dt <= e && g < 31; dt.setDate(dt.getDate() + 1), g++)
+          push(`${dt.getFullYear()}-${_p2(dt.getMonth() + 1)}-${_p2(dt.getDate())}`, 'course', t.title, sub);
+      } } catch (e) {}
     try { const { rows } = await pool.query('SELECT title,client,due,report_at FROM ticketsmodule_tc_works');
       for (const w of rows) { push(w.due, 'work', w.title, w.client); push(w.report_at, 'report', w.title, w.client); } } catch (e) {}
     try { const { rows } = await pool.query('SELECT name,short,ser,verify_next,to_next FROM ticketsmodule_tc_equipment');

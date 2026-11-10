@@ -360,7 +360,7 @@
       if(!TOP || TOP.length<2){ if(host) host.remove(); return; }
       var mods=visibleModules(); var byCode={}; mods.forEach(function(m){byCode[m.c]=m;});
       var catc={}; CATS.forEach(function(x){catc[x.id]=x.c;});
-      var list=TOP.map(function(c){return byCode[c];}).filter(Boolean).slice(0,8);
+      var list=TOP.map(function(c){return byCode[c];}).filter(Boolean).slice(0,3);
       if(list.length<2){ if(host) host.remove(); return; }
       if(!host || !host.isConnected){
         host=document.createElement('div'); host.id='cupHomeFav'; host.className='cup-homefav';

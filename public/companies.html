@@ -224,8 +224,19 @@ const fmt=n=>Math.round(Number(n)||0).toLocaleString('ru-RU').replace(/,/g,' ');
 async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.href='/login.html';return{ok:false,d:{}}}let d={};try{d=await r.json()}catch(e){}return{ok:r.ok,d}}
 
 async function boot(){const r=await fetch('/auth/me');if(!r.ok){location.href='/login.html';return;}
-  try{const _q=new URLSearchParams(location.search).get('q');if(_q){const _i=document.getElementById('fSearch');if(_i)_i.value=_q;}}catch(e){}
-  await load();}
+  let _q=''; try{_q=new URLSearchParams(location.search).get('q')||'';}catch(e){}
+  const _i=document.getElementById('fSearch');
+  if(_q&&_i)_i.value=_q;
+  await load();
+  // Прощающий deep-link из «Клиентов ТЦ»: если по точному названию ничего не нашлось,
+  // пробуем «ядро» названия (без ТОО/ИП/кавычек), затем очищаем фильтр — реестр не должен выглядеть пустым.
+  if(_q&&_i&&!filtered().length){
+    const _core=String(_q).toLowerCase().replace(/[«»"'`“”]/g,' ')
+      .replace(/\b(тоо|ип|ао|оао|зао|ооо|чп|пк|тдо|группа компаний|group)\b/g,' ')
+      .replace(/\s+/g,' ').trim().split(' ').filter(w=>w.length>2).sort((a,b)=>b.length-a.length)[0]||'';
+    _i.value=_core; render();
+    if(!filtered().length){_i.value=''; render();}
+  }}
 async function load(){
   const {ok,d}=await api('/api/companies');
   if(!ok){document.getElementById('body').innerHTML='<tr><td class="hint" colspan="9">Ошибка загрузки</td></tr>';return;}

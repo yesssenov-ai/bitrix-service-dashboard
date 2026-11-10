@@ -119,6 +119,44 @@ textarea.in{resize:vertical;min-height:48px}
 .vw-seg button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(20,25,35,.08)}
 @media(max-width:860px){.stats{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:640px){.wrap{padding:4px 12px 48px}.grid{grid-template-columns:1fr}.fld.two{grid-template-columns:1fr}.p-add{grid-template-columns:1fr 1fr}.tc-tbl{font-size:12px}}
+/* ── Календарь-сетка ТЦ ─────────────────────────────────────────────── */
+.cal-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.cal-nav{display:flex;align-items:center;gap:8px}
+.cal-nav button{border:1px solid var(--line);background:var(--surface);color:var(--text);font:inherit;font-size:14px;font-weight:700;width:30px;height:30px;border-radius:9px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;line-height:1}
+.cal-nav button:hover{border-color:var(--text-3)}
+.cal-nav button.ghost{width:auto;padding:0 12px;font-size:12px;color:var(--text-3)}
+.cal-ttl{font-weight:700;font-size:15px;min-width:150px;text-align:center;text-transform:capitalize;display:flex;flex-direction:column;line-height:1.15}
+.cal-cnt{font-size:10.5px;color:var(--text-3);font-weight:600;text-transform:none}
+.cal-legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--text-3)}
+.cal-leg{display:inline-flex;align-items:center;gap:5px}
+.cal-leg i{width:9px;height:9px;border-radius:3px;display:inline-block}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.cal-dow{font-size:10.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.03em;text-align:center;padding:2px 0 4px}
+.cal-cell{min-height:86px;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:5px 5px 6px;display:flex;flex-direction:column;gap:3px;cursor:pointer;overflow:hidden;transition:border-color .12s,box-shadow .12s}
+.cal-cell:hover{border-color:var(--line-2);box-shadow:0 2px 8px rgba(20,25,35,.05)}
+.cal-cell.out{background:var(--surface-2);opacity:.5}
+.cal-cell.out .cal-dnum{color:var(--text-3)}
+.cal-cell.today{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.cal-cell.sel{border-color:var(--accent);background:var(--accent-weak)}
+.cal-cell.has .cal-dnum{font-weight:800}
+.cal-dnum{font-size:11.5px;font-weight:600;color:var(--text);align-self:flex-end}
+.cal-cell.today .cal-dnum{color:var(--accent)}
+.cal-chip{font-size:10px;font-weight:600;line-height:1.3;border-radius:5px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;border:1px solid transparent}
+.cal-more{font-size:9.5px;color:var(--text-3);font-weight:600;padding-left:3px}
+.k-course{background:color-mix(in srgb,var(--accent) 14%,var(--surface));color:var(--accent);border-color:var(--accent-line)}
+.k-work{background:color-mix(in srgb,#2763d6 13%,var(--surface));color:#2763d6;border-color:color-mix(in srgb,#2763d6 30%,var(--line))}
+.k-report{background:color-mix(in srgb,#7a4ecc 12%,var(--surface));color:#7a4ecc;border-color:color-mix(in srgb,#7a4ecc 28%,var(--line))}
+.k-verify{background:color-mix(in srgb,#1a7f54 13%,var(--surface));color:#1a7f54;border-color:color-mix(in srgb,#1a7f54 30%,var(--line))}
+.k-to{background:color-mix(in srgb,#c47d12 14%,var(--surface));color:#b06f0c;border-color:color-mix(in srgb,#c47d12 30%,var(--line))}
+.k-routine{background:color-mix(in srgb,#0e8f9e 13%,var(--surface));color:#0b7a86;border-color:color-mix(in srgb,#0e8f9e 30%,var(--line))}
+.k-absence{background:var(--surface-2);color:var(--text-3);border-color:var(--line)}
+.cal-day{margin-top:14px}
+.cal-dayh{font-weight:700;font-size:13px;margin-bottom:8px;text-transform:capitalize}
+.cal-dayrow{display:flex;align-items:center;gap:9px;padding:7px 2px;border-bottom:1px solid var(--line);font-size:12.5px}
+.cal-dayrow:last-child{border-bottom:0}
+.cal-dayrow b{font-weight:600}
+.cal-daysub{color:var(--text-3);font-size:12px}
+@media(max-width:640px){.cal-cell{min-height:60px}.cal-chip{font-size:9px}.cal-legend{display:none}}
 </style>
 </head>
 <body>
@@ -1582,25 +1620,79 @@ async function loadTeamNow(){
   </div>`;
 }
 
-/* ── Календарь ТЦ ──────────────────────────────────────────────────────────── */
-const CAL_KIND = { work:['Срок работы','cert'], report:['Отчёт','plan'], verify:['Поверка','held'], to:['ТО','plan'], routine:['Регламент','m'], absence:['Отсутствие','lead'] };
-let _calBuilt=false;
+/* ── Календарь ТЦ (месячная сетка) ──────────────────────────────────────────── */
+const CAL_KIND = { course:['Курс','course'], work:['Срок работы','work'], report:['Отчёт','report'], verify:['Поверка','verify'], to:['ТО','to'], routine:['Регламент','routine'], absence:['Отсутствие','absence'] };
+const CAL_MON=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const CAL_DOW=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+const cpad=n=>String(n).padStart(2,'0');
+let _calBuilt=false,_calItems=null,_calFocus=null,_calSel=null;
 async function mountCalendar(){
   const host=document.getElementById('view-cal'); if(!host) return;
   if(!_calBuilt){ _calBuilt=true; host.innerHTML='<div id="calBody"><div class="empty">Загрузка…</div></div>'; }
-  const d=await api('GET','/calendar');
+  if(_calItems===null){
+    const d=await api('GET','/calendar');
+    if(!d||!d.ok){ const b=document.getElementById('calBody'); if(b) b.innerHTML='<div class="empty">Не удалось загрузить календарь</div>'; return; }
+    _calItems=(d.items||[]).filter(e=>e&&e.date);
+  }
+  if(!_calItems.length){ const b=document.getElementById('calBody'); if(b) b.innerHTML='<div class="empty">Событий нет. Заполните даты курсов, сроки работ, поверки и регламенты — они появятся в календаре.</div>'; return; }
+  if(!_calFocus){
+    const now=new Date(), curKey=`${now.getFullYear()}-${cpad(now.getMonth()+1)}`;
+    const inMonth=k=>_calItems.some(e=>e.date.slice(0,7)===k);
+    if(inMonth(curKey)){ _calFocus={y:now.getFullYear(),m:now.getMonth()}; }
+    else{ // ближайший к сегодня месяц с событиями, иначе — текущий
+      const t=+new Date(`${curKey}-15T00:00:00`); let best=null,bd=Infinity;
+      for(const e of _calItems){ const diff=Math.abs(+new Date(e.date+'T00:00:00')-t); if(diff<bd){bd=diff;best=e.date;} }
+      _calFocus=best?{y:+best.slice(0,4),m:+best.slice(5,7)-1}:{y:now.getFullYear(),m:now.getMonth()};
+    }
+  }
+  renderCalGrid();
+}
+function renderCalGrid(){
   const body=document.getElementById('calBody'); if(!body) return;
-  if(!d||!d.ok){ body.innerHTML='<div class="empty">Не удалось загрузить календарь</div>'; return; }
-  const items=d.items||[];
-  if(!items.length){ body.innerHTML='<div class="empty">Событий нет. Заполните сроки работ, поверки, регламенты.</div>'; return; }
-  const groups={}; const order=[];
-  for(const e of items){ const g=e.date?e.date.slice(0,7):'Без даты'; if(!groups[g]){groups[g]=[];order.push(g);} groups[g].push(e); }
-  const MON=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
-  const title=g=>{ const m=/^(\d{4})-(\d{2})$/.exec(g); return m?`${MON[+m[2]-1]} ${m[1]}`:g; };
-  body.innerHTML = order.map(g=>`<div class="panel" style="margin-bottom:12px"><div class="ph"><span class="pt">${esc(title(g))}</span><span class="pn">${groups[g].length}</span></div>
-    <table class="tc-tbl"><tbody>${groups[g].map(e=>{ const k=CAL_KIND[e.kind]||['Событие','m'];
-      return `<tr><td style="width:92px;color:var(--text-3)">${esc(e.raw||'')}</td><td style="width:120px"><span class="pill ${k[1]}">${esc(k[0])}</span></td><td>${esc(e.title)}</td><td style="color:var(--text-3)">${esc(e.sub||'')}</td></tr>`;
-    }).join('')}</tbody></table></div>`).join('');
+  const {y,m}=_calFocus;
+  const startDow=(new Date(y,m,1).getDay()+6)%7;      // Пн = 0
+  const daysInMonth=new Date(y,m+1,0).getDate();
+  const prevDays=new Date(y,m,0).getDate();
+  const now=new Date(), todayISO=`${now.getFullYear()}-${cpad(now.getMonth()+1)}-${cpad(now.getDate())}`;
+  const byDate={}; for(const e of _calItems){ (byDate[e.date]=byDate[e.date]||[]).push(e); }
+  const monKey=`${y}-${cpad(m+1)}`, monthCount=_calItems.filter(e=>e.date.slice(0,7)===monKey).length;
+  const totalCells=Math.ceil((startDow+daysInMonth)/7)*7;
+  let cells='';
+  for(let i=0;i<totalCells;i++){
+    const dn=i-startDow+1; let cy=y,cm=m,cd=dn,out=false;
+    if(dn<1){ out=true; cm=m-1; cd=prevDays+dn; if(cm<0){cm=11;cy=y-1;} }
+    else if(dn>daysInMonth){ out=true; cm=m+1; cd=dn-daysInMonth; if(cm>11){cm=0;cy=y+1;} }
+    const iso=`${cy}-${cpad(cm+1)}-${cpad(cd)}`, evs=byDate[iso]||[];
+    const chips=evs.slice(0,3).map(e=>{ const k=CAL_KIND[e.kind]||['Событие','absence'];
+      return `<span class="cal-chip k-${k[1]}" title="${esc(k[0]+': '+e.title+(e.sub?' — '+e.sub:''))}">${esc(e.title||k[0])}</span>`; }).join('');
+    const more=evs.length>3?`<span class="cal-more">ещё ${evs.length-3}</span>`:'';
+    cells+=`<div class="cal-cell${out?' out':''}${iso===todayISO?' today':''}${iso===_calSel?' sel':''}${evs.length?' has':''}" onclick="calPick('${iso}')"><span class="cal-dnum">${cd}</span>${chips}${more}</div>`;
+  }
+  const legend=Object.values(CAL_KIND).map(v=>`<span class="cal-leg"><i class="k-${v[1]}"></i>${esc(v[0])}</span>`).join('');
+  body.innerHTML=`
+    <div class="cal-top">
+      <div class="cal-nav">
+        <button onclick="calMove(-1)" title="Предыдущий месяц">‹</button>
+        <div class="cal-ttl">${CAL_MON[m]} ${y}<span class="cal-cnt">${monthCount} ${monthCount%10===1&&monthCount%100!==11?'событие':'событий'}</span></div>
+        <button onclick="calMove(1)" title="Следующий месяц">›</button>
+        <button class="ghost" onclick="calToday()">Сегодня</button>
+      </div>
+      <div class="cal-legend">${legend}</div>
+    </div>
+    <div class="cal-grid">${CAL_DOW.map(d=>`<div class="cal-dow">${d}</div>`).join('')}${cells}</div>
+    <div id="calDay" class="cal-day"></div>`;
+  if(_calSel) renderCalDay(_calSel);
+}
+function calMove(delta){ let {y,m}=_calFocus; m+=delta; if(m<0){m=11;y--;} else if(m>11){m=0;y++;} _calFocus={y,m}; renderCalGrid(); }
+function calToday(){ const n=new Date(); _calFocus={y:n.getFullYear(),m:n.getMonth()}; renderCalGrid(); }
+function calPick(iso){ _calSel=(_calSel===iso?null:iso); renderCalGrid(); }
+function renderCalDay(iso){
+  const host=document.getElementById('calDay'); if(!host) return;
+  const evs=_calItems.filter(e=>e.date===iso);
+  const dd=new Date(iso+'T00:00:00'), h=`${dd.getDate()} ${CAL_MON[dd.getMonth()].toLowerCase()} ${dd.getFullYear()}`;
+  if(!evs.length){ host.innerHTML=`<div class="cal-dayh">${h}</div><div class="empty">В этот день событий нет</div>`; return; }
+  host.innerHTML=`<div class="cal-dayh">${h} · ${evs.length}</div>`+evs.map(e=>{ const k=CAL_KIND[e.kind]||['Событие','absence'];
+    return `<div class="cal-dayrow"><span class="cal-chip k-${k[1]}">${esc(k[0])}</span><b>${esc(e.title)}</b>${e.sub?`<span class="cal-daysub">${esc(e.sub)}</span>`:''}</div>`; }).join('');
 }
 
 /* ── Регистрация новых разделов в переключателе вкладок ─────────────────────── */
