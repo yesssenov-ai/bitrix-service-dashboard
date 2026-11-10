@@ -218,10 +218,11 @@ async function spActive(now, opts) {
         const d = _pdate(it[k]); if (d) dates.push(d); }
       dates.sort();
       const from = dates[0] || '', to = dates[dates.length - 1] || '';
-      // Командировки — по этапу; отпуска (и фолбэк) — по датам «актуально сегодня».
-      let include;
-      if (opts.reStage && stageIds.size) include = stageIds.has(String(it.stageId));
-      else include = !!(from && to && from <= todayISO && todayISO <= to);
+      // Показываем ТОЛЬКО если даты активны сегодня (from ≤ today ≤ to). Этап
+      // «В командировке», если определился, дополнительно сужает выборку.
+      const dateActive = !!(from && from <= todayISO && (!to || todayISO <= to));
+      let include = dateActive;
+      if (opts.reStage && stageIds.size) include = include && stageIds.has(String(it.stageId));
       if (!include) continue;
       const who = USERS[String(it.assignedById)] || '';
       out.push({ name: who || it.title || 'Сотрудник', kind: opts.kind,
