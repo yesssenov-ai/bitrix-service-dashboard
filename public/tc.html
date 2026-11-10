@@ -1254,8 +1254,8 @@ const entStaff = mkEntity({
   card:it=>{ const proj=(it.projects||[]); return `<div class="cc" data-id="${it.bitrix_id}">
     <div class="row" style="justify-content:space-between;align-items:flex-start"><div class="ct">${ESCV(it.name)}</div>${pill(it.status||'free')}</div>
     <div class="row"><span class="client">${ESCV(it.role_title||'—')}</span>${it.dir?`<span class="pill m">${ESCV(it.dir)}</span>`:''}</div>
-    <div style="margin:7px 0">${loadBar(it.load_pct)}</div>
-    ${(proj.length||it.busy_on)?`<div class="sub">▶ ${ESCV(proj.length?proj.join(', '):it.busy_on)}</div>`:''}
+    <div class="row" style="margin:7px 0;align-items:center;gap:10px"><div style="flex:1;min-width:0">${loadBar(it.load_pct)}</div>${it.free_hours!=null?`<span class="pill ${it.free_hours>0?'held':'lead'}" style="flex:none">${it.free_hours>0?('свободно '+it.free_hours+' ч'):'нет окна'}</span>`:''}</div>
+    ${(proj.length||it.busy_on)?`<div class="sub">${ESCV(proj.length?proj.join(', '):it.busy_on)}</div>`:''}
     <div class="foot"><span>${(it.admits&&it.admits.length)?(tIc(TI.cap)+'допуски: '+ESCV(admitsText(it))):''}</span><span>${it.active===false?'<span class="pill lead">не активен</span>':''}</span></div>
   </div>`; },
   fields:[

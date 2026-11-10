@@ -6,12 +6,12 @@ const router = express.Router();
 const multer = require('multer');
 const storage = require('../storage-lib');
 const { pool, requireAuth, requireAnyModuleApi, isAdminLike } = require('../auth');
-const { b24 } = require('../bitrix');   // команда ТЦ тянется из отдела Bitrix
+const { b24 } = require('../bitrix');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 const ENTITIES = ['training', 'work', 'equipment', 'stock', 'qms'];
 const TC_CODES = ['TC', 'TC_WK', 'TC_EQ', 'TC_ST', 'TC_QM', 'TC_AN'];
-const WRITE = ['admin', 'coordinator', 'tc'];
+const WRITE = ['admin', 'coordinator'];
 const STATUSES = ['held', 'plan', 'lead'];
 const WTYPES = ['demo', 'paid', 'train', 'rnd', 'acc'];
 const canEditOf = u => isAdminLike(u.role) || WRITE.includes(u.role);
@@ -106,7 +106,7 @@ function normTr(b) {
     participants: Array.isArray(b.participants) ? b.participants : [], issued: !!b.issued, note: str(b.note, 4000),
   };
 }
-router.get('/trainings', requireAnyModuleApi(TC_CODES, ['tc']), async (req, res) => {
+router.get('/trainings', requireAnyModuleApi(TC_CODES), async (req, res) => {
   try {
     await ensureSeed();
     const { rows } = await pool.query('SELECT * FROM ticketsmodule_tc_trainings ORDER BY id DESC');
@@ -157,7 +157,7 @@ function normWk(b) {
     due: str(b.due, 40), notes: str(b.notes, 4000),
   };
 }
-router.get('/works', requireAnyModuleApi(TC_CODES, ['tc']), async (req, res) => {
+router.get('/works', requireAnyModuleApi(TC_CODES), async (req, res) => {
   try {
     await ensureSeed();
     const { rows } = await pool.query('SELECT * FROM ticketsmodule_tc_works ORDER BY id DESC');
@@ -209,7 +209,7 @@ function normEq(b) {
     comps_count: int(b.comps_count), resp: str(b.resp, 120), note: str(b.note, 4000),
   };
 }
-router.get('/equipment', requireAnyModuleApi(TC_CODES, ['tc']), async (req, res) => {
+router.get('/equipment', requireAnyModuleApi(TC_CODES), async (req, res) => {
   try {
     await ensureSeed();
     const { rows } = await pool.query('SELECT * FROM ticketsmodule_tc_equipment ORDER BY id DESC');
@@ -261,7 +261,7 @@ function normSt(b) {
     nom: str(b.nom, 120), note: str(b.note, 4000), off_book: !!b.off_book, expiry: str(b.expiry, 40),
   };
 }
-router.get('/stock', requireAnyModuleApi(TC_CODES, ['tc']), async (req, res) => {
+router.get('/stock', requireAnyModuleApi(TC_CODES), async (req, res) => {
   try {
     await ensureSeed();
     const { rows } = await pool.query('SELECT * FROM ticketsmodule_tc_stock ORDER BY id DESC');
@@ -309,7 +309,7 @@ function normQ(b) {
     files_count: int(b.files_count), note: str(b.note, 4000),
   };
 }
-router.get('/qms', requireAnyModuleApi(TC_CODES, ['tc']), async (req, res) => {
+router.get('/qms', requireAnyModuleApi(TC_CODES), async (req, res) => {
   try {
     await ensureSeed();
     const { rows } = await pool.query('SELECT * FROM ticketsmodule_tc_qms ORDER BY id DESC');
@@ -345,377 +345,8 @@ router.delete('/qms/:id(\\d+)', requireAuth(['admin']), async (req, res) => {
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
-// ══════════════════════════════════════════════════════════════════════════
-// Фазы 1,3,5,6,7 — новые разделы ТЦ. Единый генератор CRUD поверх таблиц.
-// ══════════════════════════════════════════════════════════════════════════
-const numf = v => (v === '' || v == null || !Number.isFinite(+v)) ? null : +v;
-const boolf = v => !!v && v !== 'false' && v !== '0' && v !== 0;
-
-function pickFields(fields, b) {
-  const o = {};
-  for (const f of fields) {
-    let v = b[f.k];
-    if (f.t === 'int') v = int(v);
-    else if (f.t === 'num') v = numf(v);
-    else if (f.t === 'bool') v = boolf(v);
-    else if (f.t === 'json') v = JSON.stringify(v == null ? (f.def != null ? f.def : []) : v);
-    else v = str(v, f.n || 500);
-    o[f.k] = v;
-  }
-  return o;
-}
-
-// Монтирует GET /p, POST /p, PUT /p/:id, DELETE /p/:id для таблицы table.
-function mountCrud(p, table, fields, opts) {
-  opts = opts || {};
-  const cols = fields.map(f => f.k);
-  const order = opts.order || 'id DESC';
-  const required = opts.required;
-  router.get('/' + p, requireAnyModuleApi(TC_CODES, ['tc']), async (req, res) => {
-    try {
-      await ensureSeed2();
-      const { rows } = await pool.query(`SELECT * FROM ${table} ORDER BY ${order}`);
-      res.json({ ok: true, canEdit: canEditOf(req.user), items: rows });
-    } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
-  });
-  router.post('/' + p, requireAuth(WRITE), express.json({ limit: '1mb' }), async (req, res) => {
-    try {
-      const v = pickFields(fields, req.body || {});
-      if (required && !v[required]) return res.status(400).json({ ok: false, error: 'Заполните обязательное поле' });
-      const by = str(req.user.display_name || req.user.username, 100);
-      const names = cols.concat('created_by');
-      const ph = names.map((_, i) => '$' + (i + 1)).join(',');
-      const vals = cols.map(c => v[c]).concat(by);
-      const { rows } = await pool.query(`INSERT INTO ${table} (${names.join(',')}) VALUES (${ph}) RETURNING *`, vals);
-      res.json({ ok: true, item: rows[0] });
-    } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
-  });
-  router.put('/' + p + '/:id(\\d+)', requireAuth(WRITE), express.json({ limit: '1mb' }), async (req, res) => {
-    try {
-      const v = pickFields(fields, req.body || {});
-      if (required && !v[required]) return res.status(400).json({ ok: false, error: 'Заполните обязательное поле' });
-      const sets = cols.map((c, i) => `${c}=$${i + 1}`).join(', ');
-      const vals = cols.map(c => v[c]).concat(req.params.id);
-      const { rows } = await pool.query(
-        `UPDATE ${table} SET ${sets}, updated_at=NOW() WHERE id=$${cols.length + 1} RETURNING *`, vals);
-      if (!rows.length) return res.status(404).json({ ok: false, error: 'Не найдено' });
-      res.json({ ok: true, item: rows[0] });
-    } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
-  });
-  router.delete('/' + p + '/:id(\\d+)', requireAuth(['admin']), async (req, res) => {
-    try { await pool.query(`DELETE FROM ${table} WHERE id=$1`, [req.params.id]); res.json({ ok: true }); }
-    catch (e) { res.status(500).json({ ok: false, error: e.message }); }
-  });
-}
-
-// ── Фаза 1: Команда ТЦ = отдел «Тренинг центр» из Bitrix + TC-наложение ──────
-// Люди (имя/должность) берутся из Bitrix по отделу; в БД храним только статус/
-// загрузку/допуски, привязанные к bitrix_id. Руками сотрудников не заводим.
-let _tcDeptId = null, _tcTeamCache = { at: 0, members: [] };
-const TC_DEPT_RE = /трен[ие]нг/i;   // «Тренинг центр» / «Тренинг-центр»
-async function tcDeptIds() {
-  if (_tcDeptId) return _tcDeptId;
-  try {
-    const res = await b24('department.get', { });
-    const list = (res && res.result) || [];
-    _tcDeptId = list.filter(d => TC_DEPT_RE.test(d.NAME || '')).map(d => String(d.ID));
-  } catch (e) { console.error('tcDeptIds:', e.message); _tcDeptId = null; }
-  return _tcDeptId || [];
-}
-async function tcTeamFromBitrix() {
-  const now = Date.now();
-  if (_tcTeamCache.members.length && now - _tcTeamCache.at < 5 * 60 * 1000) return _tcTeamCache.members;
-  let members = [];
-  try {
-    const dept = await tcDeptIds();
-    if (dept && dept.length) {
-      const seen = {};
-      let start = 0, guard = 0;
-      while (guard++ < 40) {
-        const res = await b24('user.get', { ADMIN_MODE: 'Y', start });
-        for (const u of (res && res.result) || []) {
-          const ud = [].concat(u.UF_DEPARTMENT || []).map(String);
-          if (!ud.some(x => dept.includes(x))) continue;
-          const id = +u.ID; if (seen[id]) continue; seen[id] = 1;
-          members.push({ bitrix_id: id,
-            name: [u.LAST_NAME, u.NAME].filter(Boolean).join(' ').trim() || (u.EMAIL || '#' + id),
-            position: String(u.WORK_POSITION || '').trim() });
-        }
-        const next = res && res.next; if (next === undefined || next === null) break; start = next;
-      }
-      members.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
-    }
-  } catch (e) { console.error('tcTeamFromBitrix:', e.message); }
-  if (members.length) _tcTeamCache = { at: now, members };
-  return members.length ? members : _tcTeamCache.members;
-}
-// Активные проекты на человеке — из «Работ» по совпадению ФИО исполнителя.
-async function worksByAssignee() {
-  const map = {};
-  try {
-    const { rows } = await pool.query("SELECT code, title, assignee FROM ticketsmodule_tc_works");
-    for (const w of rows) { const n = String(w.assignee || '').trim(); if (!n) continue; (map[n] = map[n] || []).push(w.code || w.title); }
-  } catch (e) { /* таблицы может не быть */ }
-  return map;
-}
-router.get('/staff', requireAnyModuleApi(TC_CODES, ['tc']), async (req, res) => {
-  try {
-    await ensureSeed();
-    const team = await tcTeamFromBitrix();
-    const { rows } = await pool.query('SELECT * FROM ticketsmodule_tc_staff');
-    const ovByBx = {}; for (const r of rows) if (r.bitrix_id != null) ovByBx[r.bitrix_id] = r;
-    const proj = await worksByAssignee();
-    let items;
-    if (team.length) {
-      items = team.map(m => {
-        const o = ovByBx[m.bitrix_id] || {};
-        return {
-          id: o.id || null, bitrix_id: m.bitrix_id, name: m.name,
-          role_title: o.role_title || m.position || '', dir: o.dir || '',
-          status: o.status || 'free', load_pct: o.load_pct || 0, busy_on: o.busy_on || '',
-          admits: o.admits || [], active: o.active == null ? true : o.active,
-          bonus_idx: o.bonus_idx || 0, note: o.note || '', projects: proj[m.name] || [],
-        };
-      });
-    } else {
-      // Bitrix недоступен — показываем то, что сохранено (наложения), чтобы раздел жил.
-      items = rows.map(o => Object.assign({}, o, { projects: proj[o.name] || [] }));
-    }
-    res.json({ ok: true, canEdit: canEditOf(req.user), fromBitrix: team.length > 0, items });
-  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
-});
-// Сохранить TC-наложение по сотруднику Bitrix (upsert по bitrix_id). Имя/должность
-// приходят из Bitrix, но сохраняем name для NOT NULL и дублирования должности.
-router.put('/staff/:bid(\\d+)', requireAuth(WRITE), express.json({ limit: '512kb' }), async (req, res) => {
-  try {
-    const bid = +req.params.bid; const b = req.body || {};
-    const v = {
-      name: str(b.name, 300) || ('#' + bid), role_title: str(b.role_title, 200), dir: str(b.dir, 120),
-      status: STAFF_ST.includes(b.status) ? b.status : 'free', load_pct: int(b.load_pct),
-      busy_on: str(b.busy_on, 300),
-      admits: JSON.stringify(Array.isArray(b.admits) ? b.admits
-        : arr(b.admits).map(m => ({ method: m }))),
-      bonus_idx: int(b.bonus_idx), note: str(b.note, 2000), active: b.active == null ? true : !!b.active,
-    };
-    const by = str(req.user.display_name || req.user.username, 100);
-    const { rows } = await pool.query(
-      `INSERT INTO ticketsmodule_tc_staff (bitrix_id, name, role_title, dir, status, load_pct, busy_on, admits, bonus_idx, note, active, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-       ON CONFLICT (bitrix_id) WHERE bitrix_id IS NOT NULL DO UPDATE SET
-         name=EXCLUDED.name, role_title=EXCLUDED.role_title, dir=EXCLUDED.dir, status=EXCLUDED.status,
-         load_pct=EXCLUDED.load_pct, busy_on=EXCLUDED.busy_on, admits=EXCLUDED.admits,
-         bonus_idx=EXCLUDED.bonus_idx, note=EXCLUDED.note, active=EXCLUDED.active, updated_at=NOW()
-       RETURNING *`,
-      [bid, v.name, v.role_title, v.dir, v.status, v.load_pct, v.busy_on, v.admits, v.bonus_idx, v.note, v.active, by]);
-    res.json({ ok: true, item: rows[0] });
-  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
-});
-const STAFF_ST = ['free', 'busy', 'leave', 'remote', 'sick', 'off'];
-
-// ── Фаза 1: Отсутствия (+ согласование директора, замена исполнителя) ──────
-mountCrud('absences', 'ticketsmodule_tc_absences', [
-  { k: 'staff_id', t: 'int' }, { k: 'kind', t: 'str', n: 20 }, { k: 'from_date', t: 'str', n: 40 },
-  { k: 'to_date', t: 'str', n: 40 }, { k: 'reason', t: 'str', n: 1000 }, { k: 'status', t: 'str', n: 20 },
-  { k: 'substitute_id', t: 'int' },
-], { order: 'id DESC' });
-// Решение по заявке: approve/reject + замена. Только руководитель.
-router.put('/absences/:id(\\d+)/decide', requireAuth(['admin', 'coordinator']), express.json({ limit: '256kb' }), async (req, res) => {
-  try {
-    const d = str((req.body || {}).decision, 20);
-    const st = d === 'approved' ? 'approved' : d === 'rejected' ? 'rejected' : null;
-    if (!st) return res.status(400).json({ ok: false, error: 'decision: approved|rejected' });
-    const sub = numf((req.body || {}).substitute_id);
-    const by = str(req.user.display_name || req.user.username, 100);
-    const { rows } = await pool.query(
-      `UPDATE ticketsmodule_tc_absences SET status=$1, substitute_id=$2, decided_by=$3, decided_at=NOW(), updated_at=NOW()
-       WHERE id=$4 RETURNING *`, [st, sub, by, req.params.id]);
-    if (!rows.length) return res.status(404).json({ ok: false, error: 'Заявка не найдена' });
-    res.json({ ok: true, item: rows[0] });
-  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
-});
-
-// ── Фаза 3: Потребности ───────────────────────────────────────────────────
-mountCrud('needs', 'ticketsmodule_tc_needs', [
-  { k: 'title', t: 'str', n: 500 }, { k: 'qty', t: 'num' }, { k: 'unit', t: 'str', n: 40 },
-  { k: 'link_type', t: 'str', n: 40 }, { k: 'link_ref', t: 'str', n: 200 }, { k: 'reason', t: 'str', n: 1000 },
-  { k: 'priority', t: 'str', n: 20 }, { k: 'status', t: 'str', n: 20 }, { k: 'est_price', t: 'num' },
-  { k: 'currency', t: 'str', n: 10 }, { k: 'assignee', t: 'str', n: 120 }, { k: 'note', t: 'str', n: 2000 },
-], { required: 'title' });
-
-// ── Фаза 5: Пробы/образцы ─────────────────────────────────────────────────
-mountCrud('samples', 'ticketsmodule_tc_samples', [
-  { k: 'code', t: 'str', n: 60 }, { k: 'client', t: 'str', n: 300 }, { k: 'matrix', t: 'str', n: 120 },
-  { k: 'work_code', t: 'str', n: 40 }, { k: 'received_at', t: 'str', n: 40 }, { k: 'storage', t: 'str', n: 200 },
-  { k: 'status', t: 'str', n: 20 }, { k: 'barcode', t: 'str', n: 80 }, { k: 'disposed_act', t: 'str', n: 200 },
-  { k: 'note', t: 'str', n: 2000 },
-], { required: 'client' });
-
-// ── Фаза 5: Методики ──────────────────────────────────────────────────────
-mountCrud('methods', 'ticketsmodule_tc_methods', [
-  { k: 'code', t: 'str', n: 60 }, { k: 'name', t: 'str', n: 300 }, { k: 'analytes', t: 'json' },
-  { k: 'demand', t: 'int' }, { k: 'restrictions', t: 'str', n: 1000 }, { k: 'instruction', t: 'str', n: 4000 },
-  { k: 'note', t: 'str', n: 2000 },
-], { required: 'name' });
-
-// ── Фаза 5: Регламенты ────────────────────────────────────────────────────
-mountCrud('routines', 'ticketsmodule_tc_routines', [
-  { k: 'title', t: 'str', n: 300 }, { k: 'freq', t: 'str', n: 20 }, { k: 'next_at', t: 'str', n: 40 },
-  { k: 'last_done', t: 'str', n: 40 }, { k: 'needs_doc', t: 'bool' }, { k: 'assignee', t: 'str', n: 120 },
-  { k: 'status', t: 'str', n: 20 }, { k: 'note', t: 'str', n: 2000 },
-], { required: 'title' });
-
-// ── Фаза 6: История колонок ───────────────────────────────────────────────
-mountCrud('columns', 'ticketsmodule_tc_columns', [
-  { k: 'equipment_id', t: 'int' }, { k: 'equipment_name', t: 'str', n: 200 }, { k: 'column_name', t: 'str', n: 200 },
-  { k: 'method', t: 'str', n: 200 }, { k: 'injections', t: 'int' }, { k: 'left_in', t: 'str', n: 200 },
-  { k: 'used_at', t: 'str', n: 40 }, { k: 'used_by', t: 'str', n: 120 }, { k: 'note', t: 'str', n: 1000 },
-], { required: 'column_name' });
-
-// ── Фаза 6: Логгеры T/влажности ───────────────────────────────────────────
-mountCrud('loggers', 'ticketsmodule_tc_loggers', [
-  { k: 'room', t: 'str', n: 120 }, { k: 'temp', t: 'num' }, { k: 'humidity', t: 'num' },
-  { k: 'measured_at', t: 'str', n: 40 }, { k: 'measured_by', t: 'str', n: 120 }, { k: 'note', t: 'str', n: 1000 },
-], { required: 'room' });
-
-// ── Фаза 7: Формы/тесты/анкеты и регистрации ──────────────────────────────
-mountCrud('forms', 'ticketsmodule_tc_forms', [
-  { k: 'kind', t: 'str', n: 20 }, { k: 'training_id', t: 'int' }, { k: 'training_title', t: 'str', n: 300 },
-  { k: 'title', t: 'str', n: 300 }, { k: 'bin', t: 'str', n: 20 }, { k: 'company', t: 'str', n: 300 },
-  { k: 'person', t: 'str', n: 200 }, { k: 'payload', t: 'json', def: {} }, { k: 'score', t: 'int' },
-  { k: 'status', t: 'str', n: 20 }, { k: 'note', t: 'str', n: 2000 },
-], { required: 'person' });
-
-// ── Фаза 7: Реестр сертификатов ───────────────────────────────────────────
-mountCrud('certs', 'ticketsmodule_tc_certs', [
-  { k: 'cert_no', t: 'str', n: 60 }, { k: 'training_id', t: 'int' }, { k: 'training_title', t: 'str', n: 300 },
-  { k: 'person', t: 'str', n: 200 }, { k: 'company', t: 'str', n: 300 }, { k: 'bin', t: 'str', n: 20 },
-  { k: 'hours', t: 'int' }, { k: 'issued_at', t: 'str', n: 40 }, { k: 'issued_by', t: 'str', n: 120 },
-  { k: 'note', t: 'str', n: 2000 },
-], { required: 'person' });
-
-// ── Фаза 2: Календарь ТЦ (агрегат: работы, поверки/ТО, регламенты, отсутствия) ──
-const parseDate = s => {
-  s = String(s || '').trim(); if (!s) return null;
-  let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-  m = /^(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})/.exec(s);
-  if (m) return `${m[3]}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`;
-  return null;
-};
-router.get('/calendar', requireAnyModuleApi(TC_CODES, ['tc']), async (req, res) => {
-  try {
-    await ensureSeed(); await ensureSeed2();
-    const ev = [];
-    const push = (raw, kind, title, sub) => { if (raw) ev.push({ date: parseDate(raw), raw: String(raw), kind, title, sub }); };
-    const w = await pool.query("SELECT code,title,client,due,report_at,recv_at FROM ticketsmodule_tc_works");
-    for (const r of w.rows) {
-      push(r.due, 'work', `Срок работы: ${r.title || r.code}`, r.client);
-      push(r.report_at, 'report', `Отчёт: ${r.title || r.code}`, r.client);
-    }
-    const eq = await pool.query("SELECT short,name,verify_next,to_next FROM ticketsmodule_tc_equipment");
-    for (const r of eq.rows) {
-      push(r.verify_next, 'verify', `Поверка: ${r.short || r.name}`, r.name);
-      push(r.to_next, 'to', `ТО: ${r.short || r.name}`, r.name);
-    }
-    const rt = await pool.query("SELECT title,next_at,freq FROM ticketsmodule_tc_routines WHERE status='active'");
-    for (const r of rt.rows) push(r.next_at, 'routine', `Регламент: ${r.title}`, r.freq);
-    const ab = await pool.query(`SELECT a.from_date,a.to_date,a.kind,a.status,s.name FROM ticketsmodule_tc_absences a
-      LEFT JOIN ticketsmodule_tc_staff s ON s.bitrix_id=a.staff_id WHERE a.status='approved'`);
-    const KIND = { vacation: 'отпуск', remote: 'удалёнка', sick: 'больничный', unpaid: 'без содержания' };
-    for (const r of ab.rows) push(r.from_date, 'absence', `${KIND[r.kind] || r.kind}: ${r.name || ''}`, r.to_date ? `по ${r.to_date}` : '');
-    ev.sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999'));
-    res.json({ ok: true, items: ev });
-  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
-});
-
-// ── Сводка «Команда сейчас» для шапки раздела ──────────────────────────────
-router.get('/team-now', requireAnyModuleApi(TC_CODES, ['tc']), async (req, res) => {
-  try {
-    const team = await tcTeamFromBitrix();
-    const { rows } = await pool.query('SELECT bitrix_id, status, active FROM ticketsmodule_tc_staff');
-    const ov = {}; for (const r of rows) if (r.bitrix_id != null) ov[r.bitrix_id] = r;
-    const by = {}; let total = 0;
-    if (team.length) {
-      for (const m of team) {
-        const o = ov[m.bitrix_id] || {};
-        if (o.active === false) continue;
-        const st = o.status || 'free';
-        by[st] = (by[st] || 0) + 1; total++;
-      }
-    } else {
-      for (const r of rows) { if (r.active === false) continue; by[r.status] = (by[r.status] || 0) + 1; total++; }
-    }
-    const pend = await pool.query(`SELECT COUNT(*)::int AS n FROM ticketsmodule_tc_absences WHERE status='pending'`);
-    res.json({ ok: true, total, by, pending: pend.rows[0].n, fromBitrix: team.length > 0 });
-  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
-});
-
-// ── Лёгкий посев демо-данных для новых разделов (идемпотентно) ─────────────
-let _seeded2 = null;
-function ensureSeed2() {
-  if (_seeded2) return _seeded2;
-  _seeded2 = (async () => {
-    try {
-      const seedIf = async (table, rows, sql, map) => {
-        const { rows: c } = await pool.query(`SELECT COUNT(*)::int AS n FROM ${table}`);
-        if (c[0].n > 0) return;
-        for (const r of rows) await pool.query(sql, map(r));
-        console.log(`✅ ТЦ (фазы 1–7): посев ${table} — ${rows.length}`);
-      };
-      // Сотрудников НЕ сеем — команда тянется из отдела «Тренинг центр» в Bitrix.
-      await seedIf('ticketsmodule_tc_methods', SEED2.methods,
-        `INSERT INTO ticketsmodule_tc_methods (code,name,analytes,demand,restrictions,note,created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,'seed')`,
-        r => [r.code, r.name, JSON.stringify(r.analytes || []), r.demand || 0, r.restrictions || '', r.note || '']);
-      await seedIf('ticketsmodule_tc_routines', SEED2.routines,
-        `INSERT INTO ticketsmodule_tc_routines (title,freq,next_at,needs_doc,assignee,status,note,created_by)
-         VALUES ($1,$2,$3,$4,$5,'active',$6,'seed')`,
-        r => [r.title, r.freq, r.next_at || '', !!r.needs_doc, r.assignee || '', r.note || '']);
-      await seedIf('ticketsmodule_tc_loggers', SEED2.loggers,
-        `INSERT INTO ticketsmodule_tc_loggers (room,temp,humidity,measured_at,measured_by,created_by)
-         VALUES ($1,$2,$3,$4,$5,'seed')`,
-        r => [r.room, r.temp, r.humidity, r.measured_at || '', r.measured_by || '']);
-      await seedIf('ticketsmodule_tc_samples', SEED2.samples,
-        `INSERT INTO ticketsmodule_tc_samples (code,client,matrix,work_code,received_at,storage,status,note,created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'seed')`,
-        r => [r.code, r.client, r.matrix, r.work_code || '', r.received_at || '', r.storage || '', r.status || 'received', r.note || '']);
-      await seedIf('ticketsmodule_tc_needs', SEED2.needs,
-        `INSERT INTO ticketsmodule_tc_needs (title,qty,unit,link_type,link_ref,reason,priority,status,est_price,currency,created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'KZT','seed')`,
-        r => [r.title, r.qty || 1, r.unit || 'шт', r.link_type || 'office', r.link_ref || '', r.reason || '', r.priority || 'normal', r.status || 'new', r.est_price || 0]);
-    } catch (e) { console.error('ТЦ seed2 error:', e.message); _seeded2 = null; }
-  })();
-  return _seeded2;
-}
-
-const SEED2 = {
-  methods: [
-    { code: 'М-01', name: 'ВЭЖХ (жидкостная хроматография)', analytes: [{ name: 'Витамины', unit: 'мг/кг', limit: '0.1' }], demand: 12, restrictions: 'Колонка C18' },
-    { code: 'М-02', name: 'ГХ-МС (газовая хром.-масс-спектр.)', analytes: [{ name: 'Пестициды', unit: 'мкг/кг', limit: '1' }], demand: 9 },
-    { code: 'М-03', name: 'ИК-Фурье спектроскопия', analytes: [{ name: 'Идентификация', unit: '-', limit: '-' }], demand: 5 },
-    { code: 'М-04', name: 'Титриметрия', analytes: [{ name: 'Кислотность', unit: '%', limit: '0.01' }], demand: 7 },
-  ],
-  routines: [
-    { title: 'Поверка аналитических весов', freq: 'monthly', next_at: '2026-12-01', needs_doc: true, assignee: 'Лаборант' },
-    { title: 'Контроль температуры холодильника', freq: 'daily', next_at: '', needs_doc: false, assignee: 'Дежурный' },
-    { title: 'Калибровка pH-метра', freq: 'weekly', next_at: '2026-11-14', needs_doc: true, assignee: 'Инженер-химик' },
-  ],
-  loggers: [
-    { room: 'Лаборатория ВЭЖХ', temp: 22.4, humidity: 41, measured_at: '2026-11-09 09:00', measured_by: 'seed' },
-    { room: 'Прекурсорная', temp: 20.1, humidity: 38, measured_at: '2026-11-09 09:00', measured_by: 'seed' },
-  ],
-  samples: [
-    { code: 'PLS-2026-0001', client: 'АО «Пример»', matrix: 'Вода питьевая', work_code: '', received_at: '2026-11-05', storage: 'Холодильник №2', status: 'in_work' },
-    { code: 'PLS-2026-0002', client: 'ТОО «Образец»', matrix: 'Почва', received_at: '2026-11-06', storage: 'Стеллаж А', status: 'received' },
-    { code: 'PLS-2026-0003', client: 'АО «Пример»', matrix: 'Пищевой продукт', received_at: '2026-11-02', storage: 'Архив проб', status: 'done' },
-  ],
-  needs: [
-    { title: 'Ацетонитрил, HPLC-grade', qty: 4, unit: 'л', link_type: 'equipment', link_ref: 'ВЭЖХ', reason: 'Заканчивается элюент', priority: 'urgent', est_price: 120000 },
-    { title: 'Виалы 2 мл с крышками', qty: 500, unit: 'шт', link_type: 'office', reason: 'Расходник', priority: 'normal', est_price: 85000 },
-  ],
-};
-
 // ── Файлы (вложения) — байты в Supabase Storage, карточки в Postgres ─────────
-router.get('/:entity/:id(\\d+)/files', requireAnyModuleApi(TC_CODES, ['tc']), async (req, res) => {
+router.get('/:entity/:id(\\d+)/files', requireAnyModuleApi(TC_CODES), async (req, res) => {
   try {
     if (!ENTITIES.includes(req.params.entity)) return res.status(404).json({ ok: false, error: 'Неизвестный раздел' });
     const { rows } = await pool.query(
@@ -747,7 +378,7 @@ router.post('/:entity/:id(\\d+)/files', requireAuth(WRITE), upload.single('file'
     res.json({ ok: true, item: rows[0] });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-router.get('/files/:fid(\\d+)/download', requireAnyModuleApi(TC_CODES, ['tc']), async (req, res) => {
+router.get('/files/:fid(\\d+)/download', requireAnyModuleApi(TC_CODES), async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT object_key, filename FROM ticketsmodule_tc_files WHERE id=$1', [req.params.fid]);
     if (!rows.length) return res.status(404).send('Файл не найден');
@@ -764,5 +395,196 @@ router.delete('/files/:fid(\\d+)', requireAuth(WRITE), async (req, res) => {
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// ТЦ Фаза 1 — Команда и занятость (/staff, /absences).
+// Команда = сотрудники отдела «Тренинг центр» из Bitrix (имя/должность по
+// bitrix_id); наложение — ticketsmodule_tc_staff. Занятость/загрузка на
+// 5 рабочих дней считается по НАДЁЖНЫМ данным (вариант A): командировки и
+// отпуска (смарт-процессы Bitrix, по ФИО) + согласованные заявки ТЦ. Работы/
+// курсы войдут в загрузку, когда исполнителем станет сотрудник отдела.
+// ────────────────────────────────────────────────────────────────────────────
+const _isoLocal = d => { const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0, 10); };
+function _nextWorkDays(now, n) { const out = []; const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let g = 0; while (out.length < n && g++ < 30) { const wd = d.getDay(); if (wd !== 0 && wd !== 6) out.push(_isoLocal(d)); d.setDate(d.getDate() + 1); } return out; }
+const _normName = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+let _tcDept = { id: null, at: 0 };
+async function _tcDeptId() {
+  if (_tcDept.id && Date.now() - _tcDept.at < 6 * 3600 * 1000) return _tcDept.id;
+  try { const r = await b24('department.get', {}); const list = (r && r.result) || [];
+    const d = list.find(x => /тренинг|training|учебн/i.test(x.NAME || '')); _tcDept = { id: d ? d.ID : null, at: Date.now() };
+  } catch (e) { _tcDept = { id: null, at: Date.now() }; }
+  return _tcDept.id;
+}
+async function _tcPeople() {
+  const dept = await _tcDeptId(); if (!dept) return [];
+  const out = []; let start = 0, g = 0;
+  while (g++ < 12) {
+    let r; try { r = await b24('user.get', { FILTER: { UF_DEPARTMENT: dept, ACTIVE: true }, start }); } catch (e) { break; }
+    const us = (r && r.result) || [];
+    for (const u of us) out.push({ bitrix_id: +u.ID,
+      name: [u.LAST_NAME, u.NAME].filter(Boolean).join(' ') || u.NAME || ('#' + u.ID),
+      role_title: u.WORK_POSITION || '', email: u.EMAIL || '', phone: u.PERSONAL_MOBILE || u.WORK_PHONE || '' });
+    const next = r && r.next; if (next == null) break; start = next;
+  }
+  return out;
+}
+
+router.get('/staff', requireAnyModuleApi(TC_CODES), async (req, res) => {
+  try {
+    let people = []; try { people = await _tcPeople(); } catch (e) {}
+    for (const p of people) {
+      try { await pool.query(
+        `INSERT INTO ticketsmodule_tc_staff (bitrix_id,name,role_title,email,phone)
+           VALUES ($1,$2,$3,$4,$5)
+         ON CONFLICT (bitrix_id) DO UPDATE SET
+           name=EXCLUDED.name,
+           role_title=CASE WHEN COALESCE(ticketsmodule_tc_staff.role_title,'')='' THEN EXCLUDED.role_title ELSE ticketsmodule_tc_staff.role_title END,
+           email=EXCLUDED.email, phone=EXCLUDED.phone, updated_at=NOW()`,
+        [p.bitrix_id, p.name, p.role_title, p.email, p.phone]); } catch (e) {}
+    }
+    const { rows } = await pool.query('SELECT * FROM ticketsmodule_tc_staff WHERE active IS NOT FALSE ORDER BY name');
+    const now = new Date(); const wdays = _nextWorkDays(now, 5); const todayISO = _isoLocal(now);
+    let trips = []; try { trips = await require('../portal-today').smartAbsences(now); } catch (e) {}
+    const byName = {}; for (const t of trips) { const k = _normName(t.name); (byName[k] = byName[k] || []).push(t); }
+    let absRows = []; try { absRows = (await pool.query(`SELECT staff_id,kind,from_date,to_date FROM ticketsmodule_tc_absences WHERE status='approved'`)).rows; } catch (e) {}
+    const byStaff = {}; for (const a of absRows) (byStaff[a.staff_id] = byStaff[a.staff_id] || []).push(a);
+    const items = rows.map(s => {
+      const ivs = (byName[_normName(s.name)] || []).map(c => ({ kind: c.kind, from: c.from_date, to: c.to_date, dest: c.dest }))
+        .concat((byStaff[s.bitrix_id] || []).map(a => ({ kind: a.kind, from: a.from_date, to: a.to_date })));
+      let absentDays = 0; for (const d of wdays) if (ivs.some(iv => iv.from && iv.to && iv.from <= d && d <= iv.to)) absentDays++;
+      const todayIv = ivs.find(iv => iv.from && iv.to && iv.from <= todayISO && todayISO <= iv.to);
+      let status = s.status || 'free', busy_on = s.busy_on || '';
+      if (todayIv) {
+        status = todayIv.kind === 'trip' ? 'busy' : todayIv.kind === 'vacation' ? 'leave' : todayIv.kind === 'remote' ? 'remote' : todayIv.kind === 'sick' ? 'sick' : 'leave';
+        busy_on = todayIv.kind === 'trip' ? ('Командировка' + (todayIv.dest ? ': ' + todayIv.dest : '')) : todayIv.kind === 'vacation' ? 'Отпуск' : busy_on;
+      }
+      const load = absentDays ? Math.round(absentDays / wdays.length * 100) : (s.load_pct || 0);
+      const free_hours = Math.max(0, (wdays.length - absentDays) * 8);
+      return Object.assign({}, s, { status, busy_on, load_pct: load, free_hours, absent_days: absentDays });
+    });
+    res.json({ ok: true, canEdit: canEditOf(req.user), items });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+router.put('/staff/:bid(\\d+)', requireAuth(WRITE), express.json({ limit: '256kb' }), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const admits = typeof b.admits === 'string'
+      ? b.admits.split(',').map(x => ({ method: str(x, 120) })).filter(x => x.method)
+      : (Array.isArray(b.admits) ? b.admits : []);
+    const { rows } = await pool.query(
+      `UPDATE ticketsmodule_tc_staff SET dir=$1,status=$2,load_pct=$3,busy_on=$4,admits=$5,bonus_idx=$6,note=$7,active=$8,updated_at=NOW()
+       WHERE bitrix_id=$9 RETURNING *`,
+      [str(b.dir, 120), str(b.status, 20) || 'free', int(b.load_pct), str(b.busy_on, 300),
+       JSON.stringify(admits), int(b.bonus_idx), str(b.note, 2000), b.active !== false, req.params.bid]);
+    if (!rows.length) return res.status(404).json({ ok: false, error: 'Сотрудник не найден' });
+    res.json({ ok: true, item: rows[0] });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+router.get('/absences', requireAnyModuleApi(TC_CODES), async (req, res) => {
+  try { const { rows } = await pool.query('SELECT * FROM ticketsmodule_tc_absences ORDER BY from_date DESC, id DESC');
+    res.json({ ok: true, canEdit: canEditOf(req.user), items: rows }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+function _normAbs(b) { const K = ['vacation', 'remote', 'sick', 'unpaid'];
+  return { staff_id: int(b.staff_id), kind: K.includes(b.kind) ? b.kind : 'vacation', from_date: str(b.from_date, 20), to_date: str(b.to_date, 20), reason: str(b.reason, 2000) }; }
+router.post('/absences', requireAuth(WRITE), express.json({ limit: '256kb' }), async (req, res) => {
+  try { const a = _normAbs(req.body || {}); if (!a.staff_id) return res.status(400).json({ ok: false, error: 'Укажите сотрудника' });
+    const by = str(req.user.display_name || req.user.username, 100);
+    const { rows } = await pool.query(
+      `INSERT INTO ticketsmodule_tc_absences (staff_id,kind,from_date,to_date,reason,status,created_by)
+       VALUES ($1,$2,$3,$4,$5,'pending',$6) RETURNING *`,
+      [a.staff_id, a.kind, a.from_date, a.to_date, a.reason, by]);
+    res.json({ ok: true, item: rows[0] }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+router.put('/absences/:id(\\d+)', requireAuth(WRITE), express.json({ limit: '256kb' }), async (req, res) => {
+  try { const a = _normAbs(req.body || {});
+    const { rows } = await pool.query(
+      `UPDATE ticketsmodule_tc_absences SET staff_id=$1,kind=$2,from_date=$3,to_date=$4,reason=$5,updated_at=NOW()
+       WHERE id=$6 RETURNING *`,
+      [a.staff_id, a.kind, a.from_date, a.to_date, a.reason, req.params.id]);
+    if (!rows.length) return res.status(404).json({ ok: false, error: 'Заявка не найдена' });
+    res.json({ ok: true, item: rows[0] }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+router.put('/absences/:id(\\d+)/decide', requireAuth(WRITE), express.json({ limit: '256kb' }), async (req, res) => {
+  try { const b = req.body || {}; const dec = b.decision === 'approved' ? 'approved' : 'rejected';
+    const sub = Number.isFinite(+b.substitute_id) && +b.substitute_id ? Math.round(+b.substitute_id) : null;
+    const by = str(req.user.display_name || req.user.username, 100);
+    const { rows } = await pool.query(
+      `UPDATE ticketsmodule_tc_absences SET status=$1, substitute_id=$2, decided_by=$3, decided_at=NOW(), updated_at=NOW()
+       WHERE id=$4 RETURNING *`, [dec, sub, by, req.params.id]);
+    if (!rows.length) return res.status(404).json({ ok: false, error: 'Заявка не найдена' });
+    res.json({ ok: true, item: rows[0] }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+router.delete('/absences/:id(\\d+)', requireAuth(WRITE), async (req, res) => {
+  try { await pool.query('DELETE FROM ticketsmodule_tc_absences WHERE id=$1', [req.params.id]); res.json({ ok: true }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// ТЦ Фазы 3/5/6/7 — универсальный CRUD для остальных реестров (UI уже есть,
+// таблицы заведены). needs=Потребности, samples=Пробы, methods=Методики,
+// routines=Регламенты, columns=История колонок, loggers=Логгеры среды,
+// forms=Формы/тесты, certs=Сертификаты. Один конструктор на все — меньше
+// кода, меньше ошибок.
+// ────────────────────────────────────────────────────────────────────────────
+function tcCrud(path, table, cols, opts) {
+  opts = opts || {};
+  const names = cols.map(c => c[0]);
+  function norm(b) {
+    const o = {};
+    for (const [k, t] of cols) {
+      const v = b[k];
+      if (t === 'i') o[k] = int(v);
+      else if (t === 'n') o[k] = Number.isFinite(+v) ? +v : 0;
+      else if (t === 'b') o[k] = (v === true || v === 'true' || v === 1 || v === '1' || v === 'on');
+      else if (t === 'j') o[k] = JSON.stringify(Array.isArray(v) ? v : (v && typeof v === 'object' ? v : (v == null || v === '' ? [] : arr(v))));
+      else o[k] = str(v, 4000);
+    }
+    return o;
+  }
+  router.get('/' + path, requireAnyModuleApi(TC_CODES), async (req, res) => {
+    try { const { rows } = await pool.query('SELECT * FROM ' + table + ' ORDER BY id DESC');
+      res.json({ ok: true, canEdit: canEditOf(req.user), items: rows }); }
+    catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+  router.post('/' + path, requireAuth(WRITE), express.json({ limit: '1mb' }), async (req, res) => {
+    try { const o = norm(req.body || {});
+      if (opts.required && !String(o[opts.required] || '').trim()) return res.status(400).json({ ok: false, error: 'Заполните обязательное поле' });
+      const ph = names.map((_, i) => '$' + (i + 1)).join(',');
+      const { rows } = await pool.query(`INSERT INTO ${table} (${names.join(',')}) VALUES (${ph}) RETURNING *`, names.map(n => o[n]));
+      res.json({ ok: true, item: rows[0] }); }
+    catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+  router.put('/' + path + '/:id(\\d+)', requireAuth(WRITE), express.json({ limit: '1mb' }), async (req, res) => {
+    try { const o = norm(req.body || {});
+      if (opts.required && !String(o[opts.required] || '').trim()) return res.status(400).json({ ok: false, error: 'Заполните обязательное поле' });
+      const setClause = names.map((n, i) => n + '=$' + (i + 1)).join(',');
+      const { rows } = await pool.query(
+        `UPDATE ${table} SET ${setClause}, updated_at=NOW() WHERE id=$${names.length + 1} RETURNING *`,
+        names.map(n => o[n]).concat([req.params.id]));
+      if (!rows.length) return res.status(404).json({ ok: false, error: 'Не найдено' });
+      res.json({ ok: true, item: rows[0] }); }
+    catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+  router.delete('/' + path + '/:id(\\d+)', requireAuth(['admin']), async (req, res) => {
+    try { await pool.query(`DELETE FROM ${table} WHERE id=$1`, [req.params.id]); res.json({ ok: true }); }
+    catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+  });
+}
+tcCrud('needs', 'ticketsmodule_tc_needs', [['title','s'],['qty','n'],['unit','s'],['link_type','s'],['link_ref','s'],['reason','s'],['priority','s'],['status','s'],['est_price','n'],['currency','s'],['assignee','s'],['note','s']], { required: 'title' });
+tcCrud('samples', 'ticketsmodule_tc_samples', [['code','s'],['client','s'],['matrix','s'],['work_code','s'],['received_at','s'],['storage','s'],['status','s'],['barcode','s'],['disposed_act','s'],['note','s']]);
+tcCrud('methods', 'ticketsmodule_tc_methods', [['code','s'],['name','s'],['analytes','j'],['demand','i'],['restrictions','s'],['instruction','s'],['note','s']]);
+tcCrud('routines', 'ticketsmodule_tc_routines', [['title','s'],['freq','s'],['next_at','s'],['last_done','s'],['needs_doc','b'],['assignee','s'],['status','s'],['note','s']], { required: 'title' });
+tcCrud('columns', 'ticketsmodule_tc_columns', [['equipment_id','i'],['equipment_name','s'],['column_name','s'],['method','s'],['injections','i'],['left_in','s'],['used_at','s'],['used_by','s'],['note','s']]);
+tcCrud('loggers', 'ticketsmodule_tc_loggers', [['room','s'],['temp','n'],['humidity','n'],['measured_at','s'],['measured_by','s'],['note','s']]);
+tcCrud('forms', 'ticketsmodule_tc_forms', [['kind','s'],['training_id','i'],['training_title','s'],['title','s'],['bin','s'],['company','s'],['person','s'],['payload','j'],['score','i'],['status','s'],['note','s']]);
+tcCrud('certs', 'ticketsmodule_tc_certs', [['cert_no','s'],['training_id','i'],['training_title','s'],['person','s'],['company','s'],['bin','s'],['hours','i'],['issued_at','s'],['issued_by','s'],['note','s']]);
 
 module.exports = { router };
