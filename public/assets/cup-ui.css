@@ -337,3 +337,34 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-ui);
   .cup-mobsheet-i svg{width:21px;height:21px;flex:none;fill:none;stroke:var(--accent);
     stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
 }
+
+/* ── Экран «Все разделы» (вкладка «Ещё» нижней навигации) — модель AN ───────── */
+.cup-allov{position:fixed;inset:0;z-index:9400;background:var(--bg);display:flex;flex-direction:column}
+.cup-allov-top{flex:none;display:flex;align-items:center;gap:10px;padding:14px 16px 10px;
+  padding-top:calc(14px + env(safe-area-inset-top,0px));border-bottom:1px solid var(--line);background:var(--surface)}
+.cup-allov-t{font-size:18px;font-weight:800;letter-spacing:-.2px}
+.cup-allov-x{margin-left:auto;width:34px;height:34px;border-radius:9px;border:1px solid var(--line-2);
+  background:var(--surface);color:var(--text-2);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.cup-allov-x svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.cup-allov-srch{flex:none;display:flex;align-items:center;gap:9px;margin:12px 16px 4px;padding:11px 13px;
+  background:var(--surface);border:1px solid var(--line-2);border-radius:13px;color:var(--text-3)}
+.cup-allov-srch span{display:flex}
+.cup-allov-srch svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.cup-allov-srch input{flex:1;border:0;background:transparent;font-family:inherit;font-size:16px;color:var(--text);outline:none;min-width:0}
+.cup-allov-body{flex:1;overflow:auto;padding:10px 14px 20px}
+.cup-allov-empty{color:var(--text-3);text-align:center;padding:40px 0;font-size:14px}
+.cup-allsec{margin-top:14px}
+.cup-allsec-h{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);margin:0 4px 9px}
+.cup-allgrid{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:8px 6px;
+  display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.cup-alltile{display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;
+  padding:11px 4px;border-radius:12px;text-decoration:none;color:var(--text-2)}
+.cup-alltile:active{background:var(--surface-2)}
+.cup-alltile-i{width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center}
+.cup-alltile-i svg{width:23px;height:23px;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.cup-alltile-n{font-size:11px;line-height:1.25;font-weight:600;color:var(--text-2);max-width:78px}
+.cup-allov-foot{flex:none;display:flex;gap:7px;padding:10px 14px calc(14px + env(safe-area-inset-bottom,0px));
+  border-top:1px solid var(--line);background:var(--surface)}
+.cup-allov-foot button{flex:1;border:1px solid var(--line-2);background:var(--surface-2);border-radius:11px;
+  padding:11px 4px;font-family:inherit;font-size:12.5px;font-weight:650;color:var(--text-2);cursor:pointer}
+.cup-allov-foot button:active{background:var(--surface-3)}
