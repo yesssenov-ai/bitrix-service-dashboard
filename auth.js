@@ -479,6 +479,19 @@ async function initDB() {
     );
     CREATE INDEX IF NOT EXISTS idx_tm_tc_certs_no ON ticketsmodule_tc_certs(cert_no);
 
+    -- ── Портал: отсутствия компании (для блока «Сегодня») ─────────────────────
+    CREATE TABLE IF NOT EXISTS ticketsmodule_portal_absences (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      kind TEXT DEFAULT 'vacation',        -- vacation|trip|sick
+      from_date TEXT DEFAULT '',           -- 'YYYY-MM-DD'
+      to_date TEXT DEFAULT '',
+      note TEXT DEFAULT '',
+      created_by VARCHAR(100),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tm_portal_abs_dates ON ticketsmodule_portal_absences(from_date, to_date);
+
     -- ── ProLab AI: банк примеров (самообучение агента на удачных запросах) ──────
     CREATE TABLE IF NOT EXISTS ticketsmodule_plsai_examples (
       id SERIAL PRIMARY KEY,

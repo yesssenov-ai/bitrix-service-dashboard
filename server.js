@@ -570,6 +570,42 @@ app.get('/api/portal/my-access', requireAuth(), async (req, res) => {
     res.json({ ok: true, enforced: true, modules: [] });
   }
 });
+
+// ── Блок «Сегодня в компании» на главной портала ──────────────────────────────
+const portalToday = require('./portal-today');
+app.get('/api/portal/today', requireAuth(), async (req, res) => {
+  try {
+    const data = await portalToday.build(pool, new Date());
+    res.json(Object.assign({ ok: true }, data));
+  } catch (e) {
+    console.error('GET /api/portal/today error:', e.message);
+    res.json({ ok: true, birthdays: { today: [], upcoming: [] }, onThisDay: [], absences: [], pulse: {}, fact: '' });
+  }
+});
+// Отсутствия компании: список (все авторизованные), правка — админ.
+app.get('/api/portal/absences', requireAuth(), async (req, res) => {
+  try { const { rows } = await pool.query('SELECT * FROM ticketsmodule_portal_absences ORDER BY from_date DESC, id DESC');
+    res.json({ ok: true, items: rows }); } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/portal/absences', requireAuth(['admin', 'superadmin']), express.json({ limit: '256kb' }), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const name = String(b.name || '').trim().slice(0, 200);
+    if (!name) return res.status(400).json({ ok: false, error: 'Укажите сотрудника' });
+    const kind = ['vacation', 'trip', 'sick'].includes(b.kind) ? b.kind : 'vacation';
+    const by = String(req.user.display_name || req.user.username || '').slice(0, 100);
+    const { rows } = await pool.query(
+      `INSERT INTO ticketsmodule_portal_absences (name, kind, from_date, to_date, note, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [name, kind, String(b.from_date || '').slice(0, 10), String(b.to_date || '').slice(0, 10), String(b.note || '').slice(0, 500), by]);
+    res.json({ ok: true, item: rows[0] });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.delete('/api/portal/absences/:id(\\d+)', requireAuth(['admin', 'superadmin']), async (req, res) => {
+  try { await pool.query('DELETE FROM ticketsmodule_portal_absences WHERE id=$1', [req.params.id]); res.json({ ok: true }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 // ── SPA fallback — must be LAST ───────────────────────────────────────────────
 app.get('*', requirePageAuth(), (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'portal.html'));

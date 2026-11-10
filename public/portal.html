@@ -178,6 +178,39 @@ main{flex:1;padding:22px 32px 60px;max-width:1180px;width:100%;margin:0 auto}
 footer{text-align:center;color:var(--text-faint);font-size:11.5px;padding:20px;font-family:var(--f-mono)}
 @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @media (max-width:640px){.topbar{padding:13px 18px}main{padding:18px 18px 44px}.hero h1{font-size:24px}.clock{display:none}.collapse-btn{margin-left:0}}
+/* ── Блок «Сегодня в компании» ── */
+#today{margin:4px 0 18px;animation:fadeUp .4s both}
+.pt-card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:5px}
+.pt-head{display:flex;align-items:center;gap:9px;padding:11px 14px 9px;cursor:pointer;user-select:none}
+.pt-head .cap{font-weight:700;font-size:14.5px;letter-spacing:.2px}
+.pt-head .date{margin-left:auto;color:var(--text-3);font-size:12px}
+.pt-head .tog{color:var(--text-3);font-size:12px;margin-left:8px}
+.pt-blocks{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:4px 12px 12px}
+@media (max-width:640px){.pt-blocks{grid-template-columns:1fr}}
+.pt-blk{background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:12px 13px}
+.pt-blk .bh{display:flex;align-items:center;gap:8px;font-weight:700;font-size:11.5px;color:var(--text-2);margin-bottom:9px;text-transform:uppercase;letter-spacing:.3px}
+.pt-blk .bh .ic{font-size:15px}
+.pt-bday{display:flex;align-items:center;gap:11px;background:linear-gradient(100deg,color-mix(in srgb,var(--brand) 9%,var(--surface)),var(--surface));border:1px solid color-mix(in srgb,var(--brand) 22%,var(--line));border-radius:11px;padding:9px 12px}
+.pt-bday .em{font-size:24px}
+.pt-bday .nm{font-weight:700;font-size:13.5px;line-height:1.3}
+.pt-bday .rl{color:var(--text-3);font-size:11.5px}
+.pt-mini{display:flex;flex-direction:column;gap:6px;margin-top:9px}
+.pt-mini .r{display:flex;gap:9px;font-size:12.5px;color:var(--text-2)}
+.pt-mini .r .d{min-width:46px;color:var(--text-3);font-weight:600}
+.pt-none{color:var(--text-3);font-size:12.5px}
+.pt-otd{display:flex;flex-direction:column;gap:9px}
+.pt-otd .ev{display:flex;gap:10px;align-items:flex-start}
+.pt-otd .yr{min-width:58px;font-weight:800;color:var(--brand);font-size:12px;padding-top:1px;line-height:1.2}
+.pt-otd .tx{font-size:12.6px;color:var(--text-2);line-height:1.4}
+.pt-otd .tx b{color:var(--text)}
+.pt-pills{display:flex;flex-wrap:wrap;gap:7px}
+.pt-pill{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:12px;color:var(--text-2)}
+.pt-pulse{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end}
+.pt-pulse .m{display:flex;flex-direction:column}
+.pt-pulse .m b{font-size:17px;font-weight:800}
+.pt-pulse .m b.up{color:#1a7f54}
+.pt-pulse .m span{font-size:11px;color:var(--text-3)}
+.pt-fact{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);font-size:12.2px;color:var(--text-3);font-style:italic}
 </style>
 </head>
 <body>
@@ -215,6 +248,8 @@ footer{text-align:center;color:var(--text-faint);font-size:11.5px;padding:20px;f
       <span class="arr">→</span>
     </a>
   </div>
+
+  <div id="today" style="display:none"></div>
 
   <div id="myday" style="display:none"></div>
 
@@ -577,6 +612,64 @@ async function loadMyDay(user){
   }));
 }
 
+/* ── Блок «Сегодня в компании» ── */
+const PT_KIND = { vacation:['🌴','отпуск'], trip:['🧳','командировка'], sick:['🤒','больничный'] };
+function ptYears(n){ const a=n%10, b=n%100; const w=(a===1&&b!==11)?'год':(a>=2&&a<=4&&(b<10||b>=20))?'года':'лет'; return `${n}<br>${w} назад`; }
+function ptMoney(v,cur){ v=+v||0; const s=v>=1e6?(Math.round(v/1e5)/10+' млн'):v.toLocaleString('ru-RU'); return s+' '+((cur==='KZT'||!cur)?'₸':esc(cur)); }
+async function loadToday(){
+  try{
+    const r=await fetch('/api/portal/today'); if(!r.ok) return;
+    const d=await r.json(); if(!d||!d.ok) return;
+    const el=document.getElementById('today'); if(!el) return;
+    el.innerHTML=renderToday(d); el.style.display='';
+    const collapsed = (()=>{try{return localStorage.getItem('pt-collapsed')==='1'}catch(e){return false}})();
+    const body=el.querySelector('.pt-blocks'), tog=el.querySelector('.pt-head .tog');
+    if(collapsed && body){ body.style.display='none'; if(tog) tog.textContent='▸'; }
+    const head=el.querySelector('.pt-head');
+    if(head) head.onclick=()=>{ const hid=body.style.display==='none'; body.style.display=hid?'':'none';
+      if(tog) tog.textContent=hid?'▾':'▸'; try{localStorage.setItem('pt-collapsed',hid?'0':'1')}catch(e){} };
+  }catch(e){}
+}
+function renderToday(d){
+  const MON=['','января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  const dt=d.date||{}; const dateStr=(dt.d||'')+' '+(MON[dt.m]||'');
+  const B=d.birthdays||{today:[],upcoming:[]};
+  let bday='';
+  if(B.today&&B.today.length){
+    bday=B.today.map(n=>`<div class="pt-bday"><span class="em">🎉</span><div><div class="nm">${esc(n)}</div><div class="rl">сегодня день рождения</div></div></div>`).join('');
+  } else bday='<div class="pt-none">Сегодня именинников нет.</div>';
+  if(B.upcoming&&B.upcoming.length){
+    bday+='<div class="pt-mini">'+B.upcoming.map(u=>`<div class="r"><span class="d">${esc(u.date)}</span> ${esc(u.names.join(' · '))}</div>`).join('')+'</div>';
+  }
+  const bBirth=`<div class="pt-blk"><div class="bh"><span class="ic">🎂</span>Дни рождения</div>${bday}</div>`;
+  let bOtd='';
+  if(d.onThisDay&&d.onThisDay.length){
+    const ev=d.onThisDay.map(e=>{
+      const amt=e.amount?(' — '+ptMoney(e.amount,e.currency)):'';
+      const mgr=e.manager?(' ('+esc(e.manager)+')'):'';
+      const more=e.count>1?` <span style="color:var(--text-3)">и ещё ${e.count-1}</span>`:'';
+      return `<div class="ev"><span class="yr">${ptYears(e.yearsAgo)}</span><span class="tx">Сделка <b>${esc(e.title)}</b>${amt}${mgr}${more}.</span></div>`;
+    }).join('');
+    bOtd=`<div class="pt-blk"><div class="bh"><span class="ic">📅</span>В этот день</div><div class="pt-otd">${ev}</div></div>`;
+  }
+  let abs='';
+  if(d.absences&&d.absences.length){
+    abs='<div class="pt-pills">'+d.absences.map(a=>{ const k=PT_KIND[a.kind]||['•',a.kind];
+      const till=a.to_date?(' до '+esc(String(a.to_date).slice(8,10)+'.'+String(a.to_date).slice(5,7))):'';
+      return `<span class="pt-pill">${k[0]} ${esc(a.name)}${till}</span>`; }).join('')+'</div>';
+  } else abs='<div class="pt-none">Сегодня все на месте 👍</div>';
+  const bAbs=`<div class="pt-blk"><div class="bh"><span class="ic">🌴</span>Сегодня отсутствуют</div>${abs}</div>`;
+  const P=d.pulse||{}; const metric=(v,l,up)=>v==null?'':`<div class="m"><b${up?' class="up"':''}>${typeof v==='number'?v.toLocaleString('ru-RU'):esc(v)}</b><span>${l}</span></div>`;
+  const hasPulse=(P.inWork!=null||P.closedMonth!=null||P.leadsToday!=null);
+  let bPulse='';
+  if(hasPulse||d.fact){
+    const m=[metric(P.inWork,'сделок в работе'),metric(P.closedMonth,'закрыто в этом месяце',true),metric(P.leadsToday,'новых лидов сегодня')].join('');
+    bPulse=`<div class="pt-blk"><div class="bh"><span class="ic">📈</span>Пульс компании</div>${hasPulse?`<div class="pt-pulse">${m}</div>`:''}${d.fact?`<div class="pt-fact">💡 ${esc(d.fact)}</div>`:''}</div>`;
+  }
+  return `<div class="pt-card"><div class="pt-head"><span>✨</span><span class="cap">Сегодня в компании</span><span class="date">${esc(dateStr)}</span><span class="tog">▾</span></div>
+    <div class="pt-blocks">${bBirth}${bOtd}${bAbs}${bPulse}</div></div>`;
+}
+
 async function init(){
   try{
     const r = await fetch('/auth/me');
@@ -590,6 +683,7 @@ async function init(){
     const greeting = hour<6?'Доброй ночи':hour<12?'Доброе утро':hour<18?'Добрый день':'Добрый вечер';
     document.getElementById('helloLine').textContent = `${greeting} · роль: ${user.role}`;
     loadMyDay(user);
+    loadToday();
 
     let allowedCodes = [];
     try{
