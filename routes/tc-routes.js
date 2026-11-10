@@ -601,4 +601,29 @@ tcCrud('loggers', 'ticketsmodule_tc_loggers', [['room','s'],['temp','n'],['humid
 tcCrud('forms', 'ticketsmodule_tc_forms', [['kind','s'],['training_id','i'],['training_title','s'],['title','s'],['bin','s'],['company','s'],['person','s'],['payload','j'],['score','i'],['status','s'],['note','s']]);
 tcCrud('certs', 'ticketsmodule_tc_certs', [['cert_no','s'],['training_id','i'],['training_title','s'],['person','s'],['company','s'],['bin','s'],['hours','i'],['issued_at','s'],['issued_by','s'],['note','s']]);
 
+// ── Календарь ТЦ (Фаза 2): собирает события из работ, приборов, регламентов и
+// отсутствий в единый список {date,kind,title,sub,raw}. Курсы пока не включаем —
+// у них даты свободным текстом (dates_text).
+router.get('/calendar', requireAnyModuleApi(TC_CODES), async (req, res) => {
+  try {
+    const items = [];
+    const dISO = v => { const m = /(\d{4})-(\d{2})-(\d{2})/.exec(String(v || '')); return m ? `${m[1]}-${m[2]}-${m[3]}` : ''; };
+    const push = (date, kind, title, sub) => { const iso = dISO(date); if (!iso) return;
+      items.push({ date: iso, raw: iso.slice(8, 10) + '.' + iso.slice(5, 7), kind, title: title || '', sub: sub || '' }); };
+    try { const { rows } = await pool.query('SELECT title,client,due,report_at FROM ticketsmodule_tc_works');
+      for (const w of rows) { push(w.due, 'work', w.title, w.client); push(w.report_at, 'report', w.title, w.client); } } catch (e) {}
+    try { const { rows } = await pool.query('SELECT name,short,ser,verify_next,to_next FROM ticketsmodule_tc_equipment');
+      for (const e of rows) { const nm = e.name || e.short || ''; push(e.verify_next, 'verify', nm, e.ser ? ('S/N ' + e.ser) : ''); push(e.to_next, 'to', nm, ''); } } catch (e) {}
+    try { const { rows } = await pool.query('SELECT title,freq,next_at FROM ticketsmodule_tc_routines');
+      for (const r of rows) push(r.next_at, 'routine', r.title, r.freq); } catch (e) {}
+    try { const { rows } = await pool.query(`SELECT a.from_date,a.to_date,a.kind,s.name FROM ticketsmodule_tc_absences a LEFT JOIN ticketsmodule_tc_staff s ON s.bitrix_id=a.staff_id WHERE a.status='approved'`);
+      const KL = { vacation: 'Отпуск', remote: 'Удалёнка', sick: 'Больничный', unpaid: 'Без содержания' };
+      for (const a of rows) push(a.from_date, 'absence', a.name || 'Сотрудник', (KL[a.kind] || a.kind) + (a.to_date ? (' до ' + a.to_date) : '')); } catch (e) {}
+    try { const trips = await require('../portal-today').smartAbsences(new Date());
+      for (const t of trips) push(t.from_date, 'absence', t.name, (t.kind === 'trip' ? 'Командировка' : 'Отпуск') + (t.dest ? (': ' + t.dest) : '')); } catch (e) {}
+    items.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+    res.json({ ok: true, items });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 module.exports = { router };
