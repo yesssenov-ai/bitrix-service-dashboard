@@ -18,6 +18,12 @@
     close:'<path d="M6 6l12 12M18 6L6 18"/>'
   };
   function nsvg(n){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">'+NAV[n]+'</svg>'; }
+  var TBIC = {
+    back:'<path d="M15 18l-6-6 6-6"/>',
+    refresh:'<path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 4v5h-5"/>',
+    logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>'
+  };
+  function ticon(n){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'+TBIC[n]+'</svg>'; }
 
   // ── Каталог модулей (снято с портала) ───────────────────────────────────────
   var MODULES = [
@@ -236,7 +242,51 @@
     a[3].onclick=openAll;
   }
 
-  function start(){ loadAccess(function(){}); build(); track(); loadTop(); }
+  // ── Единая мобильная шапка модуля ────────────────────────────────────────────
+  // Все родные шапки модулей (разной вёрстки) заменяем одной геометрически
+  // выверенной полосой: [←] [Название модуля] [⟳] [⎋]. Родную шапку прячем
+  // только на ≤640px; её кнопки обновления/выхода проксируем кликом.
+  function findByText(sel, re){ var els=document.querySelectorAll(sel);
+    for(var i=0;i<els.length;i++){ var t=(els[i].textContent||'').trim(); if(re.test(t)) return els[i]; } return null; }
+  function moduleTitle(){
+    var c=currentCode();
+    if(c){ for(var i=0;i<MODULES.length;i++){ if(MODULES[i].c===c) return MODULES[i].n; } }
+    var el=document.querySelector('.hsub,.h-sub,.top h1,header h1,.hdr h1,.hdr .hsub,h1');
+    var t=el?(el.textContent||'').trim():'';
+    if(!t){ t=(document.title||'').split(/[—·|]/)[0].trim(); }
+    return t.replace(/^[^\wА-Яа-яЁё]+/,'').trim();   // срезаем ведущие эмодзи/символы
+  }
+  function nativeRefresh(){ return document.querySelector('#refreshBtn,#btnRef,#refresh,[data-refresh]') || findByText('button,a', /обнов/i); }
+  function nativeLogout(){ return document.querySelector('[onclick*="logout"]') || findByText('button,a', /^выйти$/i); }
+  function nativeBack(){ return findByText('a,button', /все модули|^←?\s*ЦУП$/i); }
+  function buildTopbar(){
+    if(isHome) return;                                  // на главной своя шапка
+    if(document.getElementById('cupTopbar')) return;
+    var back=nativeBack();
+    var native=back ? (back.closest('header,.header,.hdr,.top,.topbar,.appbar') || back.parentElement)
+                    : document.querySelector('header,.header,.hdr,.top');
+    if(native) native.classList.add('cup-nativehdr-hide');
+    var ref=nativeRefresh(), lo=nativeLogout();
+    var bar=document.createElement('header'); bar.id='cupTopbar'; bar.className='cup-topbar';
+    bar.innerHTML=
+      '<button class="cup-tb-ic cup-tb-back" aria-label="Назад">'+ticon('back')+'</button>'+
+      '<div class="cup-tb-title">'+esc(moduleTitle())+'</div>'+
+      '<div class="cup-tb-act">'+
+        (ref?'<button class="cup-tb-ic" data-a="refresh" aria-label="Обновить">'+ticon('refresh')+'</button>':'')+
+        (lo?'<button class="cup-tb-ic" data-a="logout" aria-label="Выйти">'+ticon('logout')+'</button>':'')+
+      '</div>';
+    document.body.appendChild(bar);
+    document.body.classList.add('cup-has-topbar');
+    bar.querySelector('.cup-tb-back').onclick=function(){ go('/portal.html'); };
+    var act=bar.querySelector('.cup-tb-act');
+    if(act) act.addEventListener('click',function(e){ var b=e.target.closest('button'); if(!b) return;
+      var a=b.getAttribute('data-a');
+      if(a==='refresh' && ref){ try{ref.click();}catch(_){} }
+      else if(a==='logout' && lo){ try{lo.click();}catch(_){} } });
+  }
+
+  function start(){ if(isHome) document.body.classList.add('cup-home');
+    loadAccess(function(){}); build(); buildTopbar(); track(); loadTop(); }
   if(document.body) start();
   else document.addEventListener('DOMContentLoaded', start);
 })();

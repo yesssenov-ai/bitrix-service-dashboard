@@ -250,9 +250,21 @@ async function spActive(now, opts) {
     const stageIds = opts.reStage ? await spStageIds(etid, opts.key, opts.reStage) : new Set();
     const deadIds = opts.reDead ? await spStageIds(etid, opts.key + '_dead', opts.reDead) : new Set();
     const df = await spDateFields(etid, opts.key, opts.reDomain);
-    const r = await b24('crm.item.list', { entityTypeId: etid, select: ['*', 'uf_*'], order: { id: 'desc' }, start: 0 });
-    const items = (r && r.result && r.result.items) || [];
-    for (const it of items.slice(0, 200)) {
+    // ВАЖНО: фильтруем по этапу на стороне Bitrix. Иначе crm.item.list отдаёт
+    // только первую страницу (≈50) по id desc, и активная командировка со старой
+    // карточкой (как у Нурхата) не попадает в выборку из-за сотен свежих «Отчётов».
+    const listBase = { entityTypeId: etid, select: ['*', 'uf_*'], order: { id: 'desc' } };
+    if (opts.reStage && stageIds.size) listBase.filter = { '@stageId': [...stageIds] };
+    let items = [], start = 0, guard = 0;
+    while (guard++ < 8) {
+      const r = await b24('crm.item.list', Object.assign({ start }, listBase));
+      const batch = (r && r.result && r.result.items) || [];
+      items = items.concat(batch);
+      const next = r && r.next;
+      if (next === undefined || next === null || batch.length === 0) break;
+      start = next;
+    }
+    for (const it of items) {
       // Приоритет — конкретные поля начала/окончания. Фолбэк (если поля не нашлись)
       // — эвристика мин/макс с защитой по длине диапазона.
       let from = df.start ? _pdate(itemVal(it, df.start)) : null;
