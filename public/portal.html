@@ -226,6 +226,28 @@ footer{text-align:center;color:var(--text-faint);font-size:11.5px;padding:20px;f
 .pt-kpi .k:hover{background:var(--surface-2)}
 .pt-kpi .k:active{background:var(--surface-2)}
 .pt-fact{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);font-size:12.2px;color:var(--text-3);font-style:italic}
+/* Сводка «Сегодня в компании» — строки, раскрывающиеся по тапу (строгие line-иконки) */
+.pt-head2{display:flex;align-items:center;gap:9px;padding:12px 15px 6px}
+.pt-head2 .cap{font-weight:800;font-size:14.5px}
+.pt-head2 .date{margin-left:auto;color:var(--text-3);font-size:12px}
+.pt-rows{display:flex;flex-direction:column;padding:2px 6px 6px}
+.pt-i{width:19px;height:19px;display:block}
+.pt-row + .pt-row{border-top:1px solid var(--line)}
+.pt-row-h{display:flex;align-items:center;gap:12px;padding:11px 9px}
+.pt-row-h[onclick]{cursor:pointer}
+.pt-row-ic{flex:none;width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center}
+.pt-row-main{flex:1;min-width:0}
+.pt-row-t{font-weight:700;font-size:13.5px;color:var(--text)}
+.pt-row-s{font-size:12.5px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
+.pt-row-ch{flex:none;color:var(--text-3);display:flex;transition:transform .2s}
+.pt-row-ch svg{width:16px;height:16px}
+.pt-row.open .pt-row-ch{transform:rotate(90deg)}
+.pt-row-d{display:none;padding:0 10px 12px 61px;font-size:12.8px;color:var(--text-2);line-height:1.5}
+.pt-row.open .pt-row-d{display:block}
+.pt-d-row{padding:3px 0}
+.pt-d-sub{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);margin:9px 0 2px}
+.pt-d-mut{color:var(--text-3)}
+.pt-d-per{color:var(--text-3);font-size:11.5px;font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
@@ -630,7 +652,17 @@ async function loadMyDay(user){
 }
 
 /* ── Блок «Сегодня в компании» ── */
-const PT_KIND = { vacation:['🌴','отпуск'], trip:['🧳','командировка'], sick:['🤒','больничный'] };
+// Строгие line-иконки (без эмодзи) — единый стиль, нейтральный/акцентный окрас.
+const PT_ICO = {
+  gift:'<path d="M20 12v8.5H4V12"/><rect x="2.6" y="7.5" width="18.8" height="4.5" rx="1"/><path d="M12 7.5V20.5"/><path d="M12 7.5C12 7.5 10.6 4 8.2 4.6 6.6 5 7 7.5 9.1 7.5zM12 7.5C12 7.5 13.4 4 15.8 4.6 17.4 5 17 7.5 14.9 7.5z"/>',
+  cal:'<rect x="3.3" y="4.5" width="17.4" height="16" rx="2"/><path d="M3.3 9.2h17.4M8 2.6v4M16 2.6v4"/>',
+  suitcase:'<rect x="3.4" y="7.4" width="17.2" height="12.2" rx="2"/><path d="M8 7.4V5.6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v1.8M12 11v4.4"/>',
+  sun:'<circle cx="12" cy="12" r="3.6"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.4 5.4l1.5 1.5M17.1 17.1l1.5 1.5M18.6 5.4l-1.5 1.5M6.9 17.1l-1.5 1.5"/>',
+  cross:'<circle cx="12" cy="12" r="8.4"/><path d="M12 8v8M8 12h8"/>',
+  bulb:'<path d="M9.5 18h5M10.5 21h3M12 3a6 6 0 0 0-3.8 10.6c.8.7 1.3 1.4 1.3 2.4h5c0-1 .5-1.7 1.3-2.4A6 6 0 0 0 12 3z"/>'
+};
+function ptIc(name, color){ return `<svg class="pt-i" viewBox="0 0 24 24" fill="none" stroke="${color||'currentColor'}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${PT_ICO[name]||''}</svg>`; }
+const PT_KIND = { vacation:['sun','#2f6ad9','отпуск'], trip:['suitcase','#c98a1e','командировка'], sick:['cross','#13a08a','больничный'] };
 function ptYears(n){ const a=n%10, b=n%100; const w=(a===1&&b!==11)?'год':(a>=2&&a<=4&&(b<10||b>=20))?'года':'лет'; return `${n}<br>${w} назад`; }
 function ptMoney(v,cur){ v=+v||0; const s=v>=1e6?(Math.round(v/1e5)/10+' млн'):v.toLocaleString('ru-RU'); return s+' '+((cur==='KZT'||!cur)?'₸':esc(cur)); }
 function ptPeriod(f,t){ const dm=s=>s?(String(s).slice(8,10)+'.'+String(s).slice(5,7)):'';
@@ -642,52 +674,73 @@ async function loadToday(){
     const d=await r.json(); if(!d||!d.ok) return;
     const el=document.getElementById('today'); if(!el) return;
     el.innerHTML=renderToday(d); el.style.display='';
-    const collapsed = (()=>{try{return localStorage.getItem('pt-collapsed')==='1'}catch(e){return false}})();
-    const body=el.querySelector('.pt-blocks'), tog=el.querySelector('.pt-head .tog');
-    if(collapsed && body){ body.style.display='none'; if(tog) tog.textContent='▸'; }
-    const head=el.querySelector('.pt-head');
-    if(head) head.onclick=()=>{ const hid=body.style.display==='none'; body.style.display=hid?'':'none';
-      if(tog) tog.textContent=hid?'▾':'▸'; try{localStorage.setItem('pt-collapsed',hid?'0':'1')}catch(e){} };
   }catch(e){}
+}
+const PT_CHEV='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
+function yearsWord(n){ const a=n%10,b=n%100; return (a===1&&b!==11)?'год':(a>=2&&a<=4&&(b<10||b>=20))?'года':'лет'; }
+function shortName(n){ const p=String(n||'').trim().split(/\s+/); return p.length>=2?(p[0]+' '+p[1]):(n||''); }
+function ptToggle(h){ const r=h.closest('.pt-row'); if(r) r.classList.toggle('open'); }
+// Строка сводки: иконка + заголовок + краткое описание; детали раскрываются по тапу.
+function ptRow(icon,color,title,summary,details){
+  const hasD = details && details.length;
+  return `<div class="pt-row">
+    <div class="pt-row-h"${hasD?' onclick="ptToggle(this)"':''}>
+      <span class="pt-row-ic" style="color:${color};background:color-mix(in srgb,${color} 12%,var(--surface))">${ptIc(icon,color)}</span>
+      <div class="pt-row-main"><div class="pt-row-t">${title}</div><div class="pt-row-s">${summary}</div></div>
+      ${hasD?`<span class="pt-row-ch">${PT_CHEV}</span>`:''}
+    </div>
+    ${hasD?`<div class="pt-row-d">${details}</div>`:''}
+  </div>`;
 }
 function renderToday(d){
   const MON=['','января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
   const dt=d.date||{}; const dateStr=(dt.d||'')+' '+(MON[dt.m]||'');
   const B=d.birthdays||{today:[],upcoming:[]};
-  let bday='';
+  // ── Дни рождения ──
+  let bSum, bDet='';
   if(B.today&&B.today.length){
-    bday=B.today.map(n=>`<div class="pt-bday"><span class="em">🎉</span><div><div class="nm">${esc(n)}</div><div class="rl">сегодня день рождения</div></div></div>`).join('');
-  } else bday='<div class="pt-none">Сегодня именинников нет.</div>';
+    bSum=esc(B.today[0])+(B.today.length>1?` · и ещё ${B.today.length-1}`:'');
+    bDet=B.today.map(n=>`<div class="pt-d-row">${esc(n)} <span class="pt-d-mut">— поздравьте</span></div>`).join('');
+  } else bSum='Сегодня именинников нет';
   if(B.upcoming&&B.upcoming.length){
-    bday+='<div class="pt-mini">'+B.upcoming.map(u=>`<div class="r"><span class="d">${esc(u.date)}</span> ${esc(u.names.join(' · '))}</div>`).join('')+'</div>';
+    bDet+='<div class="pt-d-sub">Ближайшие</div>'+B.upcoming.map(u=>`<div class="pt-d-row"><span class="pt-d-mut">${esc(u.date)}</span> ${esc(u.names.join(' · '))}</div>`).join('');
   }
-  const bBirth=`<div class="pt-blk"><div class="bh"><span class="ic">🎂</span>Дни рождения</div>${bday}</div>`;
-  let bOtd='';
+  const rowBirth=ptRow('gift','#c53b2f','Дни рождения',bSum,bDet);
+  // ── В этот день ──
+  let rowOtd='';
   if(d.onThisDay&&d.onThisDay.length){
-    const ev=d.onThisDay.map(e=>{
+    const top=d.onThisDay[0];
+    const sum=`${top.yearsAgo} ${yearsWord(top.yearsAgo)} назад · ${esc(top.title)}`;
+    const det=d.onThisDay.map(e=>{
       const amt=e.amount?(' — '+ptMoney(e.amount,e.currency)):'';
-      const mgr=e.manager?(' ('+esc(e.manager)+')'):'';
-      const more=e.count>1?` <span style="color:var(--text-3)">и ещё ${e.count-1}</span>`:'';
-      return `<div class="ev"><span class="yr">${ptYears(e.yearsAgo)}</span><span class="tx">Сделка <b>${esc(e.title)}</b>${amt}${mgr}${more}.</span></div>`;
+      const mgr=e.manager?` <span class="pt-d-mut">(${esc(e.manager)})</span>`:'';
+      return `<div class="pt-d-row"><span class="pt-d-mut">${e.yearsAgo} ${yearsWord(e.yearsAgo)} назад:</span> Сделка <b>${esc(e.title)}</b>${amt}${mgr}</div>`;
     }).join('');
-    bOtd=`<div class="pt-blk"><div class="bh"><span class="ic">📅</span>В этот день</div><div class="pt-otd">${ev}</div></div>`;
+    rowOtd=ptRow('cal','#2f6ad9','В этот день',sum,det);
   }
-  let abs='';
+  // ── Сегодня отсутствуют (разделяем командировки и отпуска) ──
+  let rowAbs='';
   if(d.absences&&d.absences.length){
-    abs='<div class="pt-pills">'+d.absences.map(a=>{ const k=PT_KIND[a.kind]||['•',a.kind];
-      const dest=a.dest?(' · '+esc(a.dest)):'';
-      const per=ptPeriod(a.from_date,a.to_date); const perH=per?` <span class="pt-per">${esc(per)}</span>`:'';
-      return `<span class="pt-pill">${k[0]} ${esc(a.name)}${dest}${perH}</span>`; }).join('')+'</div>';
-  } else abs='<div class="pt-none">Сегодня все на месте 👍</div>';
-  const bAbs=`<div class="pt-blk"><div class="bh"><span class="ic">🌴</span>Сегодня отсутствуют</div>${abs}</div>`;
+    const trips=d.absences.filter(a=>a.kind==='trip');
+    const vacs=d.absences.filter(a=>a.kind==='vacation');
+    const other=d.absences.filter(a=>a.kind!=='trip'&&a.kind!=='vacation');
+    const sum=`${d.absences.length} · `+d.absences.slice(0,2).map(a=>esc(shortName(a.name))).join(', ')+(d.absences.length>2?' …':'');
+    const grp=(t,arr)=> arr.length?`<div class="pt-d-sub">${t}</div>`+arr.map(a=>{
+      const dest=a.dest?` <span class="pt-d-mut">· ${esc(a.dest)}</span>`:'';
+      const per=ptPeriod(a.from_date,a.to_date); const perH=per?` <span class="pt-d-per">${esc(per)}</span>`:'';
+      return `<div class="pt-d-row">${esc(a.name)}${dest}${perH}</div>`;}).join(''):'';
+    const det=grp('Командировки',trips)+grp('Отпуска',vacs)+grp('Прочее',other);
+    rowAbs=ptRow('suitcase','#c98a1e','Сегодня отсутствуют',sum,det);
+  } else rowAbs=ptRow('suitcase','#13a08a','Сегодня отсутствуют','Все на месте','');
+  // ── Факт дня ──
+  const rowFact=d.fact?ptRow('bulb','#7a5cd0','Факт дня',esc(d.fact),''):'';
+  // ── Пульс ──
   const P=d.pulse||{};
   const kpi=(v,l,href)=>v==null?'':`<a class="k" href="${href}"><b>${typeof v==='number'?v.toLocaleString('ru-RU'):esc(v)}</b><span>${esc(l)} ›</span></a>`;
   const hasPulse=(P.inWork!=null||P.closedMonth!=null||P.leadsToday!=null);
   const bKpi = hasPulse ? `<div class="pt-kpi">${kpi(P.inWork,'сделок в работе','/plansales.html')}${kpi(P.closedMonth,'закрыто за месяц','/stats.html')}${kpi(P.leadsToday,'новых лидов','/stats.html')}</div>` : '';
-  let bPulse='';
-  if(d.fact){ bPulse=`<div class="pt-blk"><div class="bh"><span class="ic">💡</span>Факт дня</div><div class="pt-fact" style="border:0;padding:0;margin:0">${esc(d.fact)}</div></div>`; }
-  return `<div class="pt-card"><div class="pt-head"><span>✨</span><span class="cap">Сегодня в компании</span><span class="date">${esc(dateStr)}</span><span class="tog">▾</span></div>
-    ${bKpi}<div class="pt-blocks">${bBirth}${bOtd}${bAbs}${bPulse}</div></div>`;
+  return `<div class="pt-card"><div class="pt-head2"><span class="cap">Сегодня в компании</span><span class="date">${esc(dateStr)}</span></div>
+    ${bKpi}<div class="pt-rows">${rowBirth}${rowOtd}${rowAbs}${rowFact}</div></div>`;
 }
 
 async function init(){

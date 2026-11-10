@@ -342,19 +342,39 @@
     if(TOP===null) loadTop(render);
   }
 
-  // ── Поиск на главной: открывает глобальный поиск (модули, клиенты, сделки) ────
-  function buildHomeSearch(){
+  // ── Приветственная карточка на главной (вместо «фото-героя») ─────────────────
+  var GACT={
+    req:'<path d="M12 5v14M5 12h14"/>',
+    task:'<path d="M9 11l3 3L20 6"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>',
+    search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>'
+  };
+  function gsvg(n){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'+GACT[n]+'</svg>'; }
+  function greetWord(){ var h=new Date().getHours(); return h<6?'Доброй ночи':h<12?'Доброе утро':h<18?'Добрый день':'Добрый вечер'; }
+  function firstName(){ var n=(NAME||'').trim(); return n?n.split(/\s+/)[0]:''; }
+  function setGreetName(){ var e=document.getElementById('cupGreetName'); if(!e) return;
+    var fn=firstName(); e.textContent = fn ? (fn+', на сегодня') : 'на сегодня'; }
+  function buildHomeGreet(){
     if(!isHome) return;
-    if(document.getElementById('cupHomeSearch')) return;
-    var box=document.createElement('button');
-    box.id='cupHomeSearch'; box.className='cup-hsearch'; box.type='button';
-    box.innerHTML='<span class="cup-hsearch-i">'+nsvg('search')+'</span>'+
-      '<span class="cup-hsearch-t">Модуль, клиент, сделка, заявка…</span>';
-    box.onclick=function(){ if(!clickId('pls-sr-btn')) openSearch(); };
+    if(document.getElementById('cupGreet')) return;
+    var card=document.createElement('div'); card.id='cupGreet'; card.className='cup-greet';
+    card.innerHTML=
+      '<div class="cup-greet-hi">'+esc(greetWord())+'</div>'+
+      '<div class="cup-greet-name" id="cupGreetName">на сегодня</div>'+
+      '<div class="cup-greet-acts">'+
+        '<button data-g="req"><span>'+gsvg('req')+'</span>Заявка</button>'+
+        '<button data-g="task"><span>'+gsvg('task')+'</span>Задачи</button>'+
+        '<button data-g="search"><span>'+gsvg('search')+'</span>Поиск</button>'+
+      '</div>';
     var anchor=document.getElementById('today');
     var mn=document.querySelector('main');
-    if(anchor && anchor.parentNode) anchor.parentNode.insertBefore(box, anchor);
-    else if(mn) mn.insertBefore(box, mn.firstChild);
+    if(anchor && anchor.parentNode) anchor.parentNode.insertBefore(card, anchor);
+    else if(mn) mn.insertBefore(card, mn.firstChild);
+    card.querySelector('.cup-greet-acts').addEventListener('click',function(e){
+      var b=e.target.closest('button'); if(!b) return; var g=b.getAttribute('data-g');
+      if(g==='req') go('/index.html');
+      else if(g==='task') go('/board.html');
+      else if(g==='search'){ if(!clickId('pls-sr-btn')) openSearch(); } });
+    setGreetName();
   }
 
   // Статичные иконки (Ассистент/Тема/Связь) в шапке главной — рядом с брендом.
@@ -375,7 +395,7 @@
   }
 
   function start(){ if(isHome) document.body.classList.add('cup-home');
-    loadAccess(function(){}); build(); buildTopbar(); buildBurger(); buildHomeActions(); buildHomeSearch(); buildHomeFav(); track(); loadTop(); }
+    loadAccess(function(){ setGreetName(); }); build(); buildTopbar(); buildBurger(); buildHomeActions(); buildHomeGreet(); buildHomeFav(); track(); loadTop(); }
   if(document.body) start();
   else document.addEventListener('DOMContentLoaded', start);
 })();

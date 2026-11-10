@@ -433,6 +433,21 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-ui);
 .cup-burger{display:none}
 .cup-topacts{display:none}
 .cup-hsearch{display:none}
+.cup-greet{display:none}
+@media (max-width:640px){
+  body.cup-home .hero{display:none!important}   /* фото-герой заменён приветственной карточкой */
+  .cup-greet{display:block;margin:14px 0 2px;padding:18px 18px 16px;border-radius:18px;
+    background:#0f1826;color:#fff;box-shadow:0 18px 40px -24px rgba(8,12,20,.55)}
+  .cup-greet-hi{font-size:13px;color:rgba(255,255,255,.62)}
+  .cup-greet-name{font-size:23px;font-weight:800;letter-spacing:-.02em;margin:3px 0 15px;line-height:1.15}
+  .cup-greet-acts{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+  .cup-greet-acts button{display:flex;flex-direction:column;align-items:center;gap:7px;padding:13px 6px;
+    border:0;border-radius:13px;background:rgba(255,255,255,.08);color:#fff;font:inherit;font-size:12.5px;font-weight:600;
+    cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .cup-greet-acts button:active{background:rgba(255,255,255,.17)}
+  .cup-greet-acts button span{display:flex}
+  .cup-greet-acts button svg{width:22px;height:22px}
+}
 @media (max-width:640px){
   .cup-hsearch{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
     margin:14px 0 2px;padding:13px 16px;border:1px solid var(--line);border-radius:14px;
