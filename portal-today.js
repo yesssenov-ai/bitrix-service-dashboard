@@ -245,7 +245,7 @@ async function spActive(now, opts) {
     if (!etid) return out;
     const stageIds = opts.reStage ? await spStageIds(etid, opts.key, opts.reStage) : new Set();
     const df = await spDateFields(etid, opts.key);
-    const r = await b24('crm.item.list', { entityTypeId: etid, order: { id: 'desc' }, start: 0 });
+    const r = await b24('crm.item.list', { entityTypeId: etid, select: ['*', 'uf_*'], order: { id: 'desc' }, start: 0 });
     const items = (r && r.result && r.result.items) || [];
     for (const it of items.slice(0, 200)) {
       // Приоритет — конкретные поля начала/окончания. Фолбэк (если поля не нашлись)
@@ -310,7 +310,7 @@ async function tripsDebug() {
         for (const s of (r && r.result) || []) { if (String(s.ENTITY_ID || '').indexOf('DYNAMIC_' + etid + '_') === -1) continue;
           stages.push({ id: s.STATUS_ID, name: s.NAME }); if (reStage && reStage.test(s.NAME || '')) matchStages.push(s.STATUS_ID); }
         const n = r && r.next; if (n == null) break; start = n; } } catch (e) {}
-      try { const r = await b24('crm.item.list', { entityTypeId: etid, order: { id: 'desc' }, start: 0 });
+      try { const r = await b24('crm.item.list', { entityTypeId: etid, select: ['*', 'uf_*'], order: { id: 'desc' }, start: 0 });
         const items = (r && r.result && r.result.items) || []; count = items.length; sample = items[0] || null; } catch (e) {}
     }
     // Найденные коды полей начала/окончания + их названия.

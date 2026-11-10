@@ -104,6 +104,9 @@ const FEEDBACK = '<script src="/assets/feedback.js?v=1" defer></script>';
 const SEARCH = '<script src="/assets/search.js?v=1" defer></script>';
 // Онбординг-тур + контекстные подсказки «?» — на всех страницах, кроме входа.
 const TOUR = '<script src="/assets/tour.js?v=1" defer></script>';
+// Мобильная нижняя навигация (app-shell). На всех страницах дизайн-системы,
+// кроме входа; видна только на узких экранах (≤640px).
+const MOBILE_NAV = '<script src="/assets/cup-mobile.js?v=1" defer></script>';
 app.use((req, res, next) => {
   const orig = res.sendFile.bind(res);
   res.sendFile = (fp, opts, cb) => {
@@ -124,7 +127,8 @@ app.use((req, res, next) => {
           const needFb = !isLogin && !out.includes('/assets/feedback.js');
           const needSearch = !isLogin && !out.includes('/assets/search.js');
           const needTour = !isLogin && !out.includes('/assets/tour.js');
-          const head = PWA_BASE + '\n' + ((usesNewUI || isSelfThemed) ? '' : LEGACY_THEME + '\n') + PWA_BADGE + '\n' + (needAI ? PWA_AI + '\n' : '') + (needBG ? CUP_BG + '\n' : '') + (needImp ? IMP_BAR + '\n' : '') + (needSync ? SYNC_BAR + '\n' : '') + (needFb ? FEEDBACK + '\n' : '') + (needSearch ? SEARCH + '\n' : '') + (needTour ? TOUR + '\n' : '');
+          const needMob = usesNewUI && !isLogin && !out.includes('/assets/cup-mobile.js');
+          const head = PWA_BASE + '\n' + ((usesNewUI || isSelfThemed) ? '' : LEGACY_THEME + '\n') + PWA_BADGE + '\n' + (needAI ? PWA_AI + '\n' : '') + (needBG ? CUP_BG + '\n' : '') + (needImp ? IMP_BAR + '\n' : '') + (needSync ? SYNC_BAR + '\n' : '') + (needFb ? FEEDBACK + '\n' : '') + (needSearch ? SEARCH + '\n' : '') + (needTour ? TOUR + '\n' : '') + (needMob ? MOBILE_NAV + '\n' : '');
           out = out.replace('</head>', head + '</head>');
         }
         res.set('Content-Type', 'text/html; charset=utf-8');
