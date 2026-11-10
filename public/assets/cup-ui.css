@@ -255,3 +255,33 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-ui);
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) #cup-bg{background-image:url('/assets/cup-pattern-dark.png')}}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Мобильный слой (общий, для всех модулей). Добавлен в конце, чтобы при
+   ширине ≤640px переопределять общие компоненты. Чинит горизонтальные
+   наплывы, делает таблицы прокручиваемыми внутри своей области, увеличивает
+   тач-цели и убирает авто-зум полей на iOS. Десктоп не затрагивает.
+   ───────────────────────────────────────────────────────────────────────── */
+@media (max-width:640px){
+  :root{--pad:14px}
+  /* ничего не должно выпирать за экран и давать горизонтальный скролл страницы */
+  html,body{overflow-x:hidden;max-width:100%}
+  img,video,canvas{max-width:100%;height:auto}
+  /* поля ввода: 16px — iOS не зумит при фокусе; крупнее и удобнее для пальца */
+  .cup-inp,input:not([type=checkbox]):not([type=radio]),select,textarea{font-size:16px}
+  .cup-inp{padding:10px 12px}
+  /* кнопки — комфортная тач-цель */
+  .cup-btn{padding:10px 14px;font-size:14px}
+  .cup-ib{width:34px;height:34px}
+  /* таблицы — горизонтальный скролл ВНУТРИ своей области, а не распирают
+     страницу (стандартный приём: table как блок с overflow-x). Ловим и общие
+     .cup-table, и любые обычные <table> на страницах. */
+  .cup-table,table{display:block;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .cup-table thead th,.cup-table tbody td{padding-left:12px;padding-right:12px}
+  /* горизонтальные ленты (вкладки/степпер) — прокрутка вместо вылезания */
+  .cup-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .cup-tabs::-webkit-scrollbar{display:none}
+  .cup-steps{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  /* кнопка темы — ближе к краю, не наезжает на контент */
+  #themeToggle{top:52px;right:10px;width:32px;height:32px}
+}

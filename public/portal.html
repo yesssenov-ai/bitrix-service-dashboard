@@ -177,7 +177,14 @@ main{flex:1;padding:22px 32px 60px;max-width:1180px;width:100%;margin:0 auto}
 .empty{display:none;color:var(--text-faint);font-size:13.5px;margin-top:24px;font-family:var(--f-mono)}
 footer{text-align:center;color:var(--text-faint);font-size:11.5px;padding:20px;font-family:var(--f-mono)}
 @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
-@media (max-width:640px){.topbar{padding:13px 18px}main{padding:18px 18px 44px}.hero h1{font-size:24px}.clock{display:none}.collapse-btn{margin-left:0}}
+@media (max-width:640px){.topbar{padding:13px 18px}main{padding:18px 18px 44px}.hero h1{font-size:24px}.clock{display:none}.collapse-btn{margin-left:0}
+  /* шапка-герой в столбик: кнопки больше не наезжают на текст */
+  .hero{display:block;min-height:0}
+  .hero-in{padding:20px 18px 14px;max-width:100%}
+  .hero .h1-sub{font-size:13.5px;max-width:100%}
+  .tasks-cta{position:static;display:inline-flex;margin:0 18px 16px}
+  .hero .user-chip{position:static;justify-content:flex-start;margin:0 18px 16px}
+}
 /* ── Блок «Сегодня в компании» ── */
 #today{margin:4px 0 18px;animation:fadeUp .4s both}
 .pt-card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:5px}
