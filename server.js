@@ -582,6 +582,11 @@ app.get('/api/portal/today', requireAuth(), async (req, res) => {
     res.json({ ok: true, birthdays: { today: [], upcoming: [] }, onThisDay: [], absences: [], pulse: {}, fact: '' });
   }
 });
+// Дебаг смарт-процесса «Командировки» — сверить поля дат/сотрудника на реальных данных.
+app.get('/api/portal/trips-debug', requireAuth(['admin', 'superadmin']), async (req, res) => {
+  try { res.json(Object.assign({ ok: true }, await portalToday.tripsDebug())); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 // Отсутствия компании: список (все авторизованные), правка — админ.
 app.get('/api/portal/absences', requireAuth(), async (req, res) => {
   try { const { rows } = await pool.query('SELECT * FROM ticketsmodule_portal_absences ORDER BY from_date DESC, id DESC');

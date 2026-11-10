@@ -656,7 +656,8 @@ function renderToday(d){
   if(d.absences&&d.absences.length){
     abs='<div class="pt-pills">'+d.absences.map(a=>{ const k=PT_KIND[a.kind]||['•',a.kind];
       const till=a.to_date?(' до '+esc(String(a.to_date).slice(8,10)+'.'+String(a.to_date).slice(5,7))):'';
-      return `<span class="pt-pill">${k[0]} ${esc(a.name)}${till}</span>`; }).join('')+'</div>';
+      const dest=a.dest?(' · '+esc(a.dest)):'';
+      return `<span class="pt-pill">${k[0]} ${esc(a.name)}${dest}${till}</span>`; }).join('')+'</div>';
   } else abs='<div class="pt-none">Сегодня все на месте 👍</div>';
   const bAbs=`<div class="pt-blk"><div class="bh"><span class="ic">🌴</span>Сегодня отсутствуют</div>${abs}</div>`;
   const P=d.pulse||{}; const metric=(v,l,up)=>v==null?'':`<div class="m"><b${up?' class="up"':''}>${typeof v==='number'?v.toLocaleString('ru-RU'):esc(v)}</b><span>${l}</span></div>`;
