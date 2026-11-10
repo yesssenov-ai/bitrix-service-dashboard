@@ -198,12 +198,15 @@ async function spTypeId(reName, key) {
   _sp[key] = { at: Date.now(), id, stages: null, stageKey: '', fields: null };
   return id;
 }
-// Коды полей «дата начала» и «дата окончания» процесса — по названию поля
-// (напр. «Начало командировки» / «Окончание командировки»). Берём только date-поля.
-async function spDateFields(etid, key) {
+// Коды полей «дата начала» и «дата окончания» процесса — по названию поля.
+// ВАЖНО: предпочитаем поле, в названии которого есть И слово начала/окончания,
+// И доменное слово процесса (reDomain: «командировк»/«отпуск»), т.е. именно
+// «Начало командировки», а не «Дата начала» (begindate — дата заявки). Берём
+// только date-поля. reDomain-совпадение имеет приоритет над любым другим.
+async function spDateFields(etid, key, reDomain) {
   const c = _sp[key];
   if (c && c.fields) return c.fields;
-  let start = null, end = null;
+  let startD = null, startG = null, endD = null, endG = null;
   try {
     const r = await b24('crm.item.fields', { entityTypeId: etid });
     const fields = (r && r.result && r.result.fields) || {};
@@ -211,11 +214,12 @@ async function spDateFields(etid, key) {
       const f = fields[code] || {};
       if (!/date/i.test(String(f.type || ''))) continue;
       const title = String(f.title || '').toLowerCase();
-      if (!start && /нача/.test(title)) start = code;         // «Начало…», «Дата начала…»
-      if (!end && /оконч|конец/.test(title)) end = code;      // «Окончание…», «Дата окончания…»
+      const dom = reDomain ? reDomain.test(title) : false;
+      if (/нача/.test(title)) { if (dom) { if (!startD) startD = code; } else if (!startG) startG = code; }
+      if (/оконч|конец/.test(title)) { if (dom) { if (!endD) endD = code; } else if (!endG) endG = code; }
     }
   } catch (e) { /* нет доступа — сработает фолбэк */ }
-  const ff = { start, end };
+  const ff = { start: startD || startG, end: endD || endG };
   if (c) c.fields = ff;
   return ff;
 }
@@ -244,7 +248,8 @@ async function spActive(now, opts) {
     const etid = await spTypeId(opts.reName, opts.key);
     if (!etid) return out;
     const stageIds = opts.reStage ? await spStageIds(etid, opts.key, opts.reStage) : new Set();
-    const df = await spDateFields(etid, opts.key);
+    const deadIds = opts.reDead ? await spStageIds(etid, opts.key + '_dead', opts.reDead) : new Set();
+    const df = await spDateFields(etid, opts.key, opts.reDomain);
     const r = await b24('crm.item.list', { entityTypeId: etid, select: ['*', 'uf_*'], order: { id: 'desc' }, start: 0 });
     const items = (r && r.result && r.result.items) || [];
     for (const it of items.slice(0, 200)) {
@@ -262,8 +267,10 @@ async function spActive(now, opts) {
         if (hf && ht && span >= 0 && span <= 62) { from = from || hf; to = to || ht; }
       }
       if (!from || !to) continue;
-      // Активно сегодня (from ≤ today ≤ to). Этап «В командировке», если
-      // распознан, дополнительно сужает выборку.
+      // Отсекаем отменённые/несостоявшиеся записи (этап «Провал», «не состоялась»).
+      if (deadIds.size && deadIds.has(String(it.stageId))) continue;
+      // Активно сегодня (from ≤ today ≤ to). Для командировок дополнительно требуем
+      // этап «В командировке» — только он означает, что человек в поездке прямо сейчас.
       let include = (from <= todayISO && todayISO <= to);
       if (opts.reStage && stageIds.size) include = include && stageIds.has(String(it.stageId));
       if (!include) continue;
@@ -280,8 +287,12 @@ async function smartAbsences(now) {
   now = now || new Date();
   if (_smart.data && Date.now() - _smart.at < 15 * 60 * 1000) return _smart.data;
   const [trips, vac] = await Promise.all([
-    spActive(now, { reName: /командиров/i, key: 'trip', kind: 'trip', reStage: /команди?ровк/i }),
-    spActive(now, { reName: /отпуск/i, key: 'vac', kind: 'vacation' }),
+    // Командировки: поля «Начало/Окончание командировки», этап строго «В командировке».
+    spActive(now, { reName: /командиров/i, key: 'trip', kind: 'trip',
+      reDomain: /команди?ровк/i, reStage: /^в\s+команди?ровк/i }),
+    // Отпуска: поля «Дата начала/окончания отпуска», по датам; отменённые отсекаем.
+    spActive(now, { reName: /отпуск/i, key: 'vac', kind: 'vacation',
+      reDomain: /отпуск/i, reDead: /провал|fail|отклон|не\s*состоя/i }),
   ]);
   // Компании командировок — одним запросом по companyId.
   try {
@@ -302,7 +313,7 @@ async function smartAbsences(now) {
 }
 // Дебаг обоих смарт-процессов для сверки полей/этапов.
 async function tripsDebug() {
-  const dbg = async (reName, reStage) => {
+  const dbg = async (reName, reStage, reDomain) => {
     const etid = await spTypeId(reName, 'dbg_' + reName.source);
     let sample = null, count = 0, stages = [], matchStages = [];
     if (etid) {
@@ -319,17 +330,21 @@ async function tripsDebug() {
       try {
         const r = await b24('crm.item.fields', { entityTypeId: etid });
         const fields = (r && r.result && r.result.fields) || {};
+        let sD=null,sDt='',sG=null,sGt='',eD=null,eDt='',eG=null,eGt='';
         for (const code in fields) { const f = fields[code] || {}; if (!/date/i.test(String(f.type || ''))) continue;
-          const t = String(f.title || '').toLowerCase();
-          if (!dateFields.start && /нача/.test(t)) { dateFields.start = code; dateFields.startTitle = f.title; }
-          if (!dateFields.end && /оконч|конец/.test(t)) { dateFields.end = code; dateFields.endTitle = f.title; } }
+          const t = String(f.title || '').toLowerCase(); const dom = reDomain ? reDomain.test(t) : false;
+          if (/нача/.test(t)) { if (dom) { if(!sD){sD=code;sDt=f.title;} } else if(!sG){sG=code;sGt=f.title;} }
+          if (/оконч|конец/.test(t)) { if (dom) { if(!eD){eD=code;eDt=f.title;} } else if(!eG){eG=code;eGt=f.title;} } }
+        dateFields = { start: sD||sG, end: eD||eG, startTitle: sD?sDt:sGt, endTitle: eD?eDt:eGt };
       } catch (e) {}
     }
     return { entityTypeId: etid, count, matchStages, stages, dateFields, sample };
   };
   let types = [];
   try { const tl = await b24('crm.type.list', {}); types = ((tl && tl.result && tl.result.types) || []).map(t => ({ id: t.entityTypeId, title: t.title })); } catch (e) {}
-  return { types, trips: await dbg(/командиров/i, /команди?ровк/i), vacations: await dbg(/отпуск/i, null) };
+  return { types,
+    trips: await dbg(/командиров/i, /^в\s+команди?ровк/i, /команди?ровк/i),
+    vacations: await dbg(/отпуск/i, /^отпуск$/i, /отпуск/i) };
 }
 
 async function build(pool, now) {
