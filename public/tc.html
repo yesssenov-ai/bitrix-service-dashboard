@@ -257,13 +257,13 @@ const SOON = {
 const esc = s => String(s==null?'':s).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
 /* ── Вид: карточки / строки (таблица) ── */
 let VIEW=(()=>{try{return localStorage.getItem('tc-view')||'cards'}catch(e){return 'cards'}})();
-function tcTable(list, cols){
+function tcTable(list, cols, keyFn){
   return `<table class="tc-tbl"><thead><tr>${cols.map(c=>`<th>${c.h}</th>`).join('')}</tr></thead><tbody>${
-    list.map(it=>`<tr data-id="${it.id}">${cols.map(c=>`<td>${c.c(it)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    list.map(it=>`<tr data-id="${keyFn?keyFn(it):it.id}">${cols.map(c=>`<td>${c.c(it)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
 }
-function tcRender(g, list, cardFn, cols){
+function tcRender(g, list, cardFn, cols, keyFn){
   if(!list.length){ g.style.display=''; g.innerHTML='<div class="empty">Ничего не найдено</div>'; return; }
-  if(VIEW==='rows' && cols){ g.style.display='block'; g.innerHTML=tcTable(list, cols); }
+  if(VIEW==='rows' && cols){ g.style.display='block'; g.innerHTML=tcTable(list, cols, keyFn); }
   else { g.style.display=''; g.innerHTML=list.map(cardFn).join(''); }
 }
 function rerenderAll(){
@@ -1117,7 +1117,7 @@ function mkEntity(cfg){
       <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
         <input id="${qid}" placeholder="Поиск…" autocomplete="off"></div>
       <span style="flex:1"></span>
-      <button class="btn-primary" id="${aid}" hidden><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M12 5v14M5 12h14"/></svg>${esc(cfg.one)}</button>
+      ${cfg.noAdd?'':`<button class="btn-primary" id="${aid}" hidden><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M12 5v14M5 12h14"/></svg>${esc(cfg.one)}</button>`}
     </div>`;
   }
   function filtered(){
@@ -1130,7 +1130,7 @@ function mkEntity(cfg){
     const g = document.getElementById(gid); if(!g) return;
     const list = filtered();
     if(cfg.stats){ const st=document.getElementById(cfg.key+'Stats'); if(st) st.innerHTML = cfg.stats(S.list)||''; }
-    tcRender(g, list, cfg.card, cfg.cols);
+    tcRender(g, list, cfg.card, cfg.cols, it=>it[cfg.rowKey||'id']);
   }
   async function load(){
     const d = await api('GET', cfg.ep);
@@ -1153,10 +1153,11 @@ function mkEntity(cfg){
       const row=e.target.closest('[data-id]'); if(row) openForm(itemOf(row));
     });
   }
-  function itemOf(el){ const id=+el.getAttribute('data-id'); return S.list.find(x=>x.id===id); }
+  function itemOf(el){ const k=el.getAttribute('data-id'); const rk=cfg.rowKey||'id'; return S.list.find(x=>String(x[rk])===k); }
   async function reload(){ await load(); }
-  function fieldHtml(f, v){
-    const ro = !S.canEdit ? 'disabled' : '';
+  function fieldHtml(f, it){
+    const v = f.get ? f.get(it) : it[f.k];
+    const ro = (f.ro || !S.canEdit) ? 'disabled' : '';
     const val = v==null?'':v;
     if(f.t==='select'){ const opts=(f.optsFn?f.optsFn(S):f.opts)||[]; return `<select class="in" id="ef_${f.k}" ${ro}>${opts.map(([k,l])=>`<option value="${esc(k)}"${String(val)===String(k)?' selected':''}>${esc(l)}</option>`).join('')}</select>`; }
     if(f.t==='textarea') return `<textarea class="in" id="ef_${f.k}" ${ro}>${ESCV(val)}</textarea>`;
@@ -1166,14 +1167,16 @@ function mkEntity(cfg){
   }
   function openForm(it){
     const isNew = !it; it = it || {};
-    const ov=document.createElement('div'); ov.className='ov';
+    const idKey = cfg.idKey || 'id'; const idv = it[idKey];
     const body = cfg.fields.map(f => f.t==='check'
-      ? `<div class="fld">${fieldHtml(f, it[f.k])}</div>`
-      : `<div class="fld"><span class="l">${esc(f.l)}</span>${fieldHtml(f, it[f.k])}</div>`).join('');
+      ? `<div class="fld">${fieldHtml(f, it)}</div>`
+      : `<div class="fld"><span class="l">${esc(f.l)}${f.ro?' <small style="color:var(--text-3)">(из Bitrix)</small>':''}</span>${fieldHtml(f, it)}</div>`).join('');
+    const ov=document.createElement('div'); ov.className='ov';
     const ro = !S.canEdit;
-    ov.innerHTML=`<div class="modal"><div class="mh"><h2>${isNew?'Новая запись — '+esc(cfg.one):esc(cfg.one)}</h2><button class="x" data-x>×</button></div>
+    const canDel = idv && !cfg.noDelete;
+    ov.innerHTML=`<div class="modal"><div class="mh"><h2>${isNew?'Новая запись — '+esc(cfg.one):esc(it.name||cfg.one)}</h2><button class="x" data-x>×</button></div>
       <div class="body">${body}</div>
-      ${ro?'':`<div class="mfoot"><button class="btn btn-primary" id="efSave">Сохранить</button>${it.id?'<button class="btn danger" id="efDel">Удалить</button>':''}<span style="flex:1"></span><button class="btn" data-x>Отмена</button></div>`}
+      ${ro?'':`<div class="mfoot"><button class="btn btn-primary" id="efSave">Сохранить</button>${canDel?'<button class="btn danger" id="efDel">Удалить</button>':''}<span style="flex:1"></span><button class="btn" data-x>Отмена</button></div>`}
     </div>`;
     document.body.appendChild(ov);
     ov.addEventListener('click',e=>{ if(e.target===ov||e.target.hasAttribute('data-x')) ov.remove(); });
@@ -1184,13 +1187,13 @@ function mkEntity(cfg){
           b[f.k] = f.t==='check'?el.checked : f.t==='number'?(+el.value||0) : el.value.trim(); }
         if(cfg.required && !b[cfg.required]){ alert('Заполните обязательное поле'); return; }
         const btn=document.getElementById('efSave'); btn.disabled=true; btn.textContent='Сохранение…';
-        const d = it.id ? await api('PUT', cfg.ep+'/'+it.id, b) : await api('POST', cfg.ep, b);
+        const d = idv ? await api('PUT', cfg.ep+'/'+idv, b) : await api('POST', cfg.ep, b);
         if(!d||!d.ok){ alert((d&&d.error)||'Не удалось сохранить'); btn.disabled=false; btn.textContent='Сохранить'; return; }
         ov.remove(); await load();
       };
-      if(it.id){ const del=document.getElementById('efDel'); if(del) del.onclick=async()=>{
+      if(canDel){ const del=document.getElementById('efDel'); if(del) del.onclick=async()=>{
         if(!confirm('Удалить запись безвозвратно?')) return;
-        const d=await api('DELETE', cfg.ep+'/'+it.id);
+        const d=await api('DELETE', cfg.ep+'/'+idv);
         if(!d||!d.ok){ alert((d&&d.error)||'Не удалось удалить (нужны права администратора)'); return; }
         ov.remove(); await load();
       }; }
@@ -1202,28 +1205,44 @@ function mkEntity(cfg){
 /* ── Конфиги разделов ─────────────────────────────────────────────────────── */
 const STATUS_WORK = [['free','Свободен'],['busy','Занят'],['leave','Отпуск'],['remote','Удалёнка'],['sick','Больничный'],['off','Нет на месте']];
 
+// Прогресс-бар загрузки: зелёный <70, янтарь 70–90, красный >90.
+function loadBar(pct){
+  pct = Math.max(0, Math.min(100, +pct||0));
+  const col = pct>90 ? '#C53B2F' : pct>=70 ? '#d08700' : '#1a7f54';
+  return `<div style="display:flex;align-items:center;gap:7px;min-width:120px">
+    <div style="flex:1;height:7px;border-radius:4px;background:var(--surface-2);overflow:hidden">
+      <div style="height:100%;width:${pct}%;background:${col};border-radius:4px"></div></div>
+    <b style="font-size:12px;color:${col};min-width:34px;text-align:right">${pct}%</b></div>`;
+}
+const admitsText = it => (it.admits||[]).map(a=>a.method||a).filter(Boolean).join(', ');
+
 const entStaff = mkEntity({
-  key:'staff', ep:'/staff', one:'Сотрудник', required:'name',
+  key:'staff', ep:'/staff', one:'Сотрудник',
+  rowKey:'bitrix_id', idKey:'bitrix_id', noAdd:true, noDelete:true,   // люди из отдела Bitrix
   search:['name','role_title','dir','busy_on'],
-  stats:(l)=>{ const by=k=>l.filter(x=>x.status===k).length;
-    return [['n',l.length,'Сотрудников'],['n',by('free'),'Свободны'],['n accent',by('busy'),'Заняты'],['n',by('leave')+by('sick')+by('remote'),'Отсутствуют/удал.']]
+  stats:(l)=>{ const by=k=>l.filter(x=>(x.status||'free')===k).length;
+    return [['n',l.length,'В отделе ТЦ'],['n',by('free'),'Свободны'],['n accent',by('busy'),'Заняты'],['n',by('leave')+by('sick')+by('remote'),'Отсутствуют/удал.']]
       .map(([c,n,t])=>`<div class="stat"><div class="${c}">${n}</div><div class="l">${t}</div></div>`).join(''); },
   cols:[
-    {h:'Сотрудник',c:it=>ESCV(it.name)},{h:'Должность',c:it=>ESCV(it.role_title)},{h:'Направление',c:it=>ESCV(it.dir)},
-    {h:'Занятость',c:it=>pill(it.status)},{h:'Загрузка',c:it=>(it.load_pct||0)+'%'},{h:'Чем занят',c:it=>ESCV(it.busy_on)},
+    {h:'Сотрудник',c:it=>ESCV(it.name)},{h:'Должность',c:it=>ESCV(it.role_title)},
+    {h:'Занятость',c:it=>pill(it.status||'free')},{h:'Загрузка',c:it=>loadBar(it.load_pct)},
+    {h:'Проекты',c:it=>(it.projects&&it.projects.length)?ESCV(it.projects.join(', ')):(ESCV(it.busy_on)||'—')},
   ],
-  card:it=>`<div class="cc" data-id="${it.id}">
-    <div class="row" style="justify-content:space-between;align-items:flex-start"><div class="ct">${ESCV(it.name)}</div>${pill(it.status)}</div>
+  card:it=>{ const proj=(it.projects||[]); return `<div class="cc" data-id="${it.bitrix_id}">
+    <div class="row" style="justify-content:space-between;align-items:flex-start"><div class="ct">${ESCV(it.name)}</div>${pill(it.status||'free')}</div>
     <div class="row"><span class="client">${ESCV(it.role_title||'—')}</span>${it.dir?`<span class="pill m">${ESCV(it.dir)}</span>`:''}</div>
-    ${it.busy_on?`<div class="sub">▶ ${ESCV(it.busy_on)}</div>`:''}
-    <div class="foot"><span>Загрузка <b>${it.load_pct||0}%</b></span>${(it.admits&&it.admits.length)?`<span>🎓 допусков: <b>${it.admits.length}</b></span>`:'<span></span>'}</div>
-  </div>`,
+    <div style="margin:7px 0">${loadBar(it.load_pct)}</div>
+    ${(proj.length||it.busy_on)?`<div class="sub">▶ ${ESCV(proj.length?proj.join(', '):it.busy_on)}</div>`:''}
+    <div class="foot"><span>${(it.admits&&it.admits.length)?('🎓 допуски: '+ESCV(admitsText(it))):''}</span><span>${it.active===false?'<span class="pill lead">не активен</span>':''}</span></div>
+  </div>`; },
   fields:[
-    {k:'name',l:'Имя / ФИО',t:'text'},{k:'role_title',l:'Должность',t:'text'},{k:'dir',l:'Направление / группа',t:'text'},
+    {k:'name',l:'ФИО',t:'text',ro:true},{k:'role_title',l:'Должность',t:'text',ro:true},
+    {k:'dir',l:'Направление / группа',t:'text'},
     {k:'status',l:'Занятость',t:'select',opts:STATUS_WORK},{k:'load_pct',l:'Загрузка, %',t:'number'},
-    {k:'busy_on',l:'Чем занят (работа/курс)',t:'text'},{k:'email',l:'E-mail',t:'text'},{k:'phone',l:'Телефон',t:'text'},
-    {k:'hired_at',l:'В штате с',t:'date',ph:'ГГГГ-ММ-ДД'},{k:'bonus_idx',l:'Индекс для премии',t:'number'},
-    {k:'note',l:'Заметки',t:'textarea'},{k:'active',l:'Активен (работает сейчас)',t:'check'},
+    {k:'busy_on',l:'Чем занят (если не из «Работ»)',t:'text'},
+    {k:'admits',l:'Допуски (методы через запятую)',t:'text',get:it=>admitsText(it)},
+    {k:'bonus_idx',l:'Индекс для премии',t:'number'},
+    {k:'note',l:'Заметки',t:'textarea'},{k:'active',l:'Активен (входит в команду сейчас)',t:'check'},
   ],
 });
 
@@ -1249,7 +1268,7 @@ const entAbs = mkEntity({
     if(act==='approve'||act==='reject'){
       let sub=null;
       if(act==='approve' && confirm('Назначить замену исполнителя? (ОК — выбрать, Отмена — без замены)')){
-        const names=(entAbs.S.rel.staff||[]).map(s=>`${s.id}: ${s.name}`).join('\n');
+        const names=(entAbs.S.rel.staff||[]).map(s=>`${s.bitrix_id}: ${s.name}`).join('\n');
         const v=prompt('ID сотрудника-замены:\n'+names); if(v) sub=+v;
       }
       const d=await api('PUT','/absences/'+it.id+'/decide',{decision:act==='approve'?'approved':'rejected',substitute_id:sub});
@@ -1258,14 +1277,14 @@ const entAbs = mkEntity({
     }
   },
   fields:[
-    {k:'staff_id',l:'Сотрудник',t:'select',optsFn:(S)=>[['','—']].concat((S.rel.staff||[]).map(s=>[s.id,s.name]))},
+    {k:'staff_id',l:'Сотрудник',t:'select',optsFn:(S)=>[['','—']].concat((S.rel.staff||[]).map(s=>[s.bitrix_id,s.name]))},
     {k:'kind',l:'Тип',t:'select',opts:[['vacation','Отпуск'],['remote','Удалёнка'],['sick','Больничный'],['unpaid','Без содержания']]},
     {k:'from_date',l:'С даты',t:'date',ph:'ГГГГ-ММ-ДД'},{k:'to_date',l:'По дату',t:'date',ph:'ГГГГ-ММ-ДД'},
     {k:'reason',l:'Причина / комментарий',t:'textarea'},
   ],
   required:null,
 });
-function nameStaff(S, id){ if(!id) return ''; const s=(S.rel.staff||[]).find(x=>x.id===+id); return s?s.name:('#'+id); }
+function nameStaff(S, id){ if(!id) return ''; const s=(S.rel.staff||[]).find(x=>+x.bitrix_id===+id||+x.id===+id); return s?s.name:('#'+id); }
 
 const entNeeds = mkEntity({
   key:'needs', ep:'/needs', one:'Потребность', required:'title',

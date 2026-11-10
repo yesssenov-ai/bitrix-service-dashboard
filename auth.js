@@ -294,10 +294,14 @@ async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_tm_tc_files_ent ON ticketsmodule_tc_files(entity_type, entity_id);
 
     -- ── ТЦ Фаза 1: Команда и занятость ────────────────────────────────────────
+    -- Команда ТЦ = сотрудники отдела «Тренинг центр» из Bitrix (имя/должность
+    -- приходят оттуда по bitrix_id). В этой таблице — только TC-наложение:
+    -- статус занятости, загрузка, допуски и т.п. Привязка строго по bitrix_id.
     CREATE TABLE IF NOT EXISTS ticketsmodule_tc_staff (
       id SERIAL PRIMARY KEY,
+      bitrix_id INTEGER,                   -- ID сотрудника в Bitrix (ключ наложения)
       name TEXT NOT NULL,
-      role_title TEXT DEFAULT '',          -- должность
+      role_title TEXT DEFAULT '',          -- должность (из Bitrix, можно переопределить)
       dir TEXT DEFAULT '',                 -- направление/группа
       email TEXT DEFAULT '',
       phone TEXT DEFAULT '',
@@ -313,7 +317,9 @@ async function initDB() {
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
+    ALTER TABLE ticketsmodule_tc_staff ADD COLUMN IF NOT EXISTS bitrix_id INTEGER;
     CREATE INDEX IF NOT EXISTS idx_tm_tc_staff_status ON ticketsmodule_tc_staff(status);
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_tm_tc_staff_bitrix ON ticketsmodule_tc_staff(bitrix_id) WHERE bitrix_id IS NOT NULL;
 
     CREATE TABLE IF NOT EXISTS ticketsmodule_tc_absences (
       id SERIAL PRIMARY KEY,
