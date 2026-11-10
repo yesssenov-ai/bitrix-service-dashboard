@@ -285,8 +285,48 @@
       else if(a==='logout' && lo){ try{lo.click();}catch(_){} } });
   }
 
+  // ── Бургер на главной: открывает экран «Все разделы» ─────────────────────────
+  function buildBurger(){
+    if(!isHome) return;
+    if(document.getElementById('cupBurger')) return;
+    var btn=document.createElement('button');
+    btn.id='cupBurger'; btn.className='cup-burger'; btn.setAttribute('aria-label','Разделы');
+    btn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>';
+    btn.onclick=openAll;
+    var bar=document.querySelector('.topbar');
+    if(bar) bar.insertBefore(btn, bar.firstChild);
+    else { btn.classList.add('cup-burger-float'); document.body.appendChild(btn); }
+  }
+
+  // ── Блок «Часто» на главной (быстрый доступ к топ-модулям пользователя) ───────
+  function buildHomeFav(){
+    if(!isHome) return;
+    var host=document.getElementById('cupHomeFav');
+    function render(){
+      if(!TOP || TOP.length<2){ if(host) host.remove(); return; }
+      var mods=visibleModules(); var byCode={}; mods.forEach(function(m){byCode[m.c]=m;});
+      var catc={}; CATS.forEach(function(x){catc[x.id]=x.c;});
+      var list=TOP.map(function(c){return byCode[c];}).filter(Boolean).slice(0,8);
+      if(list.length<2){ if(host) host.remove(); return; }
+      if(!host || !host.isConnected){
+        host=document.createElement('div'); host.id='cupHomeFav'; host.className='cup-homefav';
+        var anchor=document.getElementById('today');
+        if(anchor && anchor.parentNode) anchor.parentNode.insertBefore(host, anchor.nextSibling);
+        else { var mn=document.querySelector('main'); if(mn) mn.insertBefore(host, mn.firstChild); else return; }
+      }
+      host.innerHTML='<div class="cup-allsec cup-allsec-top"><div class="cup-allsec-h">Часто</div><div class="cup-allgrid">'+
+        list.map(function(m){ var cc=catc[m.g]||'#6a7488';
+          return '<a class="cup-alltile" href="'+m.h+'">'+
+            '<span class="cup-alltile-i" style="color:'+cc+';background:color-mix(in srgb,'+cc+' 12%,var(--surface))">'+micon(m.c,m.g)+'</span>'+
+            '<span class="cup-alltile-n">'+esc(m.n)+'</span></a>'; }).join('')+
+        '</div></div>';
+    }
+    render();
+    if(TOP===null) loadTop(render);
+  }
+
   function start(){ if(isHome) document.body.classList.add('cup-home');
-    loadAccess(function(){}); build(); buildTopbar(); track(); loadTop(); }
+    loadAccess(function(){}); build(); buildTopbar(); buildBurger(); buildHomeFav(); track(); loadTop(); }
   if(document.body) start();
   else document.addEventListener('DOMContentLoaded', start);
 })();
