@@ -628,16 +628,16 @@ router.get('/calendar', requireAnyModuleApi(TC_CODES), async (req, res) => {
     const dISO = v => { const m = /(\d{4})-(\d{2})-(\d{2})/.exec(String(v || '')); return m ? `${m[1]}-${m[2]}-${m[3]}` : ''; };
     const push = (date, kind, title, sub) => { const iso = dISO(date); if (!iso) return;
       items.push({ date: iso, raw: iso.slice(8, 10) + '.' + iso.slice(5, 7), kind, title: title || '', sub: sub || '' }); };
-    // Курсы ТЦ — раскрываем диапазон дат по дням (курс может идти несколько дней).
+    // Курсы ТЦ — одно событие с интервалом {date:start, end}, чтобы фронт рисовал
+    // многодневный курс одной непрерывной линией (а не чипом в каждом дне).
     try { const { rows } = await pool.query('SELECT title,client,dates_text,place,participants FROM ticketsmodule_tc_trainings');
       for (const t of rows) {
         const pr = parseDatesText(t.dates_text); if (!pr) continue;
+        const s = dISO(pr.start); if (!s) continue;
+        let e = dISO(pr.end) || s; if (e < s) e = s;
         let pc = 0; try { const a = typeof t.participants === 'string' ? JSON.parse(t.participants) : t.participants; pc = Array.isArray(a) ? a.length : 0; } catch (_) {}
         const sub = [t.client, pc ? `${pc} уч.` : '', t.place].filter(Boolean).join(' · ');
-        let s = new Date(pr.start + 'T00:00:00'), e = new Date(pr.end + 'T00:00:00');
-        if (isNaN(+s)) continue; if (isNaN(+e) || e < s) e = new Date(+s);
-        for (let dt = new Date(+s), g = 0; dt <= e && g < 31; dt.setDate(dt.getDate() + 1), g++)
-          push(`${dt.getFullYear()}-${_p2(dt.getMonth() + 1)}-${_p2(dt.getDate())}`, 'course', t.title, sub);
+        items.push({ date: s, end: e, raw: s.slice(8, 10) + '.' + s.slice(5, 7), kind: 'course', title: t.title || '', sub });
       } } catch (e) {}
     try { const { rows } = await pool.query('SELECT title,client,due,report_at FROM ticketsmodule_tc_works');
       for (const w of rows) { push(w.due, 'work', w.title, w.client); push(w.report_at, 'report', w.title, w.client); } } catch (e) {}

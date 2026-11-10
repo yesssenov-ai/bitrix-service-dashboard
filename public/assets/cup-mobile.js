@@ -360,7 +360,12 @@
       if(!TOP || TOP.length<2){ if(host) host.remove(); return; }
       var mods=visibleModules(); var byCode={}; mods.forEach(function(m){byCode[m.c]=m;});
       var catc={}; CATS.forEach(function(x){catc[x.id]=x.c;});
-      var list=TOP.map(function(c){return byCode[c];}).filter(Boolean).slice(0,3);
+      // Моб. — ровно 3 (одна строка); веб — сколько плиток (92px) помещается в одну строку главной.
+      var vw=window.innerWidth||document.documentElement.clientWidth||360;
+      var cap;
+      if(vw<=640){ cap=3; }
+      else { var mn2=document.querySelector('main'); var w=(mn2&&mn2.clientWidth)||vw||1000; cap=Math.max(4, Math.floor((w-16)/96)); }
+      var list=TOP.map(function(c){return byCode[c];}).filter(Boolean).slice(0,cap);
       if(list.length<2){ if(host) host.remove(); return; }
       if(!host || !host.isConnected){
         host=document.createElement('div'); host.id='cupHomeFav'; host.className='cup-homefav';
@@ -376,6 +381,7 @@
         '</div></div>';
     }
     render();
+    if(!buildHomeFav._rz){ buildHomeFav._rz=true; var _t; window.addEventListener('resize',function(){ clearTimeout(_t); _t=setTimeout(render,180); }); }
     if(TOP===null) loadTop(render);
   }
 
