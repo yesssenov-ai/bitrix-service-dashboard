@@ -107,6 +107,39 @@ async function binFieldCode() {
   return code;
 }
 
+// ── Диагностика БИН: какие поля похожи на «БИН/ИИН» и сколько из них реально
+// заполнено на сэмпле компаний. Ничего не пишет. Нужна, чтобы найти правильное поле.
+async function binDebug(sampleLimit) {
+  const lim = Math.min(Math.max(parseInt(sampleLimit, 10) || 800, 50), 3000);
+  const out = { envBinField: process.env.CMP_BIN_FIELD || null, resolvedBinField: null, candidates: [], sampleSize: 0 };
+  try { out.resolvedBinField = await binFieldCode(); } catch (e) {}
+  let fieldsMap = {};
+  try { const { result } = await b24('crm.company.fields', {}); fieldsMap = result || {}; } catch (e) { out.error = 'fields: ' + e.message; }
+  const WANT = ['бин', 'иин', 'bin', 'iin'];
+  const cand = [];
+  for (const [k, f] of Object.entries(fieldsMap)) {
+    const title = String((f && (f.title || f.formLabel || f.listLabel)) || '');
+    const toks = title.toLowerCase().replace(/ё/g, 'е').split(/[^a-zа-я0-9]+/).filter(Boolean);
+    if (toks.some(t => WANT.includes(t)) || /SEARCH_BIN/i.test(k)) cand.push({ code: k, title, type: (f && f.type) || '', filled: 0, samples: [] });
+  }
+  for (const extra of [out.resolvedBinField, 'UF_CRM_1731860381837', 'UF_CRM_SEARCH_BIN']) {
+    if (extra && !cand.find(c => c.code === extra)) cand.push({ code: extra, title: '(добавлено для сверки)', type: fieldsMap[extra] ? (fieldsMap[extra].type || '') : '?', filled: 0, samples: [] });
+  }
+  if (!cand.length) return out;
+  const select = ['ID', ...cand.map(c => c.code)];
+  let start = 0, seen = 0, guard = 0;
+  while (guard++ < 80 && seen < lim) {
+    const res = await b24('crm.company.list', { select, order: { ID: 'ASC' }, start });
+    const arr = res.result || [];
+    for (const c of arr) { seen++;
+      for (const cd of cand) { const v = firstVal(c[cd.code]); if (v) { cd.filled++; if (cd.samples.length < 3) cd.samples.push(v); } } }
+    if (res.next == null) break; start = res.next;
+  }
+  out.sampleSize = seen;
+  out.candidates = cand.sort((a, b) => b.filled - a.filled);
+  return out;
+}
+
 // ── Поле «короткого названия», из которого бизнес-процесс ведёт Название ────────
 // БП на сущности «Компания» при любом изменении ставит Название = значение поля
 // «ID компании (сокращённое название компании)» — это КАСТОМНОЕ поле компании
@@ -1401,7 +1434,7 @@ async function countryMap() {
 }
 
 module.exports = {
-  ensureSchema, syncCompanies, getCompaniesBoard, updateCompany, industryOptions,
+  ensureSchema, syncCompanies, getCompaniesBoard, updateCompany, industryOptions, binDebug,
   countryMap,
   getDuplicateGroups, getCompanyDeals, previewMerge, applyMerge, undoMerge, undoAllMerges, listMerges, deleteCompany, bulkDeleteCompanies, writeSelfTest,
   companyRequisite, renameDiag, binInspect, previewBin, applyBin, countryInspect, presetInspect, geoDir,

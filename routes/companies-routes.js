@@ -38,6 +38,13 @@ router.get('/bin-preview', requireAuth(EDIT), async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Диагностика источника БИН: какие поля похожи на «БИН/ИИН» и сколько заполнено
+// на сэмпле компаний. Ничего не пишет. /api/companies/bin-debug?limit=800
+router.get('/bin-debug', requireAuth(EDIT), async (req, res) => {
+  try { res.json(await require('../companies-calc').binDebug(req.query.limit)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Запись подтверждённого БИН в карточку Б24 (компания + реквизит). Перезаписывает поля.
 router.post('/bin-apply', requireAuth(EDIT), express.json(), async (req, res) => {
   try { const { id, bin } = req.body || {}; const r = await require('../companies-calc').applyBin(id, bin); bust('cmp:board'); res.json(r); }
