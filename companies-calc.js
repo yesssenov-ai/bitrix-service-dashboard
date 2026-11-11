@@ -49,18 +49,37 @@ function ensureSchema() {
   return _schema;
 }
 
-// ── Справочник сфер (INDUSTRY): id → name, и список для выпадающего списка ──────
-let _indMap = null, _indAt = 0;
+// ── Справочник сфер деятельности: id → name, и список для выпадающего списка ────
+// Источник — пользовательское enum-поле компании «Сфера деятельности компании»
+// (UF_CRM_1793361911). Код поля настраивается через env CMP_INDUSTRY_FIELD.
+// Если поле не enum (строка) — работаем со значением как есть (id = name = текст);
+// если вернули на стандартное INDUSTRY — фолбэк на справочник статусов.
+const INDUSTRY_FIELD = process.env.CMP_INDUSTRY_FIELD || 'UF_CRM_1793361911';
+let _indMap = null, _indAt = 0, _indEnum = false;
 async function industryMap() {
   if (_indMap && Date.now() - _indAt < 6 * 3600 * 1000) return _indMap;
-  const map = {};
+  const map = {}; let isEnum = false;
+  // 1) Пробуем как пользовательское enum-поле компании (берём список значений).
   try {
-    const { result } = await b24('crm.status.list', { filter: { ENTITY_ID: 'INDUSTRY' }, order: { SORT: 'ASC' } });
-    (result || []).forEach(s => { map[s.STATUS_ID] = s.NAME; });
-  } catch (e) { console.error('companies industryMap:', e.message); }
-  _indMap = map; _indAt = Date.now();
+    const { result } = await b24('crm.company.userfield.list', { filter: { FIELD_NAME: INDUSTRY_FIELD } });
+    const f = (result || [])[0];
+    if (f && Array.isArray(f.LIST) && f.LIST.length) {
+      isEnum = true;
+      f.LIST.forEach(it => { map[String(it.ID)] = it.VALUE; });
+    }
+  } catch (e) { console.error('companies industryMap (userfield):', e.message); }
+  // 2) Фолбэк на стандартный справочник INDUSTRY — только если поле вернули на стандартное.
+  if (!Object.keys(map).length && /^INDUSTRY$/i.test(INDUSTRY_FIELD)) {
+    try {
+      const { result } = await b24('crm.status.list', { filter: { ENTITY_ID: 'INDUSTRY' }, order: { SORT: 'ASC' } });
+      (result || []).forEach(s => { map[s.STATUS_ID] = s.NAME; });
+    } catch (e) { console.error('companies industryMap (status):', e.message); }
+  }
+  _indMap = map; _indEnum = isEnum; _indAt = Date.now();
   return map;
 }
+// Имя сферы по сырому значению поля: для enum — через карту, для строки — само значение.
+function industryNameOf(raw, inds) { const id = String(raw || ''); if (!id) return ''; return _indEnum ? (inds[id] || '') : id; }
 async function industryOptions() {
   const m = await industryMap();
   return Object.entries(m).map(([id, name]) => ({ id, name }));
@@ -179,7 +198,7 @@ async function syncCompanies() {
       } catch (e2) { /* зеркала может не быть — не критично */ }
     }
 
-    const select = ['ID', 'TITLE', 'INDUSTRY', 'ASSIGNED_BY_ID', 'DATE_CREATE', 'ADDRESS_CITY', 'EMAIL', 'PHONE', geo.GEO_FIELD_COMPANY];
+    const select = ['ID', 'TITLE', INDUSTRY_FIELD, 'ASSIGNED_BY_ID', 'DATE_CREATE', 'ADDRESS_CITY', 'EMAIL', 'PHONE', geo.GEO_FIELD_COMPANY];
     if (binCode) select.push(binCode);
     await geo.loadGeoDir(); // кэш справочника стран — чтобы резолв страны шёл локально
     const rows = [];
@@ -188,12 +207,12 @@ async function syncCompanies() {
       const res = await b24('crm.company.list', { select, order: { ID: 'ASC' }, start });
       const arr = res.result || [];
       for (const c of arr) {
-        const industryId = c.INDUSTRY || '';
+        const industryId = String(firstVal(c[INDUSTRY_FIELD]) || '');
         const binVal = binCode ? firstVal(c[binCode]) : '';
         const country = await geo.resolveCountry(c[geo.GEO_FIELD_COMPANY], binVal);
         rows.push({
           id: String(c.ID), title: c.TITLE || '',
-          industryId, industryName: inds[industryId] || '',
+          industryId, industryName: industryNameOf(industryId, inds),
           bin: binVal,
           email: firstMf(c.EMAIL), phone: firstMf(c.PHONE),
           assignedBid: c.ASSIGNED_BY_ID ? Number(c.ASSIGNED_BY_ID) : null,
@@ -376,12 +395,12 @@ async function updateCompany(id, { industryId, title }) {
   const inds = await industryMap();
   let appliedTitle, appliedIndustry;
 
-  // Сфера — БП не трогает, пишем напрямую + контрольное чтение.
+  // Сфера — БП не трогает, пишем напрямую (в настроенное поле) + контрольное чтение.
   if (industryId !== undefined) {
-    const resp = await b24('crm.company.update', { id, fields: { INDUSTRY: industryId || '' } });
+    const resp = await b24('crm.company.update', { id, fields: { [INDUSTRY_FIELD]: industryId || '' } });
     if (resp && resp.error) throw new Error('Bitrix: ' + (resp.error_description || resp.error));
     try { const { result: chk } = await b24('crm.company.get', { id });
-      if (chk && String(chk.INDUSTRY || '') !== String(industryId || '')) throw new Error('Битрикс не применил сферу деятельности.'); }
+      if (chk && String(firstVal(chk[INDUSTRY_FIELD]) || '') !== String(industryId || '')) throw new Error('Битрикс не применил сферу деятельности.'); }
     catch (e) { if (/не применил сферу/.test(e.message)) throw e; }
     appliedIndustry = industryId || '';
   }
@@ -394,11 +413,11 @@ async function updateCompany(id, { industryId, title }) {
   if (appliedTitle === undefined && appliedIndustry === undefined) return { ok: false, error: 'Нет изменений' };
 
   const set = [], vals = []; let i = 1;
-  if (appliedIndustry !== undefined) { set.push(`industry_id=$${i++}`, `industry_name=$${i++}`); vals.push(appliedIndustry || '', inds[appliedIndustry] || ''); }
+  if (appliedIndustry !== undefined) { set.push(`industry_id=$${i++}`, `industry_name=$${i++}`); vals.push(appliedIndustry || '', industryNameOf(appliedIndustry, inds)); }
   if (appliedTitle !== undefined) { set.push(`title=$${i++}`); vals.push(appliedTitle); }
   set.push('synced_at=NOW()'); vals.push(id);
   await pool.query(`UPDATE ticketsmodule_companies SET ${set.join(',')} WHERE id=$${i}`, vals);
-  return { ok: true, id, industryId: appliedIndustry, industryName: appliedIndustry !== undefined ? (inds[appliedIndustry] || '') : undefined, title: appliedTitle };
+  return { ok: true, id, industryId: appliedIndustry, industryName: appliedIndustry !== undefined ? industryNameOf(appliedIndustry, inds) : undefined, title: appliedTitle };
 }
 
 // ── Фаза 2: детектор дублей ────────────────────────────────────────────────────
@@ -591,10 +610,10 @@ async function childrenOf(companyId) {
 }
 
 // Поля, которые безопасно копировать в эталон (только скаляры; мультиполя не трогаем).
-const COPY_FIELDS = ['INDUSTRY', 'ADDRESS_CITY', 'ADDRESS', 'ADDRESS_REGION', 'COMMENTS', 'BANKING_DETAILS'];
+const COPY_FIELDS = [INDUSTRY_FIELD, 'ADDRESS_CITY', 'ADDRESS', 'ADDRESS_REGION', 'COMMENTS', 'BANKING_DETAILS'];
 async function companyRaw(id) {
   const binCode = await binFieldCode();
-  const sel = ['ID', 'TITLE', 'INDUSTRY', 'ADDRESS_CITY', 'ADDRESS', 'ADDRESS_REGION'];
+  const sel = ['ID', 'TITLE', INDUSTRY_FIELD, 'ADDRESS_CITY', 'ADDRESS', 'ADDRESS_REGION'];
   if (binCode) sel.push(binCode);
   const { result } = await b24('crm.company.get', { id: String(id) });
   return result || {};
@@ -743,9 +762,9 @@ async function applyMerge({ canonicalId, duplicateIds, copyFields = true, byUser
 
       // 7) зеркало: помечаем дубль + при копировании обновляем поля эталона
       await pool.query('UPDATE ticketsmodule_companies SET merged_into=$1, title=$2, synced_at=NOW() WHERE id=$3', [canonicalId, newTitle, dupId]);
-      if (copyFields && copiedFields.INDUSTRY !== undefined) {
-        const nv = raw.INDUSTRY || '';
-        await pool.query('UPDATE ticketsmodule_companies SET industry_id=$1, industry_name=$2 WHERE id=$3 AND (industry_id IS NULL OR industry_id=\'\')', [nv, inds[nv] || '', canonicalId]);
+      if (copyFields && copiedFields[INDUSTRY_FIELD] !== undefined) {
+        const nv = String(firstVal(raw[INDUSTRY_FIELD]) || '');
+        await pool.query('UPDATE ticketsmodule_companies SET industry_id=$1, industry_name=$2 WHERE id=$3 AND (industry_id IS NULL OR industry_id=\'\')', [nv, industryNameOf(nv, inds), canonicalId]);
       }
 
       const enrichedCount = Object.values(enrichedMf).reduce((s, a) => s + a.length, 0);
