@@ -45,6 +45,31 @@ router.get('/bin-debug', requireAuth(EDIT), async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Перенос сферы: старое поле INDUSTRY → новое поле-список.
+// Предпросмотр (ничего не пишет): /api/companies/industry-migrate-preview
+router.get('/industry-migrate-preview', requireAuth(EDIT), async (req, res) => {
+  try { res.json(await require('../companies-calc').industryMigratePreview()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Запуск переноса (ПИШЕТ в Б24). Требует явного подтверждения.
+// Из браузера: /api/companies/industry-migrate-apply?confirm=yes
+function _startMigrate(req, res) {
+  try {
+    const ok = (req.query && req.query.confirm === 'yes') || (req.body && req.body.confirm === true);
+    if (!ok) return res.status(400).json({ error: 'Нужно подтверждение: ?confirm=yes' });
+    const st = require('../companies-calc').startIndustryMigration();
+    bust('cmp:board');
+    res.json({ started: true, status: st });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+}
+router.get('/industry-migrate-apply', requireAuth(EDIT), _startMigrate);
+router.post('/industry-migrate-apply', requireAuth(EDIT), express.json(), _startMigrate);
+// Статус фонового переноса: /api/companies/industry-migrate-status
+router.get('/industry-migrate-status', requireAuth(EDIT), async (req, res) => {
+  try { res.json(require('../companies-calc').industryMigrationStatus()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Запись подтверждённого БИН в карточку Б24 (компания + реквизит). Перезаписывает поля.
 router.post('/bin-apply', requireAuth(EDIT), express.json(), async (req, res) => {
   try { const { id, bin } = req.body || {}; const r = await require('../companies-calc').applyBin(id, bin); bust('cmp:board'); res.json(r); }

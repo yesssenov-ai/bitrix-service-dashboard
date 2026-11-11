@@ -59,13 +59,30 @@ let _indMap = null, _indAt = 0, _indEnum = false;
 async function industryMap() {
   if (_indMap && Date.now() - _indAt < 6 * 3600 * 1000) return _indMap;
   const map = {}; let isEnum = false;
-  // 1) Пробуем как пользовательское enum-поле компании (берём список значений).
+  // 1) Читаем конфиг пользовательского поля.
   try {
     const { result } = await b24('crm.company.userfield.list', { filter: { FIELD_NAME: INDUSTRY_FIELD } });
     const f = (result || [])[0];
     if (f && Array.isArray(f.LIST) && f.LIST.length) {
+      // 1a) Простое enum-поле — значения прямо в LIST.
       isEnum = true;
       f.LIST.forEach(it => { map[String(it.ID)] = it.VALUE; });
+    } else if (f) {
+      // 1b) Поле-список «(УС)» (iblock_element): элементы тянем из самого списка.
+      const s = f.SETTINGS || f.settings || {};
+      const iblockId = s.IBLOCK_ID || s.iblockId;
+      const iblockType = s.IBLOCK_TYPE_ID || s.iblockTypeId || 'lists';
+      if (iblockId) {
+        try {
+          let start = 0, guard = 0;
+          while (guard++ < 60) {
+            const r = await b24('lists.element.get', { IBLOCK_TYPE_ID: iblockType, IBLOCK_ID: iblockId, start });
+            (r.result || []).forEach(e => { map[String(e.ID)] = e.NAME; });
+            if (r.next == null) break; start = r.next;
+          }
+          if (Object.keys(map).length) isEnum = true;
+        } catch (e) { console.error('companies industryMap (iblock):', e.message); }
+      }
     }
   } catch (e) { console.error('companies industryMap (userfield):', e.message); }
   // 2) Фолбэк на стандартный справочник INDUSTRY — только если поле вернули на стандартное.
@@ -78,11 +95,96 @@ async function industryMap() {
   _indMap = map; _indEnum = isEnum; _indAt = Date.now();
   return map;
 }
-// Имя сферы по сырому значению поля: для enum — через карту, для строки — само значение.
-function industryNameOf(raw, inds) { const id = String(raw || ''); if (!id) return ''; return _indEnum ? (inds[id] || '') : id; }
+// Нормализуем сырое значение поля сферы: пусто/false/0 → '' (Битрикс для пустого
+// iblock-поля отдаёт false, что иначе попадало бы в «сферу» как значение «false»).
+function indRaw(v) { const s = firstVal(v); return (!s || s === 'false' || s === '0') ? '' : String(s); }
+// Имя сферы по сырому значению поля: для enum/списка — через карту, для строки — само значение.
+function industryNameOf(raw, inds) { const id = indRaw(raw); if (!id) return ''; return _indEnum ? (inds[id] || '') : id; }
 async function industryOptions() {
   const m = await industryMap();
   return Object.entries(m).map(([id, name]) => ({ id, name }));
+}
+
+// ── Перенос сферы: старое стандартное поле INDUSTRY → новое поле-список ─────────
+// Старый справочник INDUSTRY (id→name) — источник переноса (данные там остались).
+async function oldIndustryMap() {
+  const map = {};
+  try { const { result } = await b24('crm.status.list', { filter: { ENTITY_ID: 'INDUSTRY' }, order: { SORT: 'ASC' } });
+    (result || []).forEach(s => { map[String(s.STATUS_ID)] = s.NAME; }); } catch (e) {}
+  return map;
+}
+const _normNm = s => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
+// Ручные соответствия имён (старое → новое), если названия в списках отличаются.
+// Ключ/значение нормализуются. Заполняется по итогам preview (unmatchedList).
+const INDUSTRY_ALIAS = {
+  'образование': 'образование и наука',
+  'наука': 'образование и наука',
+};
+function matchNewIndustryId(oldName, nameToNew) {
+  const n = _normNm(oldName); if (!n) return '';
+  if (nameToNew[n]) return nameToNew[n];
+  const a = INDUSTRY_ALIAS[n]; if (a && nameToNew[a]) return nameToNew[a];
+  return '';
+}
+// Dry-run предпросмотр: ничего не пишет, показывает план переноса и несопоставленные.
+async function industryMigratePreview() {
+  const inds = await industryMap();
+  const nameToNew = {}; Object.entries(inds).forEach(([id, nm]) => { nameToNew[_normNm(nm)] = id; });
+  const oldMap = await oldIndustryMap();
+  const r = { scanned: 0, alreadySet: 0, noOld: 0, toSet: 0, noMatch: 0, newListSize: Object.keys(inds).length, samples: [], unmatched: {} };
+  let start = 0, guard = 0;
+  while (guard++ < 2000) {
+    const res = await b24('crm.company.list', { select: ['ID', 'TITLE', 'INDUSTRY', INDUSTRY_FIELD], order: { ID: 'ASC' }, start });
+    const arr = res.result || [];
+    for (const c of arr) {
+      r.scanned++;
+      if (indRaw(c[INDUSTRY_FIELD])) { r.alreadySet++; continue; }
+      const oldName = oldMap[String(c.INDUSTRY || '')] || '';
+      if (!oldName) { r.noOld++; continue; }
+      const newId = matchNewIndustryId(oldName, nameToNew);
+      if (!newId) { r.noMatch++; r.unmatched[oldName] = (r.unmatched[oldName] || 0) + 1; continue; }
+      r.toSet++;
+      if (r.samples.length < 15) r.samples.push({ id: c.ID, title: c.TITLE, from: oldName, toId: newId, toName: inds[newId] });
+    }
+    if (res.next == null) break; start = res.next;
+  }
+  r.unmatchedList = Object.entries(r.unmatched).sort((a, b) => b[1] - a[1]).map(([name, n]) => ({ name, n }));
+  delete r.unmatched;
+  return r;
+}
+// Фоновый перенос (пишет в Б24). Запускается только по явному подтверждению.
+let _indMig = { running: false, done: false, startedAt: 0, scanned: 0, alreadySet: 0, noOld: 0, noMatch: 0, toSet: 0, written: 0, failed: 0, error: null };
+function industryMigrationStatus() { return _indMig; }
+function startIndustryMigration() {
+  if (_indMig.running) return _indMig;
+  _indMig = { running: true, done: false, startedAt: Date.now(), scanned: 0, alreadySet: 0, noOld: 0, noMatch: 0, toSet: 0, written: 0, failed: 0, error: null };
+  (async () => {
+    try {
+      const inds = await industryMap();
+      const nameToNew = {}; Object.entries(inds).forEach(([id, nm]) => { nameToNew[_normNm(nm)] = id; });
+      const oldMap = await oldIndustryMap();
+      let start = 0, guard = 0;
+      while (guard++ < 2000) {
+        const res = await b24('crm.company.list', { select: ['ID', 'INDUSTRY', INDUSTRY_FIELD], order: { ID: 'ASC' }, start });
+        const arr = res.result || [];
+        for (const c of arr) {
+          _indMig.scanned++;
+          if (indRaw(c[INDUSTRY_FIELD])) { _indMig.alreadySet++; continue; }
+          const oldName = oldMap[String(c.INDUSTRY || '')] || '';
+          if (!oldName) { _indMig.noOld++; continue; }
+          const newId = matchNewIndustryId(oldName, nameToNew);
+          if (!newId) { _indMig.noMatch++; continue; }
+          _indMig.toSet++;
+          try { await b24('crm.company.update', { id: c.ID, fields: { [INDUSTRY_FIELD]: newId } }); _indMig.written++; }
+          catch (e) { _indMig.failed++; }
+          await sleep(70);
+        }
+        if (res.next == null) break; start = res.next;
+      }
+    } catch (e) { _indMig.error = e.message; }
+    finally { _indMig.running = false; _indMig.done = true; }
+  })();
+  return _indMig;
 }
 
 // ── Поле БИН у компании (кастомное): имя поля определяем динамически (кэш) ──────
@@ -245,7 +347,7 @@ async function syncCompanies() {
       const res = await b24('crm.company.list', { select, order: { ID: 'ASC' }, start });
       const arr = res.result || [];
       for (const c of arr) {
-        const industryId = String(firstVal(c[INDUSTRY_FIELD]) || '');
+        const industryId = indRaw(c[INDUSTRY_FIELD]);
         const binVal = binCode ? firstVal(c[binCode]) : '';
         const country = await geo.resolveCountry(c[geo.GEO_FIELD_COMPANY], binVal);
         rows.push({
@@ -1440,6 +1542,7 @@ async function countryMap() {
 
 module.exports = {
   ensureSchema, syncCompanies, getCompaniesBoard, updateCompany, industryOptions, binDebug,
+  industryMigratePreview, startIndustryMigration, industryMigrationStatus,
   countryMap,
   getDuplicateGroups, getCompanyDeals, previewMerge, applyMerge, undoMerge, undoAllMerges, listMerges, deleteCompany, bulkDeleteCompanies, writeSelfTest,
   companyRequisite, renameDiag, binInspect, previewBin, applyBin, countryInspect, presetInspect, geoDir,
