@@ -98,11 +98,16 @@ async function binFieldCode() {
     // по-русски не срабатывает (отсюда «без БИН» у всех). Бьём заголовок на слова.
     const WANT = ['бин', 'иин', 'bin', 'iin'];
     for (const [k, f] of Object.entries(result || {})) {
+      // НЕ поле поиска приложения (UF_CRM_SEARCH_BIN) и не служебные rest_*-поля,
+      // которые ведёт сторонняя аппа — они почти пустые (отсюда «с БИН 16»).
+      if (/SEARCH_BIN/i.test(k)) continue;
+      if (/^rest_/i.test(String((f && f.type) || ''))) continue;
       const title = String((f && (f.title || f.formLabel || f.listLabel)) || '').toLowerCase().replace(/ё/g, 'е');
       const toks = title.split(/[^a-zа-я0-9]+/).filter(Boolean);
       if (toks.some(t => WANT.includes(t))) { code = k; break; }
     }
   } catch (e) { console.error('companies binFieldCode:', e.message); }
+  if (!code) code = 'UF_CRM_1731860381837'; // видимое поле «БИН» по умолчанию
   _binCode = code; _binAt = Date.now();
   return code;
 }
