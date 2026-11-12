@@ -180,7 +180,22 @@ async function testSearch(){
   box.innerHTML=d.results.map(h=>`<div class="hit"><div class="src">${esc(h.doc_title)}${h.category?' · '+esc(h.category):''}</div><div class="tx">${esc((h.chunk||'').slice(0,400))}${(h.chunk||'').length>400?'…':''}</div></div>`).join('');
 }
 // Сбор глобальных плавающих иконок в единый ровный ряд по центру.
-(function(){function collect(){let bar=document.getElementById('pls-toolbar');if(!bar){bar=document.createElement('div');bar.id='pls-toolbar';document.body.appendChild(bar);}['pai-fab','pls-help-btn','pls-sr-btn','pls-fb-btn','themeToggle'].forEach(id=>{const el=document.getElementById(id);if(el&&el.parentNode!==bar)bar.appendChild(el);});}[150,500,1200,2500,4000].forEach(t=>setTimeout(collect,t));})();
+(function(){
+  const TBSTYLE='border:1px solid var(--line);background:var(--surface);color:var(--text-2);border-radius:9px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;cursor:pointer';
+  function mkMsg(){
+    if(document.getElementById('pls-tb-msg')) return document.getElementById('pls-tb-msg');
+    const a=document.createElement('a'); a.id='pls-tb-msg'; a.href='/messenger.html'; a.title='Мессенджер'; a.style.cssText=TBSTYLE;
+    a.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-12 7.6L3 21l1.9-5.7A8.4 8.4 0 1 1 21 11.5z"/></svg>';
+    return a;
+  }
+  function collect(){
+    let bar=document.getElementById('pls-toolbar');
+    if(!bar){bar=document.createElement('div');bar.id='pls-toolbar';document.body.appendChild(bar);}
+    ['pai-fab','pls-help-btn','pls-sr-btn','pls-fb-btn','themeToggle'].forEach(id=>{const el=document.getElementById(id);if(el&&el.parentNode!==bar)bar.appendChild(el);});
+    const m=mkMsg(); if(m.parentNode!==bar) bar.insertBefore(m, bar.firstChild);
+  }
+  [150,500,1200,2500,4000].forEach(t=>setTimeout(collect,t));
+})();
 async function loadStatus(){
   const d=await api('GET','/status'); const badge=document.getElementById('semBadge'), hint=document.getElementById('semHint');
   if(!d||!d.ok){badge.textContent='';return;}

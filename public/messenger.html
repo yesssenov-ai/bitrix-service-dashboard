@@ -87,6 +87,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13
 .bub .reply{border-left:2px solid var(--accent-line);padding:2px 8px;margin-bottom:4px;font-size:11.5px;color:var(--text-3);background:var(--surface-2);border-radius:6px}
 .filec{display:flex;align-items:center;gap:9px;text-decoration:none;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:7px 10px;background:var(--surface-2)}
 .filec b{font-size:12.5px;font-weight:600}.filec span{font-size:11px;color:var(--text-3)}
+.voicemsg{height:40px;max-width:260px;min-width:220px}
+.imgmsg{max-width:260px;max-height:260px;border-radius:9px;display:block;object-fit:cover}
 .reacts{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
 .react{border:1px solid var(--line);background:var(--surface-2);border-radius:999px;font-size:12px;padding:1px 7px;cursor:pointer;display:inline-flex;gap:3px;align-items:center}
 .react.mine{background:var(--accent-weak);border-color:var(--accent-line);color:var(--accent)}
@@ -106,8 +108,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13
 .mpop .mi .mnm{font-size:12.75px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mpop .mi .msub{font-size:11px;color:var(--text-3);margin-left:auto;flex:none}
 .mpop .mi.agent .av{background:#7a4ecc;color:#fff}
-.comp textarea{flex:1;resize:none;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;color:var(--text);font:inherit;font-size:13px;line-height:1.4;padding:9px 12px;outline:none;max-height:130px;min-height:38px}
+.inwrap{flex:1;position:relative;display:flex;align-items:flex-end}
+.comp textarea{flex:1;resize:none;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;color:var(--text);font:inherit;font-size:13px;line-height:1.4;padding:9px 40px 9px 12px;outline:none;max-height:130px;min-height:38px}
 .comp textarea:focus{border-color:var(--accent-line)}
+.dictbtn{position:absolute;right:5px;bottom:4px;width:30px;height:30px;border:none;background:transparent;color:var(--text-3);border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.dictbtn:hover{color:var(--accent);background:var(--surface)}
+.dictbtn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.dictbtn.rec{color:#fff;background:var(--accent);animation:recpulse 1.1s infinite}
+.recbar{flex:1;display:flex;align-items:center;gap:10px}
+.recbar .rectime{flex:1;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--text)}
+.recbar .recdot{width:10px;height:10px;border-radius:50%;background:var(--accent);animation:recpulse 1s infinite;flex:none}
+.recbar .rechint{color:var(--text-3);font-weight:400;font-size:12px}
+.recbar .reccancel{color:var(--text-3)}
 .cbtn{flex:none;width:38px;height:38px;border:1px solid var(--line);background:var(--surface-2);color:var(--text-2);border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:border-color .12s,color .12s,background .12s}
 .cbtn:hover{border-color:var(--text-3);color:var(--text)}
 .cbtn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
@@ -214,9 +226,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13
       <div id="mentionPop" class="mpop" style="display:none"></div>
       <input type="file" id="fileInput" style="display:none">
       <button class="cbtn" id="attachBtn" title="Прикрепить файл"><svg viewBox="0 0 24 24"><path d="M21.4 11.1l-8.5 8.5a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg></button>
-      <button class="cbtn" id="micBtn" title="Голосовой ввод"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
-      <textarea id="input" placeholder="Сообщение…" rows="1"></textarea>
+      <button class="cbtn" id="micBtn" title="Записать голосовое сообщение"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+      <div class="inwrap">
+        <textarea id="input" placeholder="Сообщение…" rows="1"></textarea>
+        <button class="dictbtn" id="dictBtn" title="Надиктовать текст голосом"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+      </div>
       <button class="send" id="sendBtn" title="Отправить"><svg viewBox="0 0 24 24"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
+      <div class="recbar" id="recBar" style="display:none">
+        <button class="cbtn reccancel" id="recCancel" title="Отменить"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        <span class="rectime"><span class="recdot"></span><span id="recTime">0:00</span><span class="rechint">запись голосового…</span></span>
+        <button class="send" id="recSend" title="Отправить голосовое"><svg viewBox="0 0 24 24"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
+      </div>
     </div>
   </main>
 </div>
@@ -370,7 +390,15 @@ function renderMsgs(scroll){
     if(!mine && !ai && !cont) inner+=`<div class="who">${esc(author)}</div>`;
     if(ai && !cont) inner+=`<div class="who">🤖 Агент ЦУП</div>`;
     if(m.kind==='file'){
-      inner+=`<a class="filec" href="/api/msg/file/${m.id}" target="_blank" rel="noopener"><span style="font-size:20px">📄</span><div><b>${esc(m.att_name||'файл')}</b><span>${fmtBytes(m.att_size)}</span></div></a>`;
+      const isAudio=/^audio\//.test(m.att_type||'')||/\.(webm|ogg|m4a|mp3|wav)$/i.test(m.att_name||'');
+      const isImg=/^image\//.test(m.att_type||'')||/\.(png|jpe?g|gif|webp)$/i.test(m.att_name||'');
+      if(isAudio){
+        inner+=`<audio class="voicemsg" controls preload="none" src="/api/msg/file/${m.id}"></audio>`;
+      } else if(isImg){
+        inner+=`<a href="/api/msg/file/${m.id}" target="_blank" rel="noopener"><img class="imgmsg" src="/api/msg/file/${m.id}" alt="${esc(m.att_name||'изображение')}" loading="lazy"></a>`;
+      } else {
+        inner+=`<a class="filec" href="/api/msg/file/${m.id}" target="_blank" rel="noopener"><span style="font-size:20px">📄</span><div><b>${esc(m.att_name||'файл')}</b><span>${fmtBytes(m.att_size)}</span></div></a>`;
+      }
       if(m.body) inner+=`<div class="tx" style="margin-top:5px">${fmtBody(m.body)}</div>`;
     } else {
       inner+=`<div class="tx">${fmtBody(m.body||'')}</div>`;
@@ -545,6 +573,28 @@ document.getElementById('fileInput').onchange=async e=>{
   e.target.value='';
   if(d&&d.ok){ const r=await api('GET','/channels/'+CUR+'/messages?limit=60'); if(r&&r.ok){MSGS=r.messages;REACTS=r.reactions||{};applyReceipts(r.receipts);renderMsgs(true);} }
 };
+// Вставка изображения из буфера (Ctrl+V) — скриншоты отправляются как картинка.
+async function sendBlobFile(blob, name){
+  if(!CUR){ toast('Сначала откройте чат'); return; }
+  const fd=new FormData(); fd.append('file', blob, name);
+  const d=await api('POST','/channels/'+CUR+'/file',fd,true);
+  if(d&&d.ok){ const r=await api('GET','/channels/'+CUR+'/messages?limit=60'); if(r&&r.ok){MSGS=r.messages;REACTS=r.reactions||{};applyReceipts(r.receipts);renderMsgs(true);} }
+  else toast((d&&d.error)||'Не удалось вставить изображение');
+}
+function onPaste(e){
+  const items=(e.clipboardData&&e.clipboardData.items)||[];
+  for(const it of items){
+    if(it.type&&it.type.indexOf('image')===0){
+      const blob=it.getAsFile(); if(!blob) continue;
+      e.preventDefault();
+      const ext=((blob.type.split('/')[1])||'png').replace('jpeg','jpg');
+      sendBlobFile(blob,'screenshot_'+Date.now()+'.'+ext);
+      return;
+    }
+  }
+}
+document.getElementById('input').addEventListener('paste',onPaste);
+document.addEventListener('paste',e=>{ if(CUR && document.activeElement!==document.getElementById('input')) onPaste(e); });
 
 // Поиск по переписке
 async function searchMsgs(q){
@@ -744,35 +794,86 @@ function teamEditModal(team){
 let TOAST_T=null;
 function toast(msg){ let t=document.getElementById('msgToast'); if(!t){ t=document.createElement('div'); t.id='msgToast'; t.style.cssText='position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:8px 14px;border-radius:9px;font-size:12.5px;font-weight:600;z-index:9999;box-shadow:0 6px 20px rgba(0,0,0,.25);opacity:0;transition:opacity .18s'; document.body.appendChild(t); } t.textContent=msg; requestAnimationFrame(()=>t.style.opacity='1'); clearTimeout(TOAST_T); TOAST_T=setTimeout(()=>{t.style.opacity='0';},2200); }
 
-// Голосовой ввод (Web Speech API, ru-RU)
+// Диктовка текста голосом (Web Speech API, ru-RU) — микрофон СПРАВА в строке.
 (function(){
-  const micBtn=document.getElementById('micBtn'); const input=document.getElementById('input');
+  const dictBtn=document.getElementById('dictBtn'); const input=document.getElementById('input');
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){ micBtn.style.display='none'; return; }
+  if(!SR){ dictBtn.style.display='none'; return; }
   let rec=null, active=false, baseText='';
-  micBtn.onclick=()=>{
+  dictBtn.onclick=()=>{
     if(active){ try{rec.stop();}catch(e){} return; }
     rec=new SR(); rec.lang='ru-RU'; rec.interimResults=true; rec.continuous=false;
     baseText=input.value; if(baseText && !/\s$/.test(baseText)) baseText+=' ';
-    rec.onstart=()=>{ active=true; micBtn.classList.add('rec'); micBtn.title='Остановить запись'; };
-    rec.onend=()=>{ active=false; micBtn.classList.remove('rec'); micBtn.title='Голосовой ввод'; input.focus(); input.dispatchEvent(new Event('input')); };
-    rec.onerror=ev=>{ active=false; micBtn.classList.remove('rec'); if(ev.error==='not-allowed'||ev.error==='service-not-allowed') toast('Нет доступа к микрофону'); };
+    rec.onstart=()=>{ active=true; dictBtn.classList.add('rec'); dictBtn.title='Остановить диктовку'; };
+    rec.onend=()=>{ active=false; dictBtn.classList.remove('rec'); dictBtn.title='Надиктовать текст голосом'; input.focus(); input.dispatchEvent(new Event('input')); };
+    rec.onerror=ev=>{ active=false; dictBtn.classList.remove('rec'); if(ev.error==='not-allowed'||ev.error==='service-not-allowed') toast('Нет доступа к микрофону'); };
     rec.onresult=ev=>{ let txt=''; for(let i=0;i<ev.results.length;i++) txt+=ev.results[i][0].transcript; input.value=baseText+txt; input.style.height='auto'; input.style.height=Math.min(input.scrollHeight,140)+'px'; };
-    try{ rec.start(); }catch(e){ toast('Не удалось запустить запись'); }
+    try{ rec.start(); }catch(e){ toast('Не удалось запустить диктовку'); }
   };
+})();
+
+// Голосовые сообщения (запись аудио, opus/webm — компактно). Левый микрофон.
+(function(){
+  const micBtn=document.getElementById('micBtn'), recBar=document.getElementById('recBar');
+  const recTime=document.getElementById('recTime'), recSend=document.getElementById('recSend'), recCancel=document.getElementById('recCancel');
+  const comp=document.querySelector('.comp');
+  if(!navigator.mediaDevices||!window.MediaRecorder){ micBtn.style.display='none'; return; }
+  let mr=null, stream=null, chunks=[], t0=0, timer=null, cancelled=false;
+  function pickMime(){ const c=['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4']; for(const m of c){ if(MediaRecorder.isTypeSupported(m)) return m; } return ''; }
+  function fmt(s){ const m=Math.floor(s/60), ss=s%60; return m+':'+String(ss).padStart(2,'0'); }
+  function showRec(on){ recBar.style.display=on?'flex':'none'; document.getElementById('attachBtn').style.display=on?'none':''; micBtn.style.display=on?'none':''; document.querySelector('.inwrap').style.display=on?'none':''; document.getElementById('sendBtn').style.display=on?'none':''; }
+  function stopTracks(){ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } clearInterval(timer); }
+  async function start(){
+    if(!CUR){ toast('Сначала откройте чат'); return; }
+    try{ stream=await navigator.mediaDevices.getUserMedia({audio:true}); }
+    catch(e){ toast('Нет доступа к микрофону'); return; }
+    const mime=pickMime(); chunks=[]; cancelled=false;
+    try{ mr=new MediaRecorder(stream, Object.assign({audioBitsPerSecond:24000}, mime?{mimeType:mime}:{})); }
+    catch(e){ try{ mr=new MediaRecorder(stream); }catch(e2){ toast('Запись не поддерживается'); stopTracks(); return; } }
+    mr.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
+    mr.onstop=async()=>{
+      stopTracks(); showRec(false);
+      if(cancelled||!chunks.length) return;
+      const type=(mr&&mr.mimeType)||mime||'audio/webm';
+      const blob=new Blob(chunks,{type});
+      if(blob.size<900){ toast('Слишком короткое сообщение'); return; }
+      const ext=type.includes('ogg')?'ogg':(type.includes('mp4')?'m4a':'webm');
+      const fd=new FormData(); fd.append('file', blob, 'voice_'+Date.now()+'.'+ext);
+      const d=await api('POST','/channels/'+CUR+'/file',fd,true);
+      if(d&&d.ok){ const r=await api('GET','/channels/'+CUR+'/messages?limit=60'); if(r&&r.ok){MSGS=r.messages;REACTS=r.reactions||{};applyReceipts(r.receipts);renderMsgs(true);} }
+      else toast((d&&d.error)||'Не удалось отправить голосовое');
+    };
+    mr.start(); t0=Date.now(); showRec(true); recTime.textContent='0:00';
+    timer=setInterval(()=>{ const s=Math.floor((Date.now()-t0)/1000); recTime.textContent=fmt(s); if(s>=300){ stop(); } },250);
+  }
+  function stop(){ if(mr&&mr.state!=='inactive'){ try{mr.stop();}catch(e){} } }
+  function cancel(){ cancelled=true; stop(); }
+  micBtn.onclick=start;
+  recSend.onclick=stop;
+  recCancel.onclick=cancel;
 })();
 
 if(window.innerWidth<=760) document.getElementById('backMob').style.display='inline-flex';
 
 // Сбор глобальных плавающих иконок в единый ровный ряд по центру (они создаются
-// разными скриптами асинхронно, поэтому собираем несколько раз).
+// разными скриптами асинхронно, поэтому собираем несколько раз) + ярлык «База знаний».
 (function(){
+  const TBSTYLE='border:1px solid var(--line);background:var(--surface);color:var(--text-2);border-radius:9px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;cursor:pointer';
+  let isAdmin=false;
+  fetch('/auth/me',{credentials:'same-origin'}).then(r=>r.json()).then(d=>{isAdmin=d&&(d.role==='admin'||d.role==='superadmin');}).catch(()=>{});
+  function mkKb(){
+    if(document.getElementById('pls-tb-kb')) return document.getElementById('pls-tb-kb');
+    const a=document.createElement('a'); a.id='pls-tb-kb'; a.href='/knowledge.html'; a.title='База знаний'; a.style.cssText=TBSTYLE;
+    a.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2zM8 7h7M8 11h7"/></svg>';
+    return a;
+  }
   function collect(){
     let bar=document.getElementById('pls-toolbar');
     if(!bar){ bar=document.createElement('div'); bar.id='pls-toolbar'; document.body.appendChild(bar); }
     ['pai-fab','pls-help-btn','pls-sr-btn','pls-fb-btn','themeToggle'].forEach(id=>{
       const el=document.getElementById(id); if(el && el.parentNode!==bar) bar.appendChild(el);
     });
+    if(isAdmin){ const kb=mkKb(); if(kb.parentNode!==bar) bar.insertBefore(kb, bar.firstChild); }
   }
   [150,500,1200,2500,4000].forEach(t=>setTimeout(collect,t));
 })();

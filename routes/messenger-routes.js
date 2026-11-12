@@ -264,6 +264,17 @@ router.get('/channels/:id(\\d+)/messages', requireAuth(WRITE), async (req, res) 
     const cid = +req.params.id;
     if (!(await isMember(cid, uid(req)))) return res.status(403).json({ ok: false, error: 'Нет доступа к чату' });
     const before = parseInt(req.query.before, 10) || 0;
+    // Открытие чата (свежая страница, не прокрутка истории) = прочитано.
+    // Отмечаем на сервере, чтобы счётчик непрочитанных надёжно гас при чтении,
+    // не завися только от клиентского вызова /read.
+    if (!before) {
+      try {
+        await pool.query(`UPDATE ticketsmodule_msg_members mm
+          SET last_read_id = GREATEST(mm.last_read_id, COALESCE((SELECT MAX(x.id) FROM ticketsmodule_msg_messages x WHERE x.channel_id=mm.channel_id AND x.deleted_at IS NULL),0)),
+              last_read_at = NOW()
+          WHERE mm.channel_id=$1 AND mm.user_id=$2`, [cid, uid(req)]);
+      } catch (e) { /* не критично для отдачи сообщений */ }
+    }
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
     const where = before ? 'AND m.id < $3' : '';
     const params = before ? [cid, limit, before] : [cid, limit];
