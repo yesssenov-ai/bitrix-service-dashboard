@@ -1005,7 +1005,7 @@ function toast(msg){ let t=document.getElementById('msgToast'); if(!t){ t=docume
   const recTime=document.getElementById('recTime'), recSend=document.getElementById('recSend'), recCancel=document.getElementById('recCancel');
   const comp=document.querySelector('.comp');
   if(!navigator.mediaDevices||!window.MediaRecorder){ micBtn.style.display='none'; return; }
-  let mr=null, stream=null, chunks=[], t0=0, timer=null, cancelled=false;
+  let mr=null, stream=null, chunks=[], t0=0, timer=null, cancelled=false, recording=false;
   function pickMime(){ const c=['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4']; for(const m of c){ if(MediaRecorder.isTypeSupported(m)) return m; } return ''; }
   function fmt(s){ const m=Math.floor(s/60), ss=s%60; return m+':'+String(ss).padStart(2,'0'); }
   function showRec(on){ recBar.style.display=on?'flex':'none'; document.getElementById('attachBtn').style.display=on?'none':''; micBtn.style.display=on?'none':''; document.querySelector('.inwrap').style.display=on?'none':''; document.getElementById('sendBtn').style.display=on?'none':''; }
@@ -1019,7 +1019,7 @@ function toast(msg){ let t=document.getElementById('msgToast'); if(!t){ t=docume
     catch(e){ try{ mr=new MediaRecorder(stream); }catch(e2){ toast('Запись не поддерживается'); stopTracks(); return; } }
     mr.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
     mr.onstop=async()=>{
-      stopTracks(); showRec(false);
+      recording=false; stopTracks(); showRec(false);
       if(cancelled||!chunks.length) return;
       const type=(mr&&mr.mimeType)||mime||'audio/webm';
       const blob=new Blob(chunks,{type});
@@ -1035,7 +1035,7 @@ function toast(msg){ let t=document.getElementById('msgToast'); if(!t){ t=docume
       }
       else toast((d&&d.error)||'Не удалось отправить голосовое');
     };
-    mr.start(); t0=Date.now(); showRec(true); recTime.textContent='0:00';
+    mr.start(); recording=true; t0=Date.now(); showRec(true); recTime.textContent='0:00';
     timer=setInterval(()=>{ const s=Math.floor((Date.now()-t0)/1000); recTime.textContent=fmt(s); if(s>=300){ stop(); } },250);
   }
   function stop(){ if(mr&&mr.state!=='inactive'){ try{mr.stop();}catch(e){} } }
@@ -1043,6 +1043,9 @@ function toast(msg){ let t=document.getElementById('msgToast'); if(!t){ t=docume
   micBtn.onclick=start;
   recSend.onclick=stop;
   recCancel.onclick=cancel;
+  // Во время записи поле ввода скрыто, поэтому слушаем клавиши на документе:
+  // Enter — отправить голосовое, Escape — отменить запись.
+  document.addEventListener('keydown',e=>{ if(!recording) return; if(e.key==='Enter'){ e.preventDefault(); stop(); } else if(e.key==='Escape'){ e.preventDefault(); cancel(); } });
 })();
 
 if(window.innerWidth<=760) document.getElementById('backMob').style.display='inline-flex';
