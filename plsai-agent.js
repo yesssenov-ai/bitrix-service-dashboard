@@ -35,7 +35,12 @@ function agentPool() {
   return _roPool;
 }
 
-const AGENT_MODEL = process.env.PLSAI_AGENT_MODEL || process.env.PLSAI_MODEL || 'claude-haiku-5-5';
+// Основная модель — Sonnet (сильнее Haiku в понимании контекста и построении SQL).
+// Если ID недоступен для аккаунта — автоматический откат на проверенную Haiku.
+const AGENT_MODEL = process.env.PLSAI_AGENT_MODEL || process.env.PLSAI_MODEL || 'claude-sonnet-4-5';
+const FALLBACK_MODEL = process.env.PLSAI_FALLBACK_MODEL || 'claude-haiku-5-5';
+let ACTIVE_MODEL = AGENT_MODEL;
+function isModelError(msg) { return /model|not_found|does not exist|unknown model|permission|not allowed|404/i.test(String(msg || '')); }
 const MAX_STEPS = parseInt(process.env.PLSAI_AGENT_MAX_STEPS || '8', 10);
 const ROW_CAP = 2000;          // жёсткий потолок строк в SQL
 const ROWS_TO_MODEL = 40;      // сколько строк отдаём модели обратно
@@ -370,17 +375,31 @@ const TOOLS = [
   },
 ];
 
-async function callClaude(system, messages, key) {
+// Один вызов к API с заданной моделью.
+async function postClaude(model, bodyExtra, system, messages, key) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    // Haiku 5.5: отключаем adaptive-мышление (ест max_tokens) и ставим effort=low —
-    // поведение как у прежней Haiku, без пустых ответов и без потери бюджета.
-    body: JSON.stringify({ model: AGENT_MODEL, max_tokens: 1500, thinking: { type: 'disabled' }, system, tools: TOOLS, messages }),
+    body: JSON.stringify(Object.assign({ model, thinking: { type: 'disabled' }, system, messages }, bodyExtra)),
   });
   const data = await r.json();
-  if (!r.ok) throw new Error((data && data.error && data.error.message) || ('HTTP ' + r.status));
+  if (!r.ok) { const e = new Error((data && data.error && data.error.message) || ('HTTP ' + r.status)); e._api = true; throw e; }
   return data;
+}
+// Вызов с автооткатом: если основная модель недоступна — переключаемся на Haiku.
+async function callModel(bodyExtra, system, messages, key) {
+  try { return await postClaude(ACTIVE_MODEL, bodyExtra, system, messages, key); }
+  catch (e) {
+    if (ACTIVE_MODEL !== FALLBACK_MODEL && isModelError(e.message)) {
+      console.warn('PLSAI модель «' + ACTIVE_MODEL + '» недоступна (' + e.message + '), откат на ' + FALLBACK_MODEL);
+      ACTIVE_MODEL = FALLBACK_MODEL;
+      return await postClaude(ACTIVE_MODEL, bodyExtra, system, messages, key);
+    }
+    throw e;
+  }
+}
+async function callClaude(system, messages, key) {
+  return await callModel({ max_tokens: 1500, tools: TOOLS }, system, messages, key);
 }
 
 function trimRows(rows) {
@@ -519,16 +538,9 @@ async function runAgent(qRaw, user) {
   // (без инструментов), а не отдавать сухое «не удалось завершить».
   messages.push({ role: 'user', content: 'Заверши: дай лучший возможный ответ по уже полученным данным. Если данных не хватило или нет доступа — коротко объясни почему. Не вызывай инструменты.' });
   try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: AGENT_MODEL, max_tokens: 1200, thinking: { type: 'disabled' }, system, messages }),
-    });
-    const data = await r.json();
-    if (r.ok) {
-      const txt = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
-      if (txt) return finalize(txt, presentable, steps, user, q, true);
-    }
+    const data = await callModel({ max_tokens: 1200 }, system, messages, key);
+    const txt = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
+    if (txt) return finalize(txt, presentable, steps, user, q, true);
   } catch (e) { /* ниже общий ответ */ }
   // Совсем не получилось — покажем, что мешало (ошибки запросов), чтобы было понятно.
   const errs = steps.filter(s => s.error).slice(-2).map(s => s.error);
@@ -540,7 +552,7 @@ async function runAgent(qRaw, user) {
 // (до 50 строк) и токен для выгрузки всех строк в Excel + сохранить удачный
 // пример в банк (самообучение) и вернуть его id для 👍/👎.
 async function finalize(answer, presentable, steps, user, q, truncated) {
-  const out = { ok: true, answer, steps, model: AGENT_MODEL };
+  const out = { ok: true, answer, steps, model: ACTIVE_MODEL };
   if (truncated) out.truncated = true;
   if (presentable && presentable.rowCount > 0) {
     const rows = presentable.rows.slice(0, 50).map(r => {

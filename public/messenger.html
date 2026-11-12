@@ -325,6 +325,7 @@ async function openChannel(id){
   renderList();
   const d = await api('GET','/channels/'+id+'/messages?limit=60'); if(!d||!d.ok) return;
   MSGS=d.messages; REACTS=d.reactions||{}; applyReceipts(d.receipts);
+  OLDEST = MSGS.length? MSGS[0].id : 0; NO_MORE_OLDER = MSGS.length<60; LOADING_OLDER=false;
   if(d.members){ const ch=CHANNELS.find(x=>x.id===id); if(ch) ch.members=d.members; }
   if(c){ c.locked=!!d.locked; c.iAmAdmin=!!d.iAmAdmin; }
   updateComposerLock();
@@ -332,10 +333,31 @@ async function openChannel(id){
   const last = MSGS.length? MSGS[MSGS.length-1].id : 0;
   if(last){ api('POST','/read',{channelId:id,lastId:last}); const ch=CHANNELS.find(x=>x.id===id); if(ch) ch.unread=0; renderList(); }
 }
+// Подгрузка старых сообщений при прокрутке вверх (бесконечная история).
+let OLDEST=0, LOADING_OLDER=false, NO_MORE_OLDER=false;
+async function loadOlder(){
+  if(LOADING_OLDER||NO_MORE_OLDER||!CUR||!OLDEST) return;
+  LOADING_OLDER=true;
+  const box=document.getElementById('msgs'); const prevH=box.scrollHeight, prevT=box.scrollTop;
+  const r=await api('GET','/channels/'+CUR+'/messages?limit=40&before='+OLDEST);
+  LOADING_OLDER=false;
+  if(!r||!r.ok||!r.messages||!r.messages.length){ NO_MORE_OLDER=true; return; }
+  const older=r.messages.filter(m=>!MSGS.find(x=>x.id===m.id));
+  if(!older.length){ NO_MORE_OLDER=true; return; }
+  MSGS=older.concat(MSGS); OLDEST=MSGS[0].id;
+  if(r.reactions) REACTS=Object.assign(r.reactions, REACTS);
+  if(r.messages.length<40) NO_MORE_OLDER=true;
+  renderMsgs(false);
+  // сохранить положение прокрутки (чтобы не «прыгало»)
+  box.scrollTop = box.scrollHeight - prevH + prevT;
+}
+(function(){ const box=document.getElementById('msgs');
+  box.addEventListener('scroll',()=>{ if(box.scrollTop<=48) loadOlder(); }); })();
 function renderMsgs(scroll){
   const box=document.getElementById('msgs');
   if(!MSGS.length){ box.innerHTML='<div class="empty">Сообщений пока нет. Напишите первым — или спросите «@аи …».</div>'; return; }
   let html='', lastDay='', lastAuthor=null;
+  if(NO_MORE_OLDER && MSGS.length>20) html+='<div class="day" style="opacity:.55">Начало переписки</div>';
   for(const m of MSGS){
     const dk=dayKey(m.created_at);
     if(dk!==lastDay){ html+=`<div class="day">${dayLabel(m.created_at)}</div>`; lastDay=dk; lastAuthor=null; }
@@ -556,7 +578,12 @@ async function pollOnce(){
       else if(ch && m.author_id!==ME.id){ ch.unread=(ch.unread||0)+1; }
     }
     if(touched){ const b=await api('GET','/bootstrap'); if(b&&b.ok){CHANNELS=b.channels;PEOPLE=b.people;indexPeople();} }
-    if(curNew){ const r=await api('GET','/channels/'+CUR+'/messages?limit=60'); if(r&&r.ok){MSGS=r.messages;REACTS=r.reactions||{};applyReceipts(r.receipts);renderMsgs(true);} const last=MSGS.length?MSGS[MSGS.length-1].id:0; if(last) api('POST','/read',{channelId:CUR,lastId:last}); const cc=CHANNELS.find(x=>x.id===CUR); if(cc)cc.unread=0; }
+    if(curNew){ const r=await api('GET','/channels/'+CUR+'/messages?limit=60'); if(r&&r.ok){
+        // merge: сохраняем уже подгруженную старую историю, обновляем свежие + реакции
+        const byId={}; MSGS.forEach(m=>byId[m.id]=m); r.messages.forEach(m=>byId[m.id]=m);
+        MSGS=Object.values(byId).sort((a,b)=>a.id-b.id); if(MSGS.length) OLDEST=MSGS[0].id;
+        REACTS=Object.assign({}, REACTS, r.reactions||{}); applyReceipts(r.receipts); renderMsgs(true);
+      } const last=MSGS.length?MSGS[MSGS.length-1].id:0; if(last) api('POST','/read',{channelId:CUR,lastId:last}); const cc=CHANNELS.find(x=>x.id===CUR); if(cc)cc.unread=0; }
     renderList();
   }
 }
