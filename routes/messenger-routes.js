@@ -88,6 +88,16 @@ async function ensureMsgSchema() {
   // Ключ объекта в Storage (если файл вынесен из БД в объектное хранилище).
   try { await pool.query(`ALTER TABLE ticketsmodule_msg_messages ADD COLUMN IF NOT EXISTS att_key VARCHAR(400)`); }
   catch (e) { console.error('msg ALTER messages att_key:', e.message); }
+  // Длительность голосового (сек) и признак «переслано».
+  try { await pool.query(`ALTER TABLE ticketsmodule_msg_messages ADD COLUMN IF NOT EXISTS att_duration INTEGER`); } catch (e) {}
+  try { await pool.query(`ALTER TABLE ticketsmodule_msg_messages ADD COLUMN IF NOT EXISTS forwarded BOOLEAN DEFAULT false`); } catch (e) {}
+  // «Прослушано»: кто из получателей прослушал голосовое (для синей галочки голосового).
+  try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS ticketsmodule_msg_played (
+      message_id INTEGER NOT NULL, user_id INTEGER NOT NULL, played_at TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (message_id, user_id)
+    )`);
+  } catch (e) { console.error('msg played table:', e.message); }
   _schemaReady = true;
 }
 ensureMsgSchema().catch(e => console.error('msg ensureSchema:', e.message));
@@ -161,6 +171,14 @@ async function membersPointers(userId, onlyChannel, _retried) {
   });
 }
 
+// Кто прослушал голосовые (по id сообщений) → {messageId: [userId,...]}.
+async function playedFor(ids) {
+  if (!ids || !ids.length) return {};
+  try {
+    const r = await pool.query('SELECT message_id, array_agg(user_id) AS users FROM ticketsmodule_msg_played WHERE message_id = ANY($1) GROUP BY message_id', [ids]);
+    const out = {}; r.rows.forEach(x => { out[x.message_id] = x.users; }); return out;
+  } catch (e) { return {}; }
+}
 const uid = req => req.user.id;
 const dmKey = (a, b) => { a = +a; b = +b; return Math.min(a, b) + ':' + Math.max(a, b); };
 async function isMember(channelId, userId) {
@@ -296,7 +314,7 @@ router.get('/poll', requireAuth(WRITE), async (req, res) => {
     const since = parseInt(req.query.since, 10) || 0;
     const msgs = await pool.query(`
       SELECT m.id, m.channel_id, m.author_id, m.kind, m.body, m.payload, m.reply_to,
-             m.att_name, m.att_type, m.att_size, m.mentions, m.created_at, u.display_name AS author_name
+             m.att_name, m.att_type, m.att_size, m.att_duration, m.forwarded, m.mentions, m.created_at, u.display_name AS author_name
       FROM ticketsmodule_msg_messages m
       LEFT JOIN ticketsmodule_users u ON u.id=m.author_id
       WHERE m.id > $1 AND m.deleted_at IS NULL
@@ -304,7 +322,11 @@ router.get('/poll', requireAuth(WRITE), async (req, res) => {
       ORDER BY m.id ASC LIMIT 200`, [since, uid(req)]);
     const people = await directory();
     let receipts = []; try { receipts = await membersPointers(uid(req)); } catch (e) { console.error('msg receipts poll:', e.message); }
-    res.json({ ok: true, messages: msgs.rows, people, receipts });
+    // Статусы «прослушано» по голосовым текущего открытого чата (для синей галочки голосового).
+    let played = {};
+    const cur = parseInt(req.query.cur, 10) || 0;
+    if (cur) { try { const vm = await pool.query(`SELECT id FROM ticketsmodule_msg_messages WHERE channel_id=$1 AND kind='file' AND deleted_at IS NULL ORDER BY id DESC LIMIT 100`, [cur]); played = await playedFor(vm.rows.map(x => x.id)); } catch (e) {} }
+    res.json({ ok: true, messages: msgs.rows, people, receipts, played });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
@@ -333,7 +355,7 @@ router.get('/channels/:id(\\d+)/messages', requireAuth(WRITE), async (req, res) 
     const params = before ? [cid, limit, before] : [cid, limit];
     const r = await pool.query(`
       SELECT m.id, m.channel_id, m.author_id, m.kind, m.body, m.payload, m.reply_to,
-             m.att_name, m.att_type, m.att_size, m.mentions, m.created_at, u.display_name AS author_name
+             m.att_name, m.att_type, m.att_size, m.att_duration, m.forwarded, m.mentions, m.created_at, u.display_name AS author_name
       FROM ticketsmodule_msg_messages m
       LEFT JOIN ticketsmodule_users u ON u.id=m.author_id
       WHERE m.channel_id=$1 AND m.deleted_at IS NULL ${where}
@@ -352,7 +374,8 @@ router.get('/channels/:id(\\d+)/messages', requireAuth(WRITE), async (req, res) 
     try { receipts = await membersPointers(uid(req), cid); } catch (e) { console.error('msg receipts:', e.message); }
     let locked = false, iAmAdmin = false;
     try { const cc = await pool.query('SELECT locked FROM ticketsmodule_msg_channels WHERE id=$1', [cid]); locked = !!(cc.rows[0] && cc.rows[0].locked); iAmAdmin = await isChannelAdmin(cid, req.user); } catch (e) {}
-    res.json({ ok: true, messages: r.rows.reverse(), reactions, receipts, members, locked, iAmAdmin });
+    const played = await playedFor(ids);
+    res.json({ ok: true, messages: r.rows.reverse(), reactions, receipts, members, locked, iAmAdmin, played });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
@@ -487,10 +510,11 @@ router.post('/channels/:id(\\d+)/file', requireAuth(WRITE), upload.single('file'
         await storage.upload(attKey, req.file.buffer, req.file.mimetype);
       } catch (e) { console.error('msg storage upload, откат в БД:', e.message); attKey = null; attData = req.file.buffer; }
     } else { attData = req.file.buffer; }
+    const dur = Math.max(0, Math.min(3600, parseInt((req.body && req.body.duration) || '0', 10) || 0)) || null;
     const ins = await pool.query(
-      `INSERT INTO ticketsmodule_msg_messages (channel_id, author_id, kind, body, att_name, att_type, att_size, att_data, att_key)
-       VALUES ($1,$2,'file',$3,$4,$5,$6,$7,$8) RETURNING id, created_at`,
-      [cid, uid(req), caption, orig, req.file.mimetype, req.file.size, attData, attKey]);
+      `INSERT INTO ticketsmodule_msg_messages (channel_id, author_id, kind, body, att_name, att_type, att_size, att_data, att_key, att_duration)
+       VALUES ($1,$2,'file',$3,$4,$5,$6,$7,$8,$9) RETURNING id, created_at`,
+      [cid, uid(req), caption, orig, req.file.mimetype, req.file.size, attData, attKey, dur]);
     await pool.query('UPDATE ticketsmodule_msg_channels SET last_at=NOW() WHERE id=$1', [cid]);
     pushNewMessage(cid, uid(req), req.user.display_name, '📄 ' + (caption || orig)).catch(() => {});
     res.json({ ok: true, id: ins.rows[0].id });
@@ -738,6 +762,63 @@ router.post('/read', requireAuth(WRITE), express.json(), async (req, res) => {
       WHERE channel_id=$1 AND user_id=$2`, [cid, uid(req)]); }
     catch (e) { ensureMsgColumns().catch(() => {}); }
     res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// Отметить голосовое «прослушано» (его автору загорится синяя галочка голосового).
+router.post('/played', requireAuth(WRITE), express.json(), async (req, res) => {
+  try {
+    const mid = +(req.body && req.body.messageId);
+    if (!mid) return res.status(400).json({ ok: false, error: 'messageId' });
+    // Только участник канала этого сообщения и не свой же голосовой.
+    const m = await pool.query('SELECT channel_id, author_id FROM ticketsmodule_msg_messages WHERE id=$1', [mid]);
+    if (!m.rows.length) return res.status(404).json({ ok: false, error: 'Нет сообщения' });
+    if (!(await isMember(m.rows[0].channel_id, uid(req)))) return res.status(403).json({ ok: false, error: 'Нет доступа' });
+    if (m.rows[0].author_id === uid(req)) return res.json({ ok: true }); // своё — не отмечаем
+    try { await pool.query('INSERT INTO ticketsmodule_msg_played (message_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [mid, uid(req)]); }
+    catch (e) { await ensureMsgSchema(); await pool.query('INSERT INTO ticketsmodule_msg_played (message_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [mid, uid(req)]); }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// Удалить СВОИ сообщения (мягкое удаление). Удалять можно только свои.
+router.post('/messages/delete', requireAuth(WRITE), express.json(), async (req, res) => {
+  try {
+    const ids = Array.from(new Set(((req.body && req.body.ids) || []).map(Number).filter(Boolean))).slice(0, 100);
+    if (!ids.length) return res.status(400).json({ ok: false, error: 'Нет сообщений' });
+    // Только сообщения, автор которых — текущий пользователь.
+    const r = await pool.query('UPDATE ticketsmodule_msg_messages SET deleted_at=NOW() WHERE id = ANY($1) AND author_id=$2 AND deleted_at IS NULL RETURNING id', [ids, uid(req)]);
+    res.json({ ok: true, deleted: r.rows.map(x => x.id) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// Переслать одно/несколько сообщений в один/несколько чатов.
+router.post('/forward', requireAuth(WRITE), express.json({ limit: '256kb' }), async (req, res) => {
+  try {
+    const ids = Array.from(new Set(((req.body && req.body.ids) || []).map(Number).filter(Boolean))).slice(0, 50);
+    const toChannels = Array.from(new Set(((req.body && req.body.toChannels) || []).map(Number).filter(Boolean))).slice(0, 30);
+    if (!ids.length || !toChannels.length) return res.status(400).json({ ok: false, error: 'Укажите сообщения и чаты' });
+    // Источники: только сообщения из каналов, где пользователь состоит.
+    const src = await pool.query(`SELECT m.id, m.kind, m.body, m.payload, m.att_name, m.att_type, m.att_size, m.att_data, m.att_key, m.att_duration
+      FROM ticketsmodule_msg_messages m
+      WHERE m.id = ANY($1) AND m.deleted_at IS NULL
+        AND m.channel_id IN (SELECT channel_id FROM ticketsmodule_msg_members WHERE user_id=$2)
+      ORDER BY m.id ASC`, [ids, uid(req)]);
+    if (!src.rows.length) return res.status(404).json({ ok: false, error: 'Сообщения недоступны' });
+    let count = 0;
+    for (const cid of toChannels) {
+      if (!(await isMember(cid, uid(req)))) continue;
+      const chk = await pool.query('SELECT kind, locked FROM ticketsmodule_msg_channels WHERE id=$1', [cid]);
+      if (chk.rows[0] && chk.rows[0].locked && !(await isChannelAdmin(cid, req.user))) continue;
+      for (const s of src.rows) {
+        const kind = s.kind === 'file' ? 'file' : 'text';
+        const r = await pool.query(
+          `INSERT INTO ticketsmodule_msg_messages (channel_id, author_id, kind, body, att_name, att_type, att_size, att_data, att_key, att_duration, forwarded)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true) RETURNING id`,
+          [cid, uid(req), kind, s.body || '', s.att_name, s.att_type, s.att_size, s.att_data, s.att_key, s.att_duration]);
+        count++;
+      }
+      await pool.query('UPDATE ticketsmodule_msg_channels SET last_at=NOW() WHERE id=$1', [cid]);
+      pushNewMessage(cid, uid(req), req.user.display_name, 'Пересланное сообщение').catch(() => {});
+    }
+    res.json({ ok: true, count });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 router.post('/react', requireAuth(WRITE), express.json(), async (req, res) => {
