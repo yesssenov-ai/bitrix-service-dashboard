@@ -347,7 +347,7 @@ async function openChannel(id){
   const d = await api('GET','/channels/'+id+'/messages?limit=60'); if(!d||!d.ok) return;
   MSGS=d.messages; REACTS=d.reactions||{}; applyReceipts(d.receipts);
   OLDEST = MSGS.length? MSGS[0].id : 0; NO_MORE_OLDER = MSGS.length<60; LOADING_OLDER=false;
-  if(d.members){ const ch=CHANNELS.find(x=>x.id===id); if(ch) ch.members=d.members; }
+  if(d.members && d.members.length){ const ch=CHANNELS.find(x=>x.id===id); if(ch) ch.members=d.members; }
   if(c){ c.locked=!!d.locked; c.iAmAdmin=!!d.iAmAdmin; }
   updateComposerLock();
   renderMsgs(true);

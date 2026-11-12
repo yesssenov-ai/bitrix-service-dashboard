@@ -118,9 +118,14 @@ async function markDeliveredAll(userId) {
 // считаем доставленным до последнего сообщения канала — галочка «доставлено»
 // появляется сразу, не дожидаясь его опроса.
 async function membersPointers(userId, onlyChannel, _retried) {
-  const params = [userId];
-  let where = `m.channel_id IN (SELECT channel_id FROM ticketsmodule_msg_members WHERE user_id=$1)`;
-  if (onlyChannel) { params.push(onlyChannel); where = `m.channel_id=$2`; }
+  // ВАЖНО: параметры нумеруем последовательно ($1) в ОБОИХ ветках. Раньше ветка
+  // одного канала передавала [userId, onlyChannel], а ссылалась только на $2 —
+  // Postgres ругался на число параметров, запрос падал, и клиент получал пустых
+  // участников (ломались галочки). Теперь $1 используется всегда.
+  const params = onlyChannel ? [onlyChannel] : [userId];
+  const where = onlyChannel
+    ? `m.channel_id=$1`
+    : `m.channel_id IN (SELECT channel_id FROM ticketsmodule_msg_members WHERE user_id=$1)`;
   let r;
   try {
     r = await pool.query(`
@@ -335,12 +340,11 @@ router.get('/channels/:id(\\d+)/messages', requireAuth(WRITE), async (req, res) 
       const rr = await pool.query('SELECT message_id, emoji, COUNT(*)::int n, array_agg(user_id) users FROM ticketsmodule_msg_reactions WHERE message_id = ANY($1) GROUP BY message_id, emoji', [ids]);
       rr.rows.forEach(x => { (reactions[x.message_id] = reactions[x.message_id] || []).push({ emoji: x.emoji, n: x.n, users: x.users }); });
     }
+    // Участники и квитанции — НЕЗАВИСИМО: даже если квитанции упадут, список
+    // участников должен прийти (иначе на клиенте ломаются галочки).
     let receipts = [], members = [];
-    try {
-      receipts = await membersPointers(uid(req), cid);
-      const mem = await pool.query('SELECT user_id FROM ticketsmodule_msg_members WHERE channel_id=$1', [cid]);
-      members = mem.rows.map(x => x.user_id);
-    } catch (e) { console.error('msg receipts:', e.message); }
+    try { const mem = await pool.query('SELECT user_id FROM ticketsmodule_msg_members WHERE channel_id=$1', [cid]); members = mem.rows.map(x => x.user_id); } catch (e) { console.error('msg members:', e.message); }
+    try { receipts = await membersPointers(uid(req), cid); } catch (e) { console.error('msg receipts:', e.message); }
     let locked = false, iAmAdmin = false;
     try { const cc = await pool.query('SELECT locked FROM ticketsmodule_msg_channels WHERE id=$1', [cid]); locked = !!(cc.rows[0] && cc.rows[0].locked); iAmAdmin = await isChannelAdmin(cid, req.user); } catch (e) {}
     res.json({ ok: true, messages: r.rows.reverse(), reactions, receipts, members, locked, iAmAdmin });
