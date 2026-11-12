@@ -91,7 +91,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13
 .filec{display:flex;align-items:center;gap:9px;text-decoration:none;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:7px 10px;background:var(--surface-2)}
 .filec b{font-size:12.5px;font-weight:600}.filec span{font-size:11px;color:var(--text-3)}
 .voicemsg{height:40px;max-width:260px;min-width:220px}
-.imgmsg{max-width:260px;max-height:260px;border-radius:9px;display:block;object-fit:cover}
+.imgmsg{max-width:260px;max-height:260px;border-radius:9px;display:block;object-fit:cover;cursor:zoom-in}
+.lightbox{position:fixed;inset:0;background:rgba(8,11,16,.9);display:flex;align-items:center;justify-content:center;z-index:200;padding:24px;cursor:zoom-out}
+.lightbox img{max-width:100%;max-height:100%;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.lightbox .lb-dl{position:absolute;top:calc(14px + env(safe-area-inset-top));right:16px;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:9px;padding:8px 12px;font:inherit;font-size:13px;font-weight:600;text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.lightbox .lb-dl:hover{background:rgba(255,255,255,.2)}
 .reacts{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
 .react{border:1px solid var(--line);background:var(--surface-2);border-radius:999px;font-size:12px;padding:1px 7px;cursor:pointer;display:inline-flex;gap:3px;align-items:center}
 .react.mine{background:var(--accent-weak);border-color:var(--accent-line);color:var(--accent)}
@@ -418,7 +422,7 @@ function renderMsgs(scroll){
       if(isAudio){
         inner+=`<audio class="voicemsg" controls preload="none" src="/api/msg/file/${m.id}"></audio>`;
       } else if(isImg){
-        inner+=`<a href="/api/msg/file/${m.id}" target="_blank" rel="noopener"><img class="imgmsg" src="/api/msg/file/${m.id}" alt="${esc(m.att_name||'изображение')}" loading="lazy"></a>`;
+        inner+=`<img class="imgmsg" src="/api/msg/file/${m.id}" alt="${esc(m.att_name||'изображение')}" loading="lazy" onclick="openImg('/api/msg/file/${m.id}')">`;
       } else {
         inner+=`<a class="filec" href="/api/msg/file/${m.id}" target="_blank" rel="noopener"><span style="font-size:20px">📄</span><div><b>${esc(m.att_name||'файл')}</b><span>${fmtBytes(m.att_size)}</span></div></a>`;
       }
@@ -438,8 +442,18 @@ function renderMsgs(scroll){
   if(scroll) box.scrollTop=box.scrollHeight;
 }
 let AGENT_TYPING=null, AGENT_TYPING_T=null;
-function setAgentTyping(cid){ AGENT_TYPING=cid; clearTimeout(AGENT_TYPING_T); AGENT_TYPING_T=setTimeout(()=>{ if(AGENT_TYPING===cid){ AGENT_TYPING=null; if(CUR===cid) renderMsgs(true); } },120000); }
+function setAgentTyping(cid){ AGENT_TYPING=cid; clearTimeout(AGENT_TYPING_T); if(CUR===cid) renderMsgs(true); AGENT_TYPING_T=setTimeout(()=>{ if(AGENT_TYPING===cid){ AGENT_TYPING=null; if(CUR===cid) renderMsgs(true); } },120000); }
 function clearAgentTyping(){ if(AGENT_TYPING!=null){ AGENT_TYPING=null; clearTimeout(AGENT_TYPING_T); } }
+// Просмотр картинки во встроенном лайтбоксе (не скачивание).
+function openImg(url){
+  const ov=document.createElement('div'); ov.className='lightbox';
+  ov.innerHTML='<a class="lb-dl" href="'+url+'" download target="_blank" rel="noopener">Скачать</a><img src="'+url+'" alt="">';
+  ov.querySelector('.lb-dl').addEventListener('click',e=>e.stopPropagation());
+  const close=()=>{ ov.remove(); document.removeEventListener('keydown',onEsc); };
+  const onEsc=e=>{ if(e.key==='Escape') close(); };
+  ov.addEventListener('click',close); document.addEventListener('keydown',onEsc);
+  document.body.appendChild(ov);
+}
 function aiExtra(payload){
   let p=payload; try{ if(typeof p==='string') p=JSON.parse(p);}catch(e){return'';}
   const t=p&&p.table; if(!t||!t.rows||!t.rows.length) return '';
