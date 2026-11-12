@@ -470,12 +470,19 @@ router.get('/staff', requireAnyModuleApi(TC_CODES), async (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
+// Парсер допуска: «ICP-OES до 2026-12-31» → {method, until}. Без даты → {method}.
+function parseAdmit(s) {
+  s = String(s || '').trim(); if (!s) return { method: '' };
+  const m = s.match(/^(.*?)\s*(?:до|until|~|\|)\s*(\d{4}-\d{2}-\d{2})\s*$/i);
+  if (m) return { method: str(m[1].trim(), 120), until: m[2] };
+  return { method: str(s, 120) };
+}
 router.put('/staff/:bid(\\d+)', requireAuth(WRITE), express.json({ limit: '256kb' }), async (req, res) => {
   try {
     const b = req.body || {};
     const admits = typeof b.admits === 'string'
-      ? b.admits.split(',').map(x => ({ method: str(x, 120) })).filter(x => x.method)
-      : (Array.isArray(b.admits) ? b.admits : []);
+      ? b.admits.split(',').map(x => parseAdmit(x)).filter(x => x.method)
+      : (Array.isArray(b.admits) ? b.admits.map(a => (a && typeof a === 'object') ? { method: str(a.method, 120), until: str(a.until || '', 40) } : { method: str(a, 120) }).filter(x => x.method) : []);
     const { rows } = await pool.query(
       `UPDATE ticketsmodule_tc_staff SET dir=$1,status=$2,load_pct=$3,busy_on=$4,admits=$5,bonus_idx=$6,note=$7,active=$8,updated_at=NOW()
        WHERE bitrix_id=$9 RETURNING *`,

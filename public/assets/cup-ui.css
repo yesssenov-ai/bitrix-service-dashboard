@@ -170,8 +170,8 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-ui);
   display:inline-grid;place-items:center}
 .cup-ib:hover{color:var(--accent);border-color:var(--accent-line)}
 
-/* ── Переключатель темы — верх справа, в связке с ProLab AI (под шапкой) ──── */
-#themeToggle{position:fixed;top:58px;right:16px;z-index:9999;width:34px;height:34px;
+/* ── Переключатель темы — в общей центрированной ленте иконок у шапки ─────── */
+#themeToggle{position:fixed;top:13px;left:calc(50% + 75px);z-index:9999;width:34px;height:34px;
   border-radius:9px;display:flex;align-items:center;justify-content:center;
   background:var(--surface);color:var(--text-2);border:1px solid var(--line-2);
   cursor:pointer;padding:0;line-height:0;box-shadow:0 1px 2px rgba(20,25,35,.06);
@@ -179,6 +179,14 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-ui);
 #themeToggle:hover{color:var(--text);border-color:var(--text-3)}
 #themeToggle svg{display:block}
 @media print{#themeToggle{display:none}}
+
+/* ── Единая центрированная лента верхних иконок (AI · помощь · поиск · связь ·
+   тема). Перебиваем встроенные в скрипты позиции по специфичности (body #id),
+   чтобы все пять шли ровным рядом по центру у бренда. ──────────────────────── */
+body #pai-fab{left:calc(50% - 109px);top:13px}
+body #pls-help-btn{left:calc(50% - 63px);top:13px}
+body #pls-sr-btn{left:calc(50% - 17px);top:13px}
+body #pls-fb-btn{left:calc(50% + 29px);top:13px}
 
 /* ─────────────────────────────────────────────────────────────────────────
    Паттерны (перенято из мобильных приложений, пересобрано в токенах ЦУП).

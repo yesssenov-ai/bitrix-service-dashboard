@@ -1,0 +1,377 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   ЦУП — общая дизайн-система (cup-ui.css)
+   Единые токены и компоненты для всех модулей. Светлая тема по умолчанию
+   (чистый Stripe/Linear), тёмная — через [data-theme="dark"] и системную
+   настройку. Акцент — фирменный красный. Шрифты системные. Плоско, без теней.
+   Подключается на странице ПОСЛЕ сброса браузера, но ДО страничного <style>,
+   чтобы страница могла переопределять частные случаи.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root{
+  /* нейтрали — светлая (по умолчанию) */
+  --bg:#f6f7f9; --surface:#ffffff; --surface-2:#f1f3f6; --surface-3:#e9ecf1;
+  --text:#101624; --text-2:#434e63; --text-3:#6a7488; --text-faint:#9aa3b3;
+  --line:#e7eaf0; --line-2:#d6dbe4;
+  /* семантика (отдельно от акцента) */
+  --good:#1a7f54; --good-ink:#0d5c3b;
+  --warn:#b26c12; --warn-ink:#8a530b;
+  --bad:#c23a30;  --bad-ink:#9c2b22;
+  --info:#2763d6;
+  /* акцент — фирменный красный; оттенки выводим через color-mix */
+  --accent-base:#C53B2F;
+  --accent:var(--accent-base);
+  --accent-h:color-mix(in srgb, var(--accent-base) 86%, black);
+  --accent-weak:color-mix(in srgb, var(--accent) 10%, var(--surface));
+  --accent-line:color-mix(in srgb, var(--accent) 34%, var(--line));
+  --accent-ink:#ffffff;
+  /* шрифты (системные), радиусы, шкала */
+  --f-ui:system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+  --f-mono:ui-monospace,'Segoe UI Mono',SFMono-Regular,Consolas,Menlo,monospace;
+  --r:10px; --r-sm:7px; --r-lg:16px;
+  --pad:22px; --row:40px; --fs:14px;
+  color-scheme:light;
+}
+:root[data-accent="blue"]{--accent-base:#2f62d9}
+:root[data-density="compact"]{--pad:14px; --row:32px; --fs:13px}
+
+/* ── Легаси-алиасы ───────────────────────────────────────
+   Страницы ЦУП исторически используют свои имена токенов. Задаём их здесь
+   (через ссылки на основные токены — значит они тема-зависимы автоматически),
+   чтобы любая переведённая страница, которая ссылается на старое имя БЕЗ
+   своего объявления (напр. var(--card,#тёмный)), не падала на тёмный fallback.
+   Если страница объявляет своё значение в своём :root — оно (идёт позже) выигрывает. */
+:root{
+  --card:var(--surface); --panel:var(--surface); --panel-h:var(--surface-2);
+  --panel2:var(--surface-2); --card2:var(--surface-2); --white:var(--surface);
+  --bg2:var(--surface-2); --bg3:var(--surface-3); --surface2:var(--surface-2);
+  --border:var(--line); --border2:var(--line-2); --stroke:var(--line); --stroke-2:var(--line-2); --stroke-strong:var(--line-2);
+  --dim:var(--text-3); --dim2:var(--text-faint); --text-dim:var(--text-3); --text-4:var(--text-faint);
+  --text2:var(--text-2); --text3:var(--text-3); --tx:var(--text); --canvas:var(--surface-2);
+  --brand:var(--accent); --brand-h:var(--accent-h); --brand2:var(--info); --brand-l:var(--accent-weak);
+  --signal:var(--good); --signal-dim:color-mix(in srgb, var(--good) 35%, transparent);
+  --accent-light:var(--accent-weak); --ok:var(--good); --danger:var(--bad); --err:var(--bad);
+  --blue:var(--info); --green:var(--good); --amber:var(--warn); --yellow:var(--warn);
+  --radius:var(--r); --font:var(--f-ui); --font-display:var(--f-ui); --font-body:var(--f-ui); --font-mono:var(--f-mono);
+  --shadow:0 6px 20px rgba(20,25,35,.12); --shadow-sm:0 1px 2px rgba(20,25,35,.10);
+  --shadow-md:0 6px 20px rgba(20,25,35,.14); --shadow-lg:0 20px 50px rgba(20,25,35,.20);
+}
+
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1118; --surface:#161a22; --surface-2:#1b212b; --surface-3:#222a36;
+    --text:#e8ebf1; --text-2:#aeb7c6; --text-3:#7f8a9c; --text-faint:#5a6473;
+    --line:#262d39; --line-2:#333c4b;
+    --good:#34b981; --good-ink:#34b981; --warn:#e0a53f; --warn-ink:#e0a53f;
+    --bad:#ef6a5c; --bad-ink:#ef6a5c; --info:#5b8bff;
+    --accent:color-mix(in srgb, var(--accent-base) 78%, white);
+    --accent-h:var(--accent-base);
+    --accent-weak:color-mix(in srgb, var(--accent) 16%, var(--surface));
+    --accent-line:color-mix(in srgb, var(--accent) 40%, var(--line));
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1118; --surface:#161a22; --surface-2:#1b212b; --surface-3:#222a36;
+  --text:#e8ebf1; --text-2:#aeb7c6; --text-3:#7f8a9c; --text-faint:#5a6473;
+  --line:#262d39; --line-2:#333c4b;
+  --good:#34b981; --good-ink:#34b981; --warn:#e0a53f; --warn-ink:#e0a53f;
+  --bad:#ef6a5c; --bad-ink:#ef6a5c; --info:#5b8bff;
+  --accent:color-mix(in srgb, var(--accent-base) 78%, white);
+  --accent-h:var(--accent-base);
+  --accent-weak:color-mix(in srgb, var(--accent) 16%, var(--surface));
+  --accent-line:color-mix(in srgb, var(--accent) 40%, var(--line));
+  color-scheme:dark;
+}
+
+/* ── База ──────────────────────────────────────────────── */
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-ui);
+  font-size:var(--fs);line-height:1.55;-webkit-font-smoothing:antialiased;}
+:where(a,button,input,select,textarea,[tabindex]):focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px;border-radius:5px}
+.cup-mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.cup-tnum{font-variant-numeric:tabular-nums}
+
+/* ── Кнопки ────────────────────────────────────────────── */
+.cup-btn{appearance:none;font-family:inherit;font-weight:600;font-size:13px;
+  border-radius:var(--r-sm);padding:8px 15px;cursor:pointer;border:1px solid transparent;
+  transition:background .12s,border-color .12s,color .12s;line-height:1.2;white-space:nowrap}
+.cup-btn-pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.cup-btn-pri:hover{background:var(--accent-h);border-color:var(--accent-h)}
+.cup-btn-sec{background:var(--surface);color:var(--text);border-color:var(--line-2)}
+.cup-btn-sec:hover{border-color:var(--text-3)}
+.cup-btn-ghost{background:transparent;color:var(--text-2)}
+.cup-btn-ghost:hover{background:var(--surface-2);color:var(--text)}
+.cup-btn-dng{background:transparent;color:var(--bad);
+  border-color:color-mix(in srgb,var(--bad) 40%,var(--line))}
+.cup-btn-dng:hover{background:color-mix(in srgb,var(--bad) 10%,var(--surface))}
+
+/* ── Статус-чипы ───────────────────────────────────────── */
+.cup-pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
+  padding:3px 10px;border-radius:999px;border:1px solid}
+.cup-pill .d{width:6px;height:6px;border-radius:50%}
+.cup-pill.wip{color:var(--info);border-color:color-mix(in srgb,var(--info) 35%,var(--line));
+  background:color-mix(in srgb,var(--info) 9%,var(--surface))}
+.cup-pill.wip .d{background:var(--info)}
+.cup-pill.ok{color:var(--good-ink);border-color:color-mix(in srgb,var(--good) 35%,var(--line));
+  background:color-mix(in srgb,var(--good) 10%,var(--surface))}
+.cup-pill.ok .d{background:var(--good)}
+.cup-pill.late{color:var(--bad-ink);border-color:color-mix(in srgb,var(--bad) 38%,var(--line));
+  background:color-mix(in srgb,var(--bad) 10%,var(--surface))}
+.cup-pill.late .d{background:var(--bad)}
+.cup-pill.draft{color:var(--text-3);border-color:var(--line-2);background:var(--surface-2)}
+.cup-pill.draft .d{background:var(--text-faint)}
+
+/* ── Поля ──────────────────────────────────────────────── */
+.cup-inp{font-family:inherit;font-size:13.5px;color:var(--text);background:var(--surface);
+  border:1px solid var(--line-2);border-radius:var(--r-sm);padding:8px 11px;min-width:0;width:100%}
+.cup-inp:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+.cup-field{display:grid;gap:5px}
+.cup-field label{font-size:11px;font-weight:650;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--text-3)}
+
+/* ── Вкладки ───────────────────────────────────────────── */
+.cup-tabs{display:flex;gap:2px;border-bottom:1px solid var(--line)}
+.cup-tabs button{appearance:none;border:0;background:transparent;font-family:inherit;
+  font-size:13px;font-weight:600;color:var(--text-3);padding:9px 14px;cursor:pointer;
+  border-bottom:2px solid transparent;margin-bottom:-1px}
+.cup-tabs button[aria-pressed="true"]{color:var(--text);border-bottom-color:var(--accent)}
+
+/* ── Карточка (плоская, на линии) ──────────────────────── */
+.cup-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+
+/* ── Плотная таблица ───────────────────────────────────── */
+.cup-table{width:100%;border-collapse:collapse;font-size:var(--fs)}
+.cup-table thead th{position:sticky;top:0;background:var(--surface-2);text-align:left;
+  font-size:11px;font-weight:650;letter-spacing:.05em;text-transform:uppercase;color:var(--text-3);
+  padding:10px var(--pad);border-bottom:1px solid var(--line-2);white-space:nowrap}
+.cup-table tbody td{padding:0 var(--pad);height:var(--row);border-bottom:1px solid var(--line);
+  color:var(--text-2);white-space:nowrap}
+.cup-table tbody tr:hover td{background:var(--surface-2)}
+.cup-table td.num{text-align:right;font-family:var(--f-mono);
+  font-variant-numeric:tabular-nums;color:var(--text)}
+
+/* ── KPI-плитка ────────────────────────────────────────── */
+.cup-kpi{padding:16px 18px}
+.cup-kpi .lab{font-size:11px;font-weight:650;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--text-3)}
+.cup-kpi .val{font-family:var(--f-mono);font-size:27px;font-weight:600;letter-spacing:-.01em;
+  margin-top:7px;font-variant-numeric:tabular-nums}
+
+/* ── Иконочная кнопка ──────────────────────────────────── */
+.cup-ib{appearance:none;border:1px solid var(--line-2);background:var(--surface);
+  border-radius:6px;width:28px;height:28px;cursor:pointer;color:var(--text-3);padding:0;
+  display:inline-grid;place-items:center}
+.cup-ib:hover{color:var(--accent);border-color:var(--accent-line)}
+
+/* ── Переключатель темы — верх справа, в связке с ProLab AI (под шапкой) ──── */
+#themeToggle{position:fixed;top:58px;right:16px;z-index:9999;width:34px;height:34px;
+  border-radius:9px;display:flex;align-items:center;justify-content:center;
+  background:var(--surface);color:var(--text-2);border:1px solid var(--line-2);
+  cursor:pointer;padding:0;line-height:0;box-shadow:0 1px 2px rgba(20,25,35,.06);
+  transition:color .15s,border-color .15s}
+#themeToggle:hover{color:var(--text);border-color:var(--text-3)}
+#themeToggle svg{display:block}
+@media print{#themeToggle{display:none}}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Паттерны (перенято из мобильных приложений, пересобрано в токенах ЦУП).
+   Переиспользуемые блоки для всех модулей — подключаются одним классом.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* ── Степпер статуса: жизненный цикл заявки/контракта/КП ──
+   Разметка: .cup-steps > .st(.done|.active) > .node(svg) + .lab + .sub?
+   Пройденные шаги — зелёные с галочкой, текущий — кольцо акцента. Статус
+   считывается не только цветом (есть иконки и подписи). */
+.cup-steps{display:flex;align-items:flex-start}
+.cup-steps .st{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;position:relative}
+.cup-steps .st .node{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;position:relative;z-index:2;
+  background:var(--surface);border:2px solid var(--line-2);color:var(--text-faint)}
+.cup-steps .st .node svg{width:18px;height:18px}
+.cup-steps .st .lab{font-size:12px;font-weight:600;margin-top:9px;color:var(--text-3);max-width:104px;line-height:1.3}
+.cup-steps .st .sub{font-size:10.5px;color:var(--text-faint);margin-top:2px;font-family:var(--f-mono)}
+.cup-steps .st::before,.cup-steps .st::after{content:"";position:absolute;top:19px;height:2px;background:var(--line-2);z-index:1}
+.cup-steps .st::before{left:0;right:50%}
+.cup-steps .st::after{left:50%;right:0}
+.cup-steps .st:first-child::before{display:none}
+.cup-steps .st:last-child::after{display:none}
+.cup-steps .st.done .node{background:var(--good);border-color:var(--good);color:#fff}
+.cup-steps .st.done .lab{color:var(--text)}
+.cup-steps .st.done::before,.cup-steps .st.done::after{background:var(--good)}
+.cup-steps .st.active .node{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 4px var(--accent-weak)}
+.cup-steps .st.active .lab{color:var(--text)}
+.cup-steps .st.active::before{background:var(--good)}
+
+/* ── Экран-результат («чек-герой») ──
+   Разметка: .cup-result > .ico(svg) + h3 + p (+ любой контент ниже). */
+.cup-result{max-width:440px;margin:0 auto;text-align:center;padding:8px}
+.cup-result .ico{width:64px;height:64px;border-radius:50%;margin:0 auto 16px;display:grid;place-items:center;color:var(--good);
+  background:color-mix(in srgb,var(--good) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--good) 32%,var(--line))}
+.cup-result .ico svg{width:32px;height:32px}
+.cup-result h3{font-size:21px;font-weight:700;letter-spacing:-.01em}
+.cup-result p{color:var(--text-3);margin-top:7px}
+
+/* ── Квитанция с группами и итогом (КП, контракты, бонусы) ──
+   Разметка: .cup-receipt > .sec(группа) + .ln(.nm + .am)… + .tot(.l + .v). */
+.cup-receipt .sec{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);margin:16px 0 8px}
+.cup-receipt .sec:first-child{margin-top:0}
+.cup-receipt .ln{display:flex;gap:14px;padding:9px 0;border-bottom:1px solid var(--line)}
+.cup-receipt .ln .nm{flex:1;color:var(--text-2)}
+.cup-receipt .ln .am{font-family:var(--f-mono);font-variant-numeric:tabular-nums;color:var(--text);font-weight:500;white-space:nowrap}
+.cup-receipt .tot{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:12px}
+.cup-receipt .tot .l{font-size:15px;font-weight:700}
+.cup-receipt .tot .v{font-family:var(--f-mono);font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+
+/* ── Строка-данные: иконка + две линии (реквизиты в карточках) ──
+   Разметка: .cup-drow > .ic(svg) + div(.a + .b(.mono?)). */
+.cup-drow{display:flex;align-items:center;gap:13px;padding:12px 0;border-bottom:1px solid var(--line)}
+.cup-drow:last-child{border-bottom:0}
+.cup-drow .ic{width:38px;height:38px;border-radius:9px;flex:none;display:grid;place-items:center;background:var(--surface-2);color:var(--accent)}
+.cup-drow .ic svg{width:19px;height:19px}
+.cup-drow .a{font-weight:600}
+.cup-drow .b{font-size:12.5px;color:var(--text-3);margin-top:1px}
+.cup-drow .b.mono{font-family:var(--f-mono);color:var(--text-faint)}
+
+/* ── Чип-дельта для KPI (крупное число + изменение) ──
+   Разметка: <span class="cup-delta up|down|warn|soft">▲ 6%</span>. */
+.cup-delta{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;line-height:1.2}
+.cup-delta.up{color:#fff;background:var(--good)}
+.cup-delta.down{color:#fff;background:var(--bad)}
+.cup-delta.warn{color:#fff;background:var(--warn)}
+.cup-delta.soft{color:var(--good-ink);background:color-mix(in srgb,var(--good) 14%,var(--surface));
+  border:1px solid color-mix(in srgb,var(--good) 30%,var(--line))}
+
+/* ── Фирменный фон-орнамент (казахский ою) ───────────────────────────────────
+   Единый слой-водяной знак на всех страницах: фиксированный, за контентом
+   (z-index:-1 — выше фона страницы, ниже контента), не ловит клики. Карточки/
+   таблицы/шапка перекрывают его, поэтому он виден только в полях — ненавязчиво.
+   Картинки заранее «ужаты» до бледной альфы; тема-зависимые. Элемент #cup-bg
+   добавляется скриптом /assets/cup-bg.js (подставляется сервером на все страницы). */
+#cup-bg{position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:center center/cover no-repeat fixed;
+  background-image:url('/assets/cup-pattern-light.png')}
+:root[data-theme="dark"] #cup-bg{background-image:url('/assets/cup-pattern-dark.png')}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) #cup-bg{background-image:url('/assets/cup-pattern-dark.png')}}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Мобильный слой (общий, для всех модулей). Добавлен в конце, чтобы при
+   ширине ≤640px переопределять общие компоненты. Чинит горизонтальные
+   наплывы, делает таблицы прокручиваемыми внутри своей области, увеличивает
+   тач-цели и убирает авто-зум полей на iOS. Десктоп не затрагивает.
+   ───────────────────────────────────────────────────────────────────────── */
+@media (max-width:640px){
+  :root{--pad:14px}
+  /* ничего не должно выпирать за экран и давать горизонтальный скролл страницы */
+  html,body{overflow-x:hidden;max-width:100%}
+  img,video,canvas{max-width:100%;height:auto}
+  /* поля ввода: 16px — iOS не зумит при фокусе; крупнее и удобнее для пальца */
+  .cup-inp,input:not([type=checkbox]):not([type=radio]),select,textarea{font-size:16px}
+  .cup-inp{padding:10px 12px}
+  /* кнопки — комфортная тач-цель */
+  .cup-btn{padding:10px 14px;font-size:14px}
+  .cup-ib{width:34px;height:34px}
+  /* таблицы — горизонтальный скролл ВНУТРИ своей области, а не распирают
+     страницу (стандартный приём: table как блок с overflow-x). Ловим и общие
+     .cup-table, и любые обычные <table> на страницах. */
+  .cup-table,table{display:block;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .cup-table thead th,.cup-table tbody td{padding-left:12px;padding-right:12px}
+  /* горизонтальные ленты (вкладки/степпер) — прокрутка вместо вылезания */
+  .cup-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .cup-tabs::-webkit-scrollbar{display:none}
+  .cup-steps{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  /* кнопка темы — ближе к краю, не наезжает на контент */
+  #themeToggle{top:52px;right:10px;width:32px;height:32px}
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Мобильный app-shell: нижняя навигация (.cup-mobnav) + лист быстрых действий
+   (.cup-mobsheet). DOM создаёт /assets/cup-mobile.js. Видно только ≤640px.
+   ───────────────────────────────────────────────────────────────────────── */
+.cup-mobnav{display:none}
+.cup-mobsheet{display:none}
+@media (max-width:640px){
+  /* место под навбар, чтобы контент не прятался за ним */
+  body{padding-bottom:calc(62px + env(safe-area-inset-bottom,0px)) !important}
+  /* плавающие кнопки (AI/поиск/помощь/связь) — выше навбара */
+  #pai-fab,#pls-sr-btn,#pls-fb-btn,#pls-help-btn{transform:translateY(-62px)}
+
+  .cup-mobnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:9000;
+    height:calc(60px + env(safe-area-inset-bottom,0px));
+    padding:0 4px env(safe-area-inset-bottom,0px);
+    align-items:center;justify-content:space-around;
+    background:color-mix(in srgb,var(--surface) 92%,transparent);
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    border-top:1px solid var(--line)}
+  .cup-mobnav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+    text-decoration:none;color:var(--text-3);font-size:10px;font-weight:600;
+    height:56px;justify-content:center}
+  .cup-mobnav a span{line-height:1}
+  .cup-mobnav a svg{width:22px;height:22px;fill:none;stroke:currentColor;
+    stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+  .cup-mobnav a.on{color:var(--accent)}
+  .cup-mobnav a:active{color:var(--accent)}
+  .cup-mobnav .fabwrap{position:relative}
+  .cup-mobnav .fab{display:flex;align-items:center;justify-content:center;
+    width:50px;height:50px;border-radius:16px;margin-top:-20px;
+    background:var(--accent);color:#fff;border:3px solid var(--bg);
+    box-shadow:0 8px 18px -5px color-mix(in srgb,var(--accent) 55%,transparent)}
+  .cup-mobnav .fab svg{width:24px;height:24px;stroke:#fff}
+
+  /* лист быстрых действий */
+  .cup-mobsheet{display:block;position:fixed;inset:0;z-index:9500}
+  .cup-mobsheet-bd{position:absolute;inset:0;background:rgba(10,14,20,.42)}
+  .cup-mobsheet-card{position:absolute;left:0;right:0;bottom:0;background:var(--surface);
+    border-top-left-radius:18px;border-top-right-radius:18px;padding:8px 14px calc(20px + env(safe-area-inset-bottom,0px));
+    box-shadow:0 -10px 40px rgba(10,14,20,.25);animation:cupSheetUp .22s ease-out}
+  @keyframes cupSheetUp{from{transform:translateY(100%)}to{transform:none}}
+  .cup-mobsheet-grip{width:38px;height:4px;border-radius:3px;background:var(--line-2);margin:4px auto 10px}
+  .cup-mobsheet-t{font-weight:700;font-size:13px;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin:0 2px 8px}
+  .cup-mobsheet-items{display:grid;gap:8px}
+  .cup-mobsheet-i{display:flex;align-items:center;gap:13px;width:100%;text-align:left;
+    background:var(--surface-2);border:1px solid var(--line);border-radius:12px;
+    padding:13px 14px;font-family:inherit;font-size:15px;font-weight:600;color:var(--text);cursor:pointer}
+  .cup-mobsheet-i:active{background:var(--surface-3)}
+  .cup-mobsheet-i svg{width:21px;height:21px;flex:none;fill:none;stroke:var(--accent);
+    stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+}
+
+/* ── Экран «Все разделы» (вкладка «Ещё» нижней навигации) — модель AN ───────── */
+.cup-allov{position:fixed;inset:0;z-index:9400;background:var(--bg);display:flex;flex-direction:column}
+.cup-allov-top{flex:none;display:flex;align-items:center;gap:10px;padding:14px 16px 10px;
+  padding-top:calc(14px + env(safe-area-inset-top,0px));border-bottom:1px solid var(--line);background:var(--surface)}
+.cup-allov-t{font-size:18px;font-weight:800;letter-spacing:-.2px}
+.cup-allov-x{margin-left:auto;width:34px;height:34px;border-radius:9px;border:1px solid var(--line-2);
+  background:var(--surface);color:var(--text-2);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.cup-allov-x svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.cup-allov-srch{flex:none;display:flex;align-items:center;gap:9px;margin:12px 16px 4px;padding:11px 13px;
+  background:var(--surface);border:1px solid var(--line-2);border-radius:13px;color:var(--text-3)}
+.cup-allov-srch span{display:flex}
+.cup-allov-srch svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.cup-allov-srch input{flex:1;border:0;background:transparent;font-family:inherit;font-size:16px;color:var(--text);outline:none;min-width:0}
+.cup-allov-body{flex:1;overflow:auto;padding:10px 14px 20px}
+.cup-allov-empty{color:var(--text-3);text-align:center;padding:40px 0;font-size:14px}
+.cup-allsec{margin-top:14px}
+.cup-allsec-h{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);margin:0 4px 9px}
+.cup-allgrid{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:8px 6px;
+  display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.cup-alltile{display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;
+  padding:11px 4px;border-radius:12px;text-decoration:none;color:var(--text-2)}
+.cup-alltile:active{background:var(--surface-2)}
+.cup-alltile-i{width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center}
+.cup-alltile-i svg{width:23px;height:23px;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.cup-alltile-n{font-size:11px;line-height:1.25;font-weight:600;color:var(--text-2);max-width:78px}
+.cup-allov-foot{flex:none;display:flex;gap:7px;padding:10px 14px calc(14px + env(safe-area-inset-bottom,0px));
+  border-top:1px solid var(--line);background:var(--surface)}
+.cup-allov-foot button{flex:1;border:1px solid var(--line-2);background:var(--surface-2);border-radius:11px;
+  padding:11px 4px;font-family:inherit;font-size:12.5px;font-weight:650;color:var(--text-2);cursor:pointer}
+.cup-allov-foot button:active{background:var(--surface-3)}
+.cup-allov-user{flex:none;display:flex;align-items:center;gap:11px;margin:0 14px;padding:11px 13px;
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;text-decoration:none;color:var(--text)}
+.cup-allov-user .cup-allov-av{width:38px;height:38px;border-radius:50%;flex:none;display:flex;align-items:center;
+  justify-content:center;font-weight:700;font-size:14px;color:#fff;background:var(--accent)}
+.cup-allov-user .cup-allov-un{display:flex;flex-direction:column;line-height:1.25}
+.cup-allov-user .cup-allov-un b{font-size:14px;font-weight:700}
+.cup-allov-user .cup-allov-un small{font-size:11.5px;color:var(--text-3);text-transform:uppercase;letter-spacing:.3px}

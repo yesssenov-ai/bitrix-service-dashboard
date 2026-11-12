@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ЦУП — мобильный концепт</title>
+<style>
+:root{
+  --bg:#eef0f3;--surface:#fff;--surface-2:#f4f5f7;--line:#e4e7ec;--text:#161c26;--text-2:#3a4656;--text-3:#737f8c;
+  --brand:#C53B2F;--brand-h:#a62f25;--green:#1a7f54;--blue:#2763d6;--amber:#c98200;--violet:#6b46c1;--ink:#0d1117;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,Arial,sans-serif;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding:22px 16px 56px}
+h1.t{font-size:22px;margin:0 0 4px;letter-spacing:-.2px}
+.lead{color:var(--text-3);font-size:14px;margin:0 0 20px;max-width:760px}
+.row{display:flex;gap:26px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+.col{display:flex;flex-direction:column;align-items:center;gap:10px}
+.cap{font-size:13px;color:var(--text-3);font-weight:600}
+.cap b{color:var(--text)}
+.i{fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;display:block}
+
+/* phone frame */
+.phone{width:330px;height:690px;border-radius:40px;background:#0b0e13;padding:11px;box-shadow:0 30px 60px -20px rgba(13,17,23,.5),0 0 0 1px rgba(0,0,0,.06);flex:none}
+.scr{width:100%;height:100%;border-radius:30px;overflow:hidden;background:var(--bg);position:relative;display:flex;flex-direction:column}
+.notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:120px;height:24px;background:#0b0e13;border-radius:0 0 16px 16px;z-index:40}
+.sbar{height:30px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:11px;font-weight:700;color:var(--text-2)}
+.body{flex:1;overflow:hidden;position:relative}
+.scroll{position:absolute;inset:0;overflow:auto;padding:10px 12px 76px}
+/* top app bar */
+.appbar{display:flex;align-items:center;gap:10px;padding:4px 2px 10px}
+.logo{font-weight:800;font-size:15px}
+.logo span{color:var(--brand)}
+.av{margin-left:auto;width:32px;height:32px;border-radius:50%;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px}
+.bell{width:32px;height:32px;border-radius:50%;background:var(--surface);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--text-2);position:relative}
+.bell .i{width:16px;height:16px}
+.bell:after{content:'3';position:absolute;top:-3px;right:-3px;background:var(--brand);color:#fff;font-size:9px;font-weight:800;border-radius:9px;padding:1px 4px}
+/* hero compact */
+.hero{background:var(--ink);border-radius:18px;padding:15px 16px;color:#fff;position:relative;overflow:hidden;margin-bottom:12px}
+.hero:before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#2dd4bf,#2763d6,#8b5cf6,#C53B2F)}
+.hero .hi{font-size:12px;color:#aeb6c2}
+.hero .big{font-size:19px;font-weight:800;margin:3px 0 12px}
+.hero .big b{color:#fff}
+.hero .qa{display:flex;gap:8px}
+.qa a{flex:1;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:10px 6px;text-align:center;color:#fff;font-size:11px;font-weight:600;text-decoration:none}
+.qa a .i{width:19px;height:19px;margin:0 auto 5px;color:#fff}
+/* section */
+.sec-h{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:800;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;margin:14px 4px 8px}
+.sec-h .more{margin-left:auto;color:var(--brand);font-weight:700;text-transform:none;letter-spacing:0;font-size:12px}
+/* today compact */
+.today{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.trow{display:flex;align-items:center;gap:11px;padding:12px 13px;border-bottom:1px solid var(--line)}
+.trow:last-child{border-bottom:0}
+.tico{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);color:var(--text-2);flex:none}
+.tico .i{width:18px;height:18px}
+.tico.br{background:color-mix(in srgb,var(--brand) 11%,#fff);color:var(--brand)}
+.trow .tx{font-size:13px}
+.trow .tx b{font-weight:700}
+.trow .tx .s{display:block;color:var(--text-3);font-size:11.5px}
+.trow .go{margin-left:auto;color:var(--text-3)}
+.trow .go .i{width:16px;height:16px}
+/* chips */
+.chipline{display:flex;gap:7px;overflow:auto;padding:2px 1px 2px}
+.ch{flex:none;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--text-2)}
+.ch.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+/* tiles 2col */
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:9px;min-height:96px;text-decoration:none;color:inherit}
+.tile .ic{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:#fff}
+.tile .ic .i{width:20px;height:20px}
+.tile .nm{font-weight:700;font-size:13.5px}
+.tile .sub{color:var(--text-3);font-size:11px;margin-top:-4px}
+.tile .cnt{margin-top:auto;font-size:11px;color:var(--brand);font-weight:700}
+.bl{background:var(--blue)}.gr{background:var(--green)}.am{background:var(--amber)}.rd{background:var(--brand)}.vi{background:var(--violet)}.tcg{background:#1a7f54}
+/* task list cards */
+.tcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 13px;margin-bottom:9px}
+.tcard .top{display:flex;align-items:flex-start;gap:9px}
+.tcard .ti{font-weight:700;font-size:13.5px;flex:1}
+.pill{font-size:10.5px;font-weight:700;border-radius:7px;padding:2px 8px;white-space:nowrap}
+.pill.hi{background:color-mix(in srgb,var(--brand) 13%,#fff);color:var(--brand);border:1px solid color-mix(in srgb,var(--brand) 26%,var(--line))}
+.pill.md{background:color-mix(in srgb,var(--amber) 14%,#fff);color:var(--amber);border:1px solid color-mix(in srgb,var(--amber) 28%,var(--line))}
+.pill.ok{background:color-mix(in srgb,var(--green) 13%,#fff);color:var(--green);border:1px solid color-mix(in srgb,var(--green) 26%,var(--line))}
+.tcard .meta{color:var(--text-3);font-size:11.5px;margin-top:7px;display:flex;gap:12px;flex-wrap:wrap}
+.tcard .meta span{display:inline-flex;align-items:center;gap:4px}
+.tcard .meta .i{width:13px;height:13px}
+.tcard .acts{display:flex;gap:8px;margin-top:10px}
+.tcard .acts button{flex:1;border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:8px;font-size:12px;font-weight:650;color:var(--text-2)}
+.tcard .acts button.pri{background:var(--brand);color:#fff;border-color:var(--brand)}
+/* bottom nav */
+.nav{position:absolute;left:0;right:0;bottom:0;height:62px;background:color-mix(in srgb,var(--surface) 90%,transparent);backdrop-filter:blur(10px);border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-around;padding:0 6px 4px;z-index:30}
+.nav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10px;color:var(--text-3);text-decoration:none;font-weight:600}
+.nav a .i{width:21px;height:21px}
+.nav a.on{color:var(--brand)}
+.fab{width:50px;height:50px;border-radius:16px;background:linear-gradient(135deg,var(--brand),var(--brand-h));color:#fff;display:flex;align-items:center;justify-content:center;margin-top:-22px;box-shadow:0 8px 18px -5px rgba(197,59,47,.6);border:3px solid var(--bg)}
+.fab .i{width:24px;height:24px}
+/* search */
+.search{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 13px;font-size:13.5px;color:var(--text-3);margin-bottom:12px}
+.search .i{width:17px;height:17px;flex:none}
+.pulse3{display:flex;gap:8px}
+.pulse3 .m{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:11px 10px}
+.pulse3 .m b{font-size:18px;font-weight:800;display:block}
+.pulse3 .m span{font-size:10.5px;color:var(--text-3)}
+.pulse3 .m b.up{color:var(--green)}
+@media (max-width:420px){.phone{width:100%;max-width:340px;height:680px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 class="t">ЦУП на телефоне — концепт приложения</h1>
+  <p class="lead">Нижняя навигация, крупные тач-цели, строгие классические иконки, «Сегодня» и быстрые действия на входе, списки карточками вместо таблиц, любое действие в 1–2 касания.</p>
+
+  <!-- icon sprite -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <g id="i-home"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/></g>
+    <g id="i-check"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></g>
+    <g id="i-search"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></g>
+    <g id="i-menu"><path d="M4 7h16M4 12h16M4 17h16"/></g>
+    <g id="i-plus"><path d="M12 5v14M5 12h14"/></g>
+    <g id="i-bell"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></g>
+    <g id="i-chevron"><path d="M9 6l6 6-6 6"/></g>
+    <g id="i-gift"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v9h14v-9"/><path d="M12 8v13"/><path d="M12 8C10 8 7.5 7.5 8 5.5 8.4 4 10 4.5 12 8zM12 8c2 0 4.5-.5 4-2.5C15.6 4 14 4.5 12 8z"/></g>
+    <g id="i-clock"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g>
+    <g id="i-plane"><path d="M10.2 9 4 7.5l-1.3 1.3L7 12l-2.5 2.5L2 14l-1 1 3 2 2 3 1-1-.5-2.5L9 14l3.2 4.3 1.3-1.3L11 11l4.5-1.2a2 2 0 1 0-1-3.8z"/></g>
+    <g id="i-chart"><path d="M4 4v16h16"/><rect x="7" y="11" width="3" height="6"/><rect x="12" y="7" width="3" height="10"/><rect x="17" y="13" width="3" height="4"/></g>
+    <g id="i-cart"><circle cx="9" cy="20" r="1.3"/><circle cx="18" cy="20" r="1.3"/><path d="M3 4h2l2.3 11a1.5 1.5 0 0 0 1.5 1.2h8.4a1.5 1.5 0 0 0 1.5-1.2L21 7H6"/></g>
+    <g id="i-cap"><path d="M12 5 2 9.5 12 14l10-4.5z"/><path d="M6 11.5V16c0 1.3 2.7 2.5 6 2.5s6-1.2 6-2.5v-4.5"/></g>
+    <g id="i-truck"><rect x="2" y="6" width="13" height="10" rx="1"/><path d="M15 9h4l3 3v4h-7z"/><circle cx="6" cy="18" r="1.6"/><circle cx="18" cy="18" r="1.6"/></g>
+    <g id="i-msg"><path d="M20 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z"/></g>
+    <g id="i-building"><rect x="5" y="3" width="14" height="18" rx="1"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2"/></g>
+    <g id="i-link"><path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1L10.8 5"/><path d="M14 11a5 5 0 0 0-7.1 0l-2 2a5 5 0 0 0 7.1 7.1L13.2 19"/></g>
+    <g id="i-user"><circle cx="12" cy="8" r="3.5"/><path d="M5 20v-1a7 7 0 0 1 14 0v1"/></g>
+    <g id="i-phone"><path d="M5 3h3l2 5-2.5 1.5a11 11 0 0 0 5 5L17 14l5 2v3a2 2 0 0 1-2 2A17 17 0 0 1 3 5a2 2 0 0 1 2-2z"/></g>
+  </defs></svg>
+
+  <div class="row">
+
+    <!-- ── SCREEN 1: ГЛАВНАЯ ── -->
+    <div class="col">
+      <div class="phone"><div class="scr"><div class="notch"></div>
+        <div class="sbar"><span>9:41</span><span>5G ▆▆ 100%</span></div>
+        <div class="body"><div class="scroll">
+          <div class="appbar"><div class="logo">ЦУП<span>·</span></div><div class="bell"><svg class="i" viewBox="0 0 24 24"><use href="#i-bell"/></svg></div><div class="av">КЕ</div></div>
+          <div class="hero">
+            <div class="hi">Доброе утро</div>
+            <div class="big">Куаныш, <b>на сегодня</b></div>
+            <div class="qa">
+              <a href="#"><svg class="i" viewBox="0 0 24 24"><use href="#i-plus"/></svg>Заявка</a>
+              <a href="#"><svg class="i" viewBox="0 0 24 24"><use href="#i-check"/></svg>Задачи</a>
+              <a href="#"><svg class="i" viewBox="0 0 24 24"><use href="#i-search"/></svg>Поиск</a>
+            </div>
+          </div>
+          <div class="sec-h">Сегодня <span class="more">всё →</span></div>
+          <div class="today">
+            <div class="trow"><div class="tico br"><svg class="i" viewBox="0 0 24 24"><use href="#i-gift"/></svg></div><div class="tx"><b>День рождения</b><span class="s">Орынбаева Айнұр — поздравьте</span></div><span class="go"><svg class="i" viewBox="0 0 24 24"><use href="#i-chevron"/></svg></span></div>
+            <div class="trow"><div class="tico"><svg class="i" viewBox="0 0 24 24"><use href="#i-clock"/></svg></div><div class="tx"><b>2 года назад</b><span class="s">Сделка АО «Казхром», 48,5 млн ₸</span></div><span class="go"><svg class="i" viewBox="0 0 24 24"><use href="#i-chevron"/></svg></span></div>
+            <div class="trow"><div class="tico"><svg class="i" viewBox="0 0 24 24"><use href="#i-plane"/></svg></div><div class="tx"><b>Отсутствуют: 2</b><span class="s">Сорокин · Актайлаков (Алматы)</span></div><span class="go"><svg class="i" viewBox="0 0 24 24"><use href="#i-chevron"/></svg></span></div>
+          </div>
+          <div class="sec-h">Пульс</div>
+          <div class="pulse3">
+            <div class="m"><b>37</b><span>в работе</span></div>
+            <div class="m"><b class="up">128млн</b><span>за месяц ₸</span></div>
+            <div class="m"><b>6</b><span>лидов</span></div>
+          </div>
+          <div class="sec-h">Часто <span class="more" style="color:var(--text-3);font-weight:600">подстраивается под вас</span></div>
+          <div class="tiles">
+            <a class="tile"><div class="ic bl"><svg class="i" viewBox="0 0 24 24"><use href="#i-chart"/></svg></div><div class="nm">Статистика</div><div class="sub">Воронка, KPI</div><div class="cnt">вы открывали 48×</div></a>
+            <a class="tile"><div class="ic am"><svg class="i" viewBox="0 0 24 24"><use href="#i-cart"/></svg></div><div class="nm">Закупки</div><div class="sub">4 на согласовании</div><div class="cnt">31×</div></a>
+            <a class="tile"><div class="ic tcg"><svg class="i" viewBox="0 0 24 24"><use href="#i-cap"/></svg></div><div class="nm">Тренинг-центр</div><div class="sub">Команда, лаб.</div><div class="cnt">22×</div></a>
+            <a class="tile"><div class="ic gr"><svg class="i" viewBox="0 0 24 24"><use href="#i-truck"/></svg></div><div class="nm">Логистика</div><div class="sub">Отгрузки</div><div class="cnt">18×</div></a>
+          </div>
+          <div class="sec-h" style="margin-top:12px">Все модули <span class="more">29 →</span></div>
+        </div></div>
+        <div class="nav">
+          <a class="on"><svg class="i" viewBox="0 0 24 24"><use href="#i-home"/></svg>Главная</a>
+          <a><svg class="i" viewBox="0 0 24 24"><use href="#i-check"/></svg>Задачи</a>
+          <a><div class="fab"><svg class="i" viewBox="0 0 24 24"><use href="#i-plus"/></svg></div></a>
+          <a><svg class="i" viewBox="0 0 24 24"><use href="#i-search"/></svg>Поиск</a>
+          <a><svg class="i" viewBox="0 0 24 24"><use href="#i-menu"/></svg>Ещё</a>
+        </div>
+      </div></div>
+      <div class="cap"><b>Главная</b> — вход: «Сегодня», пульс, быстрые действия</div>
+    </div>
+
+    <!-- ── SCREEN 2: ЗАДАЧИ ── -->
+    <div class="col">
+      <div class="phone"><div class="scr"><div class="notch"></div>
+        <div class="sbar"><span>9:41</span><span>5G ▆▆ 100%</span></div>
+        <div class="body"><div class="scroll">
+          <div class="appbar"><div class="logo">Мои задачи</div><div class="bell"><svg class="i" viewBox="0 0 24 24"><use href="#i-bell"/></svg></div><div class="av">КЕ</div></div>
+          <div class="chipline"><span class="ch on">Все 8</span><span class="ch">Сегодня 3</span><span class="ch">Просрочено 1</span><span class="ch">Входящие</span></div>
+          <div style="height:8px"></div>
+          <div class="tcard">
+            <div class="top"><div class="ti">Согласовать закупку реактивов</div><span class="pill hi">срочно</span></div>
+            <div class="meta"><span><svg class="i" viewBox="0 0 24 24"><use href="#i-cart"/></svg>Закупки</span><span><svg class="i" viewBox="0 0 24 24"><use href="#i-clock"/></svg>сегодня</span><span><svg class="i" viewBox="0 0 24 24"><use href="#i-user"/></svg>М. Актайлаков</span></div>
+            <div class="acts"><button class="pri">Согласовать</button><button>Открыть</button></div>
+          </div>
+          <div class="tcard">
+            <div class="top"><div class="ti">Выставить КП для ТОО «КазАзот»</div><span class="pill md">±3 дня</span></div>
+            <div class="meta"><span><svg class="i" viewBox="0 0 24 24"><use href="#i-msg"/></svg>КП</span><span><svg class="i" viewBox="0 0 24 24"><use href="#i-clock"/></svg>до 13.11</span></div>
+            <div class="acts"><button class="pri">Взять в работу</button><button>Открыть</button></div>
+          </div>
+          <div class="tcard">
+            <div class="top"><div class="ti">Проверить поверку ВЭЖХ-1</div><span class="pill ok">плановая</span></div>
+            <div class="meta"><span><svg class="i" viewBox="0 0 24 24"><use href="#i-cap"/></svg>ТЦ</span><span><svg class="i" viewBox="0 0 24 24"><use href="#i-clock"/></svg>14.11</span></div>
+            <div class="acts"><button class="pri">Готово</button><button>Открыть</button></div>
+          </div>
+          <div class="tcard">
+            <div class="top"><div class="ti">Позвонить клиенту по демо-заявке</div><span class="pill hi">просрочено</span></div>
+            <div class="meta"><span><svg class="i" viewBox="0 0 24 24"><use href="#i-phone"/></svg>Лид</span><span><svg class="i" viewBox="0 0 24 24"><use href="#i-clock"/></svg>вчера</span></div>
+            <div class="acts"><button class="pri">Позвонить</button><button>Открыть</button></div>
+          </div>
+        </div></div>
+        <div class="nav">
+          <a><svg class="i" viewBox="0 0 24 24"><use href="#i-home"/></svg>Главная</a>
+          <a class="on"><svg class="i" viewBox="0 0 24 24"><use href="#i-check"/></svg>Задачи</a>
+          <a><div class="fab"><svg class="i" viewBox="0 0 24 24"><use href="#i-plus"/></svg></div></a>
+          <a><svg class="i" viewBox="0 0 24 24"><use href="#i-search"/></svg>Поиск</a>
+          <a><svg class="i" viewBox="0 0 24 24"><use href="#i-menu"/></svg>Ещё</a>
+        </div>
+      </div></div>
+      <div class="cap"><b>Задачи</b> — карточки, действие в 1 касание</div>
+    </div>
+
+    <!-- ── SCREEN 3: ПОИСК / МОДУЛИ ── -->
+    <div class="col">
+      <div class="phone"><div class="scr"><div class="notch"></div>
+        <div class="sbar"><span>9:41</span><span>5G ▆▆ 100%</span></div>
+        <div class="body"><div class="scroll">
+          <div class="appbar"><div class="logo">Поиск</div><div class="bell"><svg class="i" viewBox="0 0 24 24"><use href="#i-bell"/></svg></div><div class="av">КЕ</div></div>
+          <div class="search"><svg class="i" viewBox="0 0 24 24"><use href="#i-search"/></svg>Модуль, клиент, сделка, заявка…</div>
+          <div class="chipline"><span class="ch on">Всё</span><span class="ch">Продажи</span><span class="ch">Сервис</span><span class="ch">Склад</span><span class="ch">Финансы</span></div>
+          <div class="sec-h">Продажи и клиенты</div>
+          <div class="tiles">
+            <a class="tile"><div class="ic bl"><svg class="i" viewBox="0 0 24 24"><use href="#i-chart"/></svg></div><div class="nm">Статистика</div></a>
+            <a class="tile"><div class="ic bl"><svg class="i" viewBox="0 0 24 24"><use href="#i-msg"/></svg></div><div class="nm">КП</div></a>
+            <a class="tile"><div class="ic bl"><svg class="i" viewBox="0 0 24 24"><use href="#i-building"/></svg></div><div class="nm">Компании</div></a>
+            <a class="tile"><div class="ic bl"><svg class="i" viewBox="0 0 24 24"><use href="#i-link"/></svg></div><div class="nm">Связи сделок</div></a>
+          </div>
+          <div class="sec-h">Поставки и склад</div>
+          <div class="tiles">
+            <a class="tile"><div class="ic am"><svg class="i" viewBox="0 0 24 24"><use href="#i-cart"/></svg></div><div class="nm">Закупки</div></a>
+            <a class="tile"><div class="ic gr"><svg class="i" viewBox="0 0 24 24"><use href="#i-truck"/></svg></div><div class="nm">Логистика</div></a>
+          </div>
+        </div></div>
+        <div class="nav">
+          <a><svg class="i" viewBox="0 0 24 24"><use href="#i-home"/></svg>Главная</a>
+          <a><svg class="i" viewBox="0 0 24 24"><use href="#i-check"/></svg>Задачи</a>
+          <a><div class="fab"><svg class="i" viewBox="0 0 24 24"><use href="#i-plus"/></svg></div></a>
+          <a class="on"><svg class="i" viewBox="0 0 24 24"><use href="#i-search"/></svg>Поиск</a>
+          <a><svg class="i" viewBox="0 0 24 24"><use href="#i-menu"/></svg>Ещё</a>
+        </div>
+      </div></div>
+      <div class="cap"><b>Поиск / Модули</b> — всё в 1–2 касания</div>
+    </div>
+
+  </div>
+
+  <p class="lead" style="margin-top:26px">Иконки теперь строгие, монохромные, в одном стиле — этот набор станет единым для всего мобильного ЦУП. Техоснова: общий мобильный слой в <b>cup-ui.css</b> + нижняя навигация + карточки вместо таблиц.</p>
+</div>
+</body>
+</html>

@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Блок «Сегодня» — варианты</title>
+<style>
+:root{
+  --bg:#eef0f3; --surface:#fff; --surface-2:#f4f5f7; --line:#e4e7ec; --text:#1a2330;
+  --text-2:#3a4656; --text-3:#6b7684; --brand:#C53B2F; --brand-h:#a62f25;
+  --green:#1a7f54; --blue:#2763d6; --amber:#c98200; --violet:#6b46c1;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,Arial,sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased}
+.page{max-width:1080px;margin:0 auto;padding:22px 16px 60px}
+h1.t{font-size:22px;margin:0 0 4px;letter-spacing:-.2px}
+.lead{color:var(--text-3);font-size:14px;margin:0 0 6px}
+.pick{display:inline-flex;gap:8px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:13.5px;color:var(--text-2);margin:10px 0 26px}
+.pick b{color:var(--brand)}
+.vhead{display:flex;align-items:baseline;gap:10px;margin:30px 0 12px}
+.vbadge{background:var(--brand);color:#fff;font-weight:800;font-size:13px;border-radius:8px;padding:3px 10px;letter-spacing:.3px}
+.vtitle{font-size:16px;font-weight:700}
+.vnote{color:var(--text-3);font-size:13px;margin:0 0 12px}
+.frame{background:var(--bg);border:1px solid var(--line);border-radius:16px;padding:16px;position:relative;overflow:hidden}
+.frame:before{content:'макет главной';position:absolute;top:9px;right:14px;font-size:10.5px;color:var(--text-3);letter-spacing:.4px;text-transform:uppercase}
+
+/* faux portal chrome */
+.pbar{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.plogo{font-weight:800;font-size:15px;display:flex;align-items:center;gap:8px}
+.pdot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 22%,transparent)}
+.pclock{margin-left:auto;font-size:12.5px;color:var(--text-3);background:#fff;border:1px solid var(--line);border-radius:999px;padding:5px 12px}
+.hello{font-size:19px;font-weight:700;margin:2px 0 2px}
+.hello span{color:var(--brand)}
+.subhello{color:var(--text-3);font-size:13px;margin-bottom:14px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.tile{background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px 14px;min-height:62px}
+.tile .ti{font-size:17px}
+.tile .tn{font-weight:650;font-size:13.5px;margin-top:6px}
+.tile .td{color:var(--text-3);font-size:11.5px;margin-top:2px}
+
+/* ── info blocks (shared) ── */
+.today{background:#fff;border:1px solid var(--line);border-radius:14px;padding:4px}
+.today-h{display:flex;align-items:center;gap:9px;padding:11px 13px 9px}
+.today-h .cap{font-weight:750;font-size:14px;letter-spacing:.2px}
+.today-h .date{margin-left:auto;color:var(--text-3);font-size:12px}
+.blocks{display:grid;gap:10px;padding:4px 11px 12px}
+.blk{background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:12px 13px}
+.blk .bh{display:flex;align-items:center;gap:8px;font-weight:700;font-size:12.5px;color:var(--text-2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.3px}
+.blk .ic{font-size:15px}
+.bday-today{display:flex;align-items:center;gap:11px;background:linear-gradient(100deg,color-mix(in srgb,var(--brand) 9%,#fff),#fff);border:1px solid color-mix(in srgb,var(--brand) 22%,var(--line));border-radius:11px;padding:10px 12px}
+.bday-today .em{font-size:26px}
+.bday-today .nm{font-weight:750;font-size:14px}
+.bday-today .rl{color:var(--text-3);font-size:12px}
+.btn-cong{margin-left:auto;background:var(--brand);color:#fff;border:0;border-radius:999px;padding:7px 14px;font-weight:650;font-size:12.5px;cursor:pointer;white-space:nowrap}
+.mini{display:flex;flex-direction:column;gap:6px;margin-top:9px}
+.mini .r{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--text-2)}
+.mini .r .d{min-width:42px;color:var(--text-3);font-weight:600}
+.onthis{display:flex;flex-direction:column;gap:9px}
+.onthis .ev{display:flex;gap:10px;align-items:flex-start}
+.onthis .yr{min-width:62px;font-weight:800;color:var(--brand);font-size:12.5px;padding-top:1px}
+.onthis .tx{font-size:12.8px;color:var(--text-2)}
+.onthis .tx b{color:var(--text)}
+.pills{display:flex;flex-wrap:wrap;gap:7px}
+.pil{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-size:12px;color:var(--text-2)}
+.pil .t{width:7px;height:7px;border-radius:50%}
+.g{background:var(--green)}.b{background:var(--blue)}.a{background:var(--amber)}
+.pulse{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+.pulse .m{display:flex;flex-direction:column}
+.pulse .m b{font-size:17px;font-weight:800}
+.pulse .m span{font-size:11px;color:var(--text-3)}
+.pulse .m .up{color:var(--green)}
+.fact{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);font-size:12.5px;color:var(--text-3);font-style:italic}
+
+/* ── Variant A: card under greeting ── */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:640px){.grid2{grid-template-columns:1fr}}
+
+/* ── Variant B: ticker ── */
+.ticker{background:#fff;border:1px solid var(--line);border-radius:999px;padding:0;overflow:hidden;position:relative;height:42px;display:flex;align-items:center}
+.ticker .lbl{flex:none;background:var(--brand);color:#fff;font-weight:750;font-size:12.5px;height:100%;display:flex;align-items:center;padding:0 15px;border-radius:999px 0 0 999px}
+.tkwrap{overflow:hidden;flex:1}
+.tkrow{display:flex;gap:30px;white-space:nowrap;padding-left:18px;animation:tick 26s linear infinite}
+.tkrow .it{font-size:13px;color:var(--text-2);display:inline-flex;align-items:center;gap:7px}
+@keyframes tick{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+
+/* ── Variant C: right column ── */
+.cols{display:grid;grid-template-columns:1fr 310px;gap:14px;align-items:start}
+@media(max-width:760px){.cols{grid-template-columns:1fr}}
+.rail .today{position:sticky;top:10px}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1 class="t">Блок «Сегодня» на главной — три варианта</h1>
+  <p class="lead">Реальные данные на сегодня, 10 ноября 2026. Выбери вид — соберу его в портал.</p>
+  <div class="pick">Как выбрать: напиши <b>A</b>, <b>B</b> или <b>C</b></div>
+
+  <!-- ══ VARIANT A ══ -->
+  <div class="vhead"><span class="vbadge">A</span><span class="vtitle">Карточка под приветствием</span></div>
+  <p class="vnote">Компактный сворачиваемый блок между приветствием и плитками. Ненавязчиво, всегда на виду, хорошо на мобиле. Рекомендую.</p>
+  <div class="frame">
+    <div class="pbar"><div class="plogo"><span class="pdot"></span>ЦУП ProLabSupport</div><div class="pclock">Вт, 10 ноября · 10:29</div></div>
+    <div class="hello">Доброе утро, <span>Куаныш</span> 👋</div>
+    <div class="subhello">Вторник, 10 ноября 2026</div>
+
+    <div class="today">
+      <div class="today-h"><span>✨</span><span class="cap">Сегодня в компании</span><span class="date">10 ноября</span></div>
+      <div class="blocks">
+        <div class="grid2">
+          <div class="blk">
+            <div class="bh"><span class="ic">🎂</span>Дни рождения</div>
+            <div class="bday-today"><span class="em">🎉</span><div><div class="nm">Орынбаева Айнұр Серікқызы</div><div class="rl">сегодня день рождения</div></div><button class="btn-cong">Поздравить</button></div>
+            <div class="mini">
+              <div class="r"><span class="d">14 ноя</span> Жақсылық Рауан Болатбекұлы</div>
+              <div class="r"><span class="d">21 ноя</span> Сагитова Жадыра · Шаймұрат Бақытжан</div>
+            </div>
+          </div>
+          <div class="blk">
+            <div class="bh"><span class="ic">📅</span>В этот день</div>
+            <div class="onthis">
+              <div class="ev"><span class="yr">2 года<br>назад</span><span class="tx">Подписана сделка с <b>АО «Казхром»</b> — поставка ВЭЖХ-системы, <b>48,5 млн ₸</b>. Менеджер: С. Жаров.</span></div>
+              <div class="ev"><span class="yr">4 года<br>назад</span><span class="tx">Запущен сервисный контракт с <b>ТОО «КазАзот»</b> на годовое обслуживание.</span></div>
+            </div>
+          </div>
+          <div class="blk">
+            <div class="bh"><span class="ic">🌴</span>Сегодня отсутствуют</div>
+            <div class="pills">
+              <span class="pil"><span class="t g"></span>🌴 Сорокин Д. — отпуск до 14.11</span>
+              <span class="pil"><span class="t b"></span>🧳 Актайлаков М. — Алматы до 12.11</span>
+              <span class="pil"><span class="t a"></span>🤒 Разакова А. — больничный</span>
+            </div>
+          </div>
+          <div class="blk">
+            <div class="bh"><span class="ic">📈</span>Пульс компании</div>
+            <div class="pulse">
+              <div class="m"><b>37</b><span>сделок в работе</span></div>
+              <div class="m"><b class="up">128 млн ₸</b><span>закрыто в ноябре</span></div>
+              <div class="m"><b>6</b><span>новых лидов сегодня</span></div>
+            </div>
+            <div class="fact">💡 Факт дня: за 2026-й ТЦ обучил 312 специалистов — рекорд компании.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:14px"></div>
+    <div class="tiles">
+      <div class="tile"><div class="ti">📊</div><div class="tn">Статистика</div><div class="td">Воронка и KPI</div></div>
+      <div class="tile"><div class="ti">🛒</div><div class="tn">Закупки</div><div class="td">Заявки и статусы</div></div>
+      <div class="tile"><div class="ti">🎓</div><div class="tn">Тренинг-центр</div><div class="td">Команда и лаборатория</div></div>
+      <div class="tile"><div class="ti">📦</div><div class="tn">Логистика</div><div class="td">Отгрузки</div></div>
+    </div>
+  </div>
+
+  <!-- ══ VARIANT B ══ -->
+  <div class="vhead"><span class="vbadge">B</span><span class="vtitle">Строка-тикер под шапкой</span></div>
+  <p class="vnote">Тонкая бегущая лента вверху. Самое ненавязчивое, занимает одну строку; клик по пункту раскрывает детали. Меньше информации одновременно.</p>
+  <div class="frame">
+    <div class="pbar"><div class="plogo"><span class="pdot"></span>ЦУП ProLabSupport</div><div class="pclock">Вт, 10 ноября · 10:29</div></div>
+    <div class="ticker">
+      <div class="lbl">✨ Сегодня</div>
+      <div class="tkwrap"><div class="tkrow">
+        <span class="it">🎂 ДР: <b>&nbsp;Орынбаева Айнұр</b> — поздравьте!</span>
+        <span class="it">📅 2 года назад: сделка с АО «Казхром», 48,5 млн ₸</span>
+        <span class="it">🌴 Сорокин Д. в отпуске до 14.11</span>
+        <span class="it">🧳 Актайлаков М. — командировка, Алматы</span>
+        <span class="it">📈 37 сделок в работе · 128 млн ₸ за ноябрь</span>
+        <span class="it">🎂 ДР: &nbsp;Орынбаева Айнұр — поздравьте!</span>
+        <span class="it">📅 2 года назад: сделка с АО «Казхром», 48,5 млн ₸</span>
+        <span class="it">🌴 Сорокин Д. в отпуске до 14.11</span>
+        <span class="it">🧳 Актайлаков М. — командировка, Алматы</span>
+        <span class="it">📈 37 сделок в работе · 128 млн ₸ за ноябрь</span>
+      </div></div>
+    </div>
+    <div class="hello" style="margin-top:14px">Доброе утро, <span>Куаныш</span> 👋</div>
+    <div class="subhello">Вторник, 10 ноября 2026</div>
+    <div class="tiles">
+      <div class="tile"><div class="ti">📊</div><div class="tn">Статистика</div><div class="td">Воронка и KPI</div></div>
+      <div class="tile"><div class="ti">🛒</div><div class="tn">Закупки</div><div class="td">Заявки и статусы</div></div>
+      <div class="tile"><div class="ti">🎓</div><div class="tn">Тренинг-центр</div><div class="td">Команда и лаборатория</div></div>
+      <div class="tile"><div class="ti">📦</div><div class="tn">Логистика</div><div class="td">Отгрузки</div></div>
+    </div>
+  </div>
+
+  <!-- ══ VARIANT C ══ -->
+  <div class="vhead"><span class="vbadge">C</span><span class="vtitle">Правая колонка-лента</span></div>
+  <p class="vnote">Отдельная колонка справа, «журнальный» вид — больше всего места под «В этот день» и новости. Заметнее, но требует двухколоночной сетки портала (на мобиле уходит вниз).</p>
+  <div class="frame">
+    <div class="pbar"><div class="plogo"><span class="pdot"></span>ЦУП ProLabSupport</div><div class="pclock">Вт, 10 ноября · 10:29</div></div>
+    <div class="cols">
+      <div class="main">
+        <div class="hello">Доброе утро, <span>Куаныш</span> 👋</div>
+        <div class="subhello">Вторник, 10 ноября 2026</div>
+        <div class="tiles">
+          <div class="tile"><div class="ti">📊</div><div class="tn">Статистика</div><div class="td">Воронка и KPI</div></div>
+          <div class="tile"><div class="ti">🛒</div><div class="tn">Закупки</div><div class="td">Заявки</div></div>
+          <div class="tile"><div class="ti">🎓</div><div class="tn">Тренинг-центр</div><div class="td">Команда</div></div>
+          <div class="tile"><div class="ti">📦</div><div class="tn">Логистика</div><div class="td">Отгрузки</div></div>
+          <div class="tile"><div class="ti">🏢</div><div class="tn">Компании</div><div class="td">База</div></div>
+          <div class="tile"><div class="ti">💬</div><div class="tn">Рассылки</div><div class="td">Кампании</div></div>
+        </div>
+      </div>
+      <div class="rail">
+        <div class="today">
+          <div class="today-h"><span>✨</span><span class="cap">Сегодня</span><span class="date">10 ноя</span></div>
+          <div class="blocks">
+            <div class="blk">
+              <div class="bh"><span class="ic">🎂</span>Дни рождения</div>
+              <div class="bday-today"><span class="em">🎉</span><div><div class="nm">Орынбаева Айнұр</div><div class="rl">сегодня!</div></div></div>
+              <div class="mini"><div class="r"><span class="d">14 ноя</span> Жақсылық Рауан</div><div class="r"><span class="d">21 ноя</span> Сагитова, Шаймұрат</div></div>
+            </div>
+            <div class="blk">
+              <div class="bh"><span class="ic">📅</span>В этот день</div>
+              <div class="onthis">
+                <div class="ev"><span class="yr">2 г.</span><span class="tx">Сделка с <b>АО «Казхром»</b>, <b>48,5 млн ₸</b> (С. Жаров).</span></div>
+                <div class="ev"><span class="yr">4 г.</span><span class="tx">Сервисный контракт с <b>ТОО «КазАзот»</b>.</span></div>
+              </div>
+            </div>
+            <div class="blk">
+              <div class="bh"><span class="ic">🌴</span>Отсутствуют</div>
+              <div class="pills">
+                <span class="pil"><span class="t g"></span>🌴 Сорокин Д. до 14.11</span>
+                <span class="pil"><span class="t b"></span>🧳 Актайлаков М.</span>
+                <span class="pil"><span class="t a"></span>🤒 Разакова А.</span>
+              </div>
+            </div>
+            <div class="blk">
+              <div class="bh"><span class="ic">📈</span>Пульс</div>
+              <div class="pulse"><div class="m"><b>37</b><span>в работе</span></div><div class="m"><b class="up">128 млн</b><span>ноябрь ₸</span></div></div>
+              <div class="fact">💡 ТЦ в 2026: 312 обученных — рекорд.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="lead" style="margin-top:28px">Данные в превью — пример (кроме дней рождения: они настоящие, из твоего файла). В живой версии всё тянется по дате автоматически.</p>
+</div>
+</body>
+</html>

@@ -1320,7 +1320,16 @@ function loadBar(pct){
       <div style="height:100%;width:${pct}%;background:${col};border-radius:4px"></div></div>
     <b style="font-size:12px;color:${col};min-width:34px;text-align:right">${pct}%</b></div>`;
 }
-const admitsText = it => (it.admits||[]).map(a=>a.method||a).filter(Boolean).join(', ');
+const admitsText = it => (it.admits||[]).map(a=>{ const m=(a&&a.method)||a||''; const u=a&&a.until; return m?(m+(u?(' до '+u):'')):''; }).filter(Boolean).join(', ');
+// Допуски с датой действия: зелёный — действует, синий — истекает ≤30 дней,
+// красный — просрочен, серый — без срока. (§12 ТЗ — матрица компетенций.)
+function admitDays(u){ if(!u) return null; const d=Math.floor((new Date(u+'T00:00:00')-new Date(new Date().toDateString()))/864e5); return isNaN(d)?null:d; }
+function admitChips(it){ const a=(it.admits||[]); if(!a.length) return '';
+  return a.map(x=>{ const meth=(x&&x.method)||x||''; if(!meth) return ''; const u=x&&x.until; let cls='held',suf='';
+    if(u){ const d=admitDays(u); const du=' · до '+u.slice(8,10)+'.'+u.slice(5,7)+'.'+u.slice(0,4);
+      if(d==null){cls='m';} else if(d<0){cls='cert';suf=du+' · просрочен';} else if(d<30){cls='plan';suf=du+' · ≤30д';} else {cls='held';suf=du;} }
+    else cls='m';
+    return `<span class="pill ${cls}" title="Допуск${u?(' действует до '+u):' — срок не указан'}">${esc(meth)}${suf}</span>`; }).filter(Boolean).join(' '); }
 // Клиент ТЦ → открывает карточку в модуле «Компании» ЦУП (переиспользуем, не дублируем).
 function coLink(name){ name=String(name==null?'':name).trim();
   return (name && name!=='—')
@@ -1344,14 +1353,15 @@ const entStaff = mkEntity({
     <div class="row"><span class="client">${ESCV(it.role_title||'—')}</span>${it.dir?`<span class="pill m">${ESCV(it.dir)}</span>`:''}</div>
     <div class="row" style="margin:7px 0;align-items:center;gap:10px"><div style="flex:1;min-width:0">${loadBar(it.load_pct)}</div>${it.free_hours!=null?`<span class="pill ${it.free_hours>0?'held':'lead'}" style="flex:none">${it.free_hours>0?('свободно '+it.free_hours+' ч'):'нет окна'}</span>`:''}</div>
     ${(proj.length||it.busy_on)?`<div class="sub">${ESCV(proj.length?proj.join(', '):it.busy_on)}</div>`:''}
-    <div class="foot"><span>${(it.admits&&it.admits.length)?(tIc(TI.cap)+'допуски: '+ESCV(admitsText(it))):''}</span><span>${it.active===false?'<span class="pill lead">не активен</span>':''}</span></div>
+    ${(it.admits&&it.admits.length)?`<div class="row" style="flex-wrap:wrap;gap:4px;margin-top:5px;align-items:center">${tIc(TI.cap)}${admitChips(it)}</div>`:''}
+    ${it.active===false?'<div class="foot"><span></span><span class="pill lead">не активен</span></div>':''}
   </div>`; },
   fields:[
     {k:'name',l:'ФИО',t:'text',ro:true},{k:'role_title',l:'Должность',t:'text',ro:true},
     {k:'dir',l:'Направление / группа',t:'text'},
     {k:'status',l:'Занятость',t:'select',opts:STATUS_WORK},{k:'load_pct',l:'Загрузка, %',t:'number'},
     {k:'busy_on',l:'Чем занят (если не из «Работ»)',t:'text'},
-    {k:'admits',l:'Допуски (методы через запятую)',t:'text',get:it=>admitsText(it)},
+    {k:'admits',l:'Допуски — метод, можно с датой (ICP-OES до 2026-12-31, AAS)',t:'text',get:it=>admitsText(it)},
     {k:'bonus_idx',l:'Индекс для премии',t:'number'},
     {k:'note',l:'Заметки',t:'textarea'},{k:'active',l:'Активен (входит в команду сейчас)',t:'check'},
   ],
