@@ -442,7 +442,9 @@
   var GACT={
     req:'<path d="M12 5v14M5 12h14"/>',
     task:'<path d="M9 11l3 3L20 6"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>',
-    search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>'
+    search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+    kb:'<path d="M4 5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2zM8 7h7M8 11h7"/>',
+    msg:'<path d="M21 11.5a8.4 8.4 0 0 1-12 7.6L3 21l1.9-5.7A8.4 8.4 0 1 1 21 11.5z"/>'
   };
   function gsvg(n){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'+GACT[n]+'</svg>'; }
   function greetWord(){ var h=new Date().getHours(); return h<6?'Доброй ночи':h<12?'Доброе утро':h<18?'Добрый день':'Добрый вечер'; }
@@ -457,8 +459,8 @@
       '<div class="cup-greet-hi">'+esc(greetWord())+'</div>'+
       '<div class="cup-greet-name" id="cupGreetName">на сегодня</div>'+
       '<div class="cup-greet-acts">'+
-        '<button data-g="req"><span>'+gsvg('req')+'</span>Заявка</button>'+
-        '<button data-g="task"><span>'+gsvg('task')+'</span>Задачи</button>'+
+        '<button data-g="kb" class="cup-greet-kb" style="display:none"><span>'+gsvg('kb')+'</span>База знаний</button>'+
+        '<button data-g="msg"><span>'+gsvg('msg')+'</span>Мессенджер</button>'+
         '<button data-g="search"><span>'+gsvg('search')+'</span>Поиск</button>'+
       '</div>';
     var anchor=document.getElementById('today');
@@ -467,10 +469,16 @@
     else if(mn) mn.insertBefore(card, mn.firstChild);
     card.querySelector('.cup-greet-acts').addEventListener('click',function(e){
       var b=e.target.closest('button'); if(!b) return; var g=b.getAttribute('data-g');
-      if(g==='req') go('/index.html');
-      else if(g==='task') go('/board.html');
+      if(g==='kb') go('/knowledge.html');
+      else if(g==='msg') go('/messenger.html');
       else if(g==='search'){ if(!clickId('pls-sr-btn')) openSearch(); } });
     setGreetName();
+    applyGreetAccess();
+  }
+  // Кнопка «База знаний» — только админам/суперадминам (страница им и доступна).
+  function applyGreetAccess(){
+    var kb=document.querySelector('.cup-greet-kb'); if(!kb) return;
+    kb.style.display=(ROLE==='admin'||ROLE==='superadmin')?'':'none';
   }
 
   // Статичные иконки (Ассистент/Тема/Связь) в шапке главной — рядом с брендом.
@@ -491,7 +499,7 @@
   }
 
   function start(){ if(isHome) document.body.classList.add('cup-home');
-    loadAccess(function(){ setGreetName(); }); build(); buildTopbar(); buildBurger(); buildHomeActions(); buildHomeGreet(); buildHomeFav(); track(); loadTop(); loadPending();
+    loadAccess(function(){ setGreetName(); applyGreetAccess(); }); build(); buildTopbar(); buildBurger(); buildHomeActions(); buildHomeGreet(); buildHomeFav(); track(); loadTop(); loadPending();
     setInterval(loadPending, 60000);
     document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible') loadPending(); }); }
   if(document.body) start();
