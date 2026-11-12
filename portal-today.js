@@ -195,13 +195,16 @@ async function _genAi(ctx) {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: process.env.PLSAI_AGENT_MODEL || process.env.PLSAI_MODEL || 'claude-haiku-5-5', max_tokens: 220, system: sys,
+      // Haiku 5.5: adaptive-мышление включено по умолчанию и ест max_tokens; для
+      // короткого вывода отключаем мышление и ставим effort=low, иначе ответ пуст.
+      body: JSON.stringify({ model: process.env.PLSAI_AGENT_MODEL || process.env.PLSAI_MODEL || 'claude-haiku-5-5', max_tokens: 1024,
+        thinking: { type: 'disabled' }, system: sys,
         messages: [{ role: 'user', content: 'Цифры на сегодня:\n' + JSON.stringify(full) }] }),
     });
     const d = await r.json();
     if (!r.ok) { _ai.state = 'api-error: ' + ((d && d.error && d.error.message) || ('HTTP ' + r.status)); return ''; }
-    const t = ((d.content && d.content[0] && d.content[0].text) || '').trim();
-    _ai.state = t ? 'ok' : 'empty-response';
+    const t = (Array.isArray(d.content) ? d.content : []).filter(b => b && b.type === 'text').map(b => b.text || '').join('').trim();
+    _ai.state = t ? 'ok' : ('empty-response' + (d && d.stop_reason ? ':' + d.stop_reason : ''));
     return t;
   } catch (e) { _ai.state = 'fetch-error: ' + e.message; return ''; }
 }

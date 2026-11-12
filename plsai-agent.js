@@ -363,7 +363,9 @@ async function callClaude(system, messages, key) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: AGENT_MODEL, max_tokens: 1500, system, tools: TOOLS, messages }),
+    // Haiku 5.5: отключаем adaptive-мышление (ест max_tokens) и ставим effort=low —
+    // поведение как у прежней Haiku, без пустых ответов и без потери бюджета.
+    body: JSON.stringify({ model: AGENT_MODEL, max_tokens: 1500, thinking: { type: 'disabled' }, system, tools: TOOLS, messages }),
   });
   const data = await r.json();
   if (!r.ok) throw new Error((data && data.error && data.error.message) || ('HTTP ' + r.status));
@@ -492,7 +494,7 @@ async function runAgent(qRaw, user) {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: AGENT_MODEL, max_tokens: 1200, system, messages }),
+      body: JSON.stringify({ model: AGENT_MODEL, max_tokens: 1200, thinking: { type: 'disabled' }, system, messages }),
     });
     const data = await r.json();
     if (r.ok) {
