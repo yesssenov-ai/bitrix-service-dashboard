@@ -116,17 +116,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13
 .comp .send{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:10px;width:38px;height:38px;cursor:pointer;flex:none;display:inline-flex;align-items:center;justify-content:center}
 .comp .send svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .comp .send:disabled{opacity:.5;cursor:default}
-/* Верхний ряд глобальных иконок (AI · помощь · поиск · связь · тема) — ровно по
-   центру у бренда. Эта страница не грузит cup-ui.css, поэтому позиции задаём тут
-   и перебиваем встроенные в скрипты значения по специфичности (body #id). */
-body #pai-fab{left:calc(50% - 109px);top:13px}
-body #pls-help-btn{left:calc(50% - 63px);top:13px}
-body #pls-sr-btn{left:calc(50% - 17px);top:13px}
-body #pls-fb-btn{left:calc(50% + 29px);top:13px}
-#themeToggle{position:fixed;top:13px;left:calc(50% + 75px);right:auto;bottom:auto;z-index:9999;width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:var(--surface);color:var(--text-2);border:1px solid var(--line-2);cursor:pointer;padding:0;line-height:0;box-shadow:0 1px 2px rgba(20,25,35,.06);transition:color .15s,border-color .15s}
-#themeToggle:hover{color:var(--text);border-color:var(--text-3)}
-#themeToggle svg{display:block}
-@media(max-width:640px){#pai-fab,#pls-help-btn,#pls-sr-btn,#pls-fb-btn,#themeToggle{display:none!important}}
+/* Верхние глобальные иконки (помощь · поиск · AI · связь · тема) собираются в один
+   центрированный флекс-ряд — ровно и одинакового размера, сколько бы их ни было. */
+#pls-toolbar{position:fixed;top:11px;left:50%;transform:translateX(-50%);display:flex;gap:7px;align-items:center;z-index:99999}
+#pls-toolbar > *{position:static!important;left:auto!important;top:auto!important;right:auto!important;bottom:auto!important;width:30px!important;height:30px!important;min-width:0!important;margin:0!important;transform:none!important;box-shadow:none!important}
+#pls-toolbar > * svg{width:16px;height:16px}
+@media(max-width:640px){#pls-toolbar{display:none!important}}
 .hint{font-size:10.5px;color:var(--text-3);padding:0 16px 8px}
 .empty{color:var(--text-3);text-align:center;padding:40px 16px;font-size:12.75px;line-height:1.5}
 .replying{display:flex;align-items:center;gap:8px;padding:6px 14px;font-size:11.5px;color:var(--text-3);background:var(--surface-2);border-top:1px solid var(--line)}
@@ -768,6 +763,19 @@ function toast(msg){ let t=document.getElementById('msgToast'); if(!t){ t=docume
 })();
 
 if(window.innerWidth<=760) document.getElementById('backMob').style.display='inline-flex';
+
+// Сбор глобальных плавающих иконок в единый ровный ряд по центру (они создаются
+// разными скриптами асинхронно, поэтому собираем несколько раз).
+(function(){
+  function collect(){
+    let bar=document.getElementById('pls-toolbar');
+    if(!bar){ bar=document.createElement('div'); bar.id='pls-toolbar'; document.body.appendChild(bar); }
+    ['pai-fab','pls-help-btn','pls-sr-btn','pls-fb-btn','themeToggle'].forEach(id=>{
+      const el=document.getElementById(id); if(el && el.parentNode!==bar) bar.appendChild(el);
+    });
+  }
+  [150,500,1200,2500,4000].forEach(t=>setTimeout(collect,t));
+})();
 
 boot();
 </script>

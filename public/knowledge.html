@@ -15,6 +15,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .top .brand{font-weight:800}.top .brand b{color:var(--accent)}.top .sp{flex:1}
 a.back{color:var(--text-3);text-decoration:none;font-size:12.5px;border:1px solid var(--line);border-radius:8px;padding:6px 10px;background:var(--surface)}
 a.back:hover{color:var(--text);border-color:var(--text-3)}
+/* Верхние глобальные иконки — единый центрированный ряд, ровно и одного размера. */
+#pls-toolbar{position:fixed;top:11px;left:50%;transform:translateX(-50%);display:flex;gap:7px;align-items:center;z-index:99999}
+#pls-toolbar > *{position:static!important;left:auto!important;top:auto!important;right:auto!important;bottom:auto!important;width:30px!important;height:30px!important;min-width:0!important;margin:0!important;transform:none!important;box-shadow:none!important}
+#pls-toolbar > * svg{width:16px;height:16px}
+@media(max-width:640px){#pls-toolbar{display:none!important}}
 .wrap{flex:1;display:grid;grid-template-columns:340px 1fr;min-height:0}
 .side{background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 .sh{padding:12px;display:flex;gap:8px}
@@ -54,7 +59,6 @@ a.back:hover{color:var(--text);border-color:var(--text-3)}
   <div class="brand"><b>База знаний</b> агента</div>
   <span id="semBadge" style="font-size:11.5px;color:var(--text-3);border:1px solid var(--line);border-radius:999px;padding:4px 10px"></span>
   <div class="sp"></div>
-  <button class="back" id="themeBtn">◐ Тема</button>
 </div>
 <div class="wrap">
   <aside class="side">
@@ -141,7 +145,8 @@ async function testSearch(){
   if(!d||!d.ok||!d.results.length){box.innerHTML='<div class="empty">Ничего не найдено — добавьте регламент по этой теме.</div>';return;}
   box.innerHTML=d.results.map(h=>`<div class="hit"><div class="src">${esc(h.doc_title)}${h.category?' · '+esc(h.category):''}</div><div class="tx">${esc((h.chunk||'').slice(0,400))}${(h.chunk||'').length>400?'…':''}</div></div>`).join('');
 }
-document.getElementById('themeBtn').onclick=()=>{const cur=document.documentElement.getAttribute('data-theme');const next=cur==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',next);try{localStorage.setItem('cup-theme',next);}catch(e){}};
+// Сбор глобальных плавающих иконок в единый ровный ряд по центру.
+(function(){function collect(){let bar=document.getElementById('pls-toolbar');if(!bar){bar=document.createElement('div');bar.id='pls-toolbar';document.body.appendChild(bar);}['pai-fab','pls-help-btn','pls-sr-btn','pls-fb-btn','themeToggle'].forEach(id=>{const el=document.getElementById(id);if(el&&el.parentNode!==bar)bar.appendChild(el);});}[150,500,1200,2500,4000].forEach(t=>setTimeout(collect,t));})();
 async function loadStatus(){
   const d=await api('GET','/status'); const badge=document.getElementById('semBadge'), hint=document.getElementById('semHint');
   if(!d||!d.ok){badge.textContent='';return;}

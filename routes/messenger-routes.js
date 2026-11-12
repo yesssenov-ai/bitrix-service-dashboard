@@ -321,51 +321,32 @@ router.post('/channels/:id(\\d+)/messages', requireAuth(WRITE), express.json({ l
 async function runAgentInChannel(cid, user, rawBody) {
   const q = rawBody.replace(MENTION, ' ').replace(/\s+/g, ' ').trim();
   if (!q) return;
-  // 1) История этого чата — чтобы агент понимал контекст и короткие уточнения
-  //    («тогда 11», «а по второму», «да, покажи») как живой собеседник.
-  let history = '';
-  try {
-    const h = await pool.query(`
-      SELECT m.author_id, m.kind, m.body, u.display_name AS who
-      FROM ticketsmodule_msg_messages m LEFT JOIN ticketsmodule_users u ON u.id=m.author_id
-      WHERE m.channel_id=$1 AND m.deleted_at IS NULL AND m.kind IN ('text','ai')
-        AND m.body IS NOT NULL AND char_length(m.body) > 0
-      ORDER BY m.id DESC LIMIT 24`, [cid]);
-    const rows = h.rows.reverse();
-    // последняя реплика — это и есть текущий вопрос, её в историю не дублируем
-    if (rows.length && rows[rows.length - 1].kind === 'text' && (rows[rows.length - 1].body || '').trim() === rawBody.trim()) rows.pop();
-    if (rows.length) {
-      history = rows.map(r => {
-        const who = r.kind === 'ai' ? 'Агент' : (r.who || 'Сотрудник');
-        const txt = String(r.body || '').replace(/\s+/g, ' ').slice(0, 500);
-        return who + ': ' + txt;
-      }).join('\n');
+  // Короткая/неполная реплика («за 10», «а по второму», «да, покажи») понимается
+  // только из контекста — тогда (и ТОЛЬКО тогда) подмешиваем недавнюю историю.
+  // Полноценный вопрос отвечаем «с чистого листа», без истории — иначе сильная
+  // модель залипает на старую тему из прошлых сообщений.
+  const words = q.split(/\s+/).filter(Boolean).length;
+  const shortRef = /^(а|и|за|по|ещё|еще|да|нет|теперь|тогда|их|те|эти|этот|эту|эт|ок)\b/i.test(q) || /^[\d\s.,-]+$/.test(q);
+  const isFollowup = words <= 4 || (words <= 6 && shortRef);
+  let prompt = q;
+  if (isFollowup) {
+    let history = '';
+    try {
+      const h = await pool.query(`
+        SELECT m.author_id, m.kind, m.body, u.display_name AS who
+        FROM ticketsmodule_msg_messages m LEFT JOIN ticketsmodule_users u ON u.id=m.author_id
+        WHERE m.channel_id=$1 AND m.deleted_at IS NULL AND m.kind IN ('text','ai')
+          AND m.body IS NOT NULL AND char_length(m.body) > 0
+        ORDER BY m.id DESC LIMIT 8`, [cid]);
+      const rows = h.rows.reverse();
+      if (rows.length && rows[rows.length - 1].kind === 'text' && (rows[rows.length - 1].body || '').trim() === rawBody.trim()) rows.pop();
+      history = rows.map(r => (r.kind === 'ai' ? 'Агент' : (r.who || 'Сотрудник')) + ': ' + String(r.body || '').replace(/\s+/g, ' ').slice(0, 400)).join('\n');
+    } catch (e) {}
+    if (history) {
+      prompt = 'Это продолжение диалога. Ниже недавняя переписка — используй её, чтобы понять короткую реплику сотрудника '
+        + '(например «за 10» = та же тема, но за 10-е число; «а по второму» = про второй пункт из прошлого ответа). '
+        + 'Не переспрашивай, если смысл ясен из контекста.\n\nПереписка:\n' + history + '\n\nРеплика сотрудника: ' + q;
     }
-  } catch (e) {}
-  // 2) Доп. контекст из рабочей переписки (обучение на текстах) — по релевантности
-  let related = '';
-  try {
-    const rel = await pool.query(`
-      SELECT m.body, u.display_name AS who
-      FROM ticketsmodule_msg_messages m LEFT JOIN ticketsmodule_users u ON u.id=m.author_id
-      WHERE m.deleted_at IS NULL AND m.kind='text' AND char_length(m.body) > 2 AND m.channel_id <> $3
-        AND m.channel_id IN (SELECT channel_id FROM ticketsmodule_msg_members WHERE user_id=$1)
-        AND to_tsvector('russian', coalesce(m.body,'')) @@ plainto_tsquery('russian', $2)
-      ORDER BY m.id DESC LIMIT 4`, [user.id, q, cid]);
-    if (rel.rows.length) related = '\n\nИз другой рабочей переписки (справочно):\n' + rel.rows.map(r => (r.who || 'сотрудник') + ': ' + r.body).join('\n');
-  } catch (e) {}
-  // 3) Собираем запрос к агенту: история + текущая реплика с явной инструкцией
-  //    понимать контекст и короткие уточнения.
-  let prompt = '';
-  if (history) {
-    prompt += 'Ты — Агент ЦУП в корпоративном мессенджере, ведёшь живой диалог. Ниже история переписки.\n'
-      + 'Правила:\n'
-      + '1) Если последняя реплика — САМОСТОЯТЕЛЬНЫЙ полный вопрос (есть своя тема/период/объект), отвечай на него ЗАНОВО и НЕ притягивай даты, числа и темы из прошлых сообщений. Пример: «все сделки по хроматографии за последнюю неделю» — это новый вопрос про хроматографию за 7 дней, а не про прошлую дату.\n'
-      + '2) Только если реплика КОРОТКАЯ и неполная («за 10», «а по второму», «да, покажи», «подробнее»), трактуй её по смыслу предыдущих сообщений и не переспрашивай. Если шёл разговор про даты и пишут голое число (напр. «10», «за 10») — это то же число месяца, что обсуждали.\n'
-      + '3) Не выдумывай; если данных не хватает — так и скажи.\n\n'
-      + 'История переписки:\n' + history + related + '\n\nПоследняя реплика сотрудника: ' + q;
-  } else {
-    prompt = (related ? related.trim() + '\n\n' : '') + 'Вопрос: ' + q;
   }
   let answer = '', payload = null;
   try {
