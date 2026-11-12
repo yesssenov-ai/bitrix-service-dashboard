@@ -318,6 +318,7 @@ async function openChannel(id){
     : (c && c.kind==='dm' && PEOPLE_BY_ID[c.peerId] ? PRES_LBL[PEOPLE_BY_ID[c.peerId].status]
     : (c? ((c.members||[]).length+' участников'):'' ));
   document.getElementById('chSub').textContent = sub;
+  if(c && c.kind==='ai') loadAgentBadge();
   document.getElementById('exportBtn').style.display='inline-flex';
   document.getElementById('gearBtn').style.display = (c && c.kind==='group') ? 'inline-flex' : 'none';
   input.placeholder = (c && c.kind==='ai') ? 'Спросите агента…' : 'Сообщение…';
@@ -599,11 +600,40 @@ document.getElementById('newBtn').onclick=()=>{
     <button class="mbtn" id="mNewGroup" style="width:100%;margin-bottom:8px">👥 Новая группа</button>
     ${APP_ADMIN?'<button class="mbtn ghost" id="mTeams" style="width:100%;margin-bottom:8px">🏢 Отделы (для тега @отдел)</button>':''}
     ${APP_ADMIN?'<button class="mbtn ghost" id="mStorage" style="width:100%;margin-bottom:8px">🗄️ Хранилище файлов</button>':''}
+    ${APP_ADMIN?'<button class="mbtn ghost" id="mAgent" style="width:100%;margin-bottom:8px">🧠 Модель агента</button>':''}
     <div style="display:flex;justify-content:flex-end"><button class="mbtn ghost" data-x>Закрыть</button></div>`);
   ov.querySelector('#mNewGroup').onclick=()=>{ ov.remove(); createGroupModal(); };
   if(APP_ADMIN) ov.querySelector('#mTeams').onclick=()=>{ ov.remove(); teamsModal(); };
   if(APP_ADMIN) ov.querySelector('#mStorage').onclick=()=>{ ov.remove(); storageModal(); };
+  if(APP_ADMIN) ov.querySelector('#mAgent').onclick=()=>{ ov.remove(); agentModelModal(); };
 };
+// Красивое имя модели: claude-sonnet-4-5 → «Sonnet 4.5»
+function prettyModel(id){ if(!id) return '—'; let s=String(id).replace(/^claude-/,''); const parts=s.split('-'); const tier=parts.shift()||'';
+  const date=(parts.length&&/^\d{6,8}$/.test(parts[parts.length-1]))?parts.pop():''; const ver=parts.join('.');
+  return tier.charAt(0).toUpperCase()+tier.slice(1)+(ver?' '+ver:'')+(date?' ('+date+')':''); }
+let AGENT_INFO=null;
+async function loadAgentBadge(){ if(!AGENT_INFO){ const r=await api('GET','/agent/info'); if(r&&r.ok) AGENT_INFO=r; }
+  const c=curChannel(); if(AGENT_INFO&&c&&c.kind==='ai') document.getElementById('chSub').textContent='ИИ-ассистент · '+prettyModel(AGENT_INFO.active||AGENT_INFO.configured); }
+async function agentModelModal(){
+  const r=await api('GET','/agent/info'); if(!r||!r.ok){ toast((r&&r.error)||'Ошибка'); return; } AGENT_INFO=r;
+  const fellBack = r.active && r.configured && r.active!==r.configured;
+  let avail='';
+  if(r.available && Array.isArray(r.available)){
+    const rows=r.available.map(m=>`<div class="setrow"><div style="flex:1;min-width:0"><b style="font-size:12.5px;display:block">${esc(m.name||m.id)}</b><code style="font-size:11px;color:var(--text-3);word-break:break-all">${esc(m.id)}</code></div></div>`).join('');
+    avail=`<div style="font-size:11.5px;color:var(--text-3);margin:10px 2px 4px">Доступные вашему аккаунту модели (ID — для переменной PLSAI_AGENT_MODEL):</div><div style="max-height:40vh;overflow:auto">${rows||'<div class="empty">Список пуст</div>'}</div>`;
+  } else if(r.available && r.available.error){
+    avail=`<div style="font-size:12px;color:var(--warn);margin-top:10px">Не удалось получить список моделей: ${esc(r.available.error)}</div>`;
+  }
+  const ov=makeOv(`<h3>Модель агента</h3>
+    <div style="font-size:13px;line-height:1.8">
+      Настроена: <b>${esc(prettyModel(r.configured))}</b> <code style="font-size:11px;color:var(--text-3)">${esc(r.configured||'')}</code><br>
+      Активна сейчас: <b>${esc(prettyModel(r.active))}</b>${fellBack?' <span style="color:var(--warn)">(откат — основная недоступна)</span>':''}<br>
+      Резерв: <b>${esc(prettyModel(r.fallback))}</b>
+    </div>
+    ${fellBack?'<div style="font-size:12px;color:var(--warn);margin-top:8px">Основная модель недоступна аккаунту — агент работает на резервной. Выберите из списка ниже доступную модель и впишите её ID в переменную окружения <b>PLSAI_AGENT_MODEL</b> на Railway.</div>':''}
+    ${avail}
+    <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="mbtn ghost" data-x>Закрыть</button></div>`);
+}
 function fmtB(b){ b=+b||0; return b<1024?b+' Б':b<1048576?(b/1024).toFixed(0)+' КБ':b<1073741824?(b/1048576).toFixed(1)+' МБ':(b/1073741824).toFixed(2)+' ГБ'; }
 async function storageModal(){
   const s=await api('GET','/files/status'); if(!s||!s.ok){ toast((s&&s.error)||'Ошибка'); return; }

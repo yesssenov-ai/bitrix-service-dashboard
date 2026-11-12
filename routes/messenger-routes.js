@@ -458,6 +458,20 @@ router.post('/files/migrate', requireAuth(WRITE), express.json(), async (req, re
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
+// ── Модель агента: что настроено/активно + какие модели доступны аккаунту ──────
+router.get('/agent/info', requireAuth(WRITE), async (req, res) => {
+  try {
+    const agent = require('../plsai-agent');
+    const info = (agent.agentModelInfo && agent.agentModelInfo()) || {};
+    let available = null;
+    if (isAppAdmin(req.user) && agent.listAvailableModels) {
+      const r = await agent.listAvailableModels();
+      available = r.ok ? r.models : { error: r.error };
+    }
+    res.json({ ok: true, configured: info.configured, fallback: info.fallback, active: info.active, available });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 // ── Диалог 1:1 (создать или открыть) ─────────────────────────────────────────
 router.post('/dm', requireAuth(WRITE), express.json(), async (req, res) => {
   try {

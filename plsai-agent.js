@@ -580,4 +580,20 @@ async function finalize(answer, presentable, steps, user, q, truncated) {
   return out;
 }
 
-module.exports = { runAgent, allowedTablesFor, ownerScopeBids, guardedSelect, buildCtx, exportAgentTable, voteExample, TABLE_META };
+// Диагностика модели: что настроено, что реально активно, что доступно аккаунту.
+function agentModelInfo() { return { configured: AGENT_MODEL, fallback: FALLBACK_MODEL, active: ACTIVE_MODEL }; }
+async function listAvailableModels() {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return { ok: false, error: 'ANTHROPIC_API_KEY не задан' };
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/models?limit=100', {
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+    });
+    const data = await r.json();
+    if (!r.ok) return { ok: false, error: (data && data.error && data.error.message) || ('HTTP ' + r.status) };
+    const models = (data.data || []).map(m => ({ id: m.id, name: m.display_name || m.id, created: m.created_at || '' }));
+    return { ok: true, models };
+  } catch (e) { return { ok: false, error: e.message }; }
+}
+
+module.exports = { runAgent, allowedTablesFor, ownerScopeBids, guardedSelect, buildCtx, exportAgentTable, voteExample, TABLE_META, agentModelInfo, listAvailableModels };
