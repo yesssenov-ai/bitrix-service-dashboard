@@ -8,6 +8,7 @@ const express = require('express');
 const multer = require('multer');
 const router = express.Router();
 const { pool, requireAuth } = require('../auth');
+const storage = require('../storage-lib'); // Supabase Storage (объектное хранилище)
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 const WRITE = []; // любой авторизованный сотрудник
@@ -84,6 +85,9 @@ async function ensureMsgSchema() {
   catch (e) { console.error('msg ALTER channels locked:', e.message); }
   try { await pool.query(`ALTER TABLE ticketsmodule_msg_messages ADD COLUMN IF NOT EXISTS mentions INTEGER[]`); }
   catch (e) { console.error('msg ALTER messages mentions:', e.message); }
+  // Ключ объекта в Storage (если файл вынесен из БД в объектное хранилище).
+  try { await pool.query(`ALTER TABLE ticketsmodule_msg_messages ADD COLUMN IF NOT EXISTS att_key VARCHAR(400)`); }
+  catch (e) { console.error('msg ALTER messages att_key:', e.message); }
   _schemaReady = true;
 }
 ensureMsgSchema().catch(e => console.error('msg ensureSchema:', e.message));
@@ -317,21 +321,55 @@ router.post('/channels/:id(\\d+)/messages', requireAuth(WRITE), express.json({ l
 async function runAgentInChannel(cid, user, rawBody) {
   const q = rawBody.replace(MENTION, ' ').replace(/\s+/g, ' ').trim();
   if (!q) return;
-  let context = '';
+  // 1) История этого чата — чтобы агент понимал контекст и короткие уточнения
+  //    («тогда 11», «а по второму», «да, покажи») как живой собеседник.
+  let history = '';
+  try {
+    const h = await pool.query(`
+      SELECT m.author_id, m.kind, m.body, u.display_name AS who
+      FROM ticketsmodule_msg_messages m LEFT JOIN ticketsmodule_users u ON u.id=m.author_id
+      WHERE m.channel_id=$1 AND m.deleted_at IS NULL AND m.kind IN ('text','ai')
+        AND m.body IS NOT NULL AND char_length(m.body) > 0
+      ORDER BY m.id DESC LIMIT 24`, [cid]);
+    const rows = h.rows.reverse();
+    // последняя реплика — это и есть текущий вопрос, её в историю не дублируем
+    if (rows.length && rows[rows.length - 1].kind === 'text' && (rows[rows.length - 1].body || '').trim() === rawBody.trim()) rows.pop();
+    if (rows.length) {
+      history = rows.map(r => {
+        const who = r.kind === 'ai' ? 'Агент' : (r.who || 'Сотрудник');
+        const txt = String(r.body || '').replace(/\s+/g, ' ').slice(0, 500);
+        return who + ': ' + txt;
+      }).join('\n');
+    }
+  } catch (e) {}
+  // 2) Доп. контекст из рабочей переписки (обучение на текстах) — по релевантности
+  let related = '';
   try {
     const rel = await pool.query(`
       SELECT m.body, u.display_name AS who
       FROM ticketsmodule_msg_messages m LEFT JOIN ticketsmodule_users u ON u.id=m.author_id
-      WHERE m.deleted_at IS NULL AND m.kind='text' AND char_length(m.body) > 2
+      WHERE m.deleted_at IS NULL AND m.kind='text' AND char_length(m.body) > 2 AND m.channel_id <> $3
         AND m.channel_id IN (SELECT channel_id FROM ticketsmodule_msg_members WHERE user_id=$1)
         AND to_tsvector('russian', coalesce(m.body,'')) @@ plainto_tsquery('russian', $2)
-      ORDER BY m.id DESC LIMIT 6`, [user.id, q]);
-    if (rel.rows.length) context = 'Контекст из рабочей переписки:\n' + rel.rows.map(r => (r.who || 'сотрудник') + ': ' + r.body).join('\n') + '\n\n';
+      ORDER BY m.id DESC LIMIT 4`, [user.id, q, cid]);
+    if (rel.rows.length) related = '\n\nИз другой рабочей переписки (справочно):\n' + rel.rows.map(r => (r.who || 'сотрудник') + ': ' + r.body).join('\n');
   } catch (e) {}
+  // 3) Собираем запрос к агенту: история + текущая реплика с явной инструкцией
+  //    понимать контекст и короткие уточнения.
+  let prompt = '';
+  if (history) {
+    prompt += 'Ты — Агент ЦУП в корпоративном мессенджере, ведёшь живой диалог. Ниже история переписки. '
+      + 'Отвечай на ПОСЛЕДНЮЮ реплику сотрудника с учётом контекста выше: короткие и неполные фразы '
+      + '(«тогда 11», «а по второму», «да, покажи», «за этот месяц») трактуй по смыслу предыдущих сообщений, '
+      + 'не переспрашивай, если намерение понятно из контекста. Если «11» после разговора про даты — это 11 число того же месяца.\n\n'
+      + 'История переписки:\n' + history + related + '\n\nПоследняя реплика сотрудника: ' + q;
+  } else {
+    prompt = (related ? related.trim() + '\n\n' : '') + 'Вопрос: ' + q;
+  }
   let answer = '', payload = null;
   try {
     const { runAgent } = require('../plsai-agent');
-    const out = await runAgent(context + 'Вопрос: ' + q, user);
+    const out = await runAgent(prompt, user);
     answer = (out && out.answer) || 'Не удалось сформировать ответ.';
     if (out && (out.table || out.steps || out.exportToken)) payload = { table: out.table || null, steps: out.steps || null, exportToken: out.exportToken || null };
   } catch (e) { answer = 'Агент временно недоступен: ' + e.message; }
@@ -343,29 +381,80 @@ async function runAgentInChannel(cid, user, rawBody) {
 }
 
 // ── Файл как сообщение ───────────────────────────────────────────────────────
+// По умолчанию файл уходит в объектное хранилище (Supabase Storage, префикс
+// ключа «messenger/»). Если хранилище не настроено — безопасный откат в БД (bytea).
 router.post('/channels/:id(\\d+)/file', requireAuth(WRITE), upload.single('file'), async (req, res) => {
   try {
     const cid = +req.params.id;
     if (!(await isMember(cid, uid(req)))) return res.status(403).json({ ok: false, error: 'Нет доступа к чату' });
     if (!req.file) return res.status(400).json({ ok: false, error: 'Файл не передан' });
     const caption = String((req.body && req.body.caption) || '').trim();
+    // Имя файла: multer отдаёт latin1 → перекодируем в utf8 (кириллица).
+    let orig = req.file.originalname || 'file';
+    try { orig = Buffer.from(orig, 'latin1').toString('utf8'); } catch (_) {}
+    orig = orig.slice(0, 300);
+    const ext = ((orig.match(/\.[A-Za-z0-9]{1,8}$/) || [''])[0] || '').toLowerCase();
+    let attKey = null, attData = null;
+    if (storage.configured()) {
+      try {
+        const rand = Math.random().toString(16).slice(2, 8);
+        attKey = `messenger/${cid}/${Date.now()}-${rand}${ext}`;
+        await storage.upload(attKey, req.file.buffer, req.file.mimetype);
+      } catch (e) { console.error('msg storage upload, откат в БД:', e.message); attKey = null; attData = req.file.buffer; }
+    } else { attData = req.file.buffer; }
     const ins = await pool.query(
-      `INSERT INTO ticketsmodule_msg_messages (channel_id, author_id, kind, body, att_name, att_type, att_size, att_data)
-       VALUES ($1,$2,'file',$3,$4,$5,$6,$7) RETURNING id, created_at`,
-      [cid, uid(req), caption, req.file.originalname.slice(0, 300), req.file.mimetype, req.file.size, req.file.buffer]);
+      `INSERT INTO ticketsmodule_msg_messages (channel_id, author_id, kind, body, att_name, att_type, att_size, att_data, att_key)
+       VALUES ($1,$2,'file',$3,$4,$5,$6,$7,$8) RETURNING id, created_at`,
+      [cid, uid(req), caption, orig, req.file.mimetype, req.file.size, attData, attKey]);
     await pool.query('UPDATE ticketsmodule_msg_channels SET last_at=NOW() WHERE id=$1', [cid]);
     res.json({ ok: true, id: ins.rows[0].id });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 router.get('/file/:mid(\\d+)', requireAuth(WRITE), async (req, res) => {
   try {
-    const r = await pool.query('SELECT channel_id, att_name, att_type, att_data FROM ticketsmodule_msg_messages WHERE id=$1', [+req.params.mid]);
-    const m = r.rows[0]; if (!m || !m.att_data) return res.status(404).send('Нет файла');
+    const r = await pool.query('SELECT channel_id, att_name, att_type, att_data, att_key FROM ticketsmodule_msg_messages WHERE id=$1', [+req.params.mid]);
+    const m = r.rows[0]; if (!m || (!m.att_data && !m.att_key)) return res.status(404).send('Нет файла');
     if (!(await isMember(m.channel_id, uid(req)))) return res.status(403).send('Нет доступа');
+    if (m.att_key) { // файл в объектном хранилище — короткоживущая подписанная ссылка
+      let url = await storage.signedUrl(m.att_key, 300);
+      url += (url.includes('?') ? '&' : '?') + 'download=' + encodeURIComponent(m.att_name || 'file');
+      return res.redirect(url);
+    }
     res.setHeader('Content-Type', m.att_type || 'application/octet-stream');
     res.setHeader('Content-Disposition', 'inline; filename*=UTF-8\'\'' + encodeURIComponent(m.att_name || 'file'));
     res.send(m.att_data);
   } catch (e) { res.status(500).send(e.message); }
+});
+// Статус хранилища + сколько файлов ещё в БД (для миграции) — только админ.
+router.get('/files/status', requireAuth(WRITE), async (req, res) => {
+  try {
+    if (!isAppAdmin(req.user)) return res.status(403).json({ ok: false, error: 'Только админ' });
+    const inDb = await pool.query(`SELECT COUNT(*)::int n, COALESCE(SUM(att_size),0)::bigint bytes FROM ticketsmodule_msg_messages WHERE att_data IS NOT NULL AND att_key IS NULL`);
+    const inStore = await pool.query(`SELECT COUNT(*)::int n FROM ticketsmodule_msg_messages WHERE att_key IS NOT NULL`);
+    res.json({ ok: true, storageReady: storage.configured(), bucket: storage.BUCKET, inDb: inDb.rows[0].n, inDbBytes: Number(inDb.rows[0].bytes || 0), inStorage: inStore.rows[0].n });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// Миграция вложений из БД в объектное хранилище батчами (можно вызывать повторно).
+router.post('/files/migrate', requireAuth(WRITE), express.json(), async (req, res) => {
+  try {
+    if (!isAppAdmin(req.user)) return res.status(403).json({ ok: false, error: 'Только админ' });
+    if (!storage.configured()) return res.status(503).json({ ok: false, error: 'Хранилище не настроено (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)' });
+    const limit = Math.min(Math.max(+(req.body && req.body.limit) || 25, 1), 100);
+    const rows = (await pool.query(`SELECT id, channel_id, att_name, att_type, att_data FROM ticketsmodule_msg_messages
+      WHERE att_data IS NOT NULL AND att_key IS NULL ORDER BY id ASC LIMIT $1`, [limit])).rows;
+    let moved = 0; const errors = [];
+    for (const m of rows) {
+      try {
+        const ext = ((String(m.att_name || '').match(/\.[A-Za-z0-9]{1,8}$/) || [''])[0] || '').toLowerCase();
+        const k = `messenger/${m.channel_id}/${m.id}-${Math.random().toString(16).slice(2, 8)}${ext}`;
+        await storage.upload(k, m.att_data, m.att_type || 'application/octet-stream');
+        await pool.query('UPDATE ticketsmodule_msg_messages SET att_key=$1, att_data=NULL WHERE id=$2', [k, m.id]);
+        moved++;
+      } catch (e) { errors.push({ id: m.id, error: e.message }); }
+    }
+    const left = (await pool.query(`SELECT COUNT(*)::int n FROM ticketsmodule_msg_messages WHERE att_data IS NOT NULL AND att_key IS NULL`)).rows[0].n;
+    res.json({ ok: true, moved, remaining: left, errors });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
 // ── Диалог 1:1 (создать или открыть) ─────────────────────────────────────────
