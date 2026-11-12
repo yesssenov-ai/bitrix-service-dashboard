@@ -310,11 +310,37 @@ router.post('/channels/:id(\\d+)/messages', requireAuth(WRITE), express.json({ l
     await pool.query('UPDATE ticketsmodule_msg_channels SET last_at=NOW() WHERE id=$1', [cid]);
     await pool.query('UPDATE ticketsmodule_msg_members SET last_read_id=$1 WHERE channel_id=$2 AND user_id=$3', [ins.rows[0].id, cid, uid(req)]);
     const msg = { id: ins.rows[0].id, channel_id: cid, author_id: uid(req), kind: 'text', body, reply_to: replyTo, mentions: mentions.length ? mentions : null, created_at: ins.rows[0].created_at, author_name: req.user.display_name };
+    pushNewMessage(cid, uid(req), req.user.display_name, body).catch(() => {});
     // Личный чат с агентом — отвечаем на каждое сообщение; в обычных каналах — по @-упоминанию.
     if (isAi || MENTION.test(body)) runAgentInChannel(cid, req.user, body).catch(e => console.error('msg agent:', e.message));
     res.json({ ok: true, message: msg });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
+
+// Пуш-уведомление о новом сообщении участникам канала, которые СЕЙЧАС не в сети
+// (онлайн увидят через поллинг). Требует настроенного web-push (VAPID) и подписки.
+async function pushNewMessage(cid, authorUserId, authorName, body) {
+  try {
+    const push = require('../push');
+    const r = await pool.query(`
+      SELECT u.bitrix_user_id AS bid, EXTRACT(EPOCH FROM (NOW()-p.last_seen_at)) AS age
+      FROM ticketsmodule_msg_members m
+      JOIN ticketsmodule_users u ON u.id = m.user_id
+      LEFT JOIN ticketsmodule_msg_presence p ON p.user_id = m.user_id
+      WHERE m.channel_id=$1 AND m.user_id <> $2 AND u.bitrix_user_id IS NOT NULL AND COALESCE(m.muted,false)=false`,
+      [cid, authorUserId || 0]);
+    if (!r.rows.length) return;
+    const ch = await pool.query('SELECT kind, title FROM ticketsmodule_msg_channels WHERE id=$1', [cid]);
+    const c = ch.rows[0] || {};
+    const title = (c.kind === 'group' && c.title) ? (authorName + ' · ' + c.title) : (authorName || 'Сообщение');
+    const text = String(body || '').replace(/\s+/g, ' ').slice(0, 140) || 'новое сообщение';
+    const payload = { type: 'msg', channelId: cid, notify: { title: title.slice(0, 80), body: text }, url: '/messenger.html' };
+    for (const row of r.rows) {
+      if (row.age != null && Number(row.age) <= 70) continue; // сейчас в сети — пуш не нужен
+      push.sendToUser(row.bid, payload).catch(() => {});
+    }
+  } catch (e) { /* пуш — best-effort */ }
+}
 
 // Агент отвечает в канал: подмешиваем релевантную переписку (обучение на текстах),
 // затем runAgent, затем постим ответ как сообщение kind='ai'.
@@ -359,6 +385,7 @@ async function runAgentInChannel(cid, user, rawBody) {
     `INSERT INTO ticketsmodule_msg_messages (channel_id, author_id, kind, body, payload) VALUES ($1,NULL,'ai',$2,$3) RETURNING id`,
     [cid, answer, payload ? JSON.stringify(payload) : null]);
   await pool.query('UPDATE ticketsmodule_msg_channels SET last_at=NOW() WHERE id=$1', [cid]);
+  pushNewMessage(cid, 0, 'Агент ЦУП', answer).catch(() => {});
   return ins.rows[0].id;
 }
 
@@ -389,6 +416,7 @@ router.post('/channels/:id(\\d+)/file', requireAuth(WRITE), upload.single('file'
        VALUES ($1,$2,'file',$3,$4,$5,$6,$7,$8) RETURNING id, created_at`,
       [cid, uid(req), caption, orig, req.file.mimetype, req.file.size, attData, attKey]);
     await pool.query('UPDATE ticketsmodule_msg_channels SET last_at=NOW() WHERE id=$1', [cid]);
+    pushNewMessage(cid, uid(req), req.user.display_name, '📄 ' + (caption || orig)).catch(() => {});
     res.json({ ok: true, id: ins.rows[0].id });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });

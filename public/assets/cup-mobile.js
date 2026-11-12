@@ -1,3 +1,14 @@
+/* Присутствие ЦУП: пока у сотрудника открыта ЛЮБАЯ страница приложения — держим
+   его «в сети» (пинг присутствия мессенджера). Так онлайн считается не только на
+   странице мессенджера, а по всему приложению. Работает на всех размерах экрана. */
+(function () {
+  if (window.__cupPresence) return; window.__cupPresence = 1;
+  function ping() { try { fetch('/api/msg/ping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', credentials: 'same-origin' }).catch(function () {}); } catch (e) {} }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ping); else ping();
+  setInterval(ping, 30000); // раз в 30с — порог «в сети» 70с, так что не мигает
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) ping(); });
+})();
+
 /* cup-mobile.js — мобильный app-shell ЦУП (модель Analytical Network Control Panel).
    Нижняя навигация с именованными вкладками (без FAB) + полноэкранный экран
    «Все разделы» (поиск + модули по секциям). Подставляется сервером на все
