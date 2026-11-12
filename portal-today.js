@@ -215,22 +215,31 @@ async function debtRisk() {
     };
   } catch (e) { return null; }
 }
+let PORTAL_THINK = 'between_tools'; // как отключать «размышление» (новые модели: between_tools)
 async function _genAi(ctx) {
   const key = process.env.ANTHROPIC_API_KEY; if (!key) { _ai.state = 'no-key'; return ''; }
   let debt = null; try { debt = await debtRisk(); } catch (e) {}
   const full = debt ? Object.assign({}, ctx, { debt }) : ctx;
   const sys = 'Ты — ассистент технического директора лабораторной компании ProLabSupport (сервис и продажи аналитического оборудования). Тебе дают сигналы за день: сделки в работе/закрытые, динамика новых сделок за неделю (sales.newThisWeek vs newPrevWeek), крупнейшие сделки (sales.biggestDeals), распределение по сферам (sales.byIndustry) и менеджерам (sales.byManager), объём воронки (sales.pipelineMln), дебиторка (debt) и отсутствия. ВЫБЕРИ ОДНО самое заметное за сегодня и дай один короткий деловой вывод на русском (1–2 предложения, максимум 40 слов) с КОНКРЕТНЫМ действием. Это НЕ обязательно дебиторка — бери то, что реально выделяется: резкий рост или спад новых сделок за неделю; необычно крупная сделка (назови её и менеджера); сильный перекос нагрузки на одного менеджера; концентрация в одной сфере; ИЛИ серьёзный риск по долгам (просрочка >90–180 дней либо крупная сумма — тогда назови контрагента, срок и сумму и порекомендуй напоминание/эскалацию/взыскание). Разнообразь темы день ото дня, не повторяй одно и то же. Суммы в млн ₸. Строго, по делу, без приветствий, без воды, без эмодзи. Если данных мало или помечено isDemo — нейтрально, без тревоги.';
-  try {
+  const model = process.env.PLSAI_AGENT_MODEL || process.env.PLSAI_MODEL || 'claude-haiku-5-5';
+  const msgs = [{ role: 'user', content: 'Цифры на сегодня:\n' + JSON.stringify(full) }];
+  // Разные модели требуют разный способ отключить «размышление»: новые — between_tools,
+  // старые — disabled. Пробуем between_tools, при ошибке про thinking — повторяем с disabled.
+  async function call(thinkingType) {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      // Haiku 5.5: adaptive-мышление включено по умолчанию и ест max_tokens; для
-      // короткого вывода отключаем мышление и ставим effort=low, иначе ответ пуст.
-      body: JSON.stringify({ model: process.env.PLSAI_AGENT_MODEL || process.env.PLSAI_MODEL || 'claude-haiku-5-5', max_tokens: 1024,
-        thinking: { type: 'disabled' }, system: sys,
-        messages: [{ role: 'user', content: 'Цифры на сегодня:\n' + JSON.stringify(full) }] }),
+      body: JSON.stringify({ model, max_tokens: 1024, thinking: { type: thinkingType }, system: sys, messages: msgs }),
     });
-    const d = await r.json();
+    return { r, d: await r.json() };
+  }
+  try {
+    let { r, d } = await call(PORTAL_THINK);
+    const errMsg = (d && d.error && d.error.message) || '';
+    if (!r.ok && /thinking/i.test(errMsg)) {
+      PORTAL_THINK = (PORTAL_THINK === 'between_tools') ? 'disabled' : 'between_tools';
+      ({ r, d } = await call(PORTAL_THINK));
+    }
     if (!r.ok) { _ai.state = 'api-error: ' + ((d && d.error && d.error.message) || ('HTTP ' + r.status)); return ''; }
     const t = (Array.isArray(d.content) ? d.content : []).filter(b => b && b.type === 'text').map(b => b.text || '').join('').trim();
     _ai.state = t ? 'ok' : ('empty-response' + (d && d.stop_reason ? ':' + d.stop_reason : ''));

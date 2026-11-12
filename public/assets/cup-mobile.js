@@ -363,7 +363,6 @@
     if(!isHome) return;
     var host=document.getElementById('cupHomeFav');
     function render(){
-      if(!TOP || TOP.length<2){ if(host) host.remove(); return; }
       var mods=visibleModules(); var byCode={}; mods.forEach(function(m){byCode[m.c]=m;});
       var catc={}; CATS.forEach(function(x){catc[x.id]=x.c;});
       // Моб. — ровно 3 (одна строка); веб — сколько плиток (92px) помещается в одну строку главной.
@@ -371,7 +370,10 @@
       var cap;
       if(vw<=640){ cap=3; }
       else { var mn2=document.querySelector('main'); var w=(mn2&&mn2.clientWidth)||vw||1000; cap=Math.max(4, Math.floor((w-16)/96)); }
-      var list=TOP.map(function(c){return byCode[c];}).filter(Boolean).slice(0,cap);
+      // Мессенджер и База знаний закреплены в начале «Часто», чтобы всегда были на виду.
+      var pinned=[]; if(byCode['MSG']) pinned.push(byCode['MSG']); if(byCode['KB']) pinned.push(byCode['KB']);
+      var rest=(TOP||[]).map(function(c){return byCode[c];}).filter(Boolean).filter(function(m){return m.c!=='MSG'&&m.c!=='KB';});
+      var list=pinned.concat(rest).slice(0,Math.max(cap,pinned.length+1));
       if(list.length<2){ if(host) host.remove(); return; }
       if(!host || !host.isConnected){
         host=document.createElement('div'); host.id='cupHomeFav'; host.className='cup-homefav';

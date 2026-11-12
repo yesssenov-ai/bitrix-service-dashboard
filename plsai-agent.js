@@ -42,6 +42,10 @@ const AGENT_MODEL = process.env.PLSAI_AGENT_MODEL || process.env.PLSAI_MODEL || 
 const FALLBACK_MODEL = process.env.PLSAI_FALLBACK_MODEL || 'claude-haiku-5-5';
 let ACTIVE_MODEL = AGENT_MODEL;
 function isModelError(msg) { return /model|not_found|does not exist|unknown model|permission|not allowed|404/i.test(String(msg || '')); }
+// Как отключать «размышление» модели. Новые модели требуют between_tools вместо
+// disabled (и наоборот у старых) — храним актуальный вариант и переключаем по ошибке.
+let THINKING = { type: 'between_tools' };
+function isThinkingError(msg) { return /thinking/i.test(String(msg || '')) && /(between_tools|disabled|type)/i.test(String(msg || '')); }
 const MAX_STEPS = parseInt(process.env.PLSAI_AGENT_MAX_STEPS || '8', 10);
 const ROW_CAP = 2000;          // жёсткий потолок строк в SQL
 const ROWS_TO_MODEL = 40;      // сколько строк отдаём модели обратно
@@ -299,10 +303,11 @@ async function voteExample(id, delta) {
 
 // ── Системный промпт (карта + правила + роль + похожие примеры) ──────────────
 function buildSystem(user, allowed, examples) {
-  const lines = [];
+  const lines = [];      // таблицы с описанием
+  const extra = [];      // прочие доступные таблицы (без описания)
   for (const t of [...allowed].sort()) {
     const m = TABLE_META[t] || {};
-    lines.push(`- ${t}${m.desc ? ' — ' + m.desc : ''}`);
+    if (m.desc) lines.push(`- ${t} — ${m.desc}`); else extra.push(t);
   }
   const base = [
     'Ты — ProLab AI, аналитический помощник по системе ЦУП (ProLabSupport). Отвечай по-русски, кратко и по делу.',
@@ -310,8 +315,9 @@ function buildSystem(user, allowed, examples) {
     '',
     'У тебя есть инструмент run_sql — выполнить ОДИН SELECT (только чтение) к базе-зеркалу ЦУПа (Postgres).',
     'Данные — это зеркало Bitrix и модулей ЦУПа. Суммы почти везде в валюте сделки; для пересчёта в тенге используй ticketsmodule_exchange_rates при необходимости.',
-    'Тебе доступны ТОЛЬКО эти таблицы (доступ уже отфильтрован по твоей роли и грантам модулей — не пытайся обращаться к другим):',
+    'Тебе доступны следующие таблицы (доступ уже отфильтрован по роли и грантам — к другим не обращайся):',
     ...lines,
+    ...(extra.length ? ['', 'Также доступны прочие таблицы ЦУПа (без описания — если нужной темы нет выше, найди подходящую по имени и узнавай колонки через SELECT * FROM <таблица> LIMIT 3): ' + extra.join(', ')] : []),
     '',
     `Сегодня: ${new Date().toISOString().slice(0, 10)} (в БД это CURRENT_DATE). Относительные даты считай от сегодня: «за 11 число» = 11-е число ТЕКУЩЕГО месяца, «за последнюю неделю» = последние 7 дней, «вчера», «за этот месяц» и т.п. Для фильтра по дате создания используй поле date_create (приводи к дате: date_create::date).`,
     '',
@@ -388,16 +394,22 @@ async function postClaude(model, bodyExtra, system, messages, key) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify(Object.assign({ model, thinking: { type: 'disabled' }, system, messages }, bodyExtra)),
+    body: JSON.stringify(Object.assign({ model, thinking: THINKING, system, messages }, bodyExtra)),
   });
   const data = await r.json();
   if (!r.ok) { const e = new Error((data && data.error && data.error.message) || ('HTTP ' + r.status)); e._api = true; throw e; }
   return data;
 }
-// Вызов с автооткатом: если основная модель недоступна — переключаемся на Haiku.
+// Вызов с автооткатом: несовместимый thinking → переключаем тип; модель недоступна → Haiku.
 async function callModel(bodyExtra, system, messages, key) {
   try { return await postClaude(ACTIVE_MODEL, bodyExtra, system, messages, key); }
   catch (e) {
+    // Модель требует другой тип отключения размышления — переключаемся и повторяем.
+    if (isThinkingError(e.message)) {
+      THINKING = (THINKING.type === 'between_tools') ? { type: 'disabled' } : { type: 'between_tools' };
+      console.warn('PLSAI thinking → ' + THINKING.type + ' (из-за: ' + e.message + ')');
+      try { return await postClaude(ACTIVE_MODEL, bodyExtra, system, messages, key); } catch (e2) { e = e2; }
+    }
     if (ACTIVE_MODEL !== FALLBACK_MODEL && isModelError(e.message)) {
       console.warn('PLSAI модель «' + ACTIVE_MODEL + '» недоступна (' + e.message + '), откат на ' + FALLBACK_MODEL);
       ACTIVE_MODEL = FALLBACK_MODEL;
@@ -436,6 +448,15 @@ async function buildCtx(user) {
   const { userModuleCodes } = require('./auth');
   const codes = await userModuleCodes(user);         // null = все (админ)
   const allowed = allowedTablesFor(user, codes);
+  // Админ/суперадмин — доступ КО ВСЕМ таблицам ЦУПа (включая контракты/план/выручку
+  // и любые модульные), кроме явно заблокированных (учётки/пароли/токены/аудит/PII).
+  if (user && (user.role === 'admin' || user.role === 'superadmin')) {
+    try {
+      const blocked = new Set(Object.entries(TABLE_META).filter(([, m]) => m.tier === 'blocked').map(([t]) => t));
+      const r = await pool.query(`SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'ticketsmodule\\_%'`);
+      for (const row of r.rows) if (!blocked.has(row.tablename)) allowed.add(row.tablename);
+    } catch (e) { console.warn('buildCtx all-tables:', e.message); }
+  }
   const ownerBids = ownerScopeBids(user, meBidOf(user));
   return { allowed, ownerBids };
 }
