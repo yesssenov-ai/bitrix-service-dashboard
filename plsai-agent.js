@@ -357,6 +357,17 @@ const TOOLS = [
       required: ['title', 'sql'],
     },
   },
+  {
+    name: 'search_kb',
+    description: 'Искать в базе знаний компании (регламенты, процессы, алгоритмы, инструкции). Вызывай, когда вопрос касается КАК ЧТО-ТО ДЕЛАЕТСЯ или какого порядка/правил — даже если спросили косвенно. Сам переформулируй суть вопроса в короткий запрос по смыслу (ключевые понятия, синонимы), можно искать несколько раз разными формулировками. Отвечай ТОЛЬКО по найденным выдержкам и ссылайся на источник; если не нашёл — скажи, что в регламентах нет.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Короткий смысловой запрос к базе знаний (переформулируй вопрос пользователя своими словами, ключевые понятия и синонимы).' },
+      },
+      required: ['query'],
+    },
+  },
 ];
 
 async function callClaude(system, messages, key) {
@@ -438,7 +449,9 @@ async function runAgent(qRaw, user) {
   let presentable = null;   // последняя «таблица к показу» (present_table)
 
   const examples = await retrieveExamples(q, allowed);   // самообучение: похожие удачные решения
-  const system = buildSystem(user, allowed, examples);
+  let system = buildSystem(user, allowed, examples);
+  // База знаний: подмешиваем релевантные регламенты/инструкции компании (RAG).
+  try { const kbCtx = await require('./knowledge-calc').kbContext(q); if (kbCtx) system += '\n\n' + kbCtx; } catch (e) {}
   const messages = [{ role: 'user', content: q }];
   const steps = [];
 
@@ -469,6 +482,21 @@ async function runAgent(qRaw, user) {
         } catch (e) {
           steps.push({ purpose: 'present_table', sql: String(sql || ''), error: e.message });
           toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: 'Ошибка выполнения: ' + e.message, is_error: true });
+        }
+        continue;
+      }
+      if (tu.name === 'search_kb') {
+        try {
+          const kq = (tu.input && tu.input.query) || '';
+          const hits = await require('./knowledge-calc').kbSearch(kq, 6);
+          steps.push({ purpose: 'search_kb', query: kq, found: hits.length });
+          const body = hits.length
+            ? hits.map(h => `[Источник: ${h.doc_title}${h.category ? ' · ' + h.category : ''}]\n${h.chunk}`).join('\n\n')
+            : 'В базе знаний по этому запросу ничего не найдено.';
+          toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: body });
+        } catch (e) {
+          steps.push({ purpose: 'search_kb', error: e.message });
+          toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: 'Ошибка поиска по базе знаний: ' + e.message, is_error: true });
         }
         continue;
       }

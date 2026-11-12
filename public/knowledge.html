@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>База знаний — ЦУП</title>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef1f5;--surface:#fff;--surface-2:#f3f5f8;--line:#e5e8ee;--line-2:#d6dbe4;--text:#161c26;--text-2:#384254;--text-3:#8a94a6;--accent:#C53B2F;--accent-weak:#fbeceb;--accent-line:#edc9c6;--good:#1a7f54;--sans:'Onest',system-ui,Arial,sans-serif}
+:root:not([data-theme="light"]) [data-theme="dark"],:root[data-theme="dark"]{--bg:#0f1319;--surface:#161b23;--surface-2:#1d2430;--line:#28303d;--line-2:#333d4d;--text:#e8edf4;--text-2:#b4becd;--text-3:#7d8899;--accent:#e4553f;--accent-weak:#2a1d1b;--accent-line:#4a2f2a}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1319;--surface:#161b23;--surface-2:#1d2430;--line:#28303d;--line-2:#333d4d;--text:#e8edf4;--text-2:#b4becd;--text-3:#7d8899;--accent:#e4553f;--accent-weak:#2a1d1b;--accent-line:#4a2f2a}}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;display:flex;flex-direction:column;overflow:hidden}
+.top{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line);flex:none}
+.top .brand{font-weight:800}.top .brand b{color:var(--accent)}.top .sp{flex:1}
+a.back{color:var(--text-3);text-decoration:none;font-size:12.5px;border:1px solid var(--line);border-radius:8px;padding:6px 10px;background:var(--surface)}
+a.back:hover{color:var(--text);border-color:var(--text-3)}
+.wrap{flex:1;display:grid;grid-template-columns:340px 1fr;min-height:0}
+.side{background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.sh{padding:12px;display:flex;gap:8px}
+.sh input{flex:1;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;color:var(--text);font:inherit;font-size:13px;padding:8px 11px;outline:none}
+.plus{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:10px;padding:0 14px;font-weight:700;cursor:pointer}
+.list{flex:1;overflow:auto;padding:4px 8px 12px}
+.doc{padding:10px 11px;border-radius:11px;cursor:pointer;border:1px solid transparent}
+.doc:hover{background:var(--surface-2)}.doc.on{background:var(--accent-weak);border-color:var(--accent-line)}
+.doc b{font-weight:600;font-size:13.5px;display:block}
+.doc span{font-size:11.5px;color:var(--text-3)}
+.main{overflow:auto;padding:20px;min-height:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;max-width:860px;margin:0 auto 16px}
+.fld{margin-bottom:12px}.fld label{display:block;font-size:12px;color:var(--text-3);font-weight:600;margin-bottom:5px}
+.fld input,.fld textarea{width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;color:var(--text);font:inherit;font-size:14px;padding:10px 12px;outline:none}
+.fld input:focus,.fld textarea:focus{border-color:var(--accent-line)}
+.fld textarea{min-height:320px;resize:vertical;line-height:1.5}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btns{display:flex;gap:8px;align-items:center}
+.btn{border:1px solid var(--accent);background:var(--accent);color:#fff;font:inherit;font-weight:600;padding:10px 16px;border-radius:11px;cursor:pointer}
+.btn.ghost{background:var(--surface);color:var(--text-2);border-color:var(--line)}
+.btn.danger{background:var(--surface);color:#b3261e;border-color:#e4b8b4}
+.hint{font-size:12px;color:var(--text-3);margin-top:6px}
+.test{background:var(--surface);border:1px dashed var(--line-2);border-radius:14px;padding:16px;max-width:860px;margin:0 auto}
+.test h3{margin:0 0 10px;font-size:14px}
+.test .row{display:flex;gap:8px}
+.test input{flex:1;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;color:var(--text);font:inherit;padding:9px 11px;outline:none}
+.hit{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:10px;background:var(--surface-2)}
+.hit .src{font-size:11.5px;color:var(--accent);font-weight:700;margin-bottom:4px}
+.hit .tx{font-size:13px;white-space:pre-wrap;line-height:1.45}
+.empty{color:var(--text-3);text-align:center;padding:40px}
+.chipn{font-size:11px;color:var(--good);font-weight:700}
+</style>
+</head>
+<body>
+<div class="top">
+  <a class="back" href="/portal.html">← ЦУП</a>
+  <div class="brand"><b>База знаний</b> агента</div>
+  <div class="sp"></div>
+  <button class="back" id="themeBtn">◐ Тема</button>
+</div>
+<div class="wrap">
+  <aside class="side">
+    <div class="sh"><input id="q" placeholder="Найти регламент…"><button class="plus" id="newBtn">+ Новый</button></div>
+    <div class="list" id="list"><div class="empty">Загрузка…</div></div>
+  </aside>
+  <main class="main">
+    <div class="card" id="editor" style="display:none">
+      <div class="two">
+        <div class="fld"><label>Название регламента / инструкции</label><input id="eTitle" placeholder="Напр.: Порядок оформления командировки"></div>
+        <div class="fld"><label>Категория</label><input id="eCategory" placeholder="HR / Продажи / Сервис / Качество…"></div>
+      </div>
+      <div class="fld"><label>Источник (необязательно)</label><input id="eSource" placeholder="Напр.: Приказ №12 от 2026, или ссылка"></div>
+      <div class="fld"><label>Текст (процесс, алгоритм, инструкция)</label><textarea id="eBody" placeholder="Вставьте текст регламента. Разбивайте на абзацы и пункты — так агент точнее находит нужное место и ссылается на него."></textarea><div class="hint" id="chunkHint"></div></div>
+      <div class="btns"><button class="btn" id="saveBtn">Сохранить</button><button class="btn danger" id="delBtn" style="display:none">Удалить</button><span class="sp" style="flex:1"></span><span class="chipn" id="savedMsg"></span></div>
+    </div>
+    <div class="test">
+      <h3>Проверка: что агент найдёт по вопросу</h3>
+      <div class="row"><input id="tq" placeholder="Напр.: как оформить командировку"><button class="btn" id="testBtn">Проверить</button></div>
+      <div id="hits"></div>
+    </div>
+  </main>
+</div>
+<script>
+const api=async(m,p,b)=>{const o={method:m,credentials:'same-origin'};if(b){o.headers={'Content-Type':'application/json'};o.body=JSON.stringify(b);}const r=await fetch('/api/kb'+p,o);if(r.status===401){location.href='/login.html';return null;}return r.json().catch(()=>({ok:false}));};
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let DOCS=[],CUR=null;
+async function load(){const d=await api('GET','/docs');if(!d||!d.ok)return;DOCS=d.items;renderList();}
+function renderList(){
+  const q=(document.getElementById('q').value||'').toLowerCase().trim();
+  const items=DOCS.filter(d=>!q||(d.title||'').toLowerCase().includes(q)||(d.category||'').toLowerCase().includes(q));
+  document.getElementById('list').innerHTML=items.map(d=>`<div class="doc ${CUR===d.id?'on':''}" onclick="openDoc(${d.id})"><b>${esc(d.title)}</b><span>${esc(d.category||'—')} · ${d.chunks} фрагм.</span></div>`).join('')||'<div class="empty">Регламентов пока нет. Нажмите «+ Новый».</div>';
+}
+document.getElementById('q').addEventListener('input',renderList);
+function showEditor(doc){
+  CUR=doc?doc.id:null;
+  document.getElementById('editor').style.display='block';
+  document.getElementById('eTitle').value=doc?doc.title||'':'';
+  document.getElementById('eCategory').value=doc?doc.category||'':'';
+  document.getElementById('eSource').value=doc?doc.source||'':'';
+  document.getElementById('eBody').value=doc?doc.body||'':'';
+  document.getElementById('delBtn').style.display=doc?'inline-block':'none';
+  document.getElementById('savedMsg').textContent='';
+  document.getElementById('chunkHint').textContent='';
+  renderList();
+}
+async function openDoc(id){const d=await api('GET','/docs/'+id);if(d&&d.ok)showEditor(d.doc);}
+document.getElementById('newBtn').onclick=()=>showEditor(null);
+document.getElementById('saveBtn').onclick=async()=>{
+  const body={title:document.getElementById('eTitle').value.trim(),category:document.getElementById('eCategory').value.trim(),source:document.getElementById('eSource').value.trim(),body:document.getElementById('eBody').value};
+  if(!body.title&&!body.body.trim()){alert('Укажите название и текст');return;}
+  const btn=document.getElementById('saveBtn');btn.disabled=true;btn.textContent='Сохранение…';
+  const d=CUR?await api('PUT','/docs/'+CUR,body):await api('POST','/docs',body);
+  btn.disabled=false;btn.textContent='Сохранить';
+  if(!d||!d.ok){alert((d&&d.error)||'Не удалось сохранить');return;}
+  if(!CUR)CUR=d.id;
+  document.getElementById('savedMsg').textContent='Сохранено · '+d.chunks+' фрагм. проиндексировано';
+  document.getElementById('chunkHint').textContent='Агент теперь отвечает по этому регламенту.';
+  await load();
+};
+document.getElementById('delBtn').onclick=async()=>{
+  if(!CUR||!confirm('Удалить регламент из базы знаний?'))return;
+  const d=await api('DELETE','/docs/'+CUR);if(d&&d.ok){document.getElementById('editor').style.display='none';CUR=null;await load();}
+};
+document.getElementById('testBtn').onclick=testSearch;
+document.getElementById('tq').addEventListener('keydown',e=>{if(e.key==='Enter')testSearch();});
+async function testSearch(){
+  const q=document.getElementById('tq').value.trim();if(!q)return;
+  const d=await api('GET','/search?q='+encodeURIComponent(q));
+  const box=document.getElementById('hits');
+  if(!d||!d.ok||!d.results.length){box.innerHTML='<div class="empty">Ничего не найдено — добавьте регламент по этой теме.</div>';return;}
+  box.innerHTML=d.results.map(h=>`<div class="hit"><div class="src">${esc(h.doc_title)}${h.category?' · '+esc(h.category):''}</div><div class="tx">${esc((h.chunk||'').slice(0,400))}${(h.chunk||'').length>400?'…':''}</div></div>`).join('');
+}
+document.getElementById('themeBtn').onclick=()=>{const cur=document.documentElement.getAttribute('data-theme');const next=cur==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',next);try{localStorage.setItem('cup-theme',next);}catch(e){}};
+try{const th=localStorage.getItem('cup-theme');if(th)document.documentElement.setAttribute('data-theme',th);}catch(e){}
+load();
+</script>
+</body>
+</html>
