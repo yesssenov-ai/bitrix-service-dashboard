@@ -146,6 +146,35 @@ async function pulse(now) {
   return out;
 }
 
+// Сигналы для «Факта дня» из локального зеркала сделок (ticketsmodule_stat_deals) —
+// без обращений к Bitrix. Даёт ИИ материал: динамика новых сделок за неделю,
+// крупнейшие сделки, распределение по сферам и менеджерам, объём воронки.
+async function salesSignals(pool, now) {
+  now = now || new Date();
+  const out = {};
+  const nm = id => USERS[String(id)] || ('#' + id);
+  const mln = v => Math.round((Number(v) || 0) / 1e5) / 10; // в млн ₸, 1 знак
+  try {
+    const d = new Date(now), dow = (d.getDay() + 6) % 7;           // Пн = 0
+    const wk = new Date(d); wk.setDate(d.getDate() - dow); wk.setHours(0, 0, 0, 0);
+    const pw = new Date(wk); pw.setDate(wk.getDate() - 7);
+    const iso = x => x.toISOString().slice(0, 10);
+    const q = (sql, p) => pool.query(sql, p).then(r => r.rows).catch(() => []);
+    const a = await q('SELECT COUNT(*)::int n FROM ticketsmodule_stat_deals WHERE date_create >= $1', [iso(wk)]);
+    const b = await q('SELECT COUNT(*)::int n FROM ticketsmodule_stat_deals WHERE date_create >= $1 AND date_create < $2', [iso(pw), iso(wk)]);
+    out.newThisWeek = a[0] ? a[0].n : 0; out.newPrevWeek = b[0] ? b[0].n : 0;
+    const big = await q("SELECT deal_title, company_name, opportunity, assigned_by_id FROM ticketsmodule_stat_deals WHERE opportunity > 0 ORDER BY opportunity DESC LIMIT 5");
+    out.biggestDeals = big.map(r => ({ title: String(r.deal_title || '').slice(0, 70), company: r.company_name || '', mln: mln(r.opportunity), mgr: nm(r.assigned_by_id) }));
+    const ind = await q("SELECT COALESCE(NULLIF(industry,''),'—') g, COUNT(*)::int n FROM ticketsmodule_stat_deals GROUP BY 1 ORDER BY n DESC LIMIT 6");
+    out.byIndustry = ind.map(r => ({ sphere: r.g, n: r.n }));
+    const mgr = await q("SELECT assigned_by_id, COUNT(*)::int n, COALESCE(SUM(opportunity),0)::numeric s FROM ticketsmodule_stat_deals WHERE assigned_by_id IS NOT NULL GROUP BY 1 ORDER BY n DESC LIMIT 6");
+    out.byManager = mgr.map(r => ({ mgr: nm(r.assigned_by_id), deals: r.n, mln: mln(r.s) }));
+    const tot = await q("SELECT COUNT(*)::int n, COALESCE(SUM(opportunity),0)::numeric s FROM ticketsmodule_stat_deals");
+    if (tot[0]) { out.mirrorCount = tot[0].n; out.pipelineMln = mln(tot[0].s); }
+  } catch (e) { out.error = e.message; }
+  return out;
+}
+
 function dailyFact(now) {
   now = now || new Date();
   const doy = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 864e5);
@@ -190,7 +219,7 @@ async function _genAi(ctx) {
   const key = process.env.ANTHROPIC_API_KEY; if (!key) { _ai.state = 'no-key'; return ''; }
   let debt = null; try { debt = await debtRisk(); } catch (e) {}
   const full = debt ? Object.assign({}, ctx, { debt }) : ctx;
-  const sys = 'Ты — ассистент технического директора лабораторной компании ProLabSupport (сервис и продажи аналитического оборудования). По цифрам дня дай один короткий деловой вывод на русском (1–2 предложения, максимум 35 слов): на что обратить внимание сегодня. ПРИОРИТЕТ — риски по дебиторской задолженности: если есть просрочка с большими сроками (свыше 90–180 дней) или крупными суммами, предупреди в первую очередь — назови контрагента и срок/сумму и порекомендуй действие (напоминание, эскалация). Суммы в млн ₸. Строго, по делу, без приветствий, без воды, без эмодзи. Если данные помечены isDemo, пиши нейтрально без тревоги.';
+  const sys = 'Ты — ассистент технического директора лабораторной компании ProLabSupport (сервис и продажи аналитического оборудования). Тебе дают сигналы за день: сделки в работе/закрытые, динамика новых сделок за неделю (sales.newThisWeek vs newPrevWeek), крупнейшие сделки (sales.biggestDeals), распределение по сферам (sales.byIndustry) и менеджерам (sales.byManager), объём воронки (sales.pipelineMln), дебиторка (debt) и отсутствия. ВЫБЕРИ ОДНО самое заметное за сегодня и дай один короткий деловой вывод на русском (1–2 предложения, максимум 40 слов) с КОНКРЕТНЫМ действием. Это НЕ обязательно дебиторка — бери то, что реально выделяется: резкий рост или спад новых сделок за неделю; необычно крупная сделка (назови её и менеджера); сильный перекос нагрузки на одного менеджера; концентрация в одной сфере; ИЛИ серьёзный риск по долгам (просрочка >90–180 дней либо крупная сумма — тогда назови контрагента, срок и сумму и порекомендуй напоминание/эскалацию/взыскание). Разнообразь темы день ото дня, не повторяй одно и то же. Суммы в млн ₸. Строго, по делу, без приветствий, без воды, без эмодзи. Если данных мало или помечено isDemo — нейтрально, без тревоги.';
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -477,7 +506,9 @@ async function build(pool, now) {
   if (smart.status === 'fulfilled' && smart.value) abs = abs.concat(smart.value);
   res.absences = abs;
   // «Факт дня»: живая сводка + ИИ-вывод (кэш на день, генерится в фоне) + резервный факт.
+  let sales = {}; try { sales = await salesSignals(pool, now); } catch (e) {}
   const ctx = { inWork: res.pulse.inWork, closedMonth: res.pulse.closedMonth, leadsToday: res.pulse.leadsToday,
+    sales,
     absent: (res.absences || []).map(a => ({ name: a.name, kind: a.kind, dest: a.dest })),
     birthdaysToday: (res.birthdays.today || []), topDeal: res.onThisDay[0] || null };
   res.fact = { insight: dayInsight(res.pulse, res.absences), ai: aiDigest(now, ctx), tip: dailyFact(now), aiState: aiState() };
