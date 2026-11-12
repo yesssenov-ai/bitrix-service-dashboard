@@ -113,6 +113,8 @@
     {c:'TC_ST',n:'Склад лаборатории',h:'/tc.html#stock',g:'lab'},
     {c:'TC_QM',n:'СМК (ISO 17025)',h:'/tc.html#qms',g:'lab'},
     {c:'TC_AN',n:'Аналитика ТЦ',h:'/tc.html#analytics',g:'lab'},
+    {c:'MSG',n:'Мессенджер',h:'/messenger.html',g:'system'},
+    {c:'KB',n:'База знаний',h:'/knowledge.html',g:'system'},
     {c:'ADM',n:'Управление',h:'/admin.html',g:'system'}
   ];
   var CATS = [
@@ -165,7 +167,9 @@
     TC_ST:'<rect x="4" y="7" width="16" height="13" rx="1"/><path d="M4 11h16M9 7V4h6v3"/>',
     TC_QM:'<path d="M7 3h7l5 5v13H5V5a2 2 0 0 1 2-2z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',
     TC_AN:'<path d="M12 3a9 9 0 1 0 9 9h-9V3z"/><path d="M14 3.5A9 9 0 0 1 20.5 10H14V3.5z"/>',
-    ADM:'<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2 2M16.7 16.7l2 2M18.7 5.3l-2 2M7.3 16.7l-2 2"/>'
+    ADM:'<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2 2M16.7 16.7l2 2M18.7 5.3l-2 2M7.3 16.7l-2 2"/>',
+    MSG:'<path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.4 9 9 0 0 1-3.9-.9L3 21l1.9-5.1A8.4 8.4 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.5 8.5 0 0 1 21 11.5z"/>',
+    KB:'<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19a2 2 0 0 1 2-2h13"/><path d="M8 7h7M8 11h7"/>'
   };
   function micon(code, g){ var p=MICON[code]||CICON[g]||CICON.system;
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>'; }
@@ -210,6 +214,8 @@
   }
   function visibleModules(){
     return MODULES.filter(function(m){
+      if(m.c==='MSG') return true;                  // мессенджер — всем сотрудникам
+      if(m.c==='KB') return ROLE==='admin'||ROLE==='superadmin'; // база знаний — админам
       if(m.c==='ADM') return ROLE==='superadmin';
       if(ALLOWED===null) return true;               // admin
       return ALLOWED.has(m.c);

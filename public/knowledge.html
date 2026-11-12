@@ -57,7 +57,8 @@ a.back:hover{color:var(--text);border-color:var(--text-3)}
 </div>
 <div class="wrap">
   <aside class="side">
-    <div class="sh"><input id="q" placeholder="Найти регламент…"><button class="plus" id="newBtn">+ Новый</button></div>
+    <div class="sh"><input id="q" placeholder="Найти регламент…"><button class="plus" id="upBtn" title="Загрузить файл (docx, pdf, txt)">⤒</button><button class="plus" id="newBtn">+</button></div>
+    <input type="file" id="fileInput" accept=".txt,.md,.docx,.pdf" style="display:none">
     <div class="list" id="list"><div class="empty">Загрузка…</div></div>
   </aside>
   <main class="main">
@@ -102,6 +103,17 @@ function showEditor(doc){
 }
 async function openDoc(id){const d=await api('GET','/docs/'+id);if(d&&d.ok)showEditor(d.doc);}
 document.getElementById('newBtn').onclick=()=>showEditor(null);
+document.getElementById('upBtn').onclick=()=>document.getElementById('fileInput').click();
+document.getElementById('fileInput').onchange=async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const fd=new FormData(); fd.append('file',f);
+  const r=await fetch('/api/kb/upload',{method:'POST',credentials:'same-origin',body:fd});
+  e.target.value='';
+  const d=await r.json().catch(()=>({ok:false}));
+  if(!d||!d.ok){ alert((d&&d.error)||'Не удалось загрузить файл'); return; }
+  await load(); openDoc(d.id);
+  document.getElementById('savedMsg').textContent='Загружено из файла · '+d.chunks+' фрагм.';
+};
 document.getElementById('saveBtn').onclick=async()=>{
   const body={title:document.getElementById('eTitle').value.trim(),category:document.getElementById('eCategory').value.trim(),source:document.getElementById('eSource').value.trim(),body:document.getElementById('eBody').value};
   if(!body.title&&!body.body.trim()){alert('Укажите название и текст');return;}
