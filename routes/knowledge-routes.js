@@ -76,5 +76,15 @@ router.get('/search', requireAuth([]), async (req, res) => {
   try { res.json({ ok: true, results: await kb.kbSearch(req.query.q, req.query.limit) }); }
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
+// Статус семантики (включены ли эмбеддинги).
+router.get('/status', requireAuth([]), async (req, res) => {
+  try { res.json(Object.assign({ ok: true }, kb.kbStatus())); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// Пересчитать эмбеддинги по всем регламентам (после включения провайдера).
+router.post('/reembed', requireAuth(ADMIN), async (req, res) => {
+  try { res.json(await kb.reembedAll()); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 
 module.exports = { router };

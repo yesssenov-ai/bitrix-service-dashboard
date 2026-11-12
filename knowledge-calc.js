@@ -5,6 +5,46 @@
 // меняет ответы. Семантика (pgvector) — следующий шаг, схема к ней готова.
 const { pool } = require('./auth');
 
+// ── Эмбеддинги (семантика) — опционально, через внешний OpenAI-совместимый
+// эндпоинт. Включается переменными окружения; выключено → работает обычный
+// гибрид (FTS + триграммы), ничего не ломается. Для бесплатного локального
+// варианта: Ollama → EMBED_URL=http://<host>:11434/v1/embeddings, EMBED_MODEL=nomic-embed-text, EMBED_DIM=768.
+const EMBED = {
+  url: process.env.EMBED_URL || '',
+  key: process.env.EMBED_KEY || '',
+  model: process.env.EMBED_MODEL || '',
+  dim: parseInt(process.env.EMBED_DIM, 10) || 768,
+};
+function embedConfigured() { return !!(EMBED.url && EMBED.model); }
+async function embedText(text) {
+  if (!embedConfigured()) return null;
+  try {
+    const r = await fetch(EMBED.url, {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, EMBED.key ? { Authorization: 'Bearer ' + EMBED.key } : {}),
+      body: JSON.stringify({ model: EMBED.model, input: String(text || '').slice(0, 8000) }),
+    });
+    if (!r.ok) return null;
+    const d = await r.json();
+    const v = d && d.data && d.data[0] && d.data[0].embedding;
+    return Array.isArray(v) && v.length ? v : null;
+  } catch (e) { return null; }
+}
+const vecLit = arr => '[' + arr.map(x => (+x).toFixed(6)).join(',') + ']';
+let _vecReady = false, _vecOk = false;
+async function ensureVectorColumn() {
+  if (_vecReady) return _vecOk;
+  _vecReady = true;
+  if (!embedConfigured()) return false;
+  try {
+    await pool.query('CREATE EXTENSION IF NOT EXISTS vector');
+    await pool.query(`ALTER TABLE ticketsmodule_kb_chunks ADD COLUMN IF NOT EXISTS embedding vector(${EMBED.dim})`);
+    try { await pool.query('CREATE INDEX IF NOT EXISTS idx_kb_chunks_vec ON ticketsmodule_kb_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists=100)'); } catch (e) {}
+    _vecOk = true;
+  } catch (e) { console.error('kb vector setup:', e.message); _vecOk = false; }
+  return _vecOk;
+}
+
 let _ready = false;
 async function ensureKbSchema() {
   if (_ready) return;
@@ -64,6 +104,16 @@ async function reindexDoc(docId) {
     await pool.query('INSERT INTO ticketsmodule_kb_chunks (doc_id, doc_title, category, chunk, ord) VALUES ($1,$2,$3,$4,$5)',
       [docId, doc.title, doc.category || '', chunks[i], i]);
   }
+  // Семантические эмбеддинги (если провайдер настроен) — считаем по фрагментам.
+  try {
+    if (await ensureVectorColumn()) {
+      const cr = await pool.query('SELECT id, chunk FROM ticketsmodule_kb_chunks WHERE doc_id=$1', [docId]);
+      for (const row of cr.rows) {
+        const v = await embedText(row.chunk); if (!v) continue;
+        try { await pool.query('UPDATE ticketsmodule_kb_chunks SET embedding=$1::vector WHERE id=$2', [vecLit(v), row.id]); } catch (e) {}
+      }
+    }
+  } catch (e) { /* эмбеддинги опциональны */ }
   return chunks.length;
 }
 
@@ -103,12 +153,26 @@ async function deleteDoc(id) {
   return { ok: true };
 }
 
-// Гибридный поиск: полнотекст (FTS) → если мало, добираем триграммами по сходству.
+// Гибридный поиск: семантика (если включена) → полнотекст (FTS) → триграммы.
 async function kbSearch(query, limit) {
   await ensureKbSchema();
   const q = String(query || '').trim(); if (!q) return [];
   const lim = Math.min(Math.max(parseInt(limit, 10) || 5, 1), 12);
   let rows = [];
+  // 0) Семантический поиск по эмбеддингам (понимает смысл/перефраз), если настроено.
+  try {
+    if (await ensureVectorColumn()) {
+      const qv = await embedText(q);
+      if (qv) {
+        const r0 = await pool.query(`
+          SELECT doc_id, doc_title, category, chunk, 1 - (embedding <=> $1::vector) AS score
+          FROM ticketsmodule_kb_chunks WHERE embedding IS NOT NULL
+          ORDER BY embedding <=> $1::vector LIMIT $2`, [vecLit(qv), lim]);
+        rows = r0.rows;
+      }
+    }
+  } catch (e) { /* откат на FTS */ }
+  const seen = new Set(rows.map(x => x.chunk));
   try {
     const r = await pool.query(`
       SELECT doc_id, doc_title, category, chunk,
@@ -116,16 +180,15 @@ async function kbSearch(query, limit) {
       FROM ticketsmodule_kb_chunks
       WHERE to_tsvector('russian', chunk) @@ plainto_tsquery('russian', $1)
       ORDER BY rank DESC LIMIT $2`, [q, lim]);
-    rows = r.rows;
+    for (const x of r.rows) if (!seen.has(x.chunk)) { seen.add(x.chunk); rows.push(x); }
   } catch (e) {}
   if (rows.length < Math.min(lim, 3)) {
     try {
-      const have = new Set(rows.map(x => x.chunk));
       const r2 = await pool.query(`
         SELECT doc_id, doc_title, category, chunk, similarity(chunk, $1) AS sim
         FROM ticketsmodule_kb_chunks
         WHERE chunk % $1 ORDER BY sim DESC LIMIT $2`, [q, lim]);
-      for (const x of r2.rows) if (!have.has(x.chunk) && (x.sim == null || x.sim > 0.08)) rows.push(x);
+      for (const x of r2.rows) if (!seen.has(x.chunk) && (x.sim == null || x.sim > 0.08)) { seen.add(x.chunk); rows.push(x); }
     } catch (e) { /* нет pg_trgm — ок */ }
   }
   return rows.slice(0, lim);
@@ -142,4 +205,14 @@ async function kbContext(query) {
     + body;
 }
 
-module.exports = { ensureKbSchema, listDocs, getDoc, addDoc, updateDoc, deleteDoc, reindexDoc, kbSearch, kbContext };
+// Пересчитать эмбеддинги по всем документам (после включения провайдера).
+async function reembedAll() {
+  await ensureKbSchema();
+  if (!await ensureVectorColumn()) return { ok: false, error: 'Провайдер эмбеддингов не настроен' };
+  const ids = await pool.query('SELECT id FROM ticketsmodule_kb_docs');
+  let done = 0; for (const r of ids.rows) { try { await reindexDoc(r.id); done++; } catch (e) {} }
+  return { ok: true, docs: done };
+}
+function kbStatus() { return { semantic: embedConfigured(), model: EMBED.model || null, dim: EMBED.dim }; }
+
+module.exports = { ensureKbSchema, listDocs, getDoc, addDoc, updateDoc, deleteDoc, reindexDoc, kbSearch, kbContext, reembedAll, kbStatus };

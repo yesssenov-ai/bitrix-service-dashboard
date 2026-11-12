@@ -52,6 +52,7 @@ a.back:hover{color:var(--text);border-color:var(--text-3)}
 <div class="top">
   <a class="back" href="/portal.html">← ЦУП</a>
   <div class="brand"><b>База знаний</b> агента</div>
+  <span id="semBadge" style="font-size:11.5px;color:var(--text-3);border:1px solid var(--line);border-radius:999px;padding:4px 10px"></span>
   <div class="sp"></div>
   <button class="back" id="themeBtn">◐ Тема</button>
 </div>
@@ -75,6 +76,7 @@ a.back:hover{color:var(--text);border-color:var(--text-3)}
       <h3>Проверка: что агент найдёт по вопросу</h3>
       <div class="row"><input id="tq" placeholder="Напр.: как оформить командировку"><button class="btn" id="testBtn">Проверить</button></div>
       <div id="hits"></div>
+      <div id="semHint" class="hint" style="margin-top:10px"></div>
     </div>
   </main>
 </div>
@@ -140,8 +142,16 @@ async function testSearch(){
   box.innerHTML=d.results.map(h=>`<div class="hit"><div class="src">${esc(h.doc_title)}${h.category?' · '+esc(h.category):''}</div><div class="tx">${esc((h.chunk||'').slice(0,400))}${(h.chunk||'').length>400?'…':''}</div></div>`).join('');
 }
 document.getElementById('themeBtn').onclick=()=>{const cur=document.documentElement.getAttribute('data-theme');const next=cur==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',next);try{localStorage.setItem('cup-theme',next);}catch(e){}};
+async function loadStatus(){
+  const d=await api('GET','/status'); const badge=document.getElementById('semBadge'), hint=document.getElementById('semHint');
+  if(!d||!d.ok){badge.textContent='';return;}
+  if(d.semantic){ badge.textContent='Семантика: вкл · '+(d.model||''); badge.style.color='var(--good)'; badge.style.borderColor='var(--good)';
+    hint.innerHTML='Семантический поиск включён. Если добавили эмбеддинги после загрузки регламентов — <a href="#" id="reembed" style="color:var(--accent)">пересчитать эмбеддинги</a> по всей базе.';
+    const re=document.getElementById('reembed'); if(re) re.onclick=async(ev)=>{ev.preventDefault();re.textContent='Пересчёт…';const r=await api('POST','/reembed');re.textContent=(r&&r.ok)?('готово · '+r.docs+' док.'):'ошибка';};
+  } else { badge.textContent='Семантика: выкл (гибридный поиск)'; hint.innerHTML='Сейчас работает поиск по словам и триграммам (понимает и непрямые вопросы через агента). Чтобы включить семантику по смыслу — задайте в окружении EMBED_URL, EMBED_MODEL, EMBED_DIM (бесплатно через локальный Ollama) и перезапустите.'; }
+}
 try{const th=localStorage.getItem('cup-theme');if(th)document.documentElement.setAttribute('data-theme',th);}catch(e){}
-load();
+load(); loadStatus();
 </script>
 </body>
 </html>
