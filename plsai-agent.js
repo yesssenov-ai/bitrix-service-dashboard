@@ -18,6 +18,7 @@
 
 const { pool } = require('./auth');
 const { EMPLOYEE_DEPT } = require('./dept-map');
+require('./departments-sync'); // создаёт/засевает справочник отделов (id → название) для JOIN в сделках
 
 // Пул для запросов агента. Если задан PLSAI_READONLY_DATABASE_URL (отдельная роль
 // Postgres только на чтение) — используем его (принцип наименьших привилегий).
@@ -115,6 +116,8 @@ const TABLE_META = {
 
   // Справочники — доступны всем авторизованным (без PII).
   ticketsmodule_exchange_rates:              { tier: 'ref', desc: 'курсы валют (для пересчёта в тенге)' },
+  ticketsmodule_departments:                 { tier: 'ref', desc: 'справочник отделов: id → name (название отдела). Связь: ticketsmodule_stat_deals.department_id = ticketsmodule_departments.id. Пример: отдел «ОРМ» → найти id через name ILIKE' },
+  ticketsmodule_staff_ref:                   { tier: 'ref', desc: 'справочник сотрудников (без ПДн): id, name (ФИО), bitrix_user_id, job_title, active. Менеджер сделки: ticketsmodule_stat_deals.assigned_by_id = ticketsmodule_staff_ref.bitrix_user_id. Поиск по ФИО через name ILIKE' },
   ticketsmodule_instrument_category_map:     { tier: 'ref', desc: 'справочник: прибор → категория' },
   ticketsmodule_stat_instrument_manufacturer:{ tier: 'ref', desc: 'справочник: прибор → производитель' },
   ticketsmodule_place_geo:                   { tier: 'ref', desc: 'кэш геокодинга адресов' },
@@ -324,7 +327,8 @@ function buildSystem(user, allowed, examples) {
     'Подсказки по данным (чтобы не тратить шаги):',
     '• ЗАКУПКИ (ticketsmodule_procurement): текущая стадия — колонка stage_id. Значения: DT1066_13:NEW=Новая заявка, DT1066_13:PREPARATION=Запрос счёта, DT1066_13:CLIENT=Договор, DT1066_13:1=Согласование, DT1066_13:2=Оплата закупки, DT1066_13:UC_QO83IP=Ожидание товара, DT1066_13:SUCCESS=Товар принят. Сумма и детали лежат в JSON-поле payload: сумма = (payload->>\'opportunity\')::numeric, валюта = payload->>\'currency\', ответственный (Bitrix-id) = payload->>\'assigned\', комментарий бухгалтера = payload->>\'payComment\'. Пример «сколько закупок на этапе оплаты и на какую сумму»: SELECT count(*) AS n, sum((payload->>\'opportunity\')::numeric) AS summa FROM ticketsmodule_procurement WHERE stage_id=\'DT1066_13:2\'.',
     '• СДЕЛКИ (ticketsmodule_stat_deals): сумма = opportunity (валюта currency), стадия = stage_id, менеджер = assigned_by_id, отдел = department_id, дата покупки = planned_purchase_date, дата создания = date_create, «наиболее вероятная» = likely_deal (boolean).',
-    '• ОТДЕЛ в сделках хранится как department_id (код/число), НАЗВАНИЯ отдела в данных нет. Если пользователь называет отдел словом (например «ОРМ»): не угадывай id. Сначала посмотри, какие department_id встречаются (SELECT DISTINCT department_id … с count), и если однозначно сопоставить название нельзя — честно скажи, что фильтр по названию отдела недоступен (есть только id), и предложи разбивку по department_id.',
+    '• ОТДЕЛ: в сделках хранится department_id (id), а НАЗВАНИЯ отделов — в справочнике ticketsmodule_departments (id, name). Чтобы отфильтровать сделки по названию отдела (напр. «ОРМ», «Сервис», «Хроматография»), сопоставь через справочник: ... WHERE d.department_id IN (SELECT id FROM ticketsmodule_departments WHERE name ILIKE \'%ОРМ%\'). Для вывода названия — JOIN ticketsmodule_departments dep ON dep.id = d.department_id, покажи dep.name. Если название в справочнике не нашлось — так и скажи.',
+    '• СОТРУДНИК/МЕНЕДЖЕР: в сделках менеджер — это assigned_by_id (= bitrix_user_id). ФИО сотрудников — в справочнике ticketsmodule_staff_ref (name, bitrix_user_id, job_title). Чтобы фильтровать сделки по ФИО (напр. «сделки Жарова»): ... WHERE d.assigned_by_id IN (SELECT bitrix_user_id FROM ticketsmodule_staff_ref WHERE name ILIKE \'%Жаров%\'). Для вывода имени менеджера — JOIN ticketsmodule_staff_ref s ON s.bitrix_user_id = d.assigned_by_id, покажи s.name. Один и тот же приём (справочник id→имя) применяй для любых id-полей.',
     '• КП/МЛК (ticketsmodule_kp_requests): статус заявки — колонка status (draft/in_review/needs_revision/approved), клиент = client_name, создана = created_at.',
   ];
   if (examples && examples.length) {

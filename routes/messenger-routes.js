@@ -452,6 +452,14 @@ router.get('/agent/info', requireAuth(WRITE), async (req, res) => {
     res.json({ ok: true, configured: info.configured, fallback: info.fallback, active: info.active, available });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
+// Пересинхронизировать справочники (отделы из Битрикса + сотрудники) — только админ.
+router.post('/agent/sync-refs', requireAuth(WRITE), express.json(), async (req, res) => {
+  try {
+    if (!isAppAdmin(req.user)) return res.status(403).json({ ok: false, error: 'Только админ' });
+    const out = await require('../departments-sync').syncRefs();
+    res.json(Object.assign({ ok: true }, out));
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 
 // ── Диалог 1:1 (создать или открыть) ─────────────────────────────────────────
 router.post('/dm', requireAuth(WRITE), express.json(), async (req, res) => {
