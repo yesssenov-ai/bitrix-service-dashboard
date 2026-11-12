@@ -43,6 +43,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13
 .row .nm b{font-weight:600;font-size:12.5px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .row .nm span{font-size:11.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
 .badge{background:var(--accent);color:#fff;font-size:10.5px;font-weight:700;border-radius:999px;padding:1px 6px;min-width:17px;text-align:center}
+.row .meta{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:none}
+.row .meta .tm{font-size:10.5px;color:var(--text-3);white-space:nowrap}
 .pres-lbl{font-size:10.5px;color:var(--text-3)}
 .aitag{display:inline-block;font-size:9px;font-weight:700;color:#7a4ecc;background:color-mix(in srgb,#7a4ecc 14%,transparent);border-radius:5px;padding:0 4px;vertical-align:middle;margin-left:4px;letter-spacing:.3px}
 .row.ai .av{font-size:17px}
@@ -160,8 +162,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13
 /* ─────────────── Мобильная версия (как в Telegram / WhatsApp) ─────────────── */
 @media(max-width:760px){
   /* Список занимает весь экран; чат открывается поверх как отдельный экран. */
-  .wrap{grid-template-columns:1fr;position:relative}
-  .side{display:flex;border-right:none}
+  /* minmax(0,1fr) + min-width:0 — чтобы грид-колонка ужималась до ширины экрана
+     и длинный текст/бейджи не распирали список за край (горизонтальная прокрутка). */
+  .wrap{grid-template-columns:minmax(0,1fr);position:relative}
+  .side{display:flex;border-right:none;min-width:0;overflow:hidden}
+  .list,.sh,.tabs{min-width:0;max-width:100%}
   .chat{position:fixed;inset:0;z-index:30;background:var(--bg)}
   .chat.hide{display:none}
   /* Безопасные зоны (чёлка/статус-бар сверху, домашняя полоса снизу). */
@@ -307,7 +312,7 @@ function renderList(){
       return `<div class="row ${CUR===c.id?'on':''} ${ai?'ai':''}" onclick="openChannel(${c.id})">
         <div class="av" style="background:${avbg}">${ic}${dot}</div>
         <div class="nm"><b>${esc(c.title)}</b><span>${esc((c.lastBody||'').slice(0,42))||'Спросите о данных ЦУП'}</span></div>
-        ${c.unread>0?`<span class="badge">${c.unread}</span>`:''}</div>`;
+        <div class="meta"><span class="tm">${c.lastAt?fmtTime(c.lastAt):''}</span>${c.unread>0?`<span class="badge">${c.unread}</span>`:''}</div></div>`;
     }).join('') || '<div class="empty">Чатов пока нет. Откройте вкладку «Люди» и напишите коллеге.</div>';
   }
   list.innerHTML=html;

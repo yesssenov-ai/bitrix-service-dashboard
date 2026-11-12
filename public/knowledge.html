@@ -51,6 +51,32 @@ a.back:hover{color:var(--text);border-color:var(--text-3)}
 .hit .tx{font-size:13px;white-space:pre-wrap;line-height:1.45}
 .empty{color:var(--text-3);text-align:center;padding:40px}
 .chipn{font-size:11px;color:var(--good);font-weight:700}
+#kbBack{display:none;border:none;background:none;color:var(--accent);font:inherit;font-weight:600;font-size:14px;padding:0 0 12px;cursor:pointer}
+/* ─────────────── Мобильная версия (список → редактор поверх) ─────────────── */
+@media(max-width:760px){
+  #semBadge{display:none}
+  .top{padding:calc(8px + env(safe-area-inset-top)) 12px 8px}
+  .top .brand{font-size:15px}
+  .wrap{grid-template-columns:1fr}
+  .side{border-right:none}
+  .sh{padding:10px 12px}
+  .sh input{font-size:16px;padding:10px 12px}
+  .plus{width:42px;padding:0}
+  .doc{padding:13px 12px;border-bottom:1px solid var(--line);border-radius:0}
+  .doc b{font-size:15px}
+  .doc span{font-size:12.5px}
+  /* Редактор — отдельный полноэкранный слой поверх списка. */
+  .main{position:fixed;inset:0;z-index:40;background:var(--bg);display:none;padding:0}
+  body.kb-editing .main{display:block;overflow:auto;padding:12px 12px calc(20px + env(safe-area-inset-bottom))}
+  body.kb-editing .side{display:none}
+  #kbBack{display:inline-flex;align-items:center}
+  .card,.test{max-width:none;margin:0 0 14px;padding:14px}
+  .two{grid-template-columns:1fr}
+  .fld input,.fld textarea{font-size:16px}
+  #eBody{min-height:220px}
+  .test .row{flex-direction:column}
+  .test .row input{width:100%}
+}
 </style>
 </head>
 <body>
@@ -68,6 +94,7 @@ a.back:hover{color:var(--text);border-color:var(--text-3)}
   </aside>
   <main class="main">
     <div class="card" id="editor" style="display:none">
+      <button id="kbBack" type="button">‹ К списку регламентов</button>
       <div class="two">
         <div class="fld"><label>Название регламента / инструкции</label><input id="eTitle" placeholder="Напр.: Порядок оформления командировки"></div>
         <div class="fld"><label>Категория</label><input id="eCategory" placeholder="HR / Продажи / Сервис / Качество…"></div>
@@ -117,8 +144,12 @@ function showEditor(doc){
   document.getElementById('savedMsg').textContent='';
   document.getElementById('chunkHint').textContent='';
   renderFileRow(doc);
+  document.body.classList.add('kb-editing');
+  window.scrollTo(0,0);
   renderList();
 }
+function backToList(){ document.body.classList.remove('kb-editing'); CUR=null; renderList(); }
+document.getElementById('kbBack').onclick=backToList;
 async function openDoc(id){const d=await api('GET','/docs/'+id);if(d&&d.ok)showEditor(d.doc);}
 document.getElementById('newBtn').onclick=()=>showEditor(null);
 document.getElementById('upBtn').onclick=()=>document.getElementById('fileInput').click();
@@ -168,7 +199,7 @@ document.getElementById('saveBtn').onclick=async()=>{
 };
 document.getElementById('delBtn').onclick=async()=>{
   if(!CUR||!confirm('Удалить регламент из базы знаний?'))return;
-  const d=await api('DELETE','/docs/'+CUR);if(d&&d.ok){document.getElementById('editor').style.display='none';CUR=null;await load();}
+  const d=await api('DELETE','/docs/'+CUR);if(d&&d.ok){document.getElementById('editor').style.display='none';document.body.classList.remove('kb-editing');CUR=null;await load();}
 };
 document.getElementById('testBtn').onclick=testSearch;
 document.getElementById('tq').addEventListener('keydown',e=>{if(e.key==='Enter')testSearch();});
