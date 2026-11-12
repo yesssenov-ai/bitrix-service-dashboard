@@ -60,11 +60,30 @@ async function ensureMsgSchema() {
       last_seen_at TIMESTAMPTZ DEFAULT NOW(),
       status VARCHAR(10) DEFAULT 'online'
     );
+    -- Отделы (задаёт админ): именованные группы сотрудников для тега @отдел.
+    CREATE TABLE IF NOT EXISTS ticketsmodule_msg_teams (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(120) NOT NULL,
+      created_by INTEGER,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_msg_team_name ON ticketsmodule_msg_teams(lower(name));
+    CREATE TABLE IF NOT EXISTS ticketsmodule_msg_team_members (
+      team_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+      PRIMARY KEY (team_id, user_id)
+    );
   `);
-  // Доставленность/прочтение: указатели + время (для «галочек» и «когда»).
-  await pool.query(`ALTER TABLE ticketsmodule_msg_members ADD COLUMN IF NOT EXISTS last_delivered_id INTEGER DEFAULT 0`);
-  await pool.query(`ALTER TABLE ticketsmodule_msg_members ADD COLUMN IF NOT EXISTS last_read_at TIMESTAMPTZ`);
-  await pool.query(`ALTER TABLE ticketsmodule_msg_members ADD COLUMN IF NOT EXISTS last_delivered_at TIMESTAMPTZ`);
+  // Доставленность/прочтение + роли/блокировка/упоминания. Каждый ALTER независимо.
+  for (const col of [
+    'last_delivered_id INTEGER DEFAULT 0', 'last_read_at TIMESTAMPTZ', 'last_delivered_at TIMESTAMPTZ'
+  ]) {
+    try { await pool.query(`ALTER TABLE ticketsmodule_msg_members ADD COLUMN IF NOT EXISTS ${col}`); }
+    catch (e) { console.error('msg ALTER members ' + col + ':', e.message); }
+  }
+  try { await pool.query(`ALTER TABLE ticketsmodule_msg_channels ADD COLUMN IF NOT EXISTS locked BOOLEAN DEFAULT false`); }
+  catch (e) { console.error('msg ALTER channels locked:', e.message); }
+  try { await pool.query(`ALTER TABLE ticketsmodule_msg_messages ADD COLUMN IF NOT EXISTS mentions INTEGER[]`); }
+  catch (e) { console.error('msg ALTER messages mentions:', e.message); }
   _schemaReady = true;
 }
 ensureMsgSchema().catch(e => console.error('msg ensureSchema:', e.message));
@@ -97,6 +116,14 @@ const dmKey = (a, b) => { a = +a; b = +b; return Math.min(a, b) + ':' + Math.max
 async function isMember(channelId, userId) {
   const r = await pool.query('SELECT 1 FROM ticketsmodule_msg_members WHERE channel_id=$1 AND user_id=$2', [channelId, userId]);
   return r.rowCount > 0;
+}
+// Админ приложения (admin/superadmin) — управляет отделами и любыми группами.
+function isAppAdmin(user) { return user && (user.role === 'admin' || user.role === 'superadmin'); }
+// Админ конкретного канала: роль admin в канале ИЛИ админ приложения.
+async function isChannelAdmin(channelId, user) {
+  if (isAppAdmin(user)) return true;
+  const r = await pool.query(`SELECT role FROM ticketsmodule_msg_members WHERE channel_id=$1 AND user_id=$2`, [channelId, user.id]);
+  return r.rows[0] && r.rows[0].role === 'admin';
 }
 async function bumpPresence(userId) {
   try { await pool.query(`INSERT INTO ticketsmodule_msg_presence (user_id,last_seen_at,status) VALUES ($1,NOW(),'online')
@@ -135,15 +162,40 @@ async function directory() {
   });
 }
 
+// Персональный чат с ИИ-агентом (как диалог с ботом). Один на пользователя,
+// закреплён вверху; в нём каждое сообщение уходит агенту без @-упоминания.
+async function ensureAgentChannel(userId) {
+  const key = 'ai:' + userId;
+  const ex = await pool.query('SELECT id FROM ticketsmodule_msg_channels WHERE dm_key=$1', [key]);
+  if (ex.rows.length) return ex.rows[0].id;
+  const c = await pool.query(`INSERT INTO ticketsmodule_msg_channels (kind, title, dm_key, created_by) VALUES ('ai','Агент ЦУП',$1,$2) RETURNING id`, [key, userId]);
+  const cid = c.rows[0].id;
+  await pool.query(`INSERT INTO ticketsmodule_msg_members (channel_id, user_id, role) VALUES ($1,$2,'admin') ON CONFLICT DO NOTHING`, [cid, userId]);
+  await pool.query(`INSERT INTO ticketsmodule_msg_messages (channel_id, author_id, kind, body) VALUES ($1,NULL,'ai',$2)`,
+    [cid, 'Здравствуйте! Я агент ЦУП. Спрашивайте о командировках, компаниях, задачах, закупках и цифрах — отвечу по данным системы. Пишите обычным языком, тут @аи указывать не нужно.']);
+  await pool.query('UPDATE ticketsmodule_msg_channels SET last_at=NOW() WHERE id=$1', [cid]);
+  return cid;
+}
+
+// Список отделов с составом (для автодополнения @отдел и управления).
+async function listTeams() {
+  const t = await pool.query('SELECT id, name FROM ticketsmodule_msg_teams ORDER BY lower(name)');
+  if (!t.rows.length) return [];
+  const tm = await pool.query('SELECT team_id, user_id FROM ticketsmodule_msg_team_members');
+  const by = {}; tm.rows.forEach(r => { (by[r.team_id] = by[r.team_id] || []).push(r.user_id); });
+  return t.rows.map(x => ({ id: x.id, name: x.name, members: by[x.id] || [] }));
+}
+
 // ── Бутстрап: всё для первичной отрисовки одним запросом ─────────────────────
 router.get('/bootstrap', requireAuth(WRITE), async (req, res) => {
   try {
     await ensureMsgSchema(); await bumpPresence(uid(req)); await markDeliveredAll(uid(req));
+    try { await ensureAgentChannel(uid(req)); } catch (e) { console.error('msg agent channel:', e.message); }
     const me = { id: req.user.id, name: req.user.display_name, role: req.user.role };
     const people = await directory();
     // Мои каналы + последнее сообщение + непрочитанные.
     const ch = await pool.query(`
-      SELECT c.id, c.kind, c.title, c.dm_key, c.last_at, m.last_read_id,
+      SELECT c.id, c.kind, c.title, c.dm_key, c.last_at, c.locked, m.last_read_id, m.role AS my_role,
         (SELECT COUNT(*) FROM ticketsmodule_msg_messages x WHERE x.channel_id=c.id AND x.id > m.last_read_id AND (x.author_id IS NULL OR x.author_id <> $1) AND x.deleted_at IS NULL)::int AS unread,
         (SELECT body FROM ticketsmodule_msg_messages x WHERE x.channel_id=c.id AND x.deleted_at IS NULL ORDER BY x.id DESC LIMIT 1) AS last_body
       FROM ticketsmodule_msg_members m JOIN ticketsmodule_msg_channels c ON c.id=m.channel_id
@@ -152,13 +204,17 @@ router.get('/bootstrap', requireAuth(WRITE), async (req, res) => {
     const nameById = {}; people.forEach(p => { nameById[p.id] = p.name; });
     const memRows = await pool.query(`SELECT channel_id, user_id FROM ticketsmodule_msg_members WHERE channel_id IN (SELECT channel_id FROM ticketsmodule_msg_members WHERE user_id=$1)`, [uid(req)]);
     const byChan = {}; memRows.rows.forEach(r => { (byChan[r.channel_id] = byChan[r.channel_id] || []).push(r.user_id); });
+    const appAdmin = isAppAdmin(req.user);
     const channels = ch.rows.map(c => {
       let title = c.title, peerId = null;
       if (c.kind === 'dm') { const other = (byChan[c.id] || []).find(x => x !== uid(req)); peerId = other || null; title = nameById[other] || 'Диалог'; }
-      return { id: c.id, kind: c.kind, title, peerId, unread: c.unread, lastBody: c.last_body || '', lastAt: c.last_at, members: byChan[c.id] || [] };
+      const iAmAdmin = appAdmin || c.my_role === 'admin';
+      return { id: c.id, kind: c.kind, title, peerId, unread: c.unread, lastBody: c.last_body || '', lastAt: c.last_at,
+        members: byChan[c.id] || [], locked: !!c.locked, myRole: c.my_role || 'member', iAmAdmin };
     });
     let receipts = []; try { receipts = await membersPointers(uid(req)); } catch (e) { console.error('msg receipts boot:', e.message); }
-    res.json({ ok: true, me, people, channels, receipts });
+    let teams = []; try { teams = await listTeams(); } catch (e) { console.error('msg teams boot:', e.message); }
+    res.json({ ok: true, me, people, channels, receipts, teams, appAdmin });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
@@ -175,7 +231,7 @@ router.get('/poll', requireAuth(WRITE), async (req, res) => {
     const since = parseInt(req.query.since, 10) || 0;
     const msgs = await pool.query(`
       SELECT m.id, m.channel_id, m.author_id, m.kind, m.body, m.payload, m.reply_to,
-             m.att_name, m.att_type, m.att_size, m.created_at, u.display_name AS author_name
+             m.att_name, m.att_type, m.att_size, m.mentions, m.created_at, u.display_name AS author_name
       FROM ticketsmodule_msg_messages m
       LEFT JOIN ticketsmodule_users u ON u.id=m.author_id
       WHERE m.id > $1 AND m.deleted_at IS NULL
@@ -199,7 +255,7 @@ router.get('/channels/:id(\\d+)/messages', requireAuth(WRITE), async (req, res) 
     const params = before ? [cid, limit, before] : [cid, limit];
     const r = await pool.query(`
       SELECT m.id, m.channel_id, m.author_id, m.kind, m.body, m.payload, m.reply_to,
-             m.att_name, m.att_type, m.att_size, m.created_at, u.display_name AS author_name
+             m.att_name, m.att_type, m.att_size, m.mentions, m.created_at, u.display_name AS author_name
       FROM ticketsmodule_msg_messages m
       LEFT JOIN ticketsmodule_users u ON u.id=m.author_id
       WHERE m.channel_id=$1 AND m.deleted_at IS NULL ${where}
@@ -217,7 +273,9 @@ router.get('/channels/:id(\\d+)/messages', requireAuth(WRITE), async (req, res) 
       const mem = await pool.query('SELECT user_id FROM ticketsmodule_msg_members WHERE channel_id=$1', [cid]);
       members = mem.rows.map(x => x.user_id);
     } catch (e) { console.error('msg receipts:', e.message); }
-    res.json({ ok: true, messages: r.rows.reverse(), reactions, receipts, members });
+    let locked = false, iAmAdmin = false;
+    try { const cc = await pool.query('SELECT locked FROM ticketsmodule_msg_channels WHERE id=$1', [cid]); locked = !!(cc.rows[0] && cc.rows[0].locked); iAmAdmin = await isChannelAdmin(cid, req.user); } catch (e) {}
+    res.json({ ok: true, messages: r.rows.reverse(), reactions, receipts, members, locked, iAmAdmin });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
@@ -230,14 +288,26 @@ router.post('/channels/:id(\\d+)/messages', requireAuth(WRITE), express.json({ l
     const body = String((req.body && req.body.body) || '').trim();
     const replyTo = (req.body && +req.body.reply_to) || null;
     if (!body) return res.status(400).json({ ok: false, error: 'Пустое сообщение' });
+    const chk = await pool.query('SELECT kind, locked FROM ticketsmodule_msg_channels WHERE id=$1', [cid]);
+    const isAi = chk.rows[0] && chk.rows[0].kind === 'ai';
+    // Закрытый канал: писать могут только админы.
+    if (chk.rows[0] && chk.rows[0].locked && !(await isChannelAdmin(cid, req.user)))
+      return res.status(403).json({ ok: false, error: 'Канал закрыт: писать могут только админы' });
+    // Упоминания (клиент резолвит из автодополнения: люди + отделы). Только участники канала.
+    let mentions = Array.from(new Set(((req.body && req.body.mentions) || []).map(Number).filter(Boolean)));
+    if (mentions.length) {
+      const mm = await pool.query('SELECT user_id FROM ticketsmodule_msg_members WHERE channel_id=$1', [cid]);
+      const inCh = new Set(mm.rows.map(x => x.user_id));
+      mentions = mentions.filter(u => inCh.has(u) && u !== uid(req));
+    }
     const ins = await pool.query(
-      `INSERT INTO ticketsmodule_msg_messages (channel_id, author_id, kind, body, reply_to) VALUES ($1,$2,'text',$3,$4) RETURNING id, created_at`,
-      [cid, uid(req), body, replyTo]);
+      `INSERT INTO ticketsmodule_msg_messages (channel_id, author_id, kind, body, reply_to, mentions) VALUES ($1,$2,'text',$3,$4,$5) RETURNING id, created_at`,
+      [cid, uid(req), body, replyTo, mentions.length ? mentions : null]);
     await pool.query('UPDATE ticketsmodule_msg_channels SET last_at=NOW() WHERE id=$1', [cid]);
     await pool.query('UPDATE ticketsmodule_msg_members SET last_read_id=$1 WHERE channel_id=$2 AND user_id=$3', [ins.rows[0].id, cid, uid(req)]);
-    const msg = { id: ins.rows[0].id, channel_id: cid, author_id: uid(req), kind: 'text', body, reply_to: replyTo, created_at: ins.rows[0].created_at, author_name: req.user.display_name };
-    // Вызов агента — в фоне, ответ прилетит поллингом.
-    if (MENTION.test(body)) runAgentInChannel(cid, req.user, body).catch(e => console.error('msg agent:', e.message));
+    const msg = { id: ins.rows[0].id, channel_id: cid, author_id: uid(req), kind: 'text', body, reply_to: replyTo, mentions: mentions.length ? mentions : null, created_at: ins.rows[0].created_at, author_name: req.user.display_name };
+    // Личный чат с агентом — отвечаем на каждое сообщение; в обычных каналах — по @-упоминанию.
+    if (isAi || MENTION.test(body)) runAgentInChannel(cid, req.user, body).catch(e => console.error('msg agent:', e.message));
     res.json({ ok: true, message: msg });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
@@ -321,13 +391,121 @@ router.post('/channels', requireAuth(WRITE), express.json(), async (req, res) =>
   try {
     const title = String((req.body && req.body.title) || '').trim().slice(0, 200);
     if (!title) return res.status(400).json({ ok: false, error: 'Укажите название канала' });
+    const locked = !!(req.body && req.body.locked);
     const members = Array.from(new Set([uid(req), ...((req.body && req.body.memberIds) || []).map(Number).filter(Boolean)]));
-    const c = await pool.query(`INSERT INTO ticketsmodule_msg_channels (kind, title, created_by) VALUES ('group',$1,$2) RETURNING id`, [title, uid(req)]);
+    const adminIds = new Set([uid(req), ...((req.body && req.body.adminIds) || []).map(Number).filter(Boolean)]);
+    const c = await pool.query(`INSERT INTO ticketsmodule_msg_channels (kind, title, created_by, locked) VALUES ('group',$1,$2,$3) RETURNING id`, [title, uid(req), locked]);
     const cid = c.rows[0].id;
-    const vals = members.map((_, i) => `($1,$${i + 2},${members[i] === uid(req) ? "'admin'" : "'member'"})`).join(',');
+    const vals = members.map((_, i) => `($1,$${i + 2},${adminIds.has(members[i]) ? "'admin'" : "'member'"})`).join(',');
     await pool.query(`INSERT INTO ticketsmodule_msg_members (channel_id, user_id, role) VALUES ${vals} ON CONFLICT DO NOTHING`, [cid, ...members]);
     await pool.query(`INSERT INTO ticketsmodule_msg_messages (channel_id, author_id, kind, body) VALUES ($1,NULL,'system',$2)`, [cid, 'Канал создан: ' + title]);
     res.json({ ok: true, channelId: cid });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── Управление группой (участники, роли, блокировка) — только админ канала ────
+router.get('/channels/:id(\\d+)/info', requireAuth(WRITE), async (req, res) => {
+  try {
+    const cid = +req.params.id;
+    if (!(await isMember(cid, uid(req)))) return res.status(403).json({ ok: false, error: 'Нет доступа' });
+    const c = await pool.query('SELECT id, kind, title, locked FROM ticketsmodule_msg_channels WHERE id=$1', [cid]);
+    if (!c.rows[0]) return res.status(404).json({ ok: false, error: 'Нет канала' });
+    const mem = await pool.query(`SELECT m.user_id, m.role, u.display_name AS name, u.job_title AS title
+      FROM ticketsmodule_msg_members m LEFT JOIN ticketsmodule_users u ON u.id=m.user_id WHERE m.channel_id=$1 ORDER BY u.display_name`, [cid]);
+    res.json({ ok: true, channel: { id: c.rows[0].id, kind: c.rows[0].kind, title: c.rows[0].title, locked: !!c.rows[0].locked },
+      members: mem.rows, iAmAdmin: await isChannelAdmin(cid, req.user) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+router.post('/channels/:id(\\d+)/members', requireAuth(WRITE), express.json(), async (req, res) => {
+  try {
+    const cid = +req.params.id;
+    const c = await pool.query('SELECT kind FROM ticketsmodule_msg_channels WHERE id=$1', [cid]);
+    if (!c.rows[0] || c.rows[0].kind !== 'group') return res.status(400).json({ ok: false, error: 'Только для групп' });
+    if (!(await isChannelAdmin(cid, req.user))) return res.status(403).json({ ok: false, error: 'Только админ канала' });
+    const ids = Array.from(new Set(((req.body && req.body.userIds) || []).map(Number).filter(Boolean)));
+    if (!ids.length) return res.status(400).json({ ok: false, error: 'Некого добавлять' });
+    const vals = ids.map((_, i) => `($1,$${i + 2},'member')`).join(',');
+    await pool.query(`INSERT INTO ticketsmodule_msg_members (channel_id, user_id, role) VALUES ${vals} ON CONFLICT DO NOTHING`, [cid, ...ids]);
+    const names = await pool.query('SELECT display_name FROM ticketsmodule_users WHERE id = ANY($1)', [ids]);
+    await pool.query(`INSERT INTO ticketsmodule_msg_messages (channel_id, author_id, kind, body) VALUES ($1,NULL,'system',$2)`,
+      [cid, req.user.display_name + ' добавил(а): ' + names.rows.map(x => x.display_name).join(', ')]);
+    await pool.query('UPDATE ticketsmodule_msg_channels SET last_at=NOW() WHERE id=$1', [cid]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+router.post('/channels/:id(\\d+)/remove', requireAuth(WRITE), express.json(), async (req, res) => {
+  try {
+    const cid = +req.params.id, target = +(req.body && req.body.userId);
+    if (!(await isChannelAdmin(cid, req.user))) return res.status(403).json({ ok: false, error: 'Только админ канала' });
+    if (!target) return res.status(400).json({ ok: false, error: 'userId' });
+    await pool.query('DELETE FROM ticketsmodule_msg_members WHERE channel_id=$1 AND user_id=$2', [cid, target]);
+    const n = await pool.query('SELECT display_name FROM ticketsmodule_users WHERE id=$1', [target]);
+    await pool.query(`INSERT INTO ticketsmodule_msg_messages (channel_id, author_id, kind, body) VALUES ($1,NULL,'system',$2)`,
+      [cid, req.user.display_name + ' удалил(а): ' + ((n.rows[0] && n.rows[0].display_name) || ('#' + target))]);
+    await pool.query('UPDATE ticketsmodule_msg_channels SET last_at=NOW() WHERE id=$1', [cid]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+router.post('/channels/:id(\\d+)/role', requireAuth(WRITE), express.json(), async (req, res) => {
+  try {
+    const cid = +req.params.id, target = +(req.body && req.body.userId), role = (req.body && req.body.role) === 'admin' ? 'admin' : 'member';
+    if (!(await isChannelAdmin(cid, req.user))) return res.status(403).json({ ok: false, error: 'Только админ канала' });
+    if (!target) return res.status(400).json({ ok: false, error: 'userId' });
+    await pool.query('UPDATE ticketsmodule_msg_members SET role=$1 WHERE channel_id=$2 AND user_id=$3', [role, cid, target]);
+    const n = await pool.query('SELECT display_name FROM ticketsmodule_users WHERE id=$1', [target]);
+    await pool.query(`INSERT INTO ticketsmodule_msg_messages (channel_id, author_id, kind, body) VALUES ($1,NULL,'system',$2)`,
+      [cid, ((n.rows[0] && n.rows[0].display_name) || ('#' + target)) + (role === 'admin' ? ' — назначен(а) админом канала' : ' — снят(а) с админа')]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+router.post('/channels/:id(\\d+)/lock', requireAuth(WRITE), express.json(), async (req, res) => {
+  try {
+    const cid = +req.params.id, locked = !!(req.body && req.body.locked);
+    if (!(await isChannelAdmin(cid, req.user))) return res.status(403).json({ ok: false, error: 'Только админ канала' });
+    await pool.query('UPDATE ticketsmodule_msg_channels SET locked=$1 WHERE id=$2', [locked, cid]);
+    await pool.query(`INSERT INTO ticketsmodule_msg_messages (channel_id, author_id, kind, body) VALUES ($1,NULL,'system',$2)`,
+      [cid, locked ? 'Канал закрыт: писать могут только админы' : 'Канал открыт: писать могут все участники']);
+    await pool.query('UPDATE ticketsmodule_msg_channels SET last_at=NOW() WHERE id=$1', [cid]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── Отделы (teams): список и управление — управление только для админа ────────
+router.get('/teams', requireAuth(WRITE), async (req, res) => {
+  try { res.json({ ok: true, teams: await listTeams() }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+router.post('/teams', requireAuth(WRITE), express.json(), async (req, res) => {
+  try {
+    if (!isAppAdmin(req.user)) return res.status(403).json({ ok: false, error: 'Только админ' });
+    const name = String((req.body && req.body.name) || '').trim().slice(0, 120);
+    if (!name) return res.status(400).json({ ok: false, error: 'Укажите название отдела' });
+    const ids = Array.from(new Set(((req.body && req.body.memberIds) || []).map(Number).filter(Boolean)));
+    let teamId = +(req.body && req.body.id) || 0;
+    if (teamId) {
+      await pool.query('UPDATE ticketsmodule_msg_teams SET name=$1 WHERE id=$2', [name, teamId]);
+      await pool.query('DELETE FROM ticketsmodule_msg_team_members WHERE team_id=$1', [teamId]);
+    } else {
+      const t = await pool.query('INSERT INTO ticketsmodule_msg_teams (name, created_by) VALUES ($1,$2) RETURNING id', [name, uid(req)]);
+      teamId = t.rows[0].id;
+    }
+    if (ids.length) {
+      const vals = ids.map((_, i) => `($1,$${i + 2})`).join(',');
+      await pool.query(`INSERT INTO ticketsmodule_msg_team_members (team_id, user_id) VALUES ${vals} ON CONFLICT DO NOTHING`, [teamId, ...ids]);
+    }
+    res.json({ ok: true, id: teamId });
+  } catch (e) {
+    if (String(e.message).includes('uq_msg_team_name')) return res.status(400).json({ ok: false, error: 'Отдел с таким названием уже есть' });
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+router.post('/teams/:id(\\d+)/delete', requireAuth(WRITE), express.json(), async (req, res) => {
+  try {
+    if (!isAppAdmin(req.user)) return res.status(403).json({ ok: false, error: 'Только админ' });
+    const tid = +req.params.id;
+    await pool.query('DELETE FROM ticketsmodule_msg_team_members WHERE team_id=$1', [tid]);
+    await pool.query('DELETE FROM ticketsmodule_msg_teams WHERE id=$1', [tid]);
+    res.json({ ok: true });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
