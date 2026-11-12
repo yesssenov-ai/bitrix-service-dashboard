@@ -195,7 +195,7 @@ async function _genAi(ctx) {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: process.env.PLSAI_AGENT_MODEL || process.env.PLSAI_MODEL || 'claude-3-5-haiku-20241022', max_tokens: 220, system: sys,
+      body: JSON.stringify({ model: process.env.PLSAI_AGENT_MODEL || process.env.PLSAI_MODEL || 'claude-haiku-5-5', max_tokens: 220, system: sys,
         messages: [{ role: 'user', content: 'Цифры на сегодня:\n' + JSON.stringify(full) }] }),
     });
     const d = await r.json();

@@ -35,7 +35,7 @@ function agentPool() {
   return _roPool;
 }
 
-const AGENT_MODEL = process.env.PLSAI_AGENT_MODEL || process.env.PLSAI_MODEL || 'claude-3-5-haiku-latest';
+const AGENT_MODEL = process.env.PLSAI_AGENT_MODEL || process.env.PLSAI_MODEL || 'claude-haiku-5-5';
 const MAX_STEPS = parseInt(process.env.PLSAI_AGENT_MAX_STEPS || '8', 10);
 const ROW_CAP = 2000;          // жёсткий потолок строк в SQL
 const ROWS_TO_MODEL = 40;      // сколько строк отдаём модели обратно
