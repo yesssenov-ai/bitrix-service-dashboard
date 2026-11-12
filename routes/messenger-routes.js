@@ -157,7 +157,7 @@ router.get('/bootstrap', requireAuth(WRITE), async (req, res) => {
       if (c.kind === 'dm') { const other = (byChan[c.id] || []).find(x => x !== uid(req)); peerId = other || null; title = nameById[other] || 'Диалог'; }
       return { id: c.id, kind: c.kind, title, peerId, unread: c.unread, lastBody: c.last_body || '', lastAt: c.last_at, members: byChan[c.id] || [] };
     });
-    const receipts = await membersPointers(uid(req));
+    let receipts = []; try { receipts = await membersPointers(uid(req)); } catch (e) { console.error('msg receipts boot:', e.message); }
     res.json({ ok: true, me, people, channels, receipts });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
@@ -182,7 +182,7 @@ router.get('/poll', requireAuth(WRITE), async (req, res) => {
         AND m.channel_id IN (SELECT channel_id FROM ticketsmodule_msg_members WHERE user_id=$2)
       ORDER BY m.id ASC LIMIT 200`, [since, uid(req)]);
     const people = await directory();
-    const receipts = await membersPointers(uid(req));
+    let receipts = []; try { receipts = await membersPointers(uid(req)); } catch (e) { console.error('msg receipts poll:', e.message); }
     res.json({ ok: true, messages: msgs.rows, people, receipts });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
@@ -190,6 +190,7 @@ router.get('/poll', requireAuth(WRITE), async (req, res) => {
 // ── История канала ───────────────────────────────────────────────────────────
 router.get('/channels/:id(\\d+)/messages', requireAuth(WRITE), async (req, res) => {
   try {
+    await ensureMsgSchema();
     const cid = +req.params.id;
     if (!(await isMember(cid, uid(req)))) return res.status(403).json({ ok: false, error: 'Нет доступа к чату' });
     const before = parseInt(req.query.before, 10) || 0;
@@ -210,9 +211,13 @@ router.get('/channels/:id(\\d+)/messages', requireAuth(WRITE), async (req, res) 
       const rr = await pool.query('SELECT message_id, emoji, COUNT(*)::int n, array_agg(user_id) users FROM ticketsmodule_msg_reactions WHERE message_id = ANY($1) GROUP BY message_id, emoji', [ids]);
       rr.rows.forEach(x => { (reactions[x.message_id] = reactions[x.message_id] || []).push({ emoji: x.emoji, n: x.n, users: x.users }); });
     }
-    const receipts = await membersPointers(uid(req), cid);
-    const mem = await pool.query('SELECT user_id FROM ticketsmodule_msg_members WHERE channel_id=$1', [cid]);
-    res.json({ ok: true, messages: r.rows.reverse(), reactions, receipts, members: mem.rows.map(x => x.user_id) });
+    let receipts = [], members = [];
+    try {
+      receipts = await membersPointers(uid(req), cid);
+      const mem = await pool.query('SELECT user_id FROM ticketsmodule_msg_members WHERE channel_id=$1', [cid]);
+      members = mem.rows.map(x => x.user_id);
+    } catch (e) { console.error('msg receipts:', e.message); }
+    res.json({ ok: true, messages: r.rows.reverse(), reactions, receipts, members });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
@@ -352,6 +357,7 @@ router.post('/react', requireAuth(WRITE), express.json(), async (req, res) => {
 // ── Выгрузка истории канала (txt / html) ─────────────────────────────────────
 router.get('/channels/:id(\\d+)/export', requireAuth(WRITE), async (req, res) => {
   try {
+    await ensureMsgSchema();
     const cid = +req.params.id;
     if (!(await isMember(cid, uid(req)))) return res.status(403).send('Нет доступа');
     const fmt = (req.query.format === 'html') ? 'html' : 'txt';
