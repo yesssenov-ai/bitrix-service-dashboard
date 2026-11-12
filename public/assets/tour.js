@@ -48,7 +48,7 @@
     if (document.getElementById('pls-help-btn')) return;
     if (!document.getElementById('pls-help-style')) {
       var st = document.createElement('style'); st.id = 'pls-help-style';
-      st.textContent = '#pls-help-btn{position:fixed;right:16px;top:106px;z-index:2147483600;width:34px;height:34px;' +
+      st.textContent = '#pls-help-btn{position:fixed;top:13px;left:calc(50% - 40px);z-index:2147483600;width:34px;height:34px;' +
         'border-radius:9px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;' +
         'background:var(--surface,#fff);color:var(--text-2,#3a4254);border:1px solid var(--line-2,#d6dbe4);' +
         'box-shadow:0 1px 2px rgba(20,25,35,.06);transition:color .15s,border-color .15s}' +
