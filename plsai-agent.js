@@ -316,6 +316,7 @@ function buildSystem(user, allowed, examples) {
     `Пользователь: ${user.display_name || user.engineer_name || 'сотрудник'} · роль: ${user.role}.`,
     '',
     'У тебя есть инструмент run_sql — выполнить ОДИН SELECT (только чтение) к базе-зеркалу ЦУПа (Postgres).',
+    'Ты также МОЖЕШЬ готовить ПИШУЩИЕ действия через инструменты create_task (задача в Bitrix), add_deal_comment (комментарий к сделке), create_reminder (напоминание в ЦУП). ВАЖНО: эти действия НЕ выполняются сразу — ты лишь готовишь ПРЕДЛОЖЕНИЕ, которое инициатор подтверждает кнопкой. Вызывай их ТОЛЬКО когда пользователь явно просит создать/поставить/добавить. После вызова не говори «я создал/добавил» — говори «предлагаю … , подтвердите». Если данных для действия не хватает (например, кому задача или по какой сделке) — сначала спроси.',
     'Данные — это зеркало Bitrix и модулей ЦУПа. Суммы почти везде в валюте сделки; для пересчёта в тенге используй ticketsmodule_exchange_rates при необходимости.',
     'Тебе доступны следующие таблицы (доступ уже отфильтрован по роли и грантам — к другим не обращайся):',
     ...lines,
@@ -389,6 +390,49 @@ const TOOLS = [
         query: { type: 'string', description: 'Короткий смысловой запрос к базе знаний (переформулируй вопрос пользователя своими словами, ключевые понятия и синонимы).' },
       },
       required: ['query'],
+    },
+  },
+  // ── ПИШУЩИЕ действия: НЕ выполняются сразу. Инструмент только ГОТОВИТ ПРЕДЛОЖЕНИЕ,
+  // которое инициатор подтверждает кнопкой. Вызывай их ТОЛЬКО когда пользователь явно
+  // просит создать задачу / добавить комментарий / поставить напоминание. После вызова
+  // коротко скажи пользователю, что предлагаешь, и что нужно нажать «Подтвердить».
+  {
+    name: 'create_task',
+    description: 'ПРЕДЛОЖИТЬ создание задачи в Bitrix24 («Мои задачи»). Ничего не создаётся до подтверждения инициатора. Вызывай, когда просят поставить/создать задачу. Ответственного указывай ФИО (если не указан — задача на самого инициатора).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Короткое название задачи.' },
+        description: { type: 'string', description: 'Описание/детали задачи (необязательно).' },
+        responsible_name: { type: 'string', description: 'ФИО ответственного (необязательно; по умолчанию — инициатор).' },
+        deadline: { type: 'string', description: 'Срок в формате YYYY-MM-DD (необязательно).' },
+      },
+      required: ['title'],
+    },
+  },
+  {
+    name: 'add_deal_comment',
+    description: 'ПРЕДЛОЖИТЬ добавление комментария в ленту сделки Bitrix24. Ничего не добавляется до подтверждения инициатора. Укажи числовой ID сделки (его можно найти через run_sql в ticketsmodule_stat_deals).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        deal_id: { type: 'string', description: 'Числовой ID сделки в Bitrix.' },
+        comment: { type: 'string', description: 'Текст комментария.' },
+      },
+      required: ['deal_id', 'comment'],
+    },
+  },
+  {
+    name: 'create_reminder',
+    description: 'ПРЕДЛОЖИТЬ создание напоминания/дела внутри ЦУП (не Bitrix). Ничего не создаётся до подтверждения инициатора.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Короткий заголовок напоминания.' },
+        note: { type: 'string', description: 'Детали (необязательно).' },
+        due_date: { type: 'string', description: 'Дата в формате YYYY-MM-DD (необязательно).' },
+      },
+      required: ['title'],
     },
   },
 ];
@@ -499,6 +543,7 @@ async function runAgent(qRaw, user) {
   const ctx = await buildCtx(user);
   const allowed = ctx.allowed;
   let presentable = null;   // последняя «таблица к показу» (present_table)
+  const pendingActions = []; // подготовленные ПИШУЩИЕ действия, ждущие подтверждения
 
   const examples = await retrieveExamples(q, allowed);   // самообучение: похожие удачные решения
   let system = buildSystem(user, allowed, examples);
@@ -516,7 +561,7 @@ async function runAgent(qRaw, user) {
     const textParts = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
 
     if (!toolUses.length) {
-      return finalize(textParts || 'Готово.', presentable, steps, user, q, false);
+      return finalize(textParts || 'Готово.', presentable, steps, user, q, false, pendingActions);
     }
 
     // Есть вызовы инструмента — выполняем и возвращаем результаты модели.
@@ -552,6 +597,33 @@ async function runAgent(qRaw, user) {
         }
         continue;
       }
+      // ── ПИШУЩИЕ инструменты: готовим ПРЕДЛОЖЕНИЕ (не выполняем) ──────────────
+      if (tu.name === 'create_task' || tu.name === 'add_deal_comment' || tu.name === 'create_reminder') {
+        try {
+          const actions = require('./agent-actions');
+          const inp = tu.input || {};
+          let params = {}, summary = '';
+          if (tu.name === 'create_task') {
+            let respBid = null, respName = (inp.responsible_name || '').trim();
+            if (respName) { try { const rr = await pool.query(`SELECT bitrix_user_id, name FROM ticketsmodule_staff_ref WHERE name ILIKE $1 AND bitrix_user_id IS NOT NULL LIMIT 1`, ['%' + respName + '%']); if (rr.rows.length) { respBid = rr.rows[0].bitrix_user_id; respName = rr.rows[0].name; } } catch (e) {} }
+            params = { title: inp.title || 'Задача', description: inp.description || '', responsible_bid: respBid, responsible_name: respName || 'я (инициатор)', deadline: inp.deadline || '' };
+            summary = 'Создать задачу в Bitrix: «' + params.title + '»' + (params.responsible_name ? ', ответственный: ' + params.responsible_name : '') + (params.deadline ? ', срок: ' + params.deadline : '');
+          } else if (tu.name === 'add_deal_comment') {
+            params = { deal_id: inp.deal_id || '', comment: inp.comment || '' };
+            summary = 'Добавить комментарий к сделке ' + params.deal_id + ': «' + String(params.comment).slice(0, 120) + '»';
+          } else {
+            params = { title: inp.title || '', note: inp.note || '', due_date: inp.due_date || '' };
+            summary = 'Создать напоминание в ЦУП: «' + params.title + '»' + (params.due_date ? ', на ' + params.due_date : '');
+          }
+          const pr = await actions.propose(user, tu.name, params, summary);
+          pendingActions.push({ token: pr.token, kind: tu.name, summary, params });
+          steps.push({ purpose: 'propose:' + tu.name, summary });
+          toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: 'ПРЕДЛОЖЕНИЕ подготовлено (НЕ выполнено). Инициатор должен нажать «Подтвердить». Коротко скажи пользователю, что именно предлагаешь сделать: ' + summary + '. Не утверждай, что уже сделал.' });
+        } catch (e) {
+          toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: 'Не удалось подготовить действие: ' + e.message, is_error: true });
+        }
+        continue;
+      }
       if (tu.name !== 'run_sql') { toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: 'Неизвестный инструмент', is_error: true }); continue; }
       try {
         const res = await guardedSelect(sql, ctx);
@@ -573,20 +645,21 @@ async function runAgent(qRaw, user) {
   try {
     const data = await callModel({ max_tokens: 1200 }, system, messages, key);
     const txt = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
-    if (txt) return finalize(txt, presentable, steps, user, q, true);
+    if (txt) return finalize(txt, presentable, steps, user, q, true, pendingActions);
   } catch (e) { /* ниже общий ответ */ }
   // Совсем не получилось — покажем, что мешало (ошибки запросов), чтобы было понятно.
   const errs = steps.filter(s => s.error).slice(-2).map(s => s.error);
   const tail = errs.length ? ' Причина: ' + errs.join('; ') + '.' : '';
-  return finalize('Пока не получилось собрать ответ по этому вопросу.' + tail + ' Попробуй сформулировать точнее.', presentable, steps, user, q, true);
+  return finalize('Пока не получилось собрать ответ по этому вопросу.' + tail + ' Попробуй сформулировать точнее.', presentable, steps, user, q, true, pendingActions);
 }
 
 // Собрать финальный ответ: текст + (если была present_table) таблица для показа
 // (до 50 строк) и токен для выгрузки всех строк в Excel + сохранить удачный
 // пример в банк (самообучение) и вернуть его id для 👍/👎.
-async function finalize(answer, presentable, steps, user, q, truncated) {
+async function finalize(answer, presentable, steps, user, q, truncated, pendingActions) {
   const out = { ok: true, answer, steps, model: ACTIVE_MODEL };
   if (truncated) out.truncated = true;
+  if (pendingActions && pendingActions.length) out.actions = pendingActions;
   if (presentable && presentable.rowCount > 0) {
     const rows = presentable.rows.slice(0, 50).map(r => {
       const o = {};

@@ -478,7 +478,7 @@ async function runAgentInChannel(cid, user, rawBody) {
     const { runAgent } = require('../plsai-agent');
     const out = await runAgent(prompt, user);
     answer = (out && out.answer) || 'Не удалось сформировать ответ.';
-    if (out && (out.table || out.steps || out.exportToken)) payload = { table: out.table || null, steps: out.steps || null, exportToken: out.exportToken || null };
+    if (out && (out.table || out.steps || out.exportToken || out.actions)) payload = { table: out.table || null, steps: out.steps || null, exportToken: out.exportToken || null, actions: out.actions || null };
   } catch (e) { answer = 'Агент временно недоступен: ' + e.message; }
   const ins = await pool.query(
     `INSERT INTO ticketsmodule_msg_messages (channel_id, author_id, kind, body, payload) VALUES ($1,NULL,'ai',$2,$3) RETURNING id`,
@@ -819,6 +819,22 @@ router.post('/forward', requireAuth(WRITE), express.json({ limit: '256kb' }), as
       pushNewMessage(cid, uid(req), req.user.display_name, 'Пересланное сообщение').catch(() => {});
     }
     res.json({ ok: true, count });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// ── Агент: подтверждение/отмена подготовленного ПИШУЩЕГО действия ─────────────
+router.post('/agent/action/confirm', requireAuth(WRITE), express.json(), async (req, res) => {
+  try {
+    const token = String((req.body && req.body.token) || '');
+    if (!token) return res.status(400).json({ ok: false, error: 'token' });
+    const r = await require('../agent-actions').confirm(token, req.user);
+    res.json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+router.post('/agent/action/cancel', requireAuth(WRITE), express.json(), async (req, res) => {
+  try {
+    const token = String((req.body && req.body.token) || '');
+    const r = await require('../agent-actions').cancel(token, req.user);
+    res.json(r);
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 router.post('/react', requireAuth(WRITE), express.json(), async (req, res) => {
