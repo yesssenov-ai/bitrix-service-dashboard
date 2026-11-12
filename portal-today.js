@@ -225,22 +225,28 @@ async function _genAi(ctx) {
   const msgs = [{ role: 'user', content: 'Цифры на сегодня:\n' + JSON.stringify(full) }];
   // Разные модели требуют разный способ отключить «размышление»: новые — between_tools,
   // старые — disabled. Пробуем between_tools, при ошибке про thinking — повторяем с disabled.
-  async function call(thinkingType) {
+  // mode: 'between_tools' | 'disabled' | 'none' (без thinking, с большим бюджетом).
+  async function call(mode) {
+    const body = { model, max_tokens: mode === 'none' ? 2048 : 1024, system: sys, messages: msgs };
+    if (mode !== 'none') body.thinking = { type: mode };
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model, max_tokens: 1024, thinking: { type: thinkingType }, system: sys, messages: msgs }),
+      body: JSON.stringify(body),
     });
     return { r, d: await r.json() };
   }
+  // Перебор режимов отключения «размышления» — берём первый рабочий, запоминаем его.
+  const order = [PORTAL_THINK, 'between_tools', 'disabled', 'none'].filter((v, i, a) => a.indexOf(v) === i);
   try {
-    let { r, d } = await call(PORTAL_THINK);
-    const errMsg = (d && d.error && d.error.message) || '';
-    if (!r.ok && /thinking/i.test(errMsg)) {
-      PORTAL_THINK = (PORTAL_THINK === 'between_tools') ? 'disabled' : 'between_tools';
-      ({ r, d } = await call(PORTAL_THINK));
+    let r, d, ok = false;
+    for (const mode of order) {
+      ({ r, d } = await call(mode));
+      if (r.ok) { PORTAL_THINK = mode; ok = true; break; }
+      const em = (d && d.error && d.error.message) || '';
+      if (!/thinking/i.test(em)) break; // ошибка не про thinking — дальше перебирать нет смысла
     }
-    if (!r.ok) { _ai.state = 'api-error: ' + ((d && d.error && d.error.message) || ('HTTP ' + r.status)); return ''; }
+    if (!ok) { _ai.state = 'api-error: ' + ((d && d.error && d.error.message) || 'HTTP'); return ''; }
     const t = (Array.isArray(d.content) ? d.content : []).filter(b => b && b.type === 'text').map(b => b.text || '').join('').trim();
     _ai.state = t ? 'ok' : ('empty-response' + (d && d.stop_reason ? ':' + d.stop_reason : ''));
     return t;

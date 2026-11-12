@@ -77,7 +77,7 @@ const TABLE_META = {
   ticketsmodule_campaign_recipients:    { tier: 'privileged', desc: 'получатели рассылок (email клиентов)' },
   ticketsmodule_campaign_audience:      { tier: 'privileged', desc: 'аудитории рассылок' },
   ticketsmodule_campaign_suppression:   { tier: 'privileged', desc: 'стоп-лист рассылок' },
-  ticketsmodule_contract_plan:          { tier: 'privileged', desc: 'план по контрактам (модуль Контракты)' },
+  ticketsmodule_contract_plan:          { tier: 'privileged', desc: 'ПЛАН/ЦЕЛЬ компании по контрактам (модуль «Контракты»): year, department (НАЗВАНИЕ отдела, напр. «Элементный», «ОРМ», «Хроматография и клеточный анализ»), plan_amount (план в ТЕНГЕ). Это и есть KPI/цель компании — для «% выполнения плана» делим факт на plan_amount' },
   ticketsmodule_plsai_history:          { tier: 'privileged', desc: 'история запросов ProLab AI' },
   ticketsmodule_plsai_comment_meta:     { tier: 'privileged', desc: 'мета по комментариям сделок (ProLab AI)' },
   ticketsmodule_plsai_comment_signal:   { tier: 'privileged', desc: 'сигналы по комментариям сделок' },
@@ -336,6 +336,7 @@ function buildSystem(user, allowed, examples) {
     '• ОТДЕЛ: в сделках хранится department_id (id), а НАЗВАНИЯ отделов — в справочнике ticketsmodule_departments (id, name). Чтобы отфильтровать сделки по названию отдела (напр. «ОРМ», «Сервис», «Хроматография»), сопоставь через справочник: ... WHERE d.department_id IN (SELECT id FROM ticketsmodule_departments WHERE name ILIKE \'%ОРМ%\'). Для вывода названия — JOIN ticketsmodule_departments dep ON dep.id = d.department_id, покажи dep.name. Если название в справочнике не нашлось — так и скажи.',
     '• СОТРУДНИК/МЕНЕДЖЕР: в сделках менеджер — это assigned_by_id (= bitrix_user_id). ФИО сотрудников — в справочнике ticketsmodule_staff_ref (name, bitrix_user_id, job_title). Чтобы фильтровать сделки по ФИО (напр. «сделки Жарова»): ... WHERE d.assigned_by_id IN (SELECT bitrix_user_id FROM ticketsmodule_staff_ref WHERE name ILIKE \'%Жаров%\'). Для вывода имени менеджера — JOIN ticketsmodule_staff_ref s ON s.bitrix_user_id = d.assigned_by_id, покажи s.name. Один и тот же приём (справочник id→имя) применяй для любых id-полей.',
     '• КП/МЛК (ticketsmodule_kp_requests): статус заявки — колонка status (draft/in_review/needs_revision/approved), клиент = client_name, создана = created_at.',
+    '• КОНТРАКТЫ и ВЫПОЛНЕНИЕ ПЛАНА (как в модуле «Контракты»): ПЛАН берётся из ticketsmodule_contract_plan (year, department-название, plan_amount ₸). ФАКТ = сумма opportunity сделок из ticketsmodule_stat_deals, у которых contract_date в нужном году И stage_id — «контрактная» (подписанные/в работе по договору). Контрактные стадии: FINAL_INVOICE,1,UC_Q9J6VV,UC_9MBFR2,2,3,WON и их префиксные варианты C1:/C2:/C3: (напр. C1:FINAL_INVOICE, C1:1, C1:WON, C2:WON, C3:WON и т.д.). Сумму в USD переводи в тенге по ticketsmodule_exchange_rates. Отдел сделки (department_id) → название через ticketsmodule_departments; план хранится по названию отдела (внимание: «Хроматография» и «Клеточный анализ» в плане объединены в «Хроматография и клеточный анализ»). «% выполнения» = факт/plan_amount*100. Итоговый план компании = сумма plan_amount по году.',
   ];
   if (examples && examples.length) {
     lines2Push(base, examples);
