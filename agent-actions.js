@@ -82,18 +82,57 @@ async function execute(kind, params, user) {
   const { b24 } = require('./bitrix');
   const bid = user && user.bitrix_user_id;
   if (kind === 'create_task') {
-    const fields = {
-      TITLE: String(params.title || 'Задача').slice(0, 250),
-      DESCRIPTION: String(params.description || ''),
-      RESPONSIBLE_ID: params.responsible_bid || bid || undefined,
-      CREATED_BY: bid || undefined,
-    };
-    if (params.deadline) fields.DEADLINE = params.deadline;
-    if (!fields.RESPONSIBLE_ID) throw new Error('Не удалось определить ответственного (нет Bitrix-id)');
-    const r = await b24('tasks.task.add', { fields });
-    const t = r && r.result && r.result.task;
-    const id = t && (t.id || t.ID);
-    return 'Задача создана в Bitrix' + (id ? (' (ID ' + id + ')') : '') + ': «' + fields.TITLE + '»';
+    const title = String(params.title || 'Задача').slice(0, 250);
+    const descr = String(params.description || '');
+    const deadline = params.deadline || null;
+    const respBid = params.responsible_bid || bid || undefined;
+
+    // 1) Задача в Bitrix (не фатально: если прав нет — хотя бы в ЦУП появится)
+    let bitrixPart = '';
+    if (respBid) {
+      try {
+        const fields = { TITLE: title, DESCRIPTION: descr, RESPONSIBLE_ID: respBid, CREATED_BY: bid || undefined };
+        if (deadline) fields.DEADLINE = deadline;
+        const r = await b24('tasks.task.add', { fields });
+        const t = r && r.result && r.result.task;
+        const id = t && (t.id || t.ID);
+        bitrixPart = 'в Bitrix' + (id ? (' (ID ' + id + ')') : '');
+      } catch (e) {
+        bitrixPart = 'в Bitrix не удалось (' + String(e.message || e).slice(0, 60) + ')';
+      }
+    } else {
+      bitrixPart = 'в Bitrix пропущено (нет ответственного с Bitrix-id)';
+    }
+
+    // 2) Карточка на доске ЦУП «Мои задачи» (ticketsmodule_board_cards)
+    let boardPart = '';
+    try {
+      // ЦУП user_id ответственного: по его Bitrix-id, иначе — инициатор
+      let targetUid = user && user.id;
+      if (params.responsible_bid) {
+        try {
+          const ur = await pool.query('SELECT id FROM ticketsmodule_users WHERE bitrix_user_id=$1 LIMIT 1', [String(params.responsible_bid)]);
+          if (ur.rows.length) targetUid = ur.rows[0].id;
+        } catch (e) {}
+      }
+      if (targetUid) {
+        const pr = await pool.query(
+          `SELECT COALESCE(MAX(position),0)+1 AS p FROM ticketsmodule_board_cards WHERE user_id=$1 AND column_key='todo' AND archived=FALSE`,
+          [targetUid]);
+        const pos = pr.rows[0].p;
+        const assignedBy = (targetUid !== (user && user.id)) ? (user && user.id) : null;
+        await pool.query(
+          `INSERT INTO ticketsmodule_board_cards (user_id, column_key, title, notes, due_date, position, assigned_by)
+           VALUES ($1,'todo',$2,$3,$4,$5,$6)`,
+          [targetUid, title, descr || null, deadline, pos, assignedBy]);
+        boardPart = 'в «Мои задачи» ЦУП';
+      }
+    } catch (e) {
+      console.error('board card from agent task:', e.message);
+    }
+
+    const parts = [bitrixPart, boardPart].filter(Boolean);
+    return 'Задача создана ' + parts.join(' и ') + ': «' + title + '»';
   }
   if (kind === 'add_deal_comment') {
     const did = parseInt(params.deal_id, 10);
