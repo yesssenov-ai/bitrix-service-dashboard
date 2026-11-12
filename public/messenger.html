@@ -217,9 +217,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13
 /* Голосовое: длительность + «прослушано» (синее). */
 .voicewrap{display:flex;align-items:center;gap:8px}
 .voicewrap .vdur{font-size:11px;color:var(--text-3);flex:none}
-.voicewrap.played .voicemsg{outline:2px solid var(--accent);outline-offset:1px;border-radius:999px}
-.voicewrap.played .vdur{color:var(--accent);font-weight:700}
-.played-mark{color:var(--accent);font-weight:700;margin-left:3px}
+.voicewrap.played .voicemsg{outline:2px solid #2f9be0;outline-offset:1px;border-radius:999px}
+.voicewrap.played .vdur{color:#2f9be0;font-weight:700}
+/* Голосовое прослушано получателем — пузырь явно синеет (как «прочитано»). */
+.m.vheard .bub{background:rgba(47,155,224,.12);border-color:rgba(47,155,224,.4)}
+.played-mark{color:#2f9be0;font-weight:700;margin-left:4px;font-size:10px;display:inline-flex;align-items:center;gap:2px}
 /* Меню сообщения (копировать/переслать/выбрать/удалить). */
 .morebtn{cursor:pointer;opacity:.75}.morebtn:hover{opacity:1}
 .ctxmenu{position:fixed;z-index:300;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 34px rgba(10,14,20,.28);padding:5px;min-width:168px}
@@ -436,7 +438,7 @@ function renderMsgs(scroll){
     lastAuthor = ai?'ai':m.author_id;
     const av = ai? '🤖' : esc(initials(author));
     const avbg = ai? '#7a4ecc' : colorOf(m.author_id);
-    let inner='';
+    let inner='', voiceHeard=false;
     if(m.reply_to){ const rm=MSGS.find(x=>x.id===m.reply_to); if(rm) inner+=`<div class="reply">${esc((rm.author_name||'')+': '+(rm.body||'').slice(0,60))}</div>`; }
     if(!mine && !ai && !cont) inner+=`<div class="who">${esc(author)}</div>`;
     if(ai && !cont) inner+=`<div class="who">🤖 Агент ЦУП</div>`;
@@ -445,8 +447,8 @@ function renderMsgs(scroll){
       const isImg=/^image\//.test(m.att_type||'')||/\.(png|jpe?g|gif|webp)$/i.test(m.att_name||'');
       if(isAudio){
         const dur=m.att_duration?fmtDur(m.att_duration):'';
-        const heard=mine&&(PLAYED[m.id]||[]).some(u=>u!==ME.id);
-        inner+=`<div class="voicewrap ${heard?'played':''}"><audio class="voicemsg" controls preload="metadata" src="/api/msg/file/${m.id}" onplay="onVoicePlay(${m.id})"></audio>${dur?`<span class="vdur">${dur}</span>`:''}</div>`;
+        voiceHeard=mine&&(PLAYED[m.id]||[]).some(u=>u!==ME.id);
+        inner+=`<div class="voicewrap ${voiceHeard?'played':''}"><audio class="voicemsg" controls preload="metadata" src="/api/msg/file/${m.id}" onplay="onVoicePlay(${m.id})"></audio>${dur?`<span class="vdur">${dur}</span>`:''}</div>`;
       } else if(isImg){
         inner+=`<img class="imgmsg" src="/api/msg/file/${m.id}" alt="${esc(m.att_name||'изображение')}" loading="lazy" onclick="openImg('/api/msg/file/${m.id}')">`;
       } else {
@@ -458,11 +460,11 @@ function renderMsgs(scroll){
       if(ai && m.payload) inner+=aiExtra(m.payload);
     }
     inner+=reactsHtml(m.id);
-    inner+=`<div class="tm">${fmtTime(m.created_at)}${(mine&&(m.kind==='text'||m.kind==='file')&&(curChannel()||{}).kind!=='ai')?statusHtml(m):''}</div>`;
+    inner+=`<div class="tm">${fmtTime(m.created_at)}${(mine&&(m.kind==='text'||m.kind==='file')&&(curChannel()||{}).kind!=='ai')?statusHtml(m):''}${voiceHeard?'<span class="played-mark" title="Прослушано">🎧 прослушано</span>':''}</div>`;
     inner+=`<div class="rbar">${['👍','🔥','✅','😄','❤️'].map(e=>`<span onclick="react(${m.id},'${e}')">${e}</span>`).join('')}<span onclick="setReply(${m.id})" title="Ответить">↩︎</span><span class="morebtn" onclick="msgMenu(event,${m.id})" title="Ещё">⋯</span></div>`;
     const mentioned = Array.isArray(m.mentions) && ME && m.mentions.includes(ME.id);
     const selCls = SELMODE?'selectable':''; const isSel = SEL.has(m.id)?'sel':'';
-    html+=`<div class="m ${mine?'me':''} ${ai?'ai':''} ${cont?'cont':''} ${mentioned?'ment':''} ${selCls} ${isSel}" data-id="${m.id}" ${SELMODE?`onclick="toggleSel(${m.id})"`:''} oncontextmenu="msgMenu(event,${m.id})"><div class="mav" style="background:${avbg}">${av}</div><div class="bub">${inner}</div></div>`;
+    html+=`<div class="m ${mine?'me':''} ${ai?'ai':''} ${cont?'cont':''} ${mentioned?'ment':''} ${selCls} ${isSel} ${voiceHeard?'vheard':''}" data-id="${m.id}" ${SELMODE?`onclick="toggleSel(${m.id})"`:''} oncontextmenu="msgMenu(event,${m.id})"><div class="mav" style="background:${avbg}">${av}</div><div class="bub">${inner}</div></div>`;
   }
   if(AGENT_TYPING===CUR) html+=`<div class="m ai typing"><div class="mav" style="background:#7a4ecc">🤖</div><div class="bub"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span style="font-size:11px;color:var(--text-3);margin-left:4px">Агент думает…</span></div></div>`;
   box.innerHTML=html;
