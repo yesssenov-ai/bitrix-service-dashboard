@@ -357,7 +357,9 @@ router.get('/channels/:id(\\d+)/messages', requireAuth(WRITE), async (req, res) 
 });
 
 // ── Отправка сообщения (+ @-агент) ───────────────────────────────────────────
-const MENTION = /(^|\s)@(аи|ии|ai|агент|agent)\b/i;
+// ВАЖНО: \b после кириллицы в JS не работает (кириллица — не \w), поэтому @аи и
+// @агент не распознавались в чатах. Используем lookahead «дальше не буква/цифра».
+const MENTION = /(^|\s)@(аи|ии|ai|агент|agent)(?![a-zа-яё0-9])/iu;
 router.post('/channels/:id(\\d+)/messages', requireAuth(WRITE), express.json({ limit: '1mb' }), async (req, res) => {
   try {
     const cid = +req.params.id;

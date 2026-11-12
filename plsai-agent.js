@@ -19,6 +19,7 @@
 const { pool } = require('./auth');
 const { EMPLOYEE_DEPT } = require('./dept-map');
 require('./departments-sync'); // создаёт/засевает справочник отделов (id → название) для JOIN в сделках
+require('./birthdays-sync');   // создаёт/засевает справочник дней рождения сотрудников
 
 // Пул для запросов агента. Если задан PLSAI_READONLY_DATABASE_URL (отдельная роль
 // Postgres только на чтение) — используем его (принцип наименьших привилегий).
@@ -122,6 +123,7 @@ const TABLE_META = {
   ticketsmodule_exchange_rates:              { tier: 'ref', desc: 'курсы валют (для пересчёта в тенге)' },
   ticketsmodule_departments:                 { tier: 'ref', desc: 'справочник отделов: id → name (название отдела). Связь: ticketsmodule_stat_deals.department_id = ticketsmodule_departments.id. Пример: отдел «ОРМ» → найти id через name ILIKE' },
   ticketsmodule_staff_ref:                   { tier: 'ref', desc: 'справочник сотрудников (без ПДн): id, name (ФИО), bitrix_user_id, job_title, active. Менеджер сделки: ticketsmodule_stat_deals.assigned_by_id = ticketsmodule_staff_ref.bitrix_user_id. Поиск по ФИО через name ILIKE' },
+  ticketsmodule_staff_birthdays:             { tier: 'ref', desc: 'дни рождения сотрудников: full_name (ФИО), birth_month (месяц 1..12), birth_day (день). Для «у кого день рождения в <месяце>» фильтруй по birth_month, сортируй по birth_day. Года рождения нет — только месяц и день.' },
   ticketsmodule_instrument_category_map:     { tier: 'ref', desc: 'справочник: прибор → категория' },
   ticketsmodule_stat_instrument_manufacturer:{ tier: 'ref', desc: 'справочник: прибор → производитель' },
   ticketsmodule_place_geo:                   { tier: 'ref', desc: 'кэш геокодинга адресов' },
@@ -335,6 +337,7 @@ function buildSystem(user, allowed, examples) {
     '• СДЕЛКИ (ticketsmodule_stat_deals): сумма = opportunity (валюта currency), стадия = stage_id, менеджер = assigned_by_id, отдел = department_id, дата покупки = planned_purchase_date, дата создания = date_create, «наиболее вероятная» = likely_deal (boolean).',
     '• ОТДЕЛ: в сделках хранится department_id (id), а НАЗВАНИЯ отделов — в справочнике ticketsmodule_departments (id, name). Чтобы отфильтровать сделки по названию отдела (напр. «ОРМ», «Сервис», «Хроматография»), сопоставь через справочник: ... WHERE d.department_id IN (SELECT id FROM ticketsmodule_departments WHERE name ILIKE \'%ОРМ%\'). Для вывода названия — JOIN ticketsmodule_departments dep ON dep.id = d.department_id, покажи dep.name. Если название в справочнике не нашлось — так и скажи.',
     '• СОТРУДНИК/МЕНЕДЖЕР: в сделках менеджер — это assigned_by_id (= bitrix_user_id). ФИО сотрудников — в справочнике ticketsmodule_staff_ref (name, bitrix_user_id, job_title). Чтобы фильтровать сделки по ФИО (напр. «сделки Жарова»): ... WHERE d.assigned_by_id IN (SELECT bitrix_user_id FROM ticketsmodule_staff_ref WHERE name ILIKE \'%Жаров%\'). Для вывода имени менеджера — JOIN ticketsmodule_staff_ref s ON s.bitrix_user_id = d.assigned_by_id, покажи s.name. Один и тот же приём (справочник id→имя) применяй для любых id-полей.',
+    '• ДНИ РОЖДЕНИЯ: справочник ticketsmodule_staff_birthdays (full_name, birth_month 1..12, birth_day). «У кого день рождения в <месяце>»: WHERE birth_month = <N> ORDER BY birth_day. Год рождения не хранится. Для «ближайшие» — считай от текущей даты.',
     '• КП/МЛК (ticketsmodule_kp_requests): статус заявки — колонка status (draft/in_review/needs_revision/approved), клиент = client_name, создана = created_at.',
     '• КОНТРАКТЫ и ВЫПОЛНЕНИЕ ПЛАНА (как в модуле «Контракты»): ПЛАН берётся из ticketsmodule_contract_plan (year, department-название, plan_amount ₸). ФАКТ = сумма opportunity сделок из ticketsmodule_stat_deals, у которых contract_date в нужном году И stage_id — «контрактная» (подписанные/в работе по договору). Контрактные стадии: FINAL_INVOICE,1,UC_Q9J6VV,UC_9MBFR2,2,3,WON и их префиксные варианты C1:/C2:/C3: (напр. C1:FINAL_INVOICE, C1:1, C1:WON, C2:WON, C3:WON и т.д.). Сумму в USD переводи в тенге по ticketsmodule_exchange_rates. Отдел сделки (department_id) → название через ticketsmodule_departments; план хранится по названию отдела (внимание: «Хроматография» и «Клеточный анализ» в плане объединены в «Хроматография и клеточный анализ»). «% выполнения» = факт/plan_amount*100. Итоговый план компании = сумма plan_amount по году.',
   ];
