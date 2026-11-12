@@ -92,6 +92,15 @@ async function ensureMsgSchema() {
 }
 ensureMsgSchema().catch(e => console.error('msg ensureSchema:', e.message));
 
+// Гарантированно досоздать колонки доставки/прочтения (самолечение). Вызывается,
+// если какой-то запрос упал из-за отсутствующей колонки — тогда досоздаём и
+// повторяем. Дёшево и идемпотентно.
+async function ensureMsgColumns() {
+  for (const col of ['last_delivered_id INTEGER DEFAULT 0', 'last_read_at TIMESTAMPTZ', 'last_delivered_at TIMESTAMPTZ']) {
+    try { await pool.query(`ALTER TABLE ticketsmodule_msg_members ADD COLUMN IF NOT EXISTS ${col}`); } catch (e) {}
+  }
+}
+
 // Пометить всё доставленным текущему пользователю (он онлайн и получил снимок).
 async function markDeliveredAll(userId) {
   try {
@@ -102,23 +111,43 @@ async function markDeliveredAll(userId) {
             COALESCE((SELECT MAX(x.id) FROM ticketsmodule_msg_messages x WHERE x.channel_id=mm.channel_id AND x.deleted_at IS NULL),0)
             THEN NOW() ELSE mm.last_delivered_at END
       WHERE mm.user_id=$1`, [userId]);
-  } catch (e) {}
+  } catch (e) { ensureMsgColumns().catch(() => {}); }
 }
 // Указатели прочтения/доставки по участникам моих каналов (для «галочек»).
 // Доставку усиливаем присутствием: если получатель сейчас онлайн (свежий пинг),
 // считаем доставленным до последнего сообщения канала — галочка «доставлено»
 // появляется сразу, не дожидаясь его опроса.
-async function membersPointers(userId, onlyChannel) {
+async function membersPointers(userId, onlyChannel, _retried) {
   const params = [userId];
   let where = `m.channel_id IN (SELECT channel_id FROM ticketsmodule_msg_members WHERE user_id=$1)`;
   if (onlyChannel) { params.push(onlyChannel); where = `m.channel_id=$2`; }
-  const r = await pool.query(`
-    SELECT m.channel_id, m.user_id, m.last_read_id, m.last_delivered_id, m.last_read_at, m.last_delivered_at,
-      COALESCE(EXTRACT(EPOCH FROM (NOW()-p.last_seen_at)), 999999) AS pres_age,
-      COALESCE((SELECT MAX(x.id) FROM ticketsmodule_msg_messages x WHERE x.channel_id=m.channel_id AND x.deleted_at IS NULL), 0) AS maxid
-    FROM ticketsmodule_msg_members m
-    LEFT JOIN ticketsmodule_msg_presence p ON p.user_id = m.user_id
-    WHERE ${where}`, params);
+  let r;
+  try {
+    r = await pool.query(`
+      SELECT m.channel_id, m.user_id, m.last_read_id, m.last_delivered_id, m.last_read_at, m.last_delivered_at,
+        COALESCE(EXTRACT(EPOCH FROM (NOW()-p.last_seen_at)), 999999) AS pres_age,
+        COALESCE((SELECT MAX(x.id) FROM ticketsmodule_msg_messages x WHERE x.channel_id=m.channel_id AND x.deleted_at IS NULL), 0) AS maxid
+      FROM ticketsmodule_msg_members m
+      LEFT JOIN ticketsmodule_msg_presence p ON p.user_id = m.user_id
+      WHERE ${where}`, params);
+  } catch (e) {
+    // Самолечение: не хватает колонки доставки/прочтения — досоздаём и повторяем.
+    if (!_retried) { await ensureMsgColumns(); return membersPointers(userId, onlyChannel, true); }
+    // Запасной путь: если колонки доставки так и недоступны — работаем на гарантированной
+    // last_read_id + присутствии (доставка по онлайну). Галочки не отваливаются.
+    const rb = await pool.query(`
+      SELECT m.channel_id, m.user_id, m.last_read_id,
+        COALESCE(EXTRACT(EPOCH FROM (NOW()-p.last_seen_at)), 999999) AS pres_age,
+        COALESCE((SELECT MAX(x.id) FROM ticketsmodule_msg_messages x WHERE x.channel_id=m.channel_id AND x.deleted_at IS NULL), 0) AS maxid
+      FROM ticketsmodule_msg_members m
+      LEFT JOIN ticketsmodule_msg_presence p ON p.user_id = m.user_id
+      WHERE ${where}`, params);
+    return rb.rows.map(x => {
+      let d = 0, da = null;
+      if (Number(x.pres_age) <= 120) { d = Number(x.maxid) || 0; da = new Date().toISOString(); }
+      return { c: x.channel_id, u: x.user_id, r: x.last_read_id || 0, d, ra: null, da };
+    });
+  }
   return r.rows.map(x => {
     let d = x.last_delivered_id || 0;
     let da = x.last_delivered_at || null;
@@ -280,12 +309,14 @@ router.get('/channels/:id(\\d+)/messages', requireAuth(WRITE), async (req, res) 
     // Отмечаем на сервере, чтобы счётчик непрочитанных надёжно гас при чтении,
     // не завися только от клиентского вызова /read.
     if (!before) {
+      // Критично: last_read_id — отдельным запросом (сохраняется всегда).
       try {
         await pool.query(`UPDATE ticketsmodule_msg_members mm
-          SET last_read_id = GREATEST(mm.last_read_id, COALESCE((SELECT MAX(x.id) FROM ticketsmodule_msg_messages x WHERE x.channel_id=mm.channel_id AND x.deleted_at IS NULL),0)),
-              last_read_at = NOW()
+          SET last_read_id = GREATEST(mm.last_read_id, COALESCE((SELECT MAX(x.id) FROM ticketsmodule_msg_messages x WHERE x.channel_id=mm.channel_id AND x.deleted_at IS NULL),0))
           WHERE mm.channel_id=$1 AND mm.user_id=$2`, [cid, uid(req)]);
       } catch (e) { /* не критично для отдачи сообщений */ }
+      try { await pool.query(`UPDATE ticketsmodule_msg_members SET last_read_at = NOW() WHERE channel_id=$1 AND user_id=$2`, [cid, uid(req)]); }
+      catch (e) { ensureMsgColumns().catch(() => {}); }
     }
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
     const where = before ? 'AND m.id < $3' : '';
@@ -668,10 +699,14 @@ router.post('/read', requireAuth(WRITE), express.json(), async (req, res) => {
   try {
     const cid = +(req.body && req.body.channelId), lastId = +(req.body && req.body.lastId) || 0;
     if (!cid) return res.status(400).json({ ok: false, error: 'channelId' });
-    await pool.query(`UPDATE ticketsmodule_msg_members
-      SET last_read_at = CASE WHEN last_read_id < $1 THEN NOW() ELSE last_read_at END,
-          last_read_id = GREATEST(last_read_id,$1)
+    // Критично и независимо: last_read_id (эта колонка есть всегда — она в CREATE
+    // TABLE). Отдельный запрос, чтобы пометка прочтения сохранялась, даже если
+    // доп-колонок (last_read_at) в БД нет. last_read_at — лучшее-из-возможного.
+    await pool.query(`UPDATE ticketsmodule_msg_members SET last_read_id = GREATEST(last_read_id,$1)
       WHERE channel_id=$2 AND user_id=$3`, [lastId, cid, uid(req)]);
+    try { await pool.query(`UPDATE ticketsmodule_msg_members SET last_read_at = NOW()
+      WHERE channel_id=$1 AND user_id=$2`, [cid, uid(req)]); }
+    catch (e) { ensureMsgColumns().catch(() => {}); }
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
