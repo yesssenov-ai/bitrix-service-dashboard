@@ -861,8 +861,12 @@ function toast(msg){ let t=document.getElementById('msgToast'); if(!t){ t=docume
       if(blob.size<900){ toast('Слишком короткое сообщение'); return; }
       const ext=type.includes('ogg')?'ogg':(type.includes('mp4')?'m4a':'webm');
       const fd=new FormData(); fd.append('file', blob, 'voice_'+Date.now()+'.'+ext);
-      const d=await api('POST','/channels/'+CUR+'/file',fd,true);
-      if(d&&d.ok){ const r=await api('GET','/channels/'+CUR+'/messages?limit=60'); if(r&&r.ok){MSGS=r.messages;REACTS=r.reactions||{};applyReceipts(r.receipts);renderMsgs(true);} }
+      const sendCh=CUR;
+      const d=await api('POST','/channels/'+sendCh+'/file',fd,true);
+      if(d&&d.ok){ const r=await api('GET','/channels/'+sendCh+'/messages?limit=60'); if(r&&r.ok&&sendCh===CUR){MSGS=r.messages;REACTS=r.reactions||{};applyReceipts(r.receipts);renderMsgs(true);}
+        // В чате с агентом — показать «Агент думает», пока идёт распознавание + ответ.
+        if((CHANNELS.find(x=>x.id===sendCh)||{}).kind==='ai') setAgentTyping(sendCh);
+      }
       else toast((d&&d.error)||'Не удалось отправить голосовое');
     };
     mr.start(); t0=Date.now(); showRec(true); recTime.textContent='0:00';

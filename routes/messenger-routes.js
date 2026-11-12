@@ -486,6 +486,27 @@ router.post('/channels/:id(\\d+)/file', requireAuth(WRITE), upload.single('file'
     await pool.query('UPDATE ticketsmodule_msg_channels SET last_at=NOW() WHERE id=$1', [cid]);
     pushNewMessage(cid, uid(req), req.user.display_name, '📄 ' + (caption || orig)).catch(() => {});
     res.json({ ok: true, id: ins.rows[0].id });
+    // ── Голосовое → распознавание речи (и ответ агента в чате с агентом) ──────
+    // Ответ уже отправлен клиенту; расшифровка идёт в фоне, результат придёт поллингом.
+    const isAudio = /^audio\//.test(req.file.mimetype || '') || /\.(webm|ogg|m4a|mp3|wav)$/i.test(orig);
+    if (isAudio) {
+      (async () => {
+        try {
+          const stt = require('../stt-lib');
+          if (!stt.configured()) return;
+          const chk = await pool.query('SELECT kind FROM ticketsmodule_msg_channels WHERE id=$1', [cid]);
+          const isAiChan = chk.rows[0] && chk.rows[0].kind === 'ai';
+          // В чате с агентом распознаём всегда; в обычных чатах — только если включено STT_ALL_CHATS.
+          if (!isAiChan && !process.env.STT_ALL_CHATS) return;
+          const text = await stt.transcribe(req.file.buffer, req.file.mimetype, orig);
+          if (!text) return;
+          // Показать расшифровку в самом голосовом сообщении (под плеером).
+          await pool.query('UPDATE ticketsmodule_msg_messages SET body=$1 WHERE id=$2', ['🎤 ' + text, ins.rows[0].id]);
+          // В чате с агентом — передаём распознанный текст агенту, он отвечает.
+          if (isAiChan) await runAgentInChannel(cid, req.user, text);
+        } catch (e) { console.error('voice stt/agent:', e.message); }
+      })();
+    }
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 router.get('/file/:mid(\\d+)', requireAuth(WRITE), async (req, res) => {
