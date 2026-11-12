@@ -105,14 +105,26 @@ async function markDeliveredAll(userId) {
   } catch (e) {}
 }
 // Указатели прочтения/доставки по участникам моих каналов (для «галочек»).
+// Доставку усиливаем присутствием: если получатель сейчас онлайн (свежий пинг),
+// считаем доставленным до последнего сообщения канала — галочка «доставлено»
+// появляется сразу, не дожидаясь его опроса.
 async function membersPointers(userId, onlyChannel) {
   const params = [userId];
-  let where = `channel_id IN (SELECT channel_id FROM ticketsmodule_msg_members WHERE user_id=$1)`;
-  if (onlyChannel) { params.push(onlyChannel); where = `channel_id=$2`; }
-  const r = await pool.query(`SELECT channel_id, user_id, last_read_id, last_delivered_id, last_read_at, last_delivered_at
-    FROM ticketsmodule_msg_members WHERE ${where}`, params);
-  return r.rows.map(x => ({ c: x.channel_id, u: x.user_id, r: x.last_read_id || 0, d: x.last_delivered_id || 0,
-    ra: x.last_read_at || null, da: x.last_delivered_at || null }));
+  let where = `m.channel_id IN (SELECT channel_id FROM ticketsmodule_msg_members WHERE user_id=$1)`;
+  if (onlyChannel) { params.push(onlyChannel); where = `m.channel_id=$2`; }
+  const r = await pool.query(`
+    SELECT m.channel_id, m.user_id, m.last_read_id, m.last_delivered_id, m.last_read_at, m.last_delivered_at,
+      COALESCE(EXTRACT(EPOCH FROM (NOW()-p.last_seen_at)), 999999) AS pres_age,
+      COALESCE((SELECT MAX(x.id) FROM ticketsmodule_msg_messages x WHERE x.channel_id=m.channel_id AND x.deleted_at IS NULL), 0) AS maxid
+    FROM ticketsmodule_msg_members m
+    LEFT JOIN ticketsmodule_msg_presence p ON p.user_id = m.user_id
+    WHERE ${where}`, params);
+  return r.rows.map(x => {
+    let d = x.last_delivered_id || 0;
+    let da = x.last_delivered_at || null;
+    if (Number(x.pres_age) <= 120) { const mx = Number(x.maxid) || 0; if (mx > d) { d = mx; da = da || new Date().toISOString(); } }
+    return { c: x.channel_id, u: x.user_id, r: x.last_read_id || 0, d, ra: x.last_read_at || null, da };
+  });
 }
 
 const uid = req => req.user.id;
