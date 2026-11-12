@@ -61,7 +61,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13
 .bub .who{font-size:11px;font-weight:700;color:var(--accent);margin-bottom:2px}
 .m.ai .bub .who{color:#7a4ecc}
 .bub .tx{white-space:pre-wrap;word-break:break-word;line-height:1.42;font-size:12.75px}
-.bub .tm{font-size:10px;color:var(--text-3);margin-top:2px;text-align:right}
+.bub .tm{font-size:10px;color:var(--text-3);margin-top:2px;text-align:right;display:flex;align-items:center;justify-content:flex-end;gap:4px}
+.st{display:inline-flex;align-items:center;gap:1px;cursor:pointer;color:var(--text-3);line-height:0}
+.st .tk{width:16px;height:11px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.st i{font-style:normal;font-size:9.5px;margin-left:1px}
+.st.read{color:#2f9be0}
+.st.delivered,.st.sent{color:var(--text-3)}
+.rcp-list{display:flex;flex-direction:column;gap:2px;margin-top:4px}
+.rcp-row{display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid var(--line)}
+.rcp-row:last-child{border-bottom:none}
+.rcp-nm{flex:1;font-size:12.75px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.st.lbl{gap:5px;cursor:default}
+.st.lbl em{font-style:normal;font-size:11px;color:var(--text-2)}
+.st.lbl.read em{color:#2f9be0}
 .bub .reply{border-left:2px solid var(--accent-line);padding:2px 8px;margin-bottom:4px;font-size:11.5px;color:var(--text-3);background:var(--surface-2);border-radius:6px}
 .filec{display:flex;align-items:center;gap:9px;text-decoration:none;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:7px 10px;background:var(--surface-2)}
 .filec b{font-size:12.5px;font-weight:600}.filec span{font-size:11px;color:var(--text-3)}
@@ -128,7 +140,7 @@ body #pls-fb-btn{left:calc(50% + 29px);top:13px}
     <div class="list" id="list"></div>
   </aside>
   <main class="chat hide" id="chat">
-    <div class="ch"><button class="iconbtn" id="backMob" style="display:none">‹</button><div><div class="t" id="chTitle">Выберите чат</div><div class="s" id="chSub"></div></div></div>
+    <div class="ch"><button class="iconbtn" id="backMob" style="display:none">‹</button><div style="flex:1"><div class="t" id="chTitle">Выберите чат</div><div class="s" id="chSub"></div></div><button class="iconbtn" id="exportBtn" title="Выгрузить историю чата" style="display:none"><svg viewBox="0 0 24 24" style="width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M12 3v12M8 11l4 4 4-4M5 21h14"/></svg></button></div>
     <div class="msgs" id="msgs"><div class="empty">Выберите собеседника или канал слева, либо напишите «@аи вопрос» — агент ответит по данным ЦУП.</div></div>
     <div class="replying" id="replying" style="display:none"></div>
     <div class="comp">
@@ -163,10 +175,14 @@ const dayLabel = d => { const x=new Date(d), t=new Date(), y=new Date(Date.now()
 
 let ME=null, PEOPLE=[], PEOPLE_BY_ID={}, CHANNELS=[], CUR=null, TAB='chats', MAXID=0, REPLY=null;
 const PRES_LBL={online:'в сети',away:'отошёл',absent:'отсутствует',offline:'не в сети'};
+// Указатели прочтения/доставки: RCPT[channelId][userId] = {r:lastReadId, d:lastDeliveredId}
+let RCPT={};
+function applyReceipts(rows){ if(!rows) return; for(const x of rows){ (RCPT[x.c]=RCPT[x.c]||{})[x.u]={r:x.r,d:x.d}; } }
+function chMembers(cid){ const c=CHANNELS.find(x=>x.id===cid); return (c&&c.members)||[]; }
 
 async function boot(){
   const d = await api('GET','/bootstrap'); if(!d||!d.ok) return;
-  ME=d.me; PEOPLE=d.people; CHANNELS=d.channels; indexPeople();
+  ME=d.me; PEOPLE=d.people; CHANNELS=d.channels; indexPeople(); applyReceipts(d.receipts);
   renderList();
   startPoll();
   // тема
@@ -220,10 +236,13 @@ async function openChannel(id){
   const sub = c && c.kind==='dm' && PEOPLE_BY_ID[c.peerId] ? PRES_LBL[PEOPLE_BY_ID[c.peerId].status]
     : (c? ((c.members||[]).length+' участников'):'' );
   document.getElementById('chSub').textContent = sub;
+  document.getElementById('exportBtn').style.display='inline-flex';
   if(window.innerWidth<=760){ document.getElementById('side').classList.remove('show'); document.getElementById('chat').classList.remove('hide'); }
   renderList();
   const d = await api('GET','/channels/'+id+'/messages?limit=60'); if(!d||!d.ok) return;
-  MSGS=d.messages; REACTS=d.reactions||{}; renderMsgs(true);
+  MSGS=d.messages; REACTS=d.reactions||{}; applyReceipts(d.receipts);
+  if(d.members){ const ch=CHANNELS.find(x=>x.id===id); if(ch) ch.members=d.members; }
+  renderMsgs(true);
   const last = MSGS.length? MSGS[MSGS.length-1].id : 0;
   if(last){ api('POST','/read',{channelId:id,lastId:last}); const ch=CHANNELS.find(x=>x.id===id); if(ch) ch.unread=0; renderList(); }
 }
@@ -254,7 +273,7 @@ function renderMsgs(scroll){
       if(ai && m.payload) inner+=aiExtra(m.payload);
     }
     inner+=reactsHtml(m.id);
-    inner+=`<div class="tm">${fmtTime(m.created_at)}</div>`;
+    inner+=`<div class="tm">${fmtTime(m.created_at)}${(mine&&(m.kind==='text'||m.kind==='file'))?statusHtml(m):''}</div>`;
     inner+=`<div class="rbar">${['👍','🔥','✅','😄','❤️'].map(e=>`<span onclick="react(${m.id},'${e}')">${e}</span>`).join('')}<span onclick="setReply(${m.id})" title="Ответить">↩︎</span></div>`;
     html+=`<div class="m ${mine?'me':''} ${ai?'ai':''} ${cont?'cont':''}"><div class="mav" style="background:${avbg}">${av}</div><div class="bub">${inner}</div></div>`;
   }
@@ -273,7 +292,52 @@ function reactsHtml(mid){
   const rs=REACTS[mid]; if(!rs||!rs.length) return '';
   return '<div class="reacts">'+rs.map(r=>`<span class="react ${(r.users||[]).includes(ME.id)?'mine':''}" onclick="react(${mid},'${r.emoji}')">${r.emoji} ${r.n}</span>`).join('')+'</div>';
 }
-async function react(mid,emoji){ await api('POST','/react',{messageId:mid,emoji}); const d=await api('GET','/channels/'+CUR+'/messages?limit=60'); if(d&&d.ok){MSGS=d.messages;REACTS=d.reactions||{};renderMsgs(false);} }
+async function react(mid,emoji){ await api('POST','/react',{messageId:mid,emoji}); const d=await api('GET','/channels/'+CUR+'/messages?limit=60'); if(d&&d.ok){MSGS=d.messages;REACTS=d.reactions||{};applyReceipts(d.receipts);renderMsgs(false);} }
+
+// ── Статусы доставки/прочтения (галочки, как в WhatsApp) ─────────────────────
+const TICK1='<svg viewBox="0 0 16 11" class="tk"><path d="M1.5 6l3.2 3.4L10.8 2"/></svg>';
+const TICK2='<svg viewBox="0 0 19 11" class="tk"><path d="M1.5 6l3.2 3.4L10.8 2"/><path d="M7 6l3.2 3.4L16.5 2"/></svg>';
+function msgStatus(m){
+  const others=chMembers(m.channel_id).filter(u=>u!==ME.id && u>0);
+  const ptr=RCPT[m.channel_id]||{}; let delivered=0, read=0;
+  for(const u of others){ const p=ptr[u]; if(p){ if((p.d||0)>=m.id) delivered++; if((p.r||0)>=m.id) read++; } }
+  const total=others.length;
+  let state='sent'; if(total>0&&read>=total) state='read'; else if(delivered>0) state='delivered';
+  return {total,delivered,read,state};
+}
+function statusHtml(m){
+  const s=msgStatus(m); const grp=chMembers(m.channel_id).filter(u=>u!==ME.id&&u>0).length>1;
+  const icon=(s.state==='sent')?TICK1:TICK2;
+  const cnt=(grp&&s.read>0)?`<i>${s.read}</i>`:'';
+  const title=s.state==='read'?'Прочитано':(s.state==='delivered'?'Доставлено':'Отправлено');
+  return `<span class="st ${s.state}" id="st-${m.id}" title="${title}" onclick="showReceipts(${m.id});event.stopPropagation()">${icon}${cnt}</span>`;
+}
+function updateStatuses(){
+  if(!CUR) return;
+  for(const m of MSGS){ if(m.author_id!==ME.id||(m.kind!=='text'&&m.kind!=='file')) continue;
+    const el=document.getElementById('st-'+m.id); if(!el) continue;
+    const t=document.createElement('template'); t.innerHTML=statusHtml(m).trim(); if(t.content.firstChild) el.replaceWith(t.content.firstChild); }
+}
+function rcpTime(v){ if(!v) return ''; const x=new Date(v); const p=n=>String(n).padStart(2,'0');
+  const sameDay=x.toDateString()===new Date().toDateString();
+  return sameDay? `${p(x.getHours())}:${p(x.getMinutes())}` : `${p(x.getDate())}.${p(x.getMonth()+1)} ${p(x.getHours())}:${p(x.getMinutes())}`; }
+function showReceipts(mid){
+  const m=MSGS.find(x=>x.id===mid); if(!m) return;
+  const others=chMembers(m.channel_id).filter(u=>u!==ME.id&&u>0);
+  const ptr=RCPT[m.channel_id]||{};
+  const rows=others.map(u=>{ const p=ptr[u]||{}; const nm=(PEOPLE_BY_ID[u]&&PEOPLE_BY_ID[u].name)||('Сотрудник #'+u);
+    let st='sent',lbl='Отправлено',when='';
+    if((p.r||0)>=mid){ st='read'; lbl='Прочитано'; when=rcpTime(p.ra); }
+    else if((p.d||0)>=mid){ st='delivered'; lbl='Доставлено'; when=rcpTime(p.da); }
+    return `<div class="rcp-row"><div class="av" style="width:28px;height:28px;font-size:11px;background:${colorOf(u)}">${esc(initials(nm))}</div>
+      <div class="rcp-nm">${esc(nm)}</div>
+      <span class="st ${st} lbl">${st==='sent'?TICK1:TICK2}<em>${lbl}${when?' · '+when:''}</em></span></div>`; }).join('')
+    || '<div class="empty" style="padding:16px">Нет получателей</div>';
+  const ov=document.createElement('div'); ov.className='ov';
+  ov.innerHTML=`<div class="modal"><h3>Статус сообщения</h3><div class="rcp-list">${rows}</div><div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="mbtn ghost" data-x>Закрыть</button></div></div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click',e=>{ if(e.target===ov||e.target.hasAttribute('data-x')) ov.remove(); });
+}
 function setReply(mid){ REPLY=MSGS.find(x=>x.id===mid)||null; renderReply(); document.getElementById('input').focus(); }
 function renderReply(){ const el=document.getElementById('replying'); if(!REPLY){el.style.display='none';return;} el.style.display='flex'; el.innerHTML=`Ответ <b>${esc(REPLY.author_name||'')}</b>: ${esc((REPLY.body||'').slice(0,60))}<span class="x" onclick="REPLY=null;renderReply()">✕</span>`; }
 
@@ -294,7 +358,7 @@ document.getElementById('fileInput').onchange=async e=>{
   const fd=new FormData(); fd.append('file',f);
   const d=await api('POST','/channels/'+CUR+'/file',fd,true);
   e.target.value='';
-  if(d&&d.ok){ const r=await api('GET','/channels/'+CUR+'/messages?limit=60'); if(r&&r.ok){MSGS=r.messages;REACTS=r.reactions||{};renderMsgs(true);} }
+  if(d&&d.ok){ const r=await api('GET','/channels/'+CUR+'/messages?limit=60'); if(r&&r.ok){MSGS=r.messages;REACTS=r.reactions||{};applyReceipts(r.receipts);renderMsgs(true);} }
 };
 
 // Поиск по переписке
@@ -312,6 +376,7 @@ function startPoll(){ if(POLL) clearInterval(POLL); MAXID=Math.max(0,...CHANNELS
 async function pollOnce(){
   const d=await api('GET','/poll?since='+MAXID); if(!d||!d.ok) return;
   if(d.people){ PEOPLE=d.people; indexPeople(); if(TAB==='people') renderList(); refreshSub(); }
+  if(d.receipts){ applyReceipts(d.receipts); updateStatuses(); }
   if(d.messages&&d.messages.length){
     let touched=false, curNew=false;
     for(const m of d.messages){
@@ -323,7 +388,7 @@ async function pollOnce(){
       else if(ch && m.author_id!==ME.id){ ch.unread=(ch.unread||0)+1; }
     }
     if(touched){ const b=await api('GET','/bootstrap'); if(b&&b.ok){CHANNELS=b.channels;PEOPLE=b.people;indexPeople();} }
-    if(curNew){ const r=await api('GET','/channels/'+CUR+'/messages?limit=60'); if(r&&r.ok){MSGS=r.messages;REACTS=r.reactions||{};renderMsgs(true);} const last=MSGS.length?MSGS[MSGS.length-1].id:0; if(last) api('POST','/read',{channelId:CUR,lastId:last}); const cc=CHANNELS.find(x=>x.id===CUR); if(cc)cc.unread=0; }
+    if(curNew){ const r=await api('GET','/channels/'+CUR+'/messages?limit=60'); if(r&&r.ok){MSGS=r.messages;REACTS=r.reactions||{};applyReceipts(r.receipts);renderMsgs(true);} const last=MSGS.length?MSGS[MSGS.length-1].id:0; if(last) api('POST','/read',{channelId:CUR,lastId:last}); const cc=CHANNELS.find(x=>x.id===CUR); if(cc)cc.unread=0; }
     renderList();
   }
 }
@@ -343,6 +408,16 @@ document.getElementById('newBtn').onclick=()=>{
   };
 };
 document.getElementById('backMob').onclick=()=>{ document.getElementById('chat').classList.add('hide'); document.getElementById('side').classList.add('show'); };
+// Выгрузка истории открытого чата (txt / html)
+function exportChat(fmt){ if(!CUR) return; const a=document.createElement('a'); a.href='/api/msg/channels/'+CUR+'/export?format='+fmt; a.rel='noopener'; document.body.appendChild(a); a.click(); a.remove(); }
+document.getElementById('exportBtn').onclick=()=>{ if(!CUR){ toast('Сначала откройте чат'); return; }
+  const ov=document.createElement('div'); ov.className='ov';
+  ov.innerHTML=`<div class="modal"><h3>Выгрузить историю чата</h3><p style="color:var(--text-3);font-size:12px;margin:0 0 12px">Скачать всю переписку этого чата одним файлом.</p>
+    <div style="display:flex;gap:8px"><button class="mbtn" data-f="txt" style="flex:1">Текст (.txt)</button><button class="mbtn ghost" data-f="html" style="flex:1">Веб-страница (.html)</button></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="mbtn ghost" data-x>Отмена</button></div></div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click',e=>{ const f=e.target.getAttribute('data-f'); if(f){ exportChat(f); ov.remove(); } else if(e.target===ov||e.target.hasAttribute('data-x')) ov.remove(); });
+};
 // Тост-уведомление
 let TOAST_T=null;
 function toast(msg){ let t=document.getElementById('msgToast'); if(!t){ t=document.createElement('div'); t.id='msgToast'; t.style.cssText='position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:8px 14px;border-radius:9px;font-size:12.5px;font-weight:600;z-index:9999;box-shadow:0 6px 20px rgba(0,0,0,.25);opacity:0;transition:opacity .18s'; document.body.appendChild(t); } t.textContent=msg; requestAnimationFrame(()=>t.style.opacity='1'); clearTimeout(TOAST_T); TOAST_T=setTimeout(()=>{t.style.opacity='0';},2200); }

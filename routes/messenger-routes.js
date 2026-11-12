@@ -61,9 +61,36 @@ async function ensureMsgSchema() {
       status VARCHAR(10) DEFAULT 'online'
     );
   `);
+  // Доставленность/прочтение: указатели + время (для «галочек» и «когда»).
+  await pool.query(`ALTER TABLE ticketsmodule_msg_members ADD COLUMN IF NOT EXISTS last_delivered_id INTEGER DEFAULT 0`);
+  await pool.query(`ALTER TABLE ticketsmodule_msg_members ADD COLUMN IF NOT EXISTS last_read_at TIMESTAMPTZ`);
+  await pool.query(`ALTER TABLE ticketsmodule_msg_members ADD COLUMN IF NOT EXISTS last_delivered_at TIMESTAMPTZ`);
   _schemaReady = true;
 }
 ensureMsgSchema().catch(e => console.error('msg ensureSchema:', e.message));
+
+// Пометить всё доставленным текущему пользователю (он онлайн и получил снимок).
+async function markDeliveredAll(userId) {
+  try {
+    await pool.query(`UPDATE ticketsmodule_msg_members mm
+      SET last_delivered_id = GREATEST(mm.last_delivered_id,
+            COALESCE((SELECT MAX(x.id) FROM ticketsmodule_msg_messages x WHERE x.channel_id=mm.channel_id AND x.deleted_at IS NULL),0)),
+          last_delivered_at = CASE WHEN mm.last_delivered_id <
+            COALESCE((SELECT MAX(x.id) FROM ticketsmodule_msg_messages x WHERE x.channel_id=mm.channel_id AND x.deleted_at IS NULL),0)
+            THEN NOW() ELSE mm.last_delivered_at END
+      WHERE mm.user_id=$1`, [userId]);
+  } catch (e) {}
+}
+// Указатели прочтения/доставки по участникам моих каналов (для «галочек»).
+async function membersPointers(userId, onlyChannel) {
+  const params = [userId];
+  let where = `channel_id IN (SELECT channel_id FROM ticketsmodule_msg_members WHERE user_id=$1)`;
+  if (onlyChannel) { params.push(onlyChannel); where = `channel_id=$2`; }
+  const r = await pool.query(`SELECT channel_id, user_id, last_read_id, last_delivered_id, last_read_at, last_delivered_at
+    FROM ticketsmodule_msg_members WHERE ${where}`, params);
+  return r.rows.map(x => ({ c: x.channel_id, u: x.user_id, r: x.last_read_id || 0, d: x.last_delivered_id || 0,
+    ra: x.last_read_at || null, da: x.last_delivered_at || null }));
+}
 
 const uid = req => req.user.id;
 const dmKey = (a, b) => { a = +a; b = +b; return Math.min(a, b) + ':' + Math.max(a, b); };
@@ -111,7 +138,7 @@ async function directory() {
 // ── Бутстрап: всё для первичной отрисовки одним запросом ─────────────────────
 router.get('/bootstrap', requireAuth(WRITE), async (req, res) => {
   try {
-    await ensureMsgSchema(); await bumpPresence(uid(req));
+    await ensureMsgSchema(); await bumpPresence(uid(req)); await markDeliveredAll(uid(req));
     const me = { id: req.user.id, name: req.user.display_name, role: req.user.role };
     const people = await directory();
     // Мои каналы + последнее сообщение + непрочитанные.
@@ -130,7 +157,8 @@ router.get('/bootstrap', requireAuth(WRITE), async (req, res) => {
       if (c.kind === 'dm') { const other = (byChan[c.id] || []).find(x => x !== uid(req)); peerId = other || null; title = nameById[other] || 'Диалог'; }
       return { id: c.id, kind: c.kind, title, peerId, unread: c.unread, lastBody: c.last_body || '', lastAt: c.last_at, members: byChan[c.id] || [] };
     });
-    res.json({ ok: true, me, people, channels });
+    const receipts = await membersPointers(uid(req));
+    res.json({ ok: true, me, people, channels, receipts });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
@@ -143,7 +171,7 @@ router.post('/ping', requireAuth(WRITE), async (req, res) => {
 // ── Поллинг: новые сообщения в моих каналах после since + присутствие ─────────
 router.get('/poll', requireAuth(WRITE), async (req, res) => {
   try {
-    await bumpPresence(uid(req));
+    await bumpPresence(uid(req)); await markDeliveredAll(uid(req));
     const since = parseInt(req.query.since, 10) || 0;
     const msgs = await pool.query(`
       SELECT m.id, m.channel_id, m.author_id, m.kind, m.body, m.payload, m.reply_to,
@@ -154,7 +182,8 @@ router.get('/poll', requireAuth(WRITE), async (req, res) => {
         AND m.channel_id IN (SELECT channel_id FROM ticketsmodule_msg_members WHERE user_id=$2)
       ORDER BY m.id ASC LIMIT 200`, [since, uid(req)]);
     const people = await directory();
-    res.json({ ok: true, messages: msgs.rows, people });
+    const receipts = await membersPointers(uid(req));
+    res.json({ ok: true, messages: msgs.rows, people, receipts });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
@@ -181,7 +210,9 @@ router.get('/channels/:id(\\d+)/messages', requireAuth(WRITE), async (req, res) 
       const rr = await pool.query('SELECT message_id, emoji, COUNT(*)::int n, array_agg(user_id) users FROM ticketsmodule_msg_reactions WHERE message_id = ANY($1) GROUP BY message_id, emoji', [ids]);
       rr.rows.forEach(x => { (reactions[x.message_id] = reactions[x.message_id] || []).push({ emoji: x.emoji, n: x.n, users: x.users }); });
     }
-    res.json({ ok: true, messages: r.rows.reverse(), reactions });
+    const receipts = await membersPointers(uid(req), cid);
+    const mem = await pool.query('SELECT user_id FROM ticketsmodule_msg_members WHERE channel_id=$1', [cid]);
+    res.json({ ok: true, messages: r.rows.reverse(), reactions, receipts, members: mem.rows.map(x => x.user_id) });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
@@ -300,7 +331,10 @@ router.post('/read', requireAuth(WRITE), express.json(), async (req, res) => {
   try {
     const cid = +(req.body && req.body.channelId), lastId = +(req.body && req.body.lastId) || 0;
     if (!cid) return res.status(400).json({ ok: false, error: 'channelId' });
-    await pool.query('UPDATE ticketsmodule_msg_members SET last_read_id=GREATEST(last_read_id,$1) WHERE channel_id=$2 AND user_id=$3', [lastId, cid, uid(req)]);
+    await pool.query(`UPDATE ticketsmodule_msg_members
+      SET last_read_at = CASE WHEN last_read_id < $1 THEN NOW() ELSE last_read_at END,
+          last_read_id = GREATEST(last_read_id,$1)
+      WHERE channel_id=$2 AND user_id=$3`, [lastId, cid, uid(req)]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
@@ -313,6 +347,48 @@ router.post('/react', requireAuth(WRITE), express.json(), async (req, res) => {
     else await pool.query('INSERT INTO ticketsmodule_msg_reactions (message_id,user_id,emoji) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [mid, uid(req), emoji]);
     res.json({ ok: true, on: !ex.rowCount });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// ── Выгрузка истории канала (txt / html) ─────────────────────────────────────
+router.get('/channels/:id(\\d+)/export', requireAuth(WRITE), async (req, res) => {
+  try {
+    const cid = +req.params.id;
+    if (!(await isMember(cid, uid(req)))) return res.status(403).send('Нет доступа');
+    const fmt = (req.query.format === 'html') ? 'html' : 'txt';
+    const ch = await pool.query('SELECT kind, title, dm_key FROM ticketsmodule_msg_channels WHERE id=$1', [cid]);
+    const c = ch.rows[0] || {};
+    let title = c.title || 'Диалог';
+    if (c.kind === 'dm') {
+      const mem = await pool.query(`SELECT u.display_name FROM ticketsmodule_msg_members m JOIN ticketsmodule_users u ON u.id=m.user_id WHERE m.channel_id=$1`, [cid]);
+      title = mem.rows.map(x => x.display_name).join(' ↔ ') || 'Диалог';
+    }
+    const r = await pool.query(`
+      SELECT m.id, m.author_id, m.kind, m.body, m.att_name, m.att_size, m.created_at, u.display_name AS author_name
+      FROM ticketsmodule_msg_messages m LEFT JOIN ticketsmodule_users u ON u.id=m.author_id
+      WHERE m.channel_id=$1 AND m.deleted_at IS NULL ORDER BY m.id ASC`, [cid]);
+    const pad = n => String(n).padStart(2, '0');
+    const fmtDt = d => { const x = new Date(d); return `${pad(x.getDate())}.${pad(x.getMonth() + 1)}.${x.getFullYear()} ${pad(x.getHours())}:${pad(x.getMinutes())}`; };
+    const who = m => m.kind === 'ai' ? 'Агент ЦУП' : (m.author_name || 'Система');
+    const line = m => { let t = m.kind === 'file' ? `[файл: ${m.att_name || 'файл'}]${m.body ? ' ' + m.body : ''}` : (m.body || ''); return { dt: fmtDt(m.created_at), who: who(m), text: t }; };
+    const slug = title.replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_+|_+$/g, '').slice(0, 60) || 'chat';
+    const today = new Date().toISOString().slice(0, 10);
+    if (fmt === 'html') {
+      const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const rows = r.rows.map(m => { const l = line(m); return `<div class="m"><span class="dt">${esc(l.dt)}</span> <b>${esc(l.who)}</b><div class="tx">${esc(l.text).replace(/\n/g, '<br>')}</div></div>`; }).join('\n');
+      const html = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>${esc(title)} — выгрузка</title>
+<style>body{font-family:-apple-system,Segoe UI,Arial,sans-serif;max-width:760px;margin:24px auto;padding:0 16px;color:#161c26}
+h1{font-size:18px}.m{padding:8px 0;border-bottom:1px solid #eee}.dt{color:#8a94a6;font-size:12px}.tx{margin-top:3px;white-space:pre-wrap}</style></head>
+<body><h1>${esc(title)}</h1><p style="color:#8a94a6;font-size:12px">Выгружено ${esc(today)} · сообщений: ${r.rows.length}</p>${rows}</body></html>`;
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(slug + '_' + today + '.html')}`);
+      return res.send(html);
+    }
+    const head = `Чат: ${title}\nВыгружено: ${today}\nСообщений: ${r.rows.length}\n${'='.repeat(40)}\n\n`;
+    const text = head + r.rows.map(m => { const l = line(m); return `[${l.dt}] ${l.who}:\n${l.text}\n`; }).join('\n');
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(slug + '_' + today + '.txt')}`);
+    res.send('﻿' + text);
+  } catch (e) { res.status(500).send(e.message); }
 });
 
 // ── Поиск по переписке ───────────────────────────────────────────────────────
