@@ -481,8 +481,18 @@ function renderMsgs(scroll){
     html+=`<div class="m ${mine?'me':''} ${ai?'ai':''} ${cont?'cont':''} ${mentioned?'ment':''} ${selCls} ${isSel} ${voiceHeard?'vheard':''}" data-id="${m.id}" ${SELMODE?`onclick="toggleSel(${m.id})"`:''} oncontextmenu="msgMenu(event,${m.id})"><div class="mav" style="background:${avbg}">${av}</div><div class="bub">${inner}</div></div>`;
   }
   if(AGENT_TYPING===CUR) html+=`<div class="m ai typing"><div class="mav" style="background:#7a4ecc">🤖</div><div class="bub"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span style="font-size:11px;color:var(--text-3);margin-left:4px">Агент думает…</span></div></div>`;
-  box.innerHTML=html;
-  if(scroll) box.scrollTop=box.scrollHeight;
+  // Сохранить живой играющий голосовой элемент, чтобы перерисовка (новое сообщение, статусы) не прерывала прослушивание
+  let liveAudio=null;
+  try{ for(const a of box.querySelectorAll('audio.voicemsg')){ if(!a.paused && !a.ended){ liveAudio=a; break; } } }catch(e){}
+  if(liveAudio){
+    const prevTop=box.scrollTop, atBottom=(box.scrollHeight-box.scrollTop-box.clientHeight)<4;
+    box.innerHTML=html;
+    try{ const slot=box.querySelector('audio.voicemsg[src="'+liveAudio.getAttribute('src')+'"]'); if(slot) slot.parentNode.replaceChild(liveAudio, slot); }catch(e){}
+    if(scroll && atBottom) box.scrollTop=box.scrollHeight; else box.scrollTop=prevTop;
+  } else {
+    box.innerHTML=html;
+    if(scroll) box.scrollTop=box.scrollHeight;
+  }
 }
 let AGENT_TYPING=null, AGENT_TYPING_T=null;
 function setAgentTyping(cid){ AGENT_TYPING=cid; clearTimeout(AGENT_TYPING_T); if(CUR===cid) renderMsgs(true); AGENT_TYPING_T=setTimeout(()=>{ if(AGENT_TYPING===cid){ AGENT_TYPING=null; if(CUR===cid) renderMsgs(true); } },120000); }
