@@ -282,6 +282,7 @@ async function boot(){
   const d = await api('GET','/bootstrap'); if(!d||!d.ok) return;
   ME=d.me; PEOPLE=d.people; CHANNELS=d.channels; indexPeople(); applyReceipts(d.receipts);
   TEAMS=d.teams||[]; APP_ADMIN=!!d.appAdmin;
+  MAXID=d.maxId||0; // стартуем поллинг с последнего id — иначе первый /poll примет всю историю за «новое»
   renderList();
   startPoll();
   // тема
@@ -629,7 +630,7 @@ async function searchMsgs(q){
 
 // Поллинг: новые сообщения + присутствие
 let POLL=null;
-function startPoll(){ if(POLL) clearInterval(POLL); MAXID=Math.max(0,...CHANNELS.map(()=>0)); pollOnce(); POLL=setInterval(pollOnce,3500); setInterval(()=>api('POST','/ping'),25000); }
+function startPoll(){ if(POLL) clearInterval(POLL); pollOnce(); POLL=setInterval(pollOnce,3500); setInterval(()=>api('POST','/ping'),25000); }
 async function pollOnce(){
   const d=await api('GET','/poll?since='+MAXID); if(!d||!d.ok) return;
   if(d.people){ PEOPLE=d.people; indexPeople(); if(TAB==='people') renderList(); refreshSub(); }

@@ -274,7 +274,12 @@ router.get('/bootstrap', requireAuth(WRITE), async (req, res) => {
     });
     let receipts = []; try { receipts = await membersPointers(uid(req)); } catch (e) { console.error('msg receipts boot:', e.message); }
     let teams = []; try { teams = await listTeams(); } catch (e) { console.error('msg teams boot:', e.message); }
-    res.json({ ok: true, me, people, channels, receipts, teams, appAdmin });
+    // Максимальный id сообщения в моих каналах — чтобы клиент стартовал поллинг
+    // С НЕГО, а не с нуля (иначе первый /poll вернёт всю историю, и клиент
+    // посчитает старые сообщения «новыми», накрутив непрочитанные).
+    let maxId = 0;
+    try { const mx = await pool.query(`SELECT COALESCE(MAX(x.id),0) AS m FROM ticketsmodule_msg_messages x WHERE x.channel_id IN (SELECT channel_id FROM ticketsmodule_msg_members WHERE user_id=$1)`, [uid(req)]); maxId = mx.rows[0].m || 0; } catch (e) {}
+    res.json({ ok: true, me, people, channels, receipts, teams, appAdmin, maxId });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
