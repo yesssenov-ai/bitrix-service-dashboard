@@ -34,6 +34,13 @@ router.get('/module-counts', requireAuth(), async (req, res) => {
       if (n > 0) counts.PROC = n;
     }
   } catch (e) { /* best-effort: модуль без источника → 0 */ }
+  // MSG — «Мессенджер»: число непрочитанных сообщений (красный счётчик на плитке).
+  try {
+    if (bid) {
+      const n = await require('../pending-actions').msgUnreadForBid(bid);
+      if (n > 0) counts.MSG = n;
+    }
+  } catch (e) { /* best-effort */ }
   // Новые источники по другим модулям добавляй здесь по тому же шаблону.
   res.json({ ok: true, counts });
 });

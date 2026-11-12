@@ -9,6 +9,40 @@
   document.addEventListener('visibilitychange', function () { if (!document.hidden) ping(); });
 })();
 
+/* Верхний ряд иконок (десктоп, по центру у бренда): шорткаты Мессенджер + База
+   знаний(админ), затем собранные глобальные иконки (AI · помощь · поиск · связь ·
+   тема) — ровно в один ряд. На телефоне скрыт (там своя мобильная шапка). */
+(function () {
+  if (window.__cupTopbar) return; window.__cupTopbar = 1;
+  var st = document.createElement('style');
+  st.textContent =
+    '#pls-toolbar{position:fixed;top:11px;left:50%;transform:translateX(-50%);display:flex;gap:7px;align-items:center;z-index:99999}' +
+    '#pls-toolbar>*{position:static!important;left:auto!important;top:auto!important;right:auto!important;bottom:auto!important;width:30px!important;height:30px!important;min-width:0!important;margin:0!important;transform:none!important;box-shadow:none!important;border-radius:9px!important}' +
+    '#pls-toolbar>* svg{width:16px;height:16px}' +
+    '.pls-tb-ic{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line-2,#d6dbe4);background:var(--surface,#fff);color:var(--text-2,#384254);text-decoration:none;cursor:pointer}' +
+    '.pls-tb-ic:hover{color:var(--accent,#C53B2F);border-color:var(--accent,#C53B2F)}' +
+    '.pls-tb-ic.cur{color:var(--accent,#C53B2F);border-color:var(--accent,#C53B2F)}' +
+    '@media(max-width:640px){#pls-toolbar{display:none!important}}';
+  (document.head || document.documentElement).appendChild(st);
+  var SVG = {
+    msg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5a7.5 7.5 0 0 1-10.9 6.7L4 20l1.8-4.9A7.5 7.5 0 1 1 20 11.5z"/><path d="M8.5 10.5h7M8.5 13.5h4.5"/></svg>',
+    kb: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H19v3H6.5A2.5 2.5 0 0 1 4 20.5z"/></svg>'
+  };
+  var here = (location.pathname || '');
+  var isAdmin = false;
+  function bar() { var b = document.getElementById('pls-toolbar'); if (!b) { b = document.createElement('div'); b.id = 'pls-toolbar'; document.body.appendChild(b); } return b; }
+  function mk(id, href, title, svg, cur) { if (document.getElementById(id)) return null; var a = document.createElement('a'); a.id = id; a.href = href; a.title = title; a.className = 'pls-tb-ic' + (cur ? ' cur' : ''); a.innerHTML = svg; return a; }
+  function build() {
+    var b = bar();
+    var m = mk('pls-tb-msg', '/messenger.html', 'Мессенджер', SVG.msg, /messenger\.html/.test(here));
+    if (m) b.insertBefore(m, b.firstChild);
+    if (isAdmin) { var k = mk('pls-tb-kb', '/knowledge.html', 'База знаний', SVG.kb, /knowledge\.html/.test(here)); if (k) { var ref = document.getElementById('pls-tb-msg'); if (ref && ref.nextSibling) b.insertBefore(k, ref.nextSibling); else b.appendChild(k); } }
+    ['pai-fab', 'pls-help-btn', 'pls-sr-btn', 'pls-fb-btn', 'themeToggle'].forEach(function (id) { var el = document.getElementById(id); if (el && el.parentNode !== b) b.appendChild(el); });
+  }
+  try { fetch('/auth/me').then(function (r) { return r.json(); }).then(function (d) { var role = (d && d.user && d.user.role) || ''; isAdmin = (role === 'admin' || role === 'superadmin'); build(); }).catch(function () {}); } catch (e) {}
+  [150, 500, 1200, 2500, 4000].forEach(function (t) { setTimeout(build, t); });
+})();
+
 /* cup-mobile.js — мобильный app-shell ЦУП (модель Analytical Network Control Panel).
    Нижняя навигация с именованными вкладками (без FAB) + полноэкранный экран
    «Все разделы» (поиск + модули по секциям). Подставляется сервером на все
