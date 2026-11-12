@@ -496,14 +496,11 @@ router.post('/channels/:id(\\d+)/file', requireAuth(WRITE), upload.single('file'
           if (!stt.configured()) return;
           const chk = await pool.query('SELECT kind FROM ticketsmodule_msg_channels WHERE id=$1', [cid]);
           const isAiChan = chk.rows[0] && chk.rows[0].kind === 'ai';
-          // В чате с агентом распознаём всегда; в обычных чатах — только если включено STT_ALL_CHATS.
-          if (!isAiChan && !process.env.STT_ALL_CHATS) return;
+          if (!isAiChan) return; // распознаём только в чате с агентом
           const text = await stt.transcribe(req.file.buffer, req.file.mimetype, orig);
           if (!text) return;
-          // Показать расшифровку в самом голосовом сообщении (под плеером).
-          await pool.query('UPDATE ticketsmodule_msg_messages SET body=$1 WHERE id=$2', ['🎤 ' + text, ins.rows[0].id]);
-          // В чате с агентом — передаём распознанный текст агенту, он отвечает.
-          if (isAiChan) await runAgentInChannel(cid, req.user, text);
+          // Расшифровку НЕ показываем — агент сразу отрабатывает по распознанному тексту.
+          await runAgentInChannel(cid, req.user, text);
         } catch (e) { console.error('voice stt/agent:', e.message); }
       })();
     }
