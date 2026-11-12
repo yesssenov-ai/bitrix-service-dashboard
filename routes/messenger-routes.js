@@ -156,10 +156,20 @@ async function directory() {
     absentNames(),
   ]);
   const ageById = {}; for (const p of pr.rows) ageById[p.user_id] = Number(p.age);
+  // Второй сигнал присутствия — общая активность по мониторингу (любой запрос
+  // пользователя, включая опрос бейджа /api/notify/pending-count раз в 60 сек).
+  // Берём более свежий из двух, чтобы онлайн совпадал со страницей «Мониторинг»
+  // и не зависел от того, открыт ли именно экран мессенджера.
+  const monIdle = {};
+  try { for (const a of require('../monitoring').onlineList()) if (a && a.id != null) monIdle[a.id] = Number(a.idleSec); } catch (e) {}
   return us.rows.map(u => {
-    const age = ageById[u.id];
+    const pAge = ageById[u.id];
+    const mAge = monIdle[u.id];
+    let age = null;
+    if (pAge != null) age = pAge;
+    if (mAge != null) age = (age == null) ? mAge : Math.min(age, mAge);
     let status = 'offline';
-    if (age != null && age <= 70) status = 'online';
+    if (age != null && age <= 90) status = 'online';
     else if (age != null && age <= 600) status = 'away';
     if (absent.has(norm(u.display_name))) status = 'absent';
     return { id: u.id, name: u.display_name, username: u.username, bid: u.bitrix_user_id, title: u.job_title || '', status };
@@ -200,7 +210,7 @@ router.get('/bootstrap', requireAuth(WRITE), async (req, res) => {
     // Мои каналы + последнее сообщение + непрочитанные.
     const ch = await pool.query(`
       SELECT c.id, c.kind, c.title, c.dm_key, c.last_at, c.locked, m.last_read_id, m.role AS my_role,
-        (SELECT COUNT(*) FROM ticketsmodule_msg_messages x WHERE x.channel_id=c.id AND x.id > m.last_read_id AND (x.author_id IS NULL OR x.author_id <> $1) AND x.deleted_at IS NULL)::int AS unread,
+        (CASE WHEN c.kind='ai' THEN 0 ELSE (SELECT COUNT(*) FROM ticketsmodule_msg_messages x WHERE x.channel_id=c.id AND x.id > m.last_read_id AND x.author_id IS NOT NULL AND x.author_id <> $1 AND x.deleted_at IS NULL) END)::int AS unread,
         (SELECT body FROM ticketsmodule_msg_messages x WHERE x.channel_id=c.id AND x.deleted_at IS NULL ORDER BY x.id DESC LIMIT 1) AS last_body
       FROM ticketsmodule_msg_members m JOIN ticketsmodule_msg_channels c ON c.id=m.channel_id
       WHERE m.user_id=$1 AND c.archived=false ORDER BY c.last_at DESC`, [uid(req)]);

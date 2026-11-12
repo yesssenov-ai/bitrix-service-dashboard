@@ -31,9 +31,9 @@ async function msgUnreadForBid(bid) {
       SELECT COALESCE(SUM((
         SELECT COUNT(*) FROM ticketsmodule_msg_messages x
         WHERE x.channel_id = m.channel_id AND x.id > m.last_read_id AND x.deleted_at IS NULL
-          AND (x.author_id IS NULL OR x.author_id <> $1))), 0)::int AS n
+          AND x.author_id IS NOT NULL AND x.author_id <> $1)), 0)::int AS n
       FROM ticketsmodule_msg_members m
-      JOIN ticketsmodule_msg_channels c ON c.id = m.channel_id AND c.archived = false
+      JOIN ticketsmodule_msg_channels c ON c.id = m.channel_id AND c.archived = false AND c.kind <> 'ai'
       WHERE m.user_id = $1`, [uid]);
     return r.rows[0].n || 0;
   } catch (e) { return 0; }
