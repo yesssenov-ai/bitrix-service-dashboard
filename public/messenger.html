@@ -87,6 +87,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13
 .comp .send{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:10px;width:38px;height:38px;cursor:pointer;flex:none;display:inline-flex;align-items:center;justify-content:center}
 .comp .send svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .comp .send:disabled{opacity:.5;cursor:default}
+/* Верхний ряд глобальных иконок (AI · помощь · поиск · связь · тема) — ровно по
+   центру у бренда. Эта страница не грузит cup-ui.css, поэтому позиции задаём тут
+   и перебиваем встроенные в скрипты значения по специфичности (body #id). */
+body #pai-fab{left:calc(50% - 109px);top:13px}
+body #pls-help-btn{left:calc(50% - 63px);top:13px}
+body #pls-sr-btn{left:calc(50% - 17px);top:13px}
+body #pls-fb-btn{left:calc(50% + 29px);top:13px}
+#themeToggle{position:fixed;top:13px;left:calc(50% + 75px);right:auto;bottom:auto;z-index:9999;width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:var(--surface);color:var(--text-2);border:1px solid var(--line-2);cursor:pointer;padding:0;line-height:0;box-shadow:0 1px 2px rgba(20,25,35,.06);transition:color .15s,border-color .15s}
+#themeToggle:hover{color:var(--text);border-color:var(--text-3)}
+#themeToggle svg{display:block}
+@media(max-width:640px){#pai-fab,#pls-help-btn,#pls-sr-btn,#pls-fb-btn,#themeToggle{display:none!important}}
 .hint{font-size:10.5px;color:var(--text-3);padding:0 16px 8px}
 .empty{color:var(--text-3);text-align:center;padding:40px 16px;font-size:12.75px;line-height:1.5}
 .replying{display:flex;align-items:center;gap:8px;padding:6px 14px;font-size:11.5px;color:var(--text-3);background:var(--surface-2);border-top:1px solid var(--line)}
@@ -167,7 +178,9 @@ function renderList(){
   const q=(document.getElementById('q').value||'').toLowerCase().trim();
   const list=document.getElementById('list'); let html='';
   if(TAB==='people'){
-    const ppl=PEOPLE.filter(p=>p.id!==ME.id && (!q||p.name.toLowerCase().includes(q)||(p.title||'').toLowerCase().includes(q)));
+    const PRES_ORD={online:0,away:1,absent:2,offline:3};
+    const ppl=PEOPLE.filter(p=>p.id!==ME.id && (!q||p.name.toLowerCase().includes(q)||(p.title||'').toLowerCase().includes(q)))
+      .sort((a,b)=> (PRES_ORD[a.status]??9)-(PRES_ORD[b.status]??9) || a.name.localeCompare(b.name,'ru'));
     html = ppl.map(p=>`<div class="row" onclick="openDM(${p.id})">
       <div class="av" style="background:${colorOf(p.id)}">${esc(initials(p.name))}<span class="dot ${p.status}"></span></div>
       <div class="nm"><b>${esc(p.name)}</b><span>${esc(p.title||PRES_LBL[p.status])}</span></div>
