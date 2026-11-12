@@ -34,8 +34,21 @@ router.post('/upload', requireAuth(ADMIN), upload.single('file'), async (req, re
     text = String(text).replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim();
     if (!text) return res.status(400).json({ ok: false, error: 'В файле не найден текст (возможно, это скан — нужен OCR, или пустой документ)' });
     const title = (req.body && String(req.body.title || '').trim()) || name.replace(/\.[^.]+$/, '');
-    const r = await kb.addDoc({ title, category: (req.body && req.body.category) || '', source: name, body: text, by: req.user.display_name || req.user.username });
-    res.json({ ok: true, id: r.id, chunks: r.chunks, title, length: text.length });
+    const purpose = (req.body && String(req.body.desc || req.body.purpose || '').trim()) || '';
+    // Оригинальный файл кладём в объектное хранилище (для скачивания человеком).
+    // Если хранилище не настроено/недоступно — не падаем: текст уже извлечён.
+    let att = null;
+    try {
+      const storage = require('../storage-lib');
+      if (storage.configured()) {
+        await storage.ensureBucket();
+        const okey = `kb/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        await storage.upload(okey, buf, req.file.mimetype || 'application/octet-stream');
+        att = { name, key: okey, type: req.file.mimetype || '' };
+      }
+    } catch (e) { console.error('kb file store:', e.message); }
+    const r = await kb.addDoc({ title, category: (req.body && req.body.category) || '', source: name, body: text, purpose, att, by: req.user.display_name || req.user.username });
+    res.json({ ok: true, id: r.id, chunks: r.chunks, title, length: text.length, stored: !!att });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
@@ -51,16 +64,28 @@ router.post('/docs', requireAuth(ADMIN), express.json({ limit: '4mb' }), async (
   try {
     const b = req.body || {};
     if (!String(b.title || '').trim() && !String(b.body || '').trim()) return res.status(400).json({ ok: false, error: 'Укажите название и текст' });
-    const r = await kb.addDoc({ title: b.title, category: b.category, source: b.source, body: b.body, by: req.user.display_name || req.user.username });
+    const r = await kb.addDoc({ title: b.title, category: b.category, source: b.source, body: b.body, purpose: b.purpose, by: req.user.display_name || req.user.username });
     res.json({ ok: true, id: r.id, chunks: r.chunks });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 router.put('/docs/:id(\\d+)', requireAuth(ADMIN), express.json({ limit: '4mb' }), async (req, res) => {
   try {
     const b = req.body || {};
-    const r = await kb.updateDoc(+req.params.id, { title: b.title, category: b.category, source: b.source, body: b.body });
+    const r = await kb.updateDoc(+req.params.id, { title: b.title, category: b.category, source: b.source, body: b.body, purpose: b.purpose });
     if (!r) return res.status(404).json({ ok: false, error: 'Не найдено' });
     res.json({ ok: true, id: r.id, chunks: r.chunks });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// Скачать оригинальный файл регламента (docx/pdf), если он был загружен файлом.
+router.get('/docs/:id(\\d+)/file', requireAuth([]), async (req, res) => {
+  try {
+    const d = await kb.getDoc(+req.params.id);
+    if (!d || !d.att_key) return res.status(404).json({ ok: false, error: 'У регламента нет вложенного файла' });
+    const storage = require('../storage-lib');
+    if (!storage.configured()) return res.status(503).json({ ok: false, error: 'Хранилище файлов не настроено' });
+    const url = await storage.signedUrl(d.att_key, 300);
+    if (!url) return res.status(404).json({ ok: false, error: 'Файл недоступен' });
+    res.redirect(url);
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 router.delete('/docs/:id(\\d+)', requireAuth(ADMIN), async (req, res) => {

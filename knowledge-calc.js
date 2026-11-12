@@ -72,6 +72,11 @@ async function ensureKbSchema() {
     CREATE INDEX IF NOT EXISTS idx_kb_chunks_fts ON ticketsmodule_kb_chunks USING GIN (to_tsvector('russian', chunk));
   `);
   try { await pool.query(`CREATE INDEX IF NOT EXISTS idx_kb_chunks_trgm ON ticketsmodule_kb_chunks USING GIN (chunk gin_trgm_ops)`); } catch (e) {}
+  // Новые поля: назначение (для чего и когда агенту использовать документ) и
+  // ссылка на оригинальный файл (docx/pdf) для скачивания человеком.
+  for (const col of ['purpose TEXT', 'att_name VARCHAR(300)', 'att_key VARCHAR(400)', 'att_type VARCHAR(120)']) {
+    try { await pool.query(`ALTER TABLE ticketsmodule_kb_docs ADD COLUMN IF NOT EXISTS ${col}`); } catch (e) {}
+  }
   _ready = true;
 }
 
@@ -96,10 +101,15 @@ function chunkText(text) {
 }
 
 async function reindexDoc(docId) {
-  const d = await pool.query('SELECT id, title, category, body FROM ticketsmodule_kb_docs WHERE id=$1', [docId]);
+  const d = await pool.query('SELECT id, title, category, body, purpose FROM ticketsmodule_kb_docs WHERE id=$1', [docId]);
   const doc = d.rows[0]; if (!doc) return;
   await pool.query('DELETE FROM ticketsmodule_kb_chunks WHERE doc_id=$1', [docId]);
   const chunks = chunkText(doc.body);
+  // Назначение документа — ведущий фрагмент (ord 0). Помогает агенту понять,
+  // ДЛЯ ЧЕГО и КОГДА брать этот документ, и всплывает в поиске по смыслу запроса.
+  if (String(doc.purpose || '').trim()) {
+    chunks.unshift(`Назначение документа «${doc.title}» (когда использовать): ${String(doc.purpose).trim()}`);
+  }
   for (let i = 0; i < chunks.length; i++) {
     await pool.query('INSERT INTO ticketsmodule_kb_chunks (doc_id, doc_title, category, chunk, ord) VALUES ($1,$2,$3,$4,$5)',
       [docId, doc.title, doc.category || '', chunks[i], i]);
@@ -129,19 +139,28 @@ async function getDoc(id) {
   const r = await pool.query('SELECT * FROM ticketsmodule_kb_docs WHERE id=$1', [id]);
   return r.rows[0] || null;
 }
-async function addDoc({ title, category, source, body, by }) {
+async function addDoc({ title, category, source, body, purpose, att, by }) {
   await ensureKbSchema();
+  const a = att || {};
   const r = await pool.query(
-    'INSERT INTO ticketsmodule_kb_docs (title, category, source, body, created_by) VALUES ($1,$2,$3,$4,$5) RETURNING id',
-    [String(title || '').slice(0, 300) || 'Без названия', String(category || '').slice(0, 120), String(source || '').slice(0, 300), String(body || ''), String(by || '').slice(0, 120)]);
+    `INSERT INTO ticketsmodule_kb_docs (title, category, source, body, purpose, att_name, att_key, att_type, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+    [String(title || '').slice(0, 300) || 'Без названия', String(category || '').slice(0, 120), String(source || '').slice(0, 300),
+     String(body || ''), String(purpose || '').slice(0, 2000) || null,
+     a.name ? String(a.name).slice(0, 300) : null, a.key ? String(a.key).slice(0, 400) : null, a.type ? String(a.type).slice(0, 120) : null,
+     String(by || '').slice(0, 120)]);
   const id = r.rows[0].id; const n = await reindexDoc(id);
   return { id, chunks: n };
 }
-async function updateDoc(id, { title, category, source, body }) {
+async function updateDoc(id, { title, category, source, body, purpose }) {
   await ensureKbSchema();
-  const r = await pool.query(
-    `UPDATE ticketsmodule_kb_docs SET title=$1, category=$2, source=$3, body=$4, updated_at=NOW() WHERE id=$5 RETURNING id`,
-    [String(title || '').slice(0, 300) || 'Без названия', String(category || '').slice(0, 120), String(source || '').slice(0, 300), String(body || ''), id]);
+  // purpose обновляем только если передан (чтобы правка текста не стирала назначение).
+  const setPurpose = purpose !== undefined;
+  const params = [String(title || '').slice(0, 300) || 'Без названия', String(category || '').slice(0, 120), String(source || '').slice(0, 300), String(body || '')];
+  let sql = `UPDATE ticketsmodule_kb_docs SET title=$1, category=$2, source=$3, body=$4, updated_at=NOW()`;
+  if (setPurpose) { params.push(String(purpose || '').slice(0, 2000) || null); sql += `, purpose=$${params.length}`; }
+  params.push(id); sql += ` WHERE id=$${params.length} RETURNING id`;
+  const r = await pool.query(sql, params);
   if (!r.rows.length) return null;
   const n = await reindexDoc(id);
   return { id, chunks: n };

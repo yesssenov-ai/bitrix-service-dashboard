@@ -73,7 +73,9 @@ a.back:hover{color:var(--text);border-color:var(--text-3)}
         <div class="fld"><label>Категория</label><input id="eCategory" placeholder="HR / Продажи / Сервис / Качество…"></div>
       </div>
       <div class="fld"><label>Источник (необязательно)</label><input id="eSource" placeholder="Напр.: Приказ №12 от 2026, или ссылка"></div>
-      <div class="fld"><label>Текст (процесс, алгоритм, инструкция)</label><textarea id="eBody" placeholder="Вставьте текст регламента. Разбивайте на абзацы и пункты — так агент точнее находит нужное место и ссылается на него."></textarea><div class="hint" id="chunkHint"></div></div>
+      <div class="fld"><label>Назначение — для чего и когда агенту использовать документ</label><textarea id="eDesc" style="min-height:70px" placeholder="Напр.: Инструкция по оформлению командировок. Использовать, когда спрашивают про суточные, сроки авансового отчёта, лимиты на проживание."></textarea><div class="hint">Эта подсказка помогает агенту понять, когда брать документ. Попадает в поиск.</div></div>
+      <div class="fld" id="fileRow" style="display:none"></div>
+      <div class="fld"><label>Текст (процесс, алгоритм, инструкция)</label><textarea id="eBody" placeholder="Вставьте текст регламента, либо загрузите файл (docx, pdf) кнопкой ⤒ слева — текст извлечётся автоматически."></textarea><div class="hint" id="chunkHint"></div></div>
       <div class="btns"><button class="btn" id="saveBtn">Сохранить</button><button class="btn danger" id="delBtn" style="display:none">Удалить</button><span class="sp" style="flex:1"></span><span class="chipn" id="savedMsg"></span></div>
     </div>
     <div class="test">
@@ -87,7 +89,14 @@ a.back:hover{color:var(--text);border-color:var(--text-3)}
 <script>
 const api=async(m,p,b)=>{const o={method:m,credentials:'same-origin'};if(b){o.headers={'Content-Type':'application/json'};o.body=JSON.stringify(b);}const r=await fetch('/api/kb'+p,o);if(r.status===401){location.href='/login.html';return null;}return r.json().catch(()=>({ok:false}));};
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let DOCS=[],CUR=null;
+let DOCS=[],CUR=null,STAGED_FILE=null;
+function renderFileRow(doc){
+  const row=document.getElementById('fileRow');
+  if(STAGED_FILE){ row.style.display='block'; row.innerHTML='<label>Загружаемый файл</label><div style="background:var(--accent-weak);border:1px solid var(--accent-line);border-radius:10px;padding:10px 12px;font-size:13px">📎 '+esc(STAGED_FILE.name)+' — текст извлечётся при сохранении. <a href="#" id="dropFile" style="color:var(--accent)">убрать</a></div>';
+    const df=document.getElementById('dropFile'); if(df) df.onclick=e=>{e.preventDefault();STAGED_FILE=null;renderFileRow(doc);}; return; }
+  if(doc&&doc.att_name){ row.style.display='block'; row.innerHTML='<label>Вложенный файл</label><div style="background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px">📄 '+esc(doc.att_name)+' · <a href="/api/kb/docs/'+doc.id+'/file" target="_blank" rel="noopener" style="color:var(--accent)">скачать оригинал</a></div>'; return; }
+  row.style.display='none'; row.innerHTML='';
+}
 async function load(){const d=await api('GET','/docs');if(!d||!d.ok)return;DOCS=d.items;renderList();}
 function renderList(){
   const q=(document.getElementById('q').value||'').toLowerCase().trim();
@@ -97,33 +106,58 @@ function renderList(){
 document.getElementById('q').addEventListener('input',renderList);
 function showEditor(doc){
   CUR=doc?doc.id:null;
+  STAGED_FILE=null;
   document.getElementById('editor').style.display='block';
   document.getElementById('eTitle').value=doc?doc.title||'':'';
   document.getElementById('eCategory').value=doc?doc.category||'':'';
   document.getElementById('eSource').value=doc?doc.source||'':'';
+  document.getElementById('eDesc').value=doc?doc.purpose||'':'';
   document.getElementById('eBody').value=doc?doc.body||'':'';
   document.getElementById('delBtn').style.display=doc?'inline-block':'none';
   document.getElementById('savedMsg').textContent='';
   document.getElementById('chunkHint').textContent='';
+  renderFileRow(doc);
   renderList();
 }
 async function openDoc(id){const d=await api('GET','/docs/'+id);if(d&&d.ok)showEditor(d.doc);}
 document.getElementById('newBtn').onclick=()=>showEditor(null);
 document.getElementById('upBtn').onclick=()=>document.getElementById('fileInput').click();
-document.getElementById('fileInput').onchange=async e=>{
-  const f=e.target.files[0]; if(!f) return;
-  const fd=new FormData(); fd.append('file',f);
-  const r=await fetch('/api/kb/upload',{method:'POST',credentials:'same-origin',body:fd});
-  e.target.value='';
-  const d=await r.json().catch(()=>({ok:false}));
-  if(!d||!d.ok){ alert((d&&d.error)||'Не удалось загрузить файл'); return; }
-  await load(); openDoc(d.id);
-  document.getElementById('savedMsg').textContent='Загружено из файла · '+d.chunks+' фрагм.';
+// Выбор файла: НЕ грузим сразу — готовим документ в форме, чтобы заполнить
+// назначение (для чего и когда использовать), затем «Сохранить».
+document.getElementById('fileInput').onchange=e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  showEditor(null);
+  STAGED_FILE=f;
+  document.getElementById('eTitle').value=f.name.replace(/\.[^.]+$/,'');
+  renderFileRow(null);
+  document.getElementById('eBody').placeholder='Текст будет извлечён из файла при сохранении. Можно оставить пустым.';
+  document.getElementById('chunkHint').textContent='Заполните «Назначение», затем нажмите «Сохранить» — текст извлечётся из файла.';
+  document.getElementById('eDesc').focus();
 };
 document.getElementById('saveBtn').onclick=async()=>{
-  const body={title:document.getElementById('eTitle').value.trim(),category:document.getElementById('eCategory').value.trim(),source:document.getElementById('eSource').value.trim(),body:document.getElementById('eBody').value};
-  if(!body.title&&!body.body.trim()){alert('Укажите название и текст');return;}
-  const btn=document.getElementById('saveBtn');btn.disabled=true;btn.textContent='Сохранение…';
+  const title=document.getElementById('eTitle').value.trim();
+  const category=document.getElementById('eCategory').value.trim();
+  const source=document.getElementById('eSource').value.trim();
+  const purpose=document.getElementById('eDesc').value.trim();
+  const bodyText=document.getElementById('eBody').value;
+  const btn=document.getElementById('saveBtn');
+  // Если выбран файл — загружаем его (извлечение текста + сохранение оригинала).
+  if(STAGED_FILE){
+    btn.disabled=true;btn.textContent='Загрузка…';
+    const fd=new FormData(); fd.append('file',STAGED_FILE); fd.append('title',title); fd.append('category',category); fd.append('desc',purpose);
+    const r=await fetch('/api/kb/upload',{method:'POST',credentials:'same-origin',body:fd});
+    btn.disabled=false;btn.textContent='Сохранить';
+    const d=await r.json().catch(()=>({ok:false}));
+    if(!d||!d.ok){ alert((d&&d.error)||'Не удалось загрузить файл'); return; }
+    STAGED_FILE=null;
+    await load(); await openDoc(d.id);
+    document.getElementById('savedMsg').textContent='Загружено из файла · '+d.chunks+' фрагм.'+(d.stored?' · оригинал сохранён':'');
+    document.getElementById('chunkHint').textContent='Агент теперь отвечает по этому документу.';
+    return;
+  }
+  if(!title&&!bodyText.trim()){alert('Укажите название и текст (или загрузите файл)');return;}
+  const body={title,category,source,body:bodyText,purpose};
+  btn.disabled=true;btn.textContent='Сохранение…';
   const d=CUR?await api('PUT','/docs/'+CUR,body):await api('POST','/docs',body);
   btn.disabled=false;btn.textContent='Сохранить';
   if(!d||!d.ok){alert((d&&d.error)||'Не удалось сохранить');return;}
