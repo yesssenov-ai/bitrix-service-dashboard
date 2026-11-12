@@ -410,7 +410,7 @@ function renderMsgs(scroll){
       if(ai && m.payload) inner+=aiExtra(m.payload);
     }
     inner+=reactsHtml(m.id);
-    inner+=`<div class="tm">${fmtTime(m.created_at)}${(mine&&(m.kind==='text'||m.kind==='file'))?statusHtml(m):''}</div>`;
+    inner+=`<div class="tm">${fmtTime(m.created_at)}${(mine&&(m.kind==='text'||m.kind==='file')&&(curChannel()||{}).kind!=='ai')?statusHtml(m):''}</div>`;
     inner+=`<div class="rbar">${['👍','🔥','✅','😄','❤️'].map(e=>`<span onclick="react(${m.id},'${e}')">${e}</span>`).join('')}<span onclick="setReply(${m.id})" title="Ответить">↩︎</span></div>`;
     const mentioned = Array.isArray(m.mentions) && ME && m.mentions.includes(ME.id);
     html+=`<div class="m ${mine?'me':''} ${ai?'ai':''} ${cont?'cont':''} ${mentioned?'ment':''}"><div class="mav" style="background:${avbg}">${av}</div><div class="bub">${inner}</div></div>`;
