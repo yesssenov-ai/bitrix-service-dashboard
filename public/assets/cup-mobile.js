@@ -30,17 +30,23 @@
   };
   var here = (location.pathname || '');
   var isAdmin = false;
+  // ЕДИНЫЙ порядок иконок во всех модулях ЦУП (идентично messenger.html/knowledge.html):
+  // Мессенджер · База знаний · Агент · Поиск · Помощь · Связь · Тема.
+  var ORDER = ['pls-tb-msg', 'pls-tb-kb', 'pai-fab', 'pls-sr-btn', 'pls-help-btn', 'pls-fb-btn', 'themeToggle'];
   function bar() { var b = document.getElementById('pls-toolbar'); if (!b) { b = document.createElement('div'); b.id = 'pls-toolbar'; document.body.appendChild(b); } return b; }
-  function mk(id, href, title, svg, cur) { if (document.getElementById(id)) return null; var a = document.createElement('a'); a.id = id; a.href = href; a.title = title; a.className = 'pls-tb-ic' + (cur ? ' cur' : ''); a.innerHTML = svg; return a; }
+  function mk(id, href, title, svg, cur) { if (document.getElementById(id)) return document.getElementById(id); var a = document.createElement('a'); a.id = id; a.href = href; a.title = title; a.className = 'pls-tb-ic' + (cur ? ' cur' : ''); a.innerHTML = svg; return a; }
+  function align(b) { var h = document.querySelector('.topbar') || document.querySelector('.top') || document.querySelector('header'); if (!h) return; var r = h.getBoundingClientRect(); var bh = b.offsetHeight || 30; b.style.top = Math.max(4, Math.round(r.top + (r.height - bh) / 2)) + 'px'; }
   function build() {
     var b = bar();
-    var m = mk('pls-tb-msg', '/messenger.html', 'Мессенджер', SVG.msg, /messenger\.html/.test(here));
-    if (m) b.insertBefore(m, b.firstChild);
-    if (isAdmin) { var k = mk('pls-tb-kb', '/knowledge.html', 'База знаний', SVG.kb, /knowledge\.html/.test(here)); if (k) { var ref = document.getElementById('pls-tb-msg'); if (ref && ref.nextSibling) b.insertBefore(k, ref.nextSibling); else b.appendChild(k); } }
+    var m = mk('pls-tb-msg', '/messenger.html', 'Мессенджер', SVG.msg, /messenger\.html/.test(here)); if (m.parentNode !== b) b.appendChild(m);
+    if (isAdmin) { var k = mk('pls-tb-kb', '/knowledge.html', 'База знаний', SVG.kb, /knowledge\.html/.test(here)); if (k.parentNode !== b) b.appendChild(k); }
     ['pai-fab', 'pls-help-btn', 'pls-sr-btn', 'pls-fb-btn', 'themeToggle'].forEach(function (id) { var el = document.getElementById(id); if (el && el.parentNode !== b) b.appendChild(el); });
+    ORDER.forEach(function (id) { var el = document.getElementById(id); if (el && el.parentNode === b) b.appendChild(el); });
+    align(b);
   }
   try { fetch('/auth/me').then(function (r) { return r.json(); }).then(function (d) { var role = (d && d.user && d.user.role) || ''; isAdmin = (role === 'admin' || role === 'superadmin'); build(); }).catch(function () {}); } catch (e) {}
   [150, 500, 1200, 2500, 4000].forEach(function (t) { setTimeout(build, t); });
+  window.addEventListener('resize', function () { var b = document.getElementById('pls-toolbar'); if (b) align(b); });
 })();
 
 /* cup-mobile.js — мобильный app-shell ЦУП (модель Analytical Network Control Panel).

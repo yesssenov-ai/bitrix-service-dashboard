@@ -210,22 +210,32 @@ async function testSearch(){
   if(!d||!d.ok||!d.results.length){box.innerHTML='<div class="empty">Ничего не найдено — добавьте регламент по этой теме.</div>';return;}
   box.innerHTML=d.results.map(h=>`<div class="hit"><div class="src">${esc(h.doc_title)}${h.category?' · '+esc(h.category):''}</div><div class="tx">${esc((h.chunk||'').slice(0,400))}${(h.chunk||'').length>400?'…':''}</div></div>`).join('');
 }
-// Сбор глобальных плавающих иконок в единый ровный ряд по центру.
+// Верхний ряд иконок — ЕДИНЫЙ порядок во всех модулях ЦУП + выравнивание по центру
+// шапки. Порядок: Мессенджер · База знаний · Агент · Поиск · Помощь · Связь · Тема.
+// (идентичный блок в messenger.html и cup-mobile.js)
 (function(){
-  const TBSTYLE='border:1px solid var(--line);background:var(--surface);color:var(--text-2);border-radius:9px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;cursor:pointer';
-  function mkMsg(){
-    if(document.getElementById('pls-tb-msg')) return document.getElementById('pls-tb-msg');
-    const a=document.createElement('a'); a.id='pls-tb-msg'; a.href='/messenger.html'; a.title='Мессенджер'; a.style.cssText=TBSTYLE;
-    a.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-12 7.6L3 21l1.9-5.7A8.4 8.4 0 1 1 21 11.5z"/></svg>';
-    return a;
-  }
-  function collect(){
+  const TBST='border:1px solid var(--line);background:var(--surface);color:var(--text-2);border-radius:9px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;cursor:pointer';
+  const SVG={
+    msg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5a7.5 7.5 0 0 1-10.9 6.7L4 20l1.8-4.9A7.5 7.5 0 1 1 20 11.5z"/><path d="M8.5 10.5h7M8.5 13.5h4.5"/></svg>',
+    kb:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H19v3H6.5A2.5 2.5 0 0 1 4 20.5z"/></svg>'
+  };
+  const HERE=location.pathname||'';
+  const ORDER=['pls-tb-msg','pls-tb-kb','pai-fab','pls-sr-btn','pls-help-btn','pls-fb-btn','themeToggle'];
+  let isAdmin=false;
+  fetch('/auth/me',{credentials:'same-origin'}).then(r=>r.json()).then(d=>{const role=(d&&d.user&&d.user.role)||'';isAdmin=(role==='admin'||role==='superadmin');build();}).catch(()=>{});
+  function mk(id,href,title,svg,cur){ let a=document.getElementById(id); if(a) return a; a=document.createElement('a'); a.id=id; a.href=href; a.title=title; a.style.cssText=TBST; if(cur){a.style.color='var(--accent)';a.style.borderColor='var(--accent)';} a.innerHTML=svg; return a; }
+  function align(bar){ const h=document.querySelector('.top')||document.querySelector('.topbar')||document.querySelector('header'); if(!h) return; const r=h.getBoundingClientRect(); const bh=bar.offsetHeight||30; bar.style.top=Math.max(4,Math.round(r.top+(r.height-bh)/2))+'px'; }
+  function build(){
     let bar=document.getElementById('pls-toolbar');
     if(!bar){bar=document.createElement('div');bar.id='pls-toolbar';document.body.appendChild(bar);}
-    ['pai-fab','pls-help-btn','pls-sr-btn','pls-fb-btn','themeToggle'].forEach(id=>{const el=document.getElementById(id);if(el&&el.parentNode!==bar)bar.appendChild(el);});
-    const m=mkMsg(); if(m.parentNode!==bar) bar.insertBefore(m, bar.firstChild);
+    const m=mk('pls-tb-msg','/messenger.html','Мессенджер',SVG.msg,/messenger\.html/.test(HERE)); if(m.parentNode!==bar) bar.appendChild(m);
+    if(isAdmin){ const k=mk('pls-tb-kb','/knowledge.html','База знаний',SVG.kb,/knowledge\.html/.test(HERE)); if(k.parentNode!==bar) bar.appendChild(k); }
+    ['pai-fab','pls-sr-btn','pls-help-btn','pls-fb-btn','themeToggle'].forEach(id=>{const el=document.getElementById(id);if(el&&el.parentNode!==bar)bar.appendChild(el);});
+    ORDER.forEach(id=>{ const el=document.getElementById(id); if(el && el.parentNode===bar) bar.appendChild(el); });
+    align(bar);
   }
-  [150,500,1200,2500,4000].forEach(t=>setTimeout(collect,t));
+  [150,500,1200,2500,4000].forEach(t=>setTimeout(build,t));
+  window.addEventListener('resize',()=>{ const b=document.getElementById('pls-toolbar'); if(b) align(b); });
 })();
 async function loadStatus(){
   const d=await api('GET','/status'); const badge=document.getElementById('semBadge'), hint=document.getElementById('semHint');
