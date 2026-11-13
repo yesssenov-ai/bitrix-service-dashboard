@@ -4,33 +4,36 @@
 <meta charset="UTF-8">
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#f6f7f9">
 <title>Календарь — ЦУП</title>
-<script>(function(){try{var m=localStorage.getItem('pls-theme');document.documentElement.setAttribute('data-theme',m==='dark'?'dark':'light');}catch(e){}})();</script>
-<link rel="stylesheet" href="/assets/cup-ui.css">
 <style>
+:root{
+  --bg:#fbfcfd; --surface:#ffffff; --surface-2:#f6f8fa;
+  --text:#121722; --text-2:#3d4756; --text-3:#8893a3; --faint:#aab3c0;
+  --line:#eceff3; --line-2:#e1e6ec;
+  --accent:#2f6bed;
+  --c-meet:#2f6bed; --c-task:#7a4ecc; --c-trip:#0ea5a4; --c-vac:#16a37a;
+  --c-bd:#e0569b; --c-agent:#d9821a; --c-imp:#e5484d; --c-sick:#e8821f;
+  --shadow:0 1px 2px rgba(20,25,35,.04),0 8px 30px rgba(20,25,35,.06);
+  --shadow-pop:0 18px 50px rgba(20,25,35,.18);
+  --r:14px;
+  --f:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+}
 *,*::before,*::after{box-sizing:border-box}
 html,body{margin:0;height:100%}
-body{background:var(--bg);color:var(--text);font-family:var(--f-ui);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:var(--f);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column;height:100vh;overflow:hidden}
 button{font-family:inherit;cursor:pointer}
-a{color:inherit}
 .app{display:flex;flex:1;min-height:0}
 
 /* ─── Sidebar ─── */
-.side{width:252px;flex:none;border-right:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column;padding:14px 13px;gap:14px;overflow:auto}
-.brand{display:flex;align-items:center;gap:10px;padding:2px 2px}
-.brand a.back{color:var(--text-3);text-decoration:none;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border:1px solid var(--line-2);border-radius:9px;background:var(--surface);flex:none}
-.brand a.back:hover{color:var(--text);border-color:var(--text-3)}
+.side{width:256px;flex:none;border-right:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column;padding:16px 14px;gap:16px;overflow:auto}
+.brand{display:flex;align-items:center;gap:10px;padding:2px 4px}
+.brand .mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(140deg,#3f78f0,#2f6bed);display:flex;align-items:center;justify-content:center;color:#fff;flex:none;text-decoration:none}
 .brand b{font-size:15px;font-weight:800;letter-spacing:-.02em}
 .brand span{display:block;font-size:11px;color:var(--text-3);font-weight:600;margin-top:-1px}
-.create{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:0;background:var(--accent);color:#fff;font-size:13.5px;font-weight:700;padding:11px;border-radius:12px}
-.create:hover{filter:brightness(1.05)}
-.ct{font-size:10.5px;color:var(--text-3);font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:4px 4px 6px}
-.cals{display:flex;flex-direction:column;gap:2px}
-.calitem{display:flex;align-items:center;gap:10px;padding:8px 9px;border-radius:10px;font-size:13.5px;font-weight:700;color:var(--text-2);border:1px solid transparent;background:none;text-align:left;width:100%;font-family:inherit}
-.calitem:hover{background:var(--surface-2)}
-.calitem.on{background:var(--accent-weak);color:var(--accent);border-color:var(--accent-line)}
-.calitem .ci{width:23px;height:23px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff;flex:none}
+.create{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:0;background:var(--accent);color:#fff;font-size:13.5px;font-weight:700;padding:11px;border-radius:12px;box-shadow:0 4px 14px rgba(47,107,237,.28)}
+.create:hover{filter:brightness(1.04)}
+
+/* mini month */
 .mini{user-select:none}
 .mini-h{display:flex;align-items:center;justify-content:space-between;padding:0 4px 8px}
 .mini-h b{font-size:12.5px;font-weight:700}
@@ -38,53 +41,55 @@ a{color:inherit}
 .mini-h .nav button{border:0;background:none;color:var(--text-3);width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center}
 .mini-h .nav button:hover{background:var(--surface-2);color:var(--text)}
 .mini-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;text-align:center}
-.mini-grid .wd{font-size:9.5px;color:var(--text-3);font-weight:700;padding:3px 0;text-transform:uppercase;opacity:.7}
+.mini-grid .wd{font-size:9.5px;color:var(--faint);font-weight:700;padding:3px 0;text-transform:uppercase}
 .mini-grid .d{font-size:11px;color:var(--text-2);padding:5px 0;border-radius:7px;position:relative;cursor:pointer}
 .mini-grid .d:hover{background:var(--surface-2)}
-.mini-grid .d.mut{color:var(--text-3);opacity:.5}
+.mini-grid .d.mut{color:var(--faint)}
 .mini-grid .d.today{background:var(--accent);color:#fff;font-weight:700}
 .mini-grid .d.has::after{content:"";position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:3px;height:3px;border-radius:50%;background:var(--accent)}
 .mini-grid .d.today.has::after{background:#fff}
-.cat{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:9px;font-size:13px;color:var(--text-2);font-weight:600;cursor:pointer}
+
+.cats{display:flex;flex-direction:column;gap:2px}
+.cats .ct{font-size:10.5px;color:var(--faint);font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:4px 4px 6px}
+.cat{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:9px;font-size:13px;color:var(--text-2);font-weight:600}
 .cat:hover{background:var(--surface-2)}
 .cat .dot{width:11px;height:11px;border-radius:4px;flex:none}
-.cat.off{opacity:.42}
+.cat.off{opacity:.4}
 .cat .chk{margin-left:auto;color:var(--text-3)}
 .cat.off .chk{opacity:0}
 .cat.static{cursor:default}
+.cat.static:hover{background:none}
 
 /* ─── Main ─── */
 .main{flex:1;min-width:0;display:flex;flex-direction:column}
-.bar{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--surface);flex-wrap:wrap}
-.bar .today{border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);font-size:13px;font-weight:700;padding:8px 13px;border-radius:10px}
+.bar{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--surface)}
+.bar .today{border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);font-size:13px;font-weight:700;padding:8px 14px;border-radius:10px}
 .bar .today:hover{border-color:var(--text-3);color:var(--text)}
 .bar .chev{display:flex;gap:2px}
-.bar .chev button{border:0;background:none;color:var(--text-3);width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.bar .chev button{border:0;background:none;color:var(--text-3);width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center}
 .bar .chev button:hover{background:var(--surface-2);color:var(--text)}
-.bar h2{font-size:18px;font-weight:800;letter-spacing:-.02em;margin:0;min-width:150px}
+.bar h2{font-size:19px;font-weight:800;letter-spacing:-.02em;margin:0;min-width:210px}
 .bar h2 span{color:var(--text-3);font-weight:600}
 .bar .sp{flex:1}
 .seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:3px}
-.seg button{border:0;background:none;color:var(--text-3);font-size:12.5px;font-weight:700;padding:7px 13px;border-radius:8px}
+.seg button{border:0;background:none;color:var(--text-3);font-size:12.5px;font-weight:700;padding:7px 14px;border-radius:8px}
 .seg button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(20,25,35,.1)}
-.gear{border:1px solid var(--line-2);background:var(--surface);color:var(--text-3);width:38px;height:38px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;flex:none}
-.gear:hover{color:var(--text);border-color:var(--text-3)}
 .view{flex:1;min-height:0;overflow:auto;position:relative}
-.loading{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--line);color:var(--text-3);font-size:12px;font-weight:600;padding:5px 12px;border-radius:20px;box-shadow:0 2px 8px rgba(20,25,35,.08);z-index:5;display:none}
+.loading{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--line);color:var(--text-3);font-size:12px;font-weight:600;padding:5px 12px;border-radius:20px;box-shadow:var(--shadow);z-index:5;display:none}
 .loading.on{display:block}
 .empty{color:var(--text-3);text-align:center;padding:60px 20px;font-size:13.5px}
 
-/* ─── Month ─── */
+/* ─── Month grid (недельные ряды + непрерывные линии-плашки) ─── */
 .mweek-h{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--line);background:var(--surface);position:sticky;top:0;z-index:2}
-.mweek-h div{padding:9px 12px;font-size:11px;font-weight:800;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em}
-.mweek-h div.we{color:var(--bad)}
+.mweek-h div{padding:10px 12px;font-size:11px;font-weight:800;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em}
+.mweek-h div.we{color:var(--c-imp)}
 .mbody{display:flex;flex-direction:column;border-left:1px solid var(--line)}
 .mweek{position:relative;border-bottom:1px solid var(--line)}
 .mcells{position:absolute;inset:0;display:grid;grid-template-columns:repeat(7,1fr)}
 .mcell{border-right:1px solid var(--line);padding:6px 7px}
-.mcell.mut{background:var(--surface-2)}
+.mcell.mut{background:#fcfdfe}
 .mcell .dn{font-size:12.5px;font-weight:700;color:var(--text-2);width:25px;height:25px;display:flex;align-items:center;justify-content:center;border-radius:50%}
-.mcell.mut .dn{color:var(--text-3);opacity:.6}
+.mcell.mut .dn{color:var(--faint)}
 .mcell.today .dn{background:var(--accent);color:#fff}
 .movl{position:absolute;inset:0;pointer-events:none}
 .mbar{position:absolute;height:19px;line-height:19px;margin-left:3px;color:#fff;font-size:11.5px;font-weight:700;padding:0 9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:auto;cursor:pointer;box-shadow:0 1px 2px rgba(20,25,35,.1)}
@@ -94,115 +99,151 @@ a{color:inherit}
 .mtimed .tm{color:var(--text-3);font-weight:700;font-size:10.5px;flex:none}
 .mtimed .tt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mmore{position:absolute;height:17px;line-height:17px;margin-left:3px;font-size:10.5px;color:var(--text-3);font-weight:700;pointer-events:auto;cursor:pointer}
-
-/* ─── Agenda ─── */
-.agenda{max-width:720px;margin:0 auto;padding:18px 18px 60px}
-.aday{display:flex;gap:16px;padding:13px 0;border-bottom:1px solid var(--line)}
-.aday:last-child{border-bottom:0}
-.aday .date{width:50px;flex:none;text-align:center;padding-top:2px}
-.aday .date .dn{font-size:23px;font-weight:800;letter-spacing:-.02em;line-height:1}
-.aday .date .wd{font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase;margin-top:3px}
-.aday.today .date .dn,.aday.today .date .wd{color:var(--accent)}
-.aevs{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}
-.aev{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 13px;box-shadow:0 1px 2px rgba(20,25,35,.04);cursor:pointer}
-.aev:hover{border-color:var(--line-2)}
-.aev .bar-c{width:4px;align-self:stretch;border-radius:4px;flex:none;min-height:20px}
-.aev .tm{font-size:12px;color:var(--text-3);font-weight:700;width:92px;flex:none}
-.aev .ti{font-size:14px;font-weight:600;flex:1;min-width:0}
-.aev .ti small{display:block;color:var(--text-3);font-weight:500;font-size:12px;margin-top:1px}
-.aev .tag{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;padding:3px 8px;border-radius:20px;flex:none;white-space:nowrap}
-
-/* ─── Week / rooms grid ─── */
-.wkhead{display:grid;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);z-index:2}
-.wkhead .cnr{border-right:1px solid var(--line)}
-.wkhead .wd{padding:9px 6px;text-align:center;border-right:1px solid var(--line)}
-.wkhead .wd .d{font-size:18px;font-weight:800;letter-spacing:-.02em}
-.wkhead .wd .n{font-size:10.5px;color:var(--text-3);font-weight:700;text-transform:uppercase}
-.wkhead .wd.today .d{color:var(--accent)}
-.wkhead .rm{padding:12px 14px;font-size:13.5px;font-weight:800;border-right:1px solid var(--line);display:flex;align-items:center;gap:8px}
-.wkhead .rmdot{width:10px;height:10px;border-radius:50%;flex:none}
-.wkbody{display:grid;position:relative}
-.wkbody .hours{border-right:1px solid var(--line)}
-.wkbody .hours .h{height:50px;font-size:10.5px;color:var(--text-3);font-weight:700;text-align:right;padding:2px 7px 0;position:relative;top:-7px;opacity:.7}
-.wkcol{border-right:1px solid var(--line);position:relative}
-.wkcol .slot{height:50px;border-bottom:1px solid var(--line)}
-.wev{position:absolute;left:3px;right:3px;border-radius:9px;padding:5px 8px;font-size:11.5px;font-weight:700;color:#fff;overflow:hidden;box-shadow:0 2px 6px rgba(20,25,35,.14);cursor:pointer}
-.wev small{display:block;font-weight:600;opacity:.92;font-size:10px;margin-top:1px}
-.wkallday{display:grid;border-bottom:1px solid var(--line);background:var(--surface)}
-.wkband{position:relative}
+/* all-day band в виде «Неделя» */
+.wkallday{display:grid;grid-template-columns:56px repeat(7,1fr);border-bottom:1px solid var(--line);background:var(--surface)}
+.wkband{grid-column:2/9;position:relative}
 .wkbar{position:absolute;height:19px;line-height:19px;margin-left:3px;color:#fff;font-size:11px;font-weight:700;padding:0 9px;border-radius:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;box-shadow:0 1px 2px rgba(20,25,35,.1)}
-.rinfo{max-width:1000px;margin:14px auto 2px;display:flex;align-items:center;gap:9px;background:var(--accent-weak);border:1px solid var(--accent-line);color:var(--accent);font-size:12.5px;font-weight:600;padding:10px 14px;border-radius:11px}
-
-/* ─── Modals ─── */
-.ov{position:fixed;inset:0;z-index:50;background:rgba(18,23,34,.42);display:none;align-items:center;justify-content:center;padding:20px}
-.ov.on{display:flex}
-.modal{width:100%;max-width:440px;background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:0 24px 70px rgba(0,0,0,.3);max-height:88vh;overflow:auto}
-.pop{max-width:400px}
-.ph{padding:17px 18px 13px;display:flex;gap:12px;align-items:flex-start}
-.ph .cc{width:5px;border-radius:5px;flex:none;align-self:stretch;min-height:30px}
-.ph h3{margin:0;font-size:17px;font-weight:800;letter-spacing:-.01em;line-height:1.3;flex:1}
-.ph .x{border:0;background:var(--surface-2);color:var(--text-3);width:28px;height:28px;border-radius:8px;font-size:17px;line-height:1;flex:none}
-.pb{padding:0 18px 18px;display:flex;flex-direction:column;gap:11px}
-.row{display:flex;align-items:center;gap:11px;font-size:13.5px;color:var(--text-2)}
-.row svg{color:var(--text-3);flex:none}
-.tagline{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;padding:4px 10px;border-radius:20px;align-self:flex-start}
-.actions{display:flex;gap:8px;padding-top:4px}
-.actions button{flex:1;border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);font-size:13px;font-weight:700;padding:9px;border-radius:10px}
-.actions button.pri{background:var(--accent);border-color:var(--accent);color:#fff}
-.actions button.danger{color:var(--bad);border-color:var(--line-2)}
-.fld{display:flex;flex-direction:column;gap:5px}
-.fld label{font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase;letter-spacing:.03em}
-.fld input,.fld textarea{background:var(--surface-2);border:1px solid var(--line);border-radius:9px;color:var(--text);font:inherit;font-size:13.5px;padding:9px 11px;outline:none;width:100%}
-.fld input:focus,.fld textarea:focus{border-color:var(--accent-line)}
-.fld textarea{resize:vertical;min-height:54px}
-.catpick{display:flex;flex-wrap:wrap;gap:6px}
-.catpick button{border:1px solid var(--line);background:var(--surface-2);color:var(--text-2);font-size:12px;font-weight:700;padding:6px 10px;border-radius:8px;display:flex;align-items:center;gap:6px}
-.catpick button .d{width:9px;height:9px;border-radius:50%}
-.catpick button.on{border-color:var(--text-3);background:var(--surface);box-shadow:0 1px 2px rgba(20,25,35,.1)}
-.tgl{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:600;color:var(--text-2)}
-.tgl input{width:17px;height:17px}
-.two{display:flex;gap:8px}.two .fld{flex:1}
+/* админ-настройка цветов */
+.gear{border:1px solid var(--line-2);background:var(--surface);color:var(--text-3);width:38px;height:38px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.gear:hover{color:var(--text);border-color:var(--text-3)}
 .crow{display:flex;align-items:center;gap:12px}
 .crow .dot{width:13px;height:13px;border-radius:5px;flex:none}
 .crow .nm{flex:1;font-size:13.5px;font-weight:600}
 .crow input[type=color]{width:40px;height:30px;border:1px solid var(--line-2);border-radius:8px;background:none;padding:2px;cursor:pointer}
 .chint{font-size:11.5px;color:var(--text-3);padding-top:2px;line-height:1.5}
-.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(10px);background:var(--text);color:var(--bg);font-size:13px;font-weight:600;padding:10px 16px;border-radius:11px;opacity:0;transition:.2s;z-index:90;pointer-events:none}
+
+/* ─── Agenda ─── */
+.agenda{max-width:720px;margin:0 auto;padding:20px 20px 60px}
+.aday{display:flex;gap:18px;padding:14px 0;border-bottom:1px solid var(--line)}
+.aday:last-child{border-bottom:0}
+.aday .date{width:54px;flex:none;text-align:center;padding-top:2px}
+.aday .date .dn{font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1}
+.aday .date .wd{font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase;margin-top:3px}
+.aday.today .date .dn{color:var(--accent)}
+.aday.today .date .wd{color:var(--accent)}
+.aevs{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}
+.aev{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px 13px;box-shadow:var(--shadow);cursor:pointer}
+.aev:hover{border-color:var(--line-2)}
+.aev .bar-c{width:4px;align-self:stretch;border-radius:4px;flex:none;min-height:18px}
+.aev .tm{font-size:12px;color:var(--text-3);font-weight:700;width:92px;flex:none}
+.aev .ti{font-size:14px;font-weight:600;flex:1;min-width:0}
+.aev .ti small{display:block;color:var(--text-3);font-weight:500;font-size:12px;margin-top:1px}
+.aev .tag{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;padding:3px 8px;border-radius:20px;flex:none}
+
+/* ─── Week ─── */
+.wkhead{display:grid;grid-template-columns:56px repeat(7,1fr);border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);z-index:2}
+.wkhead .cnr{border-right:1px solid var(--line)}
+.wkhead .wd{padding:9px 6px;text-align:center;border-right:1px solid var(--line)}
+.wkhead .wd .d{font-size:18px;font-weight:800;letter-spacing:-.02em}
+.wkhead .wd .n{font-size:10.5px;color:var(--text-3);font-weight:700;text-transform:uppercase}
+.wkhead .wd.today .d{color:var(--accent)}
+.wkbody{display:grid;grid-template-columns:56px repeat(7,1fr);position:relative}
+.wkbody .hours{border-right:1px solid var(--line)}
+.wkbody .hours .h{height:48px;font-size:10.5px;color:var(--faint);font-weight:700;text-align:right;padding:2px 7px 0;position:relative;top:-7px}
+.wkcol{border-right:1px solid var(--line);position:relative}
+.wkcol .slot{height:48px;border-bottom:1px solid var(--line)}
+.wev{position:absolute;left:3px;right:3px;border-radius:8px;padding:4px 7px;font-size:11px;font-weight:700;color:#fff;overflow:hidden;box-shadow:0 2px 6px rgba(20,25,35,.14);cursor:pointer}
+.wev small{display:block;font-weight:600;opacity:.92;font-size:10px}
+
+/* popover / модалки */
+.pop-ov{position:fixed;inset:0;z-index:50;background:rgba(18,23,34,.14);display:none;align-items:center;justify-content:center;padding:20px}
+.pop-ov.on{display:flex}
+.pop{width:100%;max-width:400px;background:var(--surface);border-radius:18px;box-shadow:var(--shadow-pop);overflow:hidden}
+.pop .ph{padding:18px 18px 14px;display:flex;gap:12px}
+.pop .ph .cc{width:5px;border-radius:5px;flex:none}
+.pop .ph h3{margin:0;font-size:17px;font-weight:800;letter-spacing:-.01em;line-height:1.3;flex:1}
+.pop .ph .x{margin-left:auto;border:0;background:var(--surface-2);color:var(--text-3);width:28px;height:28px;border-radius:8px;font-size:17px;line-height:1;flex:none}
+.pop .pb{padding:0 18px 18px;display:flex;flex-direction:column;gap:11px;max-height:74vh;overflow:auto}
+.pop .row{display:flex;align-items:center;gap:11px;font-size:13.5px;color:var(--text-2)}
+.pop .row svg{color:var(--text-3);flex:none}
+.pop .tagline{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;padding:4px 10px;border-radius:20px;align-self:flex-start}
+.pop .actions{display:flex;gap:8px;padding-top:4px}
+.pop .actions button{flex:1;border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);font-size:13px;font-weight:700;padding:9px;border-radius:10px;font-family:inherit}
+.pop .actions button.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.pop .actions button.danger{color:var(--c-imp);border-color:var(--line-2)}
+/* поля формы создания/редактирования — в том же стиле */
+.fld{display:flex;flex-direction:column;gap:5px}
+.fld label{font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.fld input,.fld textarea{background:var(--surface-2);border:1px solid var(--line);border-radius:9px;color:var(--text);font:inherit;font-size:13.5px;padding:9px 11px;outline:none;width:100%}
+.fld input:focus,.fld textarea:focus{border-color:var(--accent)}
+.fld textarea{resize:vertical;min-height:54px}
+.catpick{display:flex;flex-wrap:wrap;gap:6px}
+.catpick button{border:1px solid var(--line);background:var(--surface-2);color:var(--text-2);font-size:12px;font-weight:700;padding:6px 10px;border-radius:8px;display:flex;align-items:center;gap:6px;font-family:inherit}
+.catpick button .d{width:9px;height:9px;border-radius:50%}
+.catpick button.on{border-color:var(--text-3);background:var(--surface);box-shadow:0 1px 2px rgba(20,25,35,.1)}
+.tgl{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:600;color:var(--text-2)}
+.tgl input{width:17px;height:17px}
+.two{display:flex;gap:8px}.two .fld{flex:1}
+
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(10px);background:#121722;color:#fff;font-size:13px;font-weight:600;padding:10px 16px;border-radius:11px;opacity:0;transition:.2s;z-index:80;pointer-events:none}
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* выбор календаря */
+.cals.scope .calitem{display:flex;align-items:center;gap:10px;padding:8px 9px;border-radius:10px;font-size:13.5px;font-weight:700;color:var(--text-2);border:1px solid transparent;background:none;text-align:left;width:100%;font-family:inherit}
+.calitem{display:flex;align-items:center;gap:10px;padding:8px 9px;border-radius:10px;font-size:13.5px;font-weight:700;color:var(--text-2);border:1px solid transparent;background:none;text-align:left;width:100%;font-family:inherit}
+.calitem:hover{background:var(--surface-2)}
+.calitem.on{background:#eef3fe;color:var(--accent);border-color:#dbe6fe}
+.calitem .ci{width:23px;height:23px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff;flex:none}
+/* переговорные (ресурсный вид) */
+.rinfo{max-width:1000px;margin:14px auto 2px;display:flex;align-items:center;gap:9px;background:#f3f7ff;border:1px solid #dbe6fe;color:#2b4b8f;font-size:12.5px;font-weight:600;padding:10px 14px;border-radius:11px}
+.rmhead{display:grid;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);z-index:2;margin-top:12px}
+.rmhead .cnr{border-right:1px solid var(--line)}
+.rmhead .rm{padding:12px 14px;font-size:13.5px;font-weight:800;border-right:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.rmhead .rmdot{width:10px;height:10px;border-radius:50%;flex:none}
+.rmbody{display:grid}
+.rmbody .hours{border-right:1px solid var(--line)}
+.rmbody .hours .h{height:52px;font-size:10.5px;color:var(--faint);font-weight:700;text-align:right;padding:2px 7px 0;position:relative;top:-7px}
+.rmcol{border-right:1px solid var(--line);position:relative}
+.rmcol .slot{height:52px;border-bottom:1px solid var(--line)}
+.rev{position:absolute;left:5px;right:5px;border-radius:10px;padding:6px 10px;font-size:12.5px;font-weight:700;color:#fff;overflow:hidden;box-shadow:0 2px 8px rgba(20,25,35,.16);cursor:pointer}
+.rev small{display:block;font-weight:600;opacity:.92;font-size:10.5px;margin-top:2px}
 svg{display:block}
-@media(max-width:860px){.side{display:none}.bar h2{min-width:0;font-size:16px}.bar .today{display:none}}
+@media(max-width:860px){.side{display:none}.bar h2{min-width:0;font-size:17px}.bar .today{display:none}}
 </style>
 </head>
 <body>
 <div class="app">
+  <!-- Sidebar -->
   <aside class="side">
     <div class="brand">
-      <a class="back" href="/portal.html" title="На портал"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></a>
+      <a class="mark" href="/portal.html" title="На портал"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg></a>
       <div><b>Календарь</b><span>ЦУП · ProLabSupport</span></div>
     </div>
-    <button class="create" id="createBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Создать</button>
+    <button class="create" id="createBtn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      Создать
+    </button>
 
     <div class="cals">
       <div class="ct">Календари</div>
-      <button class="calitem on" data-scope="company"><span class="ci" style="background:#2f6bed"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16M14 21V9h5a1 1 0 0 1 1 1v11M7 8h2M7 12h2M7 16h2"/></svg></span>Компания</button>
-      <button class="calitem" data-scope="personal"><span class="ci" style="background:#16a37a"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/></svg></span>Личный</button>
-      <button class="calitem" data-scope="rooms"><span class="ci" style="background:#7a4ecc"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v18M14 3 6 5v15l8 1M6 20H4M16 21h4M11 12h.01"/></svg></span>Переговорные</button>
+      <button class="calitem on" data-scope="company">
+        <span class="ci" style="background:#2f6bed"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16M14 21V9h5a1 1 0 0 1 1 1v11M7 8h2M7 12h2M7 16h2"/></svg></span>Компания
+      </button>
+      <button class="calitem" data-scope="personal">
+        <span class="ci" style="background:#16a37a"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/></svg></span>Личный
+      </button>
+      <button class="calitem" data-scope="rooms">
+        <span class="ci" style="background:#7a4ecc"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v18M14 3 6 5v15l8 1M6 20H4M16 21h4M11 12h.01"/></svg></span>Переговорные
+      </button>
     </div>
 
     <div class="mini">
-      <div class="mini-h"><b id="miniLbl"></b><div class="nav"><button id="miniPrev">‹</button><button id="miniNext">›</button></div></div>
+      <div class="mini-h"><b id="miniLbl"></b>
+        <div class="nav"><button id="miniPrev">‹</button><button id="miniNext">›</button></div>
+      </div>
       <div class="mini-grid" id="miniGrid"></div>
     </div>
 
-    <div class="cals" id="catBox"><div class="ct">Категории</div><div id="catList"></div></div>
-    <div class="cals" id="roomBox" style="display:none"><div class="ct">Переговорные</div><div id="roomList"></div></div>
+    <div class="cats" id="catBox"><div class="ct">Категории</div><div id="catList"></div></div>
+    <div class="cats" id="roomBox" style="display:none"><div class="ct">Переговорные</div><div id="roomList"></div></div>
   </aside>
 
+  <!-- Main -->
   <div class="main">
     <div class="bar">
       <button class="today" id="todayBtn">Сегодня</button>
       <div class="chev"><button id="prevBtn">‹</button><button id="nextBtn">›</button></div>
-      <h2 id="title"></h2>
+      <h2 id="title">Ноябрь <span>2026</span></h2>
       <div class="sp"></div>
       <div class="seg" id="seg">
         <button data-v="agenda" class="on">Повестка</button>
@@ -214,15 +255,17 @@ svg{display:block}
         <button data-rv="week">Неделя</button>
         <button data-rv="month">Месяц</button>
       </div>
-      <button class="gear" id="gearBtn" title="Цвета событий (для админа)" style="display:none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 13.5a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>
+      <button class="gear" id="gearBtn" title="Цвета событий (для админа)" style="display:none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 13.5a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
+      </button>
     </div>
     <div class="view" id="view"><div class="loading" id="loading">Загрузка…</div></div>
   </div>
 </div>
 
-<div class="ov" id="popOv"><div class="modal pop" id="pop"></div></div>
-<div class="ov" id="editOv"><div class="modal" id="editModal"></div></div>
-<div class="ov" id="colorOv"><div class="modal" style="max-width:384px">
+<div class="pop-ov" id="popOv"><div class="pop" id="pop"></div></div>
+<div class="pop-ov" id="editOv"><div class="pop" id="editModal" style="max-width:440px"></div></div>
+<div class="pop-ov" id="colorOv"><div class="pop" style="max-width:384px">
   <div class="ph"><div class="cc" style="background:var(--accent)"></div><h3>Цвета событий</h3><button class="x" onclick="closeColors()">×</button></div>
   <div class="pb" id="colorBody"></div>
 </div></div>
@@ -233,63 +276,60 @@ const WD=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 const WD_FULL=['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье'];
 const MON=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 const MONN=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
-const NAMES={meet:'Встречи',task:'Задачи и дела',trip:'Командировки',vac:'Отпуска',sick:'Больничные',bd:'Дни рождения',agent:'От агента ЦУП',imp:'Важное'};
+const CNAME={meet:'Встречи',task:'Задачи и дела',trip:'Командировки',vac:'Отпуска',bd:'Дни рождения',agent:'От агента ЦУП'};
 const TAG={meet:'Встреча',task:'Задача',trip:'Командировка',vac:'Отпуск',sick:'Больничный',bd:'День рождения',agent:'Агент ЦУП',imp:'Важное'};
-const FILTER_CATS=['meet','task','trip','vac','sick','bd','agent'];
-const EDITABLE_CATS=['meet','task','imp','agent'];
-let CATC={meet:'#2f6bed',task:'#7a4ecc',trip:'#0ea5a4',vac:'#16a37a',sick:'#e8821f',bd:'#e0569b',agent:'#d9821a',imp:'#e5484d'};
+const FILTER_CATS=['meet','task','trip','vac','bd','agent'];
+let CATC={meet:'#2f6bed',task:'#7a4ecc',trip:'#0ea5a4',vac:'#16a37a',bd:'#e0569b',agent:'#d9821a',sick:'#e8821f',imp:'#e5484d'};
 let ME=null, ADMIN=false;
 let VIEW='agenda', SCOPE='company', ROOMVIEW='day';
 let CUR=new Date(); CUR.setHours(0,0,0,0);
 let EVENTS=[], ROOMS=[], BOOKINGS=[];
 const OFF=new Set();
 
-function iso(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function pad(n){return String(n).padStart(2,'0')}
+function iso(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
 function parseD(s){const p=String(s).slice(0,10).split('-').map(Number);return new Date(p[0],p[1]-1,p[2])}
 function timeOf(s){return String(s).length>10?String(s).slice(11,16):''}
-function todayIso(){const t=new Date();return iso(t)}
+function todayIso(){return iso(new Date())}
 function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
 function mondayOf(d){const x=new Date(d);const w=(x.getDay()+6)%7;x.setDate(x.getDate()-w);x.setHours(0,0,0,0);return x}
 function esc(s){return String(s==null?'':s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]))}
 function visible(ev){return !OFF.has(ev.category)}
-function catColor(c){return CATC[c]||'#888'}
-function evStartDate(ev){return parseD(ev.start)}
-function evEndDate(ev){return parseD(ev.end||ev.start)}
-function spanDates(ev){const a=evStartDate(ev),b=evEndDate(ev),out=[];for(let x=new Date(a);x<=b;x=addDays(x,1))out.push(iso(x));return out}
+function catColor(c){return CATC[c]||'#8893a3'}
+function evStart(ev){return parseD(ev.start)}
+function evEnd(ev){return parseD(ev.end||ev.start)}
+function spanDays(ev){const a=evStart(ev),b=evEnd(ev),out=[];for(let x=new Date(a);x<=b;x=addDays(x,1))out.push(iso(x));return out}
 function isAllDay(ev){return ev.allDay || !timeOf(ev.start)}
 
-let tT;function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('on'),2000)}
+let tT;function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('on'),1900)}
 async function api(method,path,body){
   const opt={method,credentials:'same-origin',headers:{}};
   if(body){opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(body)}
   try{const r=await fetch('/api/calendar'+path,opt);return await r.json()}catch(e){return{ok:false,error:'Сеть'}}
 }
 
-// ─── Диапазон загрузки по текущему виду ───
+/* ── загрузка ── */
 function range(){
   if(VIEW==='week'){const m=mondayOf(CUR);return[iso(m),iso(addDays(m,6))]}
   if(VIEW==='agenda'){return[todayIso(),iso(addDays(new Date(),60))]}
-  // month: сетка месяца (с хвостами соседних)
-  const first=new Date(CUR.getFullYear(),CUR.getMonth(),1);
-  const start=mondayOf(first);const end=addDays(start,41);
-  return[iso(start),iso(end)];
+  const start=mondayOf(new Date(CUR.getFullYear(),CUR.getMonth(),1));return[iso(start),iso(addDays(start,41))];
 }
 let loadSeq=0;
 async function loadEvents(){
-  if(SCOPE==='rooms'){return loadRooms();}
+  if(SCOPE==='rooms')return loadRooms();
   const [from,to]=range();const seq=++loadSeq;
   document.getElementById('loading').classList.add('on');
   const d=await api('GET',`/events?from=${from}&to=${to}&scope=${SCOPE}`);
   if(seq!==loadSeq)return;
   document.getElementById('loading').classList.remove('on');
-  if(d&&d.ok){EVENTS=d.events||[];if(d.colors){CATC=Object.assign({},CATC,d.colors);syncCssVars();}}
+  if(d&&d.ok){EVENTS=d.events||[];if(d.colors)CATC=Object.assign({},CATC,d.colors);}
   render();miniMonth();
 }
 async function loadRooms(){
   const seq=++loadSeq;document.getElementById('loading').classList.add('on');
   let from,to;
   if(ROOMVIEW==='week'){const m=mondayOf(CUR);from=iso(m);to=iso(addDays(m,6));}
-  else if(ROOMVIEW==='month'){const f=new Date(CUR.getFullYear(),CUR.getMonth(),1);const s=mondayOf(f);from=iso(s);to=iso(addDays(s,41));}
+  else if(ROOMVIEW==='month'){const s=mondayOf(new Date(CUR.getFullYear(),CUR.getMonth(),1));from=iso(s);to=iso(addDays(s,41));}
   else{from=iso(CUR);to=from;}
   const d=await api('GET',`/rooms?from=${from}&to=${to}`);
   if(seq!==loadSeq)return;
@@ -298,62 +338,62 @@ async function loadRooms(){
   renderRoomLegend();render();miniMonth();
 }
 function normBooking(b){
-  // Bitrix отдаёт сырые даты; приводим к {d, t, e, title, who, room}
   const sd=b.startRaw?new Date(b.startRaw):null, ed=b.endRaw?new Date(b.endRaw):null;
-  const pad=n=>String(n).padStart(2,'0');
-  const d=sd?sd.getFullYear()+'-'+pad(sd.getMonth()+1)+'-'+pad(sd.getDate()):todayIso();
+  const d=sd?iso(sd):todayIso();
   const t=sd?pad(sd.getHours())+':'+pad(sd.getMinutes()):'09:00';
   const e=ed?pad(ed.getHours())+':'+pad(ed.getMinutes()):t;
   return {room:b.room,title:b.title||'Бронь',who:b.who||'',d,t,e};
 }
 
-// ─── Рендер ───
+/* ── render dispatch ── */
 function render(){
-  const v=document.getElementById('view');
-  const ld=v.querySelector('#loading');
+  const v=document.getElementById('view');const ld=v.querySelector('#loading');
   if(SCOPE==='rooms'){
     document.querySelectorAll('#segRoom button').forEach(b=>b.classList.toggle('on',b.dataset.rv===ROOMVIEW));
-    v.innerHTML = ROOMVIEW==='day'?roomsDay() : ROOMVIEW==='week'?roomsWeek() : roomsMonth();
+    v.innerHTML = ROOMVIEW==='day'?renderRooms() : ROOMVIEW==='week'?renderRoomsWeek() : renderRoomsMonth();
   } else {
     document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.v===VIEW));
     v.innerHTML = VIEW==='agenda'?renderAgenda() : VIEW==='month'?renderMonth() : renderWeek();
     v.querySelectorAll('[data-ev]').forEach(el=>el.onclick=()=>openEvent(el.dataset.ev));
   }
   if(ld)v.appendChild(ld);
-  updateTitle();
+  updTitle();
 }
-function updateTitle(){
-  const t=document.getElementById('title');let h='';
-  if(SCOPE==='rooms'){const sub=ROOMVIEW==='day'?dayTitle(CUR):ROOMVIEW==='week'?weekTitle():(MONN[CUR.getMonth()]+' <span>'+CUR.getFullYear()+'</span>');h='Переговорные · '+sub;}
-  else{const pre=SCOPE==='personal'?'Личный · ':'';h=VIEW==='week'?pre+weekTitle():VIEW==='agenda'?pre+'Повестка':pre+MONN[CUR.getMonth()]+' <span>'+CUR.getFullYear()+'</span>';}
-  t.innerHTML=h;
+function updTitle(){
+  const t=document.getElementById('title');
+  if(SCOPE==='rooms'){const sub=ROOMVIEW==='day'?dayTitle(CUR):ROOMVIEW==='week'?weekTitle():(MONN[CUR.getMonth()]+' <span>'+CUR.getFullYear()+'</span>');t.innerHTML='Переговорные · '+sub;return;}
+  const pre=SCOPE==='personal'?'Личный · ':'';
+  t.innerHTML = VIEW==='week'?pre+'Неделя <span>'+weekRangeTxt()+'</span>' : VIEW==='agenda'?pre+'Повестка' : pre+MONN[CUR.getMonth()]+' <span>'+CUR.getFullYear()+'</span>';
 }
-function dayTitle(d){return '<span>'+WD_FULL[(d.getDay()+6)%7].slice(0,2)+', '+d.getDate()+' '+MON[d.getMonth()]+'</span>'}
-function weekTitle(){const m=mondayOf(CUR),e=addDays(m,6);return '<span>'+m.getDate()+'–'+e.getDate()+' '+MON[e.getMonth()]+'</span>'}
+function dayTitle(d){return '<span>'+WD[(d.getDay()+6)%7]+', '+d.getDate()+' '+MON[d.getMonth()]+'</span>'}
+function weekRangeTxt(){const m=mondayOf(CUR),e=addDays(m,6);return m.getDate()+'–'+e.getDate()+' '+MON[e.getMonth()]}
+function weekTitle(){return '<span>'+weekRangeTxt()+'</span>'}
 
+/* ── Agenda ── */
 function renderAgenda(){
   const byDay={};
-  EVENTS.forEach(ev=>{if(!visible(ev))return;spanDates(ev).forEach((d,idx)=>{(byDay[d]=byDay[d]||[]).push({ev,idx})})});
+  EVENTS.forEach(ev=>{if(!visible(ev))return;spanDays(ev).forEach((d,idx)=>{(byDay[d]=byDay[d]||[]).push({ev,idx})})});
   const days=Object.keys(byDay).filter(d=>d>=todayIso()).sort().slice(0,40);
   if(!days.length)return '<div class="empty">Ближайших событий нет. Нажмите «Создать», чтобы добавить встречу или дело.</div>';
   let h='<div class="agenda">';
   days.forEach(d=>{
-    const dt=parseD(d),isT=d===todayIso();
+    const dt=parseD(d);const isT=d===todayIso();
     const items=byDay[d].sort((a,b)=>(timeOf(a.ev.start)||'00:00').localeCompare(timeOf(b.ev.start)||'00:00'));
     h+=`<div class="aday ${isT?'today':''}"><div class="date"><div class="dn">${dt.getDate()}</div><div class="wd">${WD[(dt.getDay()+6)%7]}</div></div><div class="aevs">`;
     items.forEach(({ev,idx})=>{
       const c=catColor(ev.category);
-      const tm=isAllDay(ev)?(ev.end&&ev.end!==ev.start?(idx===0?'начало':(d===ev.end?'конец':'весь день')):'весь день'):(timeOf(ev.start)+(ev.end&&timeOf(ev.end)&&ev.end!==ev.start?'–'+timeOf(ev.end):''));
-      h+=`<div class="aev" data-ev="${ev.id}"><div class="bar-c" style="background:${c}"></div><div class="tm">${tm}</div><div class="ti">${esc(ev.title)}${ev.location?`<small>${esc(ev.location)}</small>`:''}</div><div class="tag" style="background:${c}1f;color:${c}">${TAG[ev.category]||''}</div></div>`;
+      const tm=isAllDay(ev)?((ev.end&&ev.end.slice(0,10)!==ev.start.slice(0,10))?(idx===0?'начало':(d===ev.end.slice(0,10)?'конец':'весь день')):'весь день'):(timeOf(ev.start)+(timeOf(ev.end)&&ev.end!==ev.start?'–'+timeOf(ev.end):''));
+      h+=`<div class="aev" data-ev="${ev.id}"><div class="bar-c" style="background:${c}"></div><div class="tm">${tm}</div><div class="ti">${esc(ev.title)}${ev.location?`<small>${esc(ev.location)}</small>`:''}</div><div class="tag" style="background:${c}1a;color:${c}">${TAG[ev.category]||''}</div></div>`;
     });
     h+='</div></div>';
   });
   return h+'</div>';
 }
 
+/* ── Month ── */
 function weeksGrid(){
-  const first=new Date(CUR.getFullYear(),CUR.getMonth(),1);
-  const start=mondayOf(first);const cells=[];for(let i=0;i<42;i++)cells.push(addDays(start,i));
+  const start=mondayOf(new Date(CUR.getFullYear(),CUR.getMonth(),1));
+  const cells=[];for(let i=0;i<42;i++)cells.push(addDays(start,i));
   const weeks=[];for(let i=0;i<42;i+=7)weeks.push(cells.slice(i,i+7));return weeks;
 }
 function renderMonth(){
@@ -361,7 +401,7 @@ function renderMonth(){
   let h='<div class="mweek-h">'+WD.map((w,i)=>`<div class="${i>4?'we':''}">${w}</div>`).join('')+'</div><div class="mbody">';
   weeksGrid().forEach(week=>{
     const wkStart=week[0],wkEnd=week[6],spans=[];
-    EVENTS.forEach(ev=>{if(!visible(ev)||!isAllDay(ev))return;const a=evStartDate(ev),b=evEndDate(ev);if(b<wkStart||a>wkEnd)return;spans.push({ev,sc:Math.max(0,Math.round((a-wkStart)/864e5)),ec:Math.min(6,Math.round((b-wkStart)/864e5)),contL:a<wkStart,contR:b>wkEnd})});
+    EVENTS.forEach(ev=>{if(!visible(ev)||!isAllDay(ev))return;const a=evStart(ev),b=evEnd(ev);if(b<wkStart||a>wkEnd)return;spans.push({ev,sc:Math.max(0,Math.round((a-wkStart)/864e5)),ec:Math.min(6,Math.round((b-wkStart)/864e5)),contL:a<wkStart,contR:b>wkEnd})});
     spans.sort((x,y)=>x.sc-y.sc||(y.ec-y.sc)-(x.ec-x.sc));
     const lanes=[];spans.forEach(s=>{let L=0;while(lanes[L]&&lanes[L].some(o=>!(s.ec<o.sc||s.sc>o.ec)))L++;(lanes[L]=lanes[L]||[]).push(s);s.lane=L});
     const nLanes=lanes.length;
@@ -377,67 +417,62 @@ function renderMonth(){
   return h+'</div>';
 }
 
-function timedGrid(days, items, allDayBand){
-  // items: [{d,t,e,title,color,id,who}]
-  let h='';
-  const cols='56px repeat('+days.length+',1fr)';
-  if(allDayBand){
-    const wkStart=days[0],wkEnd=days[days.length-1],spans=[];
-    EVENTS.forEach(ev=>{if(!visible(ev)||!isAllDay(ev))return;const a=evStartDate(ev),b=evEndDate(ev);if(b<wkStart||a>wkEnd)return;spans.push({ev,sc:Math.max(0,Math.round((a-wkStart)/864e5)),ec:Math.min(days.length-1,Math.round((b-wkStart)/864e5)),contL:a<wkStart,contR:b>wkEnd})});
-    spans.sort((x,y)=>x.sc-y.sc||(y.ec-y.sc)-(x.ec-x.sc));
-    const lanes=[];spans.forEach(s=>{let L=0;while(lanes[L]&&lanes[L].some(o=>!(s.ec<o.sc||s.sc>o.ec)))L++;(lanes[L]=lanes[L]||[]).push(s);s.lane=L});
-    if(spans.length){h+=`<div class="wkallday" style="grid-template-columns:${cols}"><div></div><div class="wkband" style="grid-column:2/${days.length+2};height:${lanes.length*22+6}px">`;
-      spans.forEach(s=>{const c=catColor(s.ev.category),rl=s.contL?'0':'7px',rr=s.contR?'0':'7px';h+=`<div class="wkbar" data-ev="${s.ev.id}" style="left:${s.sc/days.length*100}%;width:calc(${(s.ec-s.sc+1)/days.length*100}% - 6px);top:${s.lane*22}px;background:${c};border-radius:${rl} ${rr} ${rr} ${rl}">${s.contL?'‹ ':''}${esc(s.ev.title)}</div>`});
-      h+='</div></div>';}
-  }
-  h+=`<div class="wkbody" style="grid-template-columns:${cols}"><div class="hours">`;
-  for(let hr=8;hr<=20;hr++)h+=`<div class="h">${hr}:00</div>`;
-  h+='</div>';
-  days.forEach(dt=>{const d=iso(dt);h+='<div class="wkcol">';for(let hr=8;hr<=20;hr++)h+='<div class="slot"></div>';
-    items.filter(x=>x.d===d).forEach(x=>{const[sh,sm]=x.t.split(':').map(Number),[eh,em]=(x.e||x.t).split(':').map(Number);const top=((sh-8)*60+sm)/60*50,hgt=Math.max(26,((eh*60+em)-(sh*60+sm))/60*50-3);h+=`<div class="wev" ${x.id?`data-ev="${x.id}"`:`onclick="toast('${esc(x.title)} · ${esc(x.who||'')}')"`} style="top:${top}px;height:${hgt}px;background:${x.color}">${esc(x.title)}<small>${x.sub||x.t+'–'+(x.e||'')}</small></div>`});
-    h+='</div>';});
-  return h+'</div>';
-}
+/* ── Week ── */
 function renderWeek(){
   const m=mondayOf(CUR),days=[];for(let i=0;i<7;i++)days.push(addDays(m,i));
-  let h='<div class="wkhead" style="grid-template-columns:56px repeat(7,1fr)"><div class="cnr"></div>';
+  let h='<div class="wkhead"><div class="cnr"></div>';
   days.forEach(dt=>{const isT=iso(dt)===todayIso();h+=`<div class="wd ${isT?'today':''}"><div class="d">${dt.getDate()}</div><div class="n">${WD[(dt.getDay()+6)%7]}</div></div>`});
   h+='</div>';
-  const items=EVENTS.filter(ev=>visible(ev)&&!isAllDay(ev)).map(ev=>({d:ev.start.slice(0,10),t:timeOf(ev.start),e:timeOf(ev.end),title:ev.title,color:catColor(ev.category),id:ev.id,sub:ev.location||''}));
-  return h+timedGrid(days,items,true);
-}
-
-// ─── Переговорные ───
-function renderRoomLegend(){
-  document.getElementById('roomList').innerHTML=ROOMS.map(r=>`<div class="cat static"><span class="dot" style="background:${r.color}"></span>${esc(r.name)}</div>`).join('')||'<div class="chint" style="padding:0 6px">Нет переговорных</div>';
-}
-function roomsDay(){
-  let h='<div class="rinfo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>Брони подтягиваются из Bitrix24. Создание брони прямо из ЦУП добавим следующим этапом.</div>';
-  const cols='56px repeat('+Math.max(1,ROOMS.length)+',1fr)';
-  h+=`<div class="wkhead" style="grid-template-columns:${cols}"><div class="cnr"></div>`;
-  ROOMS.forEach(r=>h+=`<div class="rm"><span class="rmdot" style="background:${r.color}"></span>${esc(r.name)}</div>`);
-  h+=`</div><div class="wkbody" style="grid-template-columns:${cols}"><div class="hours">`;
-  for(let hr=8;hr<=20;hr++)h+=`<div class="h">${hr}:00</div>`;
+  const wkStart=days[0],wkEnd=days[6],spans=[];
+  EVENTS.forEach(ev=>{if(!visible(ev)||!isAllDay(ev))return;const a=evStart(ev),b=evEnd(ev);if(b<wkStart||a>wkEnd)return;spans.push({ev,sc:Math.max(0,Math.round((a-wkStart)/864e5)),ec:Math.min(6,Math.round((b-wkStart)/864e5)),contL:a<wkStart,contR:b>wkEnd})});
+  spans.sort((x,y)=>x.sc-y.sc||(y.ec-y.sc)-(x.ec-x.sc));
+  const lanes=[];spans.forEach(s=>{let L=0;while(lanes[L]&&lanes[L].some(o=>!(s.ec<o.sc||s.sc>o.ec)))L++;(lanes[L]=lanes[L]||[]).push(s);s.lane=L});
+  if(spans.length){h+=`<div class="wkallday"><div></div><div class="wkband" style="height:${lanes.length*22+6}px">`;
+    spans.forEach(s=>{const c=catColor(s.ev.category),rl=s.contL?'0':'7px',rr=s.contR?'0':'7px';h+=`<div class="wkbar" data-ev="${s.ev.id}" style="left:${s.sc/7*100}%;width:calc(${(s.ec-s.sc+1)/7*100}% - 6px);top:${s.lane*22}px;background:${c};border-radius:${rl} ${rr} ${rr} ${rl}">${s.contL?'‹ ':''}${esc(s.ev.title)}</div>`});
+    h+='</div></div>';}
+  h+='<div class="wkbody"><div class="hours">';
+  for(let hr=8;hr<=19;hr++)h+=`<div class="h">${hr}:00</div>`;
   h+='</div>';
-  const today=iso(CUR);
-  ROOMS.forEach(r=>{h+='<div class="wkcol">';for(let hr=8;hr<=20;hr++)h+='<div class="slot"></div>';
-    BOOKINGS.filter(b=>b.room===r.id&&b.d===today).forEach(b=>{const[sh,sm]=b.t.split(':').map(Number),[eh,em]=b.e.split(':').map(Number);const top=((sh-8)*60+sm)/60*50,hgt=Math.max(30,((eh*60+em)-(sh*60+sm))/60*50-3);h+=`<div class="wev" style="top:${top}px;height:${hgt}px;background:${r.color}" onclick="toast('${esc(r.name)}: ${esc(b.title)} · ${esc(b.who)}')">${esc(b.title)}<small>${b.t}–${b.e}${b.who?' · '+esc(b.who):''}</small></div>`});
+  days.forEach(dt=>{const d=iso(dt);h+='<div class="wkcol">';for(let hr=8;hr<=19;hr++)h+='<div class="slot"></div>';
+    EVENTS.forEach(ev=>{if(!visible(ev)||isAllDay(ev)||ev.start.slice(0,10)!==d)return;const[sh,sm]=timeOf(ev.start).split(':').map(Number);const[eh,em]=(timeOf(ev.end)||timeOf(ev.start)).split(':').map(Number);const top=((sh-8)*60+sm)/60*48,hgt=Math.max(26,((eh*60+em)-(sh*60+sm))/60*48-3);const c=catColor(ev.category);h+=`<div class="wev" data-ev="${ev.id}" style="top:${top}px;height:${hgt}px;background:${c}">${esc(ev.title)}<small>${timeOf(ev.start)}–${timeOf(ev.end)||''}</small></div>`});
     h+='</div>';});
-  if(!ROOMS.length)h+='';
   return h+'</div>';
 }
-function roomsWeek(){
-  const m=mondayOf(CUR),days=[];for(let i=0;i<7;i++)days.push(addDays(m,i));
-  let h='<div class="wkhead" style="grid-template-columns:56px repeat(7,1fr)"><div class="cnr"></div>';
-  days.forEach(dt=>{const isT=iso(dt)===todayIso();h+=`<div class="wd ${isT?'today':''}"><div class="d">${dt.getDate()}</div><div class="n">${WD[(dt.getDay()+6)%7]}</div></div>`});
-  h+='</div>';
-  const roomColor=id=>{const r=ROOMS.find(x=>x.id===id);return r?r.color:'#2f6bed'};
-  const roomName=id=>{const r=ROOMS.find(x=>x.id===id);return r?r.name:''};
-  const items=BOOKINGS.map(b=>({d:b.d,t:b.t,e:b.e,title:b.title,color:roomColor(b.room),who:b.who,sub:roomName(b.room)}));
-  return h+timedGrid(days,items,false);
+
+/* ── Переговорные ── */
+function renderRoomLegend(){
+  document.getElementById('roomList').innerHTML=ROOMS.map(r=>`<div class="cat static"><span class="dot" style="background:${r.color}"></span>${esc(r.name)}</div>`).join('')||'<div class="chint" style="padding:0 6px">Переговорные не найдены.</div>';
 }
-function roomsMonth(){
-  const curM=CUR.getMonth();const roomColor=id=>{const r=ROOMS.find(x=>x.id===id);return r?r.color:'#2f6bed'};const roomName=id=>{const r=ROOMS.find(x=>x.id===id);return r?r.name:''};
+function roomColor(id){const r=ROOMS.find(x=>x.id===id);return r?r.color:'#2f6bed'}
+function roomName(id){const r=ROOMS.find(x=>x.id===id);return r?r.name:''}
+function renderRooms(){
+  const n=Math.max(1,ROOMS.length),cols=`56px repeat(${n},1fr)`;
+  let h='<div class="rinfo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>Брони подтягиваются из Bitrix24. Создание брони прямо из ЦУП добавим на следующем этапе.</div>';
+  h+=`<div class="rmhead" style="grid-template-columns:${cols}"><div class="cnr"></div>`;
+  ROOMS.forEach(r=>h+=`<div class="rm"><span class="rmdot" style="background:${r.color}"></span>${esc(r.name)}</div>`);
+  h+=`</div><div class="rmbody" style="grid-template-columns:${cols}"><div class="hours">`;
+  for(let hr=8;hr<=19;hr++)h+=`<div class="h">${hr}:00</div>`;
+  h+='</div>';
+  const today=iso(CUR);
+  ROOMS.forEach(r=>{h+='<div class="rmcol">';for(let hr=8;hr<=19;hr++)h+='<div class="slot"></div>';
+    BOOKINGS.filter(b=>b.room===r.id&&b.d===today).forEach(b=>{const[sh,sm]=b.t.split(':').map(Number),[eh,em]=b.e.split(':').map(Number);const top=((sh-8)*60+sm)/60*52,hgt=Math.max(30,((eh*60+em)-(sh*60+sm))/60*52-3);h+=`<div class="rev" style="top:${top}px;height:${hgt}px;background:${r.color}" onclick="toast('${esc(r.name)}: ${esc(b.title)}${b.who?' · '+esc(b.who):''}')">${esc(b.title)}<small>${b.t}–${b.e}${b.who?' · '+esc(b.who):''}</small></div>`});
+    h+='</div>';});
+  return h+'</div>';
+}
+function renderRoomsWeek(){
+  const m=mondayOf(CUR),days=[];for(let i=0;i<7;i++)days.push(addDays(m,i));
+  let h='<div class="wkhead"><div class="cnr"></div>';
+  days.forEach(dt=>{const isT=iso(dt)===todayIso();h+=`<div class="wd ${isT?'today':''}"><div class="d">${dt.getDate()}</div><div class="n">${WD[(dt.getDay()+6)%7]}</div></div>`});
+  h+='</div><div class="wkbody"><div class="hours">';
+  for(let hr=8;hr<=19;hr++)h+=`<div class="h">${hr}:00</div>`;
+  h+='</div>';
+  days.forEach(dt=>{const d=iso(dt);h+='<div class="wkcol">';for(let hr=8;hr<=19;hr++)h+='<div class="slot"></div>';
+    BOOKINGS.filter(b=>b.d===d).forEach(b=>{const[sh,sm]=b.t.split(':').map(Number),[eh,em]=b.e.split(':').map(Number);const top=((sh-8)*60+sm)/60*48,hgt=Math.max(26,((eh*60+em)-(sh*60+sm))/60*48-3);h+=`<div class="wev" style="top:${top}px;height:${hgt}px;background:${roomColor(b.room)}" onclick="toast('${esc(roomName(b.room))}: ${esc(b.title)}')">${esc(b.title)}<small>${esc(roomName(b.room))}</small></div>`});
+    h+='</div>';});
+  return h+'</div>';
+}
+function renderRoomsMonth(){
+  const curM=CUR.getMonth();
   let h='<div class="mweek-h">'+WD.map((w,i)=>`<div class="${i>4?'we':''}">${w}</div>`).join('')+'</div><div class="mbody">';
   weeksGrid().forEach(week=>{
     const per=week.map(dt=>BOOKINGS.filter(b=>b.d===iso(dt)));const rows=Math.min(4,Math.max(0,...per.map(a=>a.length)));
@@ -448,91 +483,84 @@ function roomsMonth(){
   return h+'</div>';
 }
 
-// ─── Мини-месяц ───
+/* ── мини-месяц ── */
 function miniMonth(){
   const y=CUR.getFullYear(),mo=CUR.getMonth();
   document.getElementById('miniLbl').textContent=MONN[mo]+' '+y;
   const g=document.getElementById('miniGrid');let h='';
   WD.forEach(w=>h+=`<div class="wd">${w[0]}</div>`);
-  const first=new Date(y,mo,1);const start=mondayOf(first);
-  const has=new Set();if(SCOPE!=='rooms')EVENTS.forEach(ev=>{if(!visible(ev))return;spanDates(ev).forEach(d=>has.add(d))});
+  const start=mondayOf(new Date(y,mo,1));
+  const has=new Set();if(SCOPE!=='rooms')EVENTS.forEach(ev=>{if(!visible(ev))return;spanDays(ev).forEach(d=>has.add(d))});
   for(let i=0;i<42;i++){const dt=addDays(start,i);const mut=dt.getMonth()!==mo;const isT=iso(dt)===todayIso();const hs=has.has(iso(dt));
     h+=`<div class="d ${mut?'mut':''} ${isT?'today':''} ${hs?'has':''}" data-d="${iso(dt)}">${dt.getDate()}</div>`;}
   g.innerHTML=h;
   g.querySelectorAll('.d[data-d]').forEach(el=>el.onclick=()=>{CUR=parseD(el.dataset.d);if(SCOPE!=='rooms'&&VIEW==='agenda')VIEW='month';loadEvents()});
 }
 function renderCatList(){
-  document.getElementById('catList').innerHTML=FILTER_CATS.map(c=>`<div class="cat ${OFF.has(c)?'off':''}" data-cat="${c}"><span class="dot" style="background:${catColor(c)}"></span>${NAMES[c]}<span class="chk">✓</span></div>`).join('');
+  document.getElementById('catList').innerHTML=FILTER_CATS.map(c=>`<div class="cat ${OFF.has(c)?'off':''}" data-cat="${c}"><span class="dot" style="background:${catColor(c)}"></span>${CNAME[c]}<span class="chk">✓</span></div>`).join('');
   document.querySelectorAll('#catList .cat').forEach(el=>el.onclick=()=>{const c=el.dataset.cat;if(OFF.has(c))OFF.delete(c);else OFF.add(c);renderCatList();render();miniMonth()});
 }
-function syncCssVars(){/* categories use CATC directly; nothing to sync for cup-ui */}
 
-// ─── Просмотр/редактирование события ───
+/* ── просмотр/редактирование ── */
 function findEv(id){return EVENTS.find(e=>e.id===id)}
 function openEvent(id){
   const ev=findEv(id);if(!ev)return;
   if(ev.source==='calendar'&&ev.editable){openEdit(ev);return;}
-  const c=catColor(ev.category);
-  const a=evStartDate(ev),b=evEndDate(ev);
-  const when = (ev.end&&ev.end.slice(0,10)!==ev.start.slice(0,10))
-    ? `${a.getDate()} ${MON[a.getMonth()]} – ${b.getDate()} ${MON[b.getMonth()]}`
-    : `${WD_FULL[(a.getDay()+6)%7]}, ${a.getDate()} ${MON[a.getMonth()]}`;
-  const time = isAllDay(ev)?'Весь день':`${timeOf(ev.start)}${timeOf(ev.end)&&ev.end!==ev.start?' – '+timeOf(ev.end):''}`;
-  let rows=`<div class="tagline" style="background:${c}1f;color:${c}"><span style="width:8px;height:8px;border-radius:50%;background:${c}"></span>${TAG[ev.category]||''}</div>`;
+  const c=catColor(ev.category),a=evStart(ev),b=evEnd(ev);
+  const when=(ev.end&&ev.end.slice(0,10)!==ev.start.slice(0,10))?`${a.getDate()} ${MON[a.getMonth()]} – ${b.getDate()} ${MON[b.getMonth()]}`:`${WD_FULL[(a.getDay()+6)%7]}, ${a.getDate()} ${MON[a.getMonth()]}`;
+  const time=isAllDay(ev)?'Весь день':`${timeOf(ev.start)}${timeOf(ev.end)&&ev.end!==ev.start?' – '+timeOf(ev.end):''}`;
+  let rows=`<div class="tagline" style="background:${c}1a;color:${c}"><span style="width:8px;height:8px;border-radius:50%;background:${c}"></span>${TAG[ev.category]||''}</div>`;
   rows+=`<div class="row">${ic('cal')}${when}</div><div class="row">${ic('clock')}${time}</div>`;
   if(ev.location)rows+=`<div class="row">${ic('pin')}${esc(ev.location)}</div>`;
   if(ev.who)rows+=`<div class="row">${ic('user')}${esc(ev.who)}</div>`;
   if(ev.note)rows+=`<div class="row">${ic('info')}${esc(ev.note)}</div>`;
-  const openBtn = ev.url?`<button class="pri" onclick="location.href='${ev.url}'">Открыть источник</button>`:`<button class="pri" onclick="closePop()">Закрыть</button>`;
-  document.getElementById('pop').innerHTML=`<div class="ph"><div class="cc" style="background:${c}"></div><h3>${esc(ev.title)}</h3><button class="x" onclick="closePop()">×</button></div><div class="pb">${rows}<div class="actions">${openBtn}</div></div>`;
+  const btn=ev.url?`<button class="pri" onclick="location.href='${ev.url}'">Открыть источник</button>`:`<button class="pri" onclick="closePop()">Закрыть</button>`;
+  document.getElementById('pop').innerHTML=`<div class="ph"><div class="cc" style="background:${c}"></div><h3>${esc(ev.title)}</h3><button class="x" onclick="closePop()">×</button></div><div class="pb">${rows}<div class="actions">${btn}</div></div>`;
   document.getElementById('popOv').classList.add('on');
 }
 function closePop(){document.getElementById('popOv').classList.remove('on')}
 function ic(n){const p={cal:'<rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',pin:'<path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',user:'<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/>',info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>'}[n];return `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`}
 
-// ─── Создание/редактирование своего события ───
 let EDIT=null;
 function openCreate(){
-  const base=new Date(CUR);const t=new Date();base.setHours(t.getHours()+1,0,0,0);
-  EDIT={id:null,title:'',category:'meet',allDay:false,start:iso(base)+'T'+String(base.getHours()).padStart(2,'0')+':00',end:iso(base)+'T'+String(base.getHours()+1).padStart(2,'0')+':00',location:'',note:''};
+  const base=new Date(CUR);const now=new Date();base.setHours(now.getHours()+1,0,0,0);
+  EDIT={id:null,title:'',category:'meet',allDay:false,start:iso(base)+'T'+pad(base.getHours())+':00',end:iso(base)+'T'+pad(base.getHours()+1)+':00',location:'',note:''};
   renderEdit();
 }
 function openEdit(ev){
-  EDIT={id:ev.id.replace('cal:',''),title:ev.title,category:ev.category,allDay:isAllDay(ev),
+  EDIT={id:String(ev.id).replace('cal:',''),title:ev.title,category:ev.category,allDay:isAllDay(ev),
     start:isAllDay(ev)?ev.start.slice(0,10)+'T09:00':ev.start.slice(0,16),
     end:isAllDay(ev)?(ev.end||ev.start).slice(0,10)+'T10:00':(ev.end||ev.start).slice(0,16),
     location:ev.location||'',note:ev.note||''};
   closePop();renderEdit();
 }
 function renderEdit(){
-  const e=EDIT;const sD=e.start.slice(0,10),sT=e.start.slice(11,16),eD=e.end.slice(0,10),eT=e.end.slice(11,16);
+  const e=EDIT,sD=e.start.slice(0,10),sT=e.start.slice(11,16),eD=e.end.slice(0,10),eT=e.end.slice(11,16);
   const cats=['meet','task','imp','agent'];
   let h=`<div class="ph"><div class="cc" style="background:${catColor(e.category)}"></div><h3>${e.id?'Событие':'Новое событие'}</h3><button class="x" onclick="closeEdit()">×</button></div><div class="pb">`;
   h+=`<div class="fld"><label>Название</label><input id="eTitle" value="${esc(e.title)}" placeholder="Например, встреча с клиентом"></div>`;
   h+=`<div class="fld"><label>Тип</label><div class="catpick" id="eCat">`+cats.map(c=>`<button data-c="${c}" class="${e.category===c?'on':''}"><span class="d" style="background:${catColor(c)}"></span>${TAG[c]}</button>`).join('')+`</div></div>`;
   h+=`<label class="tgl"><input type="checkbox" id="eAllday" ${e.allDay?'checked':''}> Весь день</label>`;
-  h+=`<div class="two" id="eStartRow"><div class="fld"><label>Начало</label><input type="date" id="eSd" value="${sD}"></div><div class="fld" id="eStWrap" ${e.allDay?'style="display:none"':''}><label>Время</label><input type="time" id="eSt" value="${sT}"></div></div>`;
-  h+=`<div class="two" id="eEndRow"><div class="fld"><label>Конец</label><input type="date" id="eEd" value="${eD}"></div><div class="fld" id="eEtWrap" ${e.allDay?'style="display:none"':''}><label>Время</label><input type="time" id="eEt" value="${eT}"></div></div>`;
+  h+=`<div class="two"><div class="fld"><label>Начало</label><input type="date" id="eSd" value="${sD}"></div><div class="fld" id="eStWrap" ${e.allDay?'style="display:none"':''}><label>Время</label><input type="time" id="eSt" value="${sT}"></div></div>`;
+  h+=`<div class="two"><div class="fld"><label>Конец</label><input type="date" id="eEd" value="${eD}"></div><div class="fld" id="eEtWrap" ${e.allDay?'style="display:none"':''}><label>Время</label><input type="time" id="eEt" value="${eT}"></div></div>`;
   h+=`<div class="fld"><label>Место</label><input id="eLoc" value="${esc(e.location)}" placeholder="Необязательно"></div>`;
   h+=`<div class="fld"><label>Заметка</label><textarea id="eNote" placeholder="Необязательно">${esc(e.note)}</textarea></div>`;
   h+=`<div class="actions">${e.id?'<button class="danger" onclick="delEvent()">Удалить</button>':''}<button onclick="closeEdit()">Отмена</button><button class="pri" onclick="saveEvent()">Сохранить</button></div></div>`;
   document.getElementById('editModal').innerHTML=h;
   document.getElementById('editOv').classList.add('on');
   document.querySelectorAll('#eCat button').forEach(b=>b.onclick=()=>{EDIT.category=b.dataset.c;document.querySelectorAll('#eCat button').forEach(x=>x.classList.toggle('on',x===b));document.querySelector('#editModal .cc').style.background=catColor(b.dataset.c)});
-  document.getElementById('eAllday').onchange=e2=>{const on=e2.target.checked;document.getElementById('eStWrap').style.display=on?'none':'';document.getElementById('eEtWrap').style.display=on?'none':''};
+  document.getElementById('eAllday').onchange=ev2=>{const on=ev2.target.checked;document.getElementById('eStWrap').style.display=on?'none':'';document.getElementById('eEtWrap').style.display=on?'none':''};
 }
 function closeEdit(){document.getElementById('editOv').classList.remove('on')}
 async function saveEvent(){
   const allDay=document.getElementById('eAllday').checked;
   const sd=document.getElementById('eSd').value,ed=document.getElementById('eEd').value;
   const st=allDay?'00:00':(document.getElementById('eSt').value||'09:00'),et=allDay?'00:00':(document.getElementById('eEt').value||'10:00');
-  const body={title:document.getElementById('eTitle').value.trim(),category:EDIT.category,allDay,
-    location:document.getElementById('eLoc').value,note:document.getElementById('eNote').value};
+  const body={title:document.getElementById('eTitle').value.trim(),category:EDIT.category,allDay,location:document.getElementById('eLoc').value,note:document.getElementById('eNote').value};
   if(allDay){body.start=sd;body.end=ed||sd;}else{body.start=sd+'T'+st;body.end=(ed||sd)+'T'+et;}
   if(!body.title){toast('Нужно название');return;}
   const d=EDIT.id?await api('PATCH','/events/'+EDIT.id,body):await api('POST','/events',body);
-  if(d&&d.ok){closeEdit();toast(EDIT.id?'Сохранено':'Событие создано');loadEvents();}
-  else toast((d&&d.error)||'Не удалось сохранить');
+  if(d&&d.ok){closeEdit();toast(EDIT.id?'Сохранено':'Событие создано');loadEvents();}else toast((d&&d.error)||'Не удалось сохранить');
 }
 async function delEvent(){
   if(!EDIT.id)return;
@@ -540,17 +568,16 @@ async function delEvent(){
   if(d&&d.ok){closeEdit();toast('Удалено');loadEvents();}else toast('Не удалось удалить');
 }
 
-// ─── Цвета (админ) ───
+/* ── цвета (админ) ── */
 function openColors(){
-  document.getElementById('colorBody').innerHTML=FILTER_CATS.concat(['imp']).map(c=>`<label class="crow"><span class="dot" id="sw-${c}" style="background:${catColor(c)}"></span><span class="nm">${NAMES[c]}</span><input type="color" value="${catColor(c)}" oninput="setCat('${c}',this.value)"></label>`).join('')+'<div class="chint">Применяется ко всему календарю для всех сотрудников.</div><div class="actions"><button onclick="closeColors()">Готово</button></div>';
+  document.getElementById('colorBody').innerHTML=FILTER_CATS.concat(['sick','imp']).map(c=>`<label class="crow"><span class="dot" id="sw-${c}" style="background:${catColor(c)}"></span><span class="nm">${(CNAME[c]||TAG[c])}</span><input type="color" value="${catColor(c)}" oninput="setCat('${c}',this.value)"></label>`).join('')+'<div class="chint">Доступно администратору. Выбранные цвета применяются ко всему календарю для всех сотрудников.</div><div class="actions"><button onclick="closeColors()">Готово</button></div>';
   document.getElementById('colorOv').classList.add('on');
 }
 function closeColors(){document.getElementById('colorOv').classList.remove('on')}
-let colorSaveT;
-function setCat(c,val){CATC[c]=val;const sw=document.getElementById('sw-'+c);if(sw)sw.style.background=val;renderCatList();renderRoomLegend();render();miniMonth();
-  clearTimeout(colorSaveT);colorSaveT=setTimeout(()=>{api('PUT','/colors',CATC)},600);}
+let colorT;
+function setCat(c,val){CATC[c]=val;const sw=document.getElementById('sw-'+c);if(sw)sw.style.background=val;renderCatList();renderRoomLegend();render();miniMonth();clearTimeout(colorT);colorT=setTimeout(()=>api('PUT','/colors',CATC),600);}
 
-// ─── Навигация ───
+/* ── навигация / скоуп ── */
 function shift(dir){
   if(SCOPE==='rooms'){CUR=ROOMVIEW==='month'?new Date(CUR.getFullYear(),CUR.getMonth()+dir,1):ROOMVIEW==='week'?addDays(CUR,7*dir):addDays(CUR,dir);}
   else{CUR=VIEW==='week'?addDays(CUR,7*dir):VIEW==='agenda'?addDays(CUR,30*dir):new Date(CUR.getFullYear(),CUR.getMonth()+dir,1);}
@@ -567,10 +594,10 @@ function switchScope(s){
   loadEvents();
 }
 
-// ─── Инициализация ───
+/* ── init ── */
 async function boot(){
   try{const r=await fetch('/api/account/me',{credentials:'same-origin'});const d=await r.json();if(d&&d.user){ME=d.user;ADMIN=['admin','superadmin'].includes(d.user.role);}}catch(e){}
-  try{const c=await api('GET','/colors');if(c&&c.ok){CATC=Object.assign({},CATC,c.colors);}}catch(e){}
+  try{const c=await api('GET','/colors');if(c&&c.ok)CATC=Object.assign({},CATC,c.colors);}catch(e){}
   document.getElementById('gearBtn').style.display=ADMIN?'':'none';
   renderCatList();
   document.querySelectorAll('.calitem').forEach(b=>b.onclick=()=>switchScope(b.dataset.scope));
