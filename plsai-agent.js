@@ -316,7 +316,7 @@ function buildSystem(user, allowed, examples) {
     `Пользователь: ${user.display_name || user.engineer_name || 'сотрудник'} · роль: ${user.role}.`,
     '',
     'У тебя есть инструмент run_sql — выполнить ОДИН SELECT (только чтение) к базе-зеркалу ЦУПа (Postgres).',
-    'Ты также МОЖЕШЬ готовить ПИШУЩИЕ действия через инструменты create_task (задача в Bitrix), add_deal_comment (комментарий к сделке), create_reminder (напоминание в ЦУП), create_event (событие/встреча в КАЛЕНДАРЬ ЦУП). ВАЖНО: эти действия НЕ выполняются сразу — ты лишь готовишь ПРЕДЛОЖЕНИЕ, которое инициатор подтверждает кнопкой. Вызывай их ТОЛЬКО когда пользователь явно просит создать/поставить/добавить. После вызова не говори «я создал/добавил» — говори «предлагаю … , подтвердите». Если данных для действия не хватает (например, кому задача или по какой сделке) — сначала спроси.',
+    'Ты также МОЖЕШЬ готовить ПИШУЩИЕ действия через инструменты create_task (задача в Bitrix), add_deal_comment (комментарий к сделке), create_reminder (напоминание в ЦУП), create_event (событие/встреча в КАЛЕНДАРЬ ЦУП), create_room_booking (бронь ПЕРЕГОВОРНОЙ в Bitrix). ВАЖНО: эти действия НЕ выполняются сразу — ты лишь готовишь ПРЕДЛОЖЕНИЕ, которое инициатор подтверждает кнопкой. Вызывай их ТОЛЬКО когда пользователь явно просит создать/поставить/добавить. После вызова не говори «я создал/добавил» — говори «предлагаю … , подтвердите». Если данных для действия не хватает (например, кому задача или по какой сделке) — сначала спроси.',
     'Данные — это зеркало Bitrix и модулей ЦУПа. Суммы почти везде в валюте сделки; для пересчёта в тенге используй ticketsmodule_exchange_rates при необходимости.',
     'Тебе доступны следующие таблицы (доступ уже отфильтрован по роли и грантам — к другим не обращайся):',
     ...lines,
@@ -450,6 +450,20 @@ const TOOLS = [
         note: { type: 'string', description: 'Детали (необязательно).' },
       },
       required: ['title', 'start'],
+    },
+  },
+  {
+    name: 'create_room_booking',
+    description: 'ПРЕДЛОЖИТЬ бронирование ПЕРЕГОВОРНОЙ в Bitrix на дату и время. Ничего не бронируется до подтверждения инициатора. Укажи начало и конец со временем. Если переговорных несколько — укажи название (room_name).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Название встречи/брони (необязательно).' },
+        room_name: { type: 'string', description: 'Название переговорной (необязательно; если одна — не нужно).' },
+        start: { type: 'string', description: 'Начало: YYYY-MM-DDTHH:mm.' },
+        end: { type: 'string', description: 'Конец: YYYY-MM-DDTHH:mm.' },
+      },
+      required: ['start', 'end'],
     },
   },
 ];
@@ -615,12 +629,15 @@ async function runAgent(qRaw, user) {
         continue;
       }
       // ── ПИШУЩИЕ инструменты: готовим ПРЕДЛОЖЕНИЕ (не выполняем) ──────────────
-      if (tu.name === 'create_task' || tu.name === 'add_deal_comment' || tu.name === 'create_reminder' || tu.name === 'create_event') {
+      if (tu.name === 'create_task' || tu.name === 'add_deal_comment' || tu.name === 'create_reminder' || tu.name === 'create_event' || tu.name === 'create_room_booking') {
         try {
           const actions = require('./agent-actions');
           const inp = tu.input || {};
           let params = {}, summary = '';
-          if (tu.name === 'create_event') {
+          if (tu.name === 'create_room_booking') {
+            params = { title: inp.title || '', room_name: inp.room_name || '', start: inp.start || '', end: inp.end || '' };
+            summary = 'Забронировать переговорную' + (params.room_name ? (' «' + params.room_name + '»') : '') + ': ' + String(params.start).replace('T', ' ') + ' – ' + String(params.end).slice(11, 16) + (params.title ? (' (' + params.title + ')') : '');
+          } else if (tu.name === 'create_event') {
             params = { title: inp.title || 'Событие', start: inp.start || '', end: inp.end || '', allDay: !!inp.all_day, category: inp.category || 'meet', location: inp.location || '', note: inp.note || '' };
             const whenTxt = params.allDay ? ('на ' + String(params.start).slice(0, 10)) : String(params.start).replace('T', ' ');
             summary = 'Добавить в календарь ЦУП: «' + params.title + '» (' + whenTxt + ')';

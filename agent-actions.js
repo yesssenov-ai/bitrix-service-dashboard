@@ -168,6 +168,22 @@ async function execute(kind, params, user) {
       [user && user.id, title, cat, startVal, endVal, allDay, String(params.location || '').slice(0, 300), String(params.note || '').slice(0, 2000), (user && user.username) || 'agent']);
     return 'Событие добавлено в календарь ЦУП: «' + title + '»' + (allDay ? (' на ' + startVal.slice(0, 10)) : (' ' + startVal.slice(0, 10) + ' ' + startVal.slice(11, 16)));
   }
+  if (kind === 'create_room_booking') {
+    const cal = require('./routes/calendar-routes');
+    const re = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+    if (!re.test(String(params.start || '')) || !re.test(String(params.end || ''))) throw new Error('Нужны дата и время начала и конца');
+    if (String(params.end).slice(0, 16) <= String(params.start).slice(0, 16)) throw new Error('Конец должен быть позже начала');
+    let rid = params.room_id;
+    let rooms = [];
+    try { rooms = await cal.listRooms(); } catch (e) {}
+    if (!rid && params.room_name) { const m = rooms.find(r => r.name.toLowerCase().includes(String(params.room_name).toLowerCase())); if (m) rid = m.rid; }
+    if (!rid && rooms.length) rid = rooms[0].rid;
+    if (!rid) throw new Error('Не удалось определить переговорную');
+    // bookRoom сам проверяет пересечение и бросает «…занята»
+    const id = await cal.bookRoom(rid, params.title, params.start, params.end, user);
+    const rm = rooms.find(r => r.rid === rid);
+    return 'Переговорная' + (rm ? (' «' + rm.name + '»') : '') + ' забронирована: ' + String(params.start).replace('T', ' ') + ' – ' + String(params.end).slice(11, 16);
+  }
   throw new Error('Неизвестный тип действия: ' + kind);
 }
 

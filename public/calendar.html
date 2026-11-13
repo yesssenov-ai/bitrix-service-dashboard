@@ -255,6 +255,7 @@ svg{display:block}
         <button data-rv="week">Неделя</button>
         <button data-rv="month">Месяц</button>
       </div>
+      <button id="bookBtn" style="display:none;border:0;background:var(--accent);color:#fff;font-size:13px;font-weight:700;padding:9px 15px;border-radius:10px;font-family:inherit">Забронировать</button>
       <button class="gear" id="gearBtn" title="Цвета событий (для админа)" style="display:none">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 13.5a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
       </button>
@@ -265,6 +266,7 @@ svg{display:block}
 
 <div class="pop-ov" id="popOv"><div class="pop" id="pop"></div></div>
 <div class="pop-ov" id="editOv"><div class="pop" id="editModal" style="max-width:440px"></div></div>
+<div class="pop-ov" id="bookOv"><div class="pop" id="bookModal" style="max-width:420px"></div></div>
 <div class="pop-ov" id="colorOv"><div class="pop" style="max-width:384px">
   <div class="ph"><div class="cc" style="background:var(--accent)"></div><h3>Цвета событий</h3><button class="x" onclick="closeColors()">×</button></div>
   <div class="pb" id="colorBody"></div>
@@ -447,7 +449,7 @@ function roomColor(id){const r=ROOMS.find(x=>x.id===id);return r?r.color:'#2f6be
 function roomName(id){const r=ROOMS.find(x=>x.id===id);return r?r.name:''}
 function renderRooms(){
   const n=Math.max(1,ROOMS.length),cols=`56px repeat(${n},1fr)`;
-  let h='<div class="rinfo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>Брони подтягиваются из Bitrix24. Создание брони прямо из ЦУП добавим на следующем этапе.</div>';
+  let h='<div class="rinfo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>Бронируйте переговорные прямо здесь — кнопка «Забронировать» вверху. '+(ADMIN?'<a href="#" onclick="openImport();return false" style="color:var(--accent);font-weight:700;margin-left:auto;text-decoration:none">Импорт старых броней из Bitrix →</a>':'')+'</div>';
   h+=`<div class="rmhead" style="grid-template-columns:${cols}"><div class="cnr"></div>`;
   ROOMS.forEach(r=>h+=`<div class="rm"><span class="rmdot" style="background:${r.color}"></span>${esc(r.name)}</div>`);
   h+=`</div><div class="rmbody" style="grid-template-columns:${cols}"><div class="hours">`;
@@ -568,6 +570,48 @@ async function delEvent(){
   if(d&&d.ok){closeEdit();toast('Удалено');loadEvents();}else toast('Не удалось удалить');
 }
 
+/* ── бронь переговорной ── */
+function openBook(){
+  if(!ROOMS.length){ toast('Переговорные не найдены'); return; }
+  const now=new Date(); const h=(iso(CUR)===todayIso()?Math.min(19,now.getHours()+1):10); const d=iso(CUR);
+  const roomOpts=ROOMS.map(r=>`<option value="${r.sid||''}">${esc(r.name)}</option>`).join('');
+  document.getElementById('bookModal').innerHTML=
+    `<div class="ph"><div class="cc" style="background:var(--accent)"></div><h3>Забронировать переговорную</h3><button class="x" onclick="closeBook()">×</button></div><div class="pb">
+      <div class="fld"><label>Переговорная</label><select id="bRoom" style="background:var(--surface-2);border:1px solid var(--line);border-radius:9px;color:var(--text);font:inherit;font-size:13.5px;padding:9px 11px;width:100%">${roomOpts}</select></div>
+      <div class="fld"><label>Название (необязательно)</label><input id="bTitle" placeholder="Например, встреча с клиентом"></div>
+      <div class="two"><div class="fld"><label>Дата</label><input type="date" id="bDate" value="${d}"></div><div class="fld"><label>С</label><input type="time" id="bFrom" value="${pad(h)}:00"></div><div class="fld"><label>До</label><input type="time" id="bTo" value="${pad(Math.min(20,h+1))}:00"></div></div>
+      <div class="actions"><button onclick="closeBook()">Отмена</button><button class="pri" onclick="saveBook()">Забронировать</button></div></div>`;
+  document.getElementById('bookOv').classList.add('on');
+}
+function closeBook(){document.getElementById('bookOv').classList.remove('on')}
+async function saveBook(){
+  const sid=document.getElementById('bRoom').value, d=document.getElementById('bDate').value, f=document.getElementById('bFrom').value, t=document.getElementById('bTo').value;
+  if(!sid){toast('Выберите переговорную');return;}
+  if(!d||!f||!t){toast('Укажите дату и время');return;}
+  const r=await api('POST','/rooms/book',{sectionId:sid,title:document.getElementById('bTitle').value,start:d+'T'+f,end:d+'T'+t});
+  if(r&&r.ok){closeBook();toast('Переговорная забронирована');loadRooms();}
+  else toast((r&&r.error)||'Не удалось забронировать');
+}
+
+/* ── импорт старых броней из Bitrix (админ) ── */
+function openImport(){
+  if(!ROOMS.length){toast('Сначала должны быть переговорные');return;}
+  const opts=ROOMS.map(r=>`<option value="${r.sid||''}">${esc(r.name)}</option>`).join('');
+  document.getElementById('bookModal').innerHTML=
+    `<div class="ph"><div class="cc" style="background:var(--accent)"></div><h3>Импорт броней из Bitrix</h3><button class="x" onclick="closeBook()">×</button></div><div class="pb">
+      <div class="chint">Перенесёт существующие брони «Conference room» из Bitrix в выбранную переговорную ЦУП. Повтор не дублирует.</div>
+      <div class="fld"><label>Импортировать в переговорную</label><select id="impRoom" style="background:var(--surface-2);border:1px solid var(--line);border-radius:9px;color:var(--text);font:inherit;font-size:13.5px;padding:9px 11px;width:100%">${opts}</select></div>
+      <div class="actions"><button onclick="closeBook()">Отмена</button><button class="pri" onclick="runImport()">Импортировать</button></div></div>`;
+  document.getElementById('bookOv').classList.add('on');
+}
+async function runImport(){
+  const rid=document.getElementById('impRoom').value; if(!rid){toast('Выберите комнату');return;}
+  toast('Импорт…');
+  const r=await api('POST','/rooms/import-bitrix',{roomId:rid});
+  if(r&&r.ok){closeBook();toast('Импортировано: '+r.added+' · пропущено '+r.skipped);loadRooms();}
+  else toast((r&&r.error)||'Не удалось импортировать');
+}
+
 /* ── цвета (админ) ── */
 function openColors(){
   document.getElementById('colorBody').innerHTML=FILTER_CATS.concat(['sick','imp']).map(c=>`<label class="crow"><span class="dot" id="sw-${c}" style="background:${catColor(c)}"></span><span class="nm">${(CNAME[c]||TAG[c])}</span><input type="color" value="${catColor(c)}" oninput="setCat('${c}',this.value)"></label>`).join('')+'<div class="chint">Доступно администратору. Выбранные цвета применяются ко всему календарю для всех сотрудников.</div><div class="actions"><button onclick="closeColors()">Готово</button></div>';
@@ -590,6 +634,7 @@ function switchScope(s){
   document.getElementById('roomBox').style.display=s==='rooms'?'':'none';
   document.getElementById('seg').style.display=s==='rooms'?'none':'';
   document.getElementById('segRoom').style.display=s==='rooms'?'':'none';
+  document.getElementById('bookBtn').style.display=s==='rooms'?'':'none';
   document.getElementById('gearBtn').style.display=(s!=='rooms'&&ADMIN)?'':'none';
   loadEvents();
 }
@@ -610,7 +655,8 @@ async function boot(){
   document.getElementById('miniNext').onclick=()=>{CUR=new Date(CUR.getFullYear(),CUR.getMonth()+1,1);miniMonth()};
   document.getElementById('createBtn').onclick=openCreate;
   document.getElementById('gearBtn').onclick=openColors;
-  [document.getElementById('popOv'),document.getElementById('editOv'),document.getElementById('colorOv')].forEach(ov=>ov.onclick=e=>{if(e.target===ov)ov.classList.remove('on')});
+  document.getElementById('bookBtn').onclick=openBook;
+  [document.getElementById('popOv'),document.getElementById('editOv'),document.getElementById('colorOv'),document.getElementById('bookOv')].forEach(ov=>ov.onclick=e=>{if(e.target===ov)ov.classList.remove('on')});
   loadEvents();
 }
 boot();

@@ -287,59 +287,130 @@ router.delete('/events/:id', requireAuth(), async (req, res) => {
   } catch (e) { console.error('cal delete:', e.message); res.status(500).json({ ok: false, error: 'Ошибка' }); }
 });
 
-// ── Переговорные (Bitrix) ──────────────────────────────────────────────────
-// Тянем ресурсы-переговорные и их брони из коробочного Bitrix. Метод может
-// отличаться, поэтому пробуем несколько и всегда отдаём рабочий ответ
-// (в худшем случае — настроенные комнаты EXPO/Training без броней).
-async function bitrixRooms(from, to) {
-  const { b24 } = require('../bitrix');
-  const out = { rooms: [], bookings: [], source: 'bitrix', warn: null };
-  // 1) список ресурсов-переговорных
-  let resources = [];
+// ── Переговорные (нативно в ЦУП/Supabase, без Bitrix) ──────────────────────
+// Переговорные и брони хранятся в ЦУП. Старые брони Bitrix «Conference room»
+// переносятся разовым импортом (POST /rooms/import-bitrix).
+let _roomsReady = false;
+async function ensureRooms() {
+  if (_roomsReady) return;
   try {
-    const r = await b24('calendar.resource.list', {});
-    resources = (r && r.result) || [];
-  } catch (e) { out.warn = 'resource.list: ' + e.message; }
-  const palette = ['#2f6bed', '#16a37a', '#d9821a', '#7a4ecc', '#e0569b', '#0ea5a4'];
-  if (Array.isArray(resources) && resources.length) {
-    out.rooms = resources.map((r, i) => ({
-      id: 'r' + (r.id || r.ID || i),
-      bid: r.id || r.ID,
-      name: String(r.name || r.NAME || ('Переговорная ' + (i + 1))).replace(/^Conference room:?\s*/i, '').trim() || ('Переговорная ' + (i + 1)),
-      color: palette[i % palette.length],
-    }));
-  } else {
-    out.rooms = DEFAULT_ROOMS.slice();
-  }
-  // 2) брони по ресурсам за период (тип 'location' — бронь переговорной)
-  for (const room of out.rooms) {
-    if (!room.bid) continue;
-    try {
-      const r = await b24('calendar.event.get', { type: 'location', ownerId: room.bid, from, to });
-      const evs = (r && r.result) || [];
-      for (const ev of (Array.isArray(evs) ? evs : [])) {
-        const s = ev.DATE_FROM || ev.dateFrom; const e = ev.DATE_TO || ev.dateTo;
-        out.bookings.push({
-          room: room.id,
-          title: String(ev.NAME || ev.name || 'Бронь').replace(/^Conference room:?\s*/i, '').trim(),
-          who: (ev.CREATED_BY_NAME || ''), startRaw: s, endRaw: e,
-        });
-      }
-    } catch (e) { if (!out.warn) out.warn = 'event.get: ' + e.message; }
-  }
-  return out;
+    await pool.query(`CREATE TABLE IF NOT EXISTS ticketsmodule_calendar_rooms (
+      id SERIAL PRIMARY KEY, name VARCHAR(200) NOT NULL, building VARCHAR(200) DEFAULT '',
+      color VARCHAR(16) DEFAULT '#2f6bed', active BOOLEAN DEFAULT true, position INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW())`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS ticketsmodule_room_bookings (
+      id SERIAL PRIMARY KEY, room_id INTEGER NOT NULL, title VARCHAR(300) DEFAULT '',
+      user_id INTEGER, booker_name VARCHAR(200) DEFAULT '',
+      start_at TIMESTAMPTZ NOT NULL, end_at TIMESTAMPTZ NOT NULL,
+      source VARCHAR(20) DEFAULT 'cup', bitrix_event_id VARCHAR(40), created_at TIMESTAMPTZ DEFAULT NOW())`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_tm_rbk_room_time ON ticketsmodule_room_bookings(room_id, start_at, end_at)`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_tm_rbk_bx ON ticketsmodule_room_bookings(bitrix_event_id) WHERE bitrix_event_id IS NOT NULL`);
+    const c = await pool.query(`SELECT COUNT(*)::int AS n FROM ticketsmodule_calendar_rooms`);
+    if (!c.rows[0].n) {
+      await pool.query(`INSERT INTO ticketsmodule_calendar_rooms (name, building, color, position) VALUES
+        ('Переговорная EXPO','Здание EXPO','#2f6bed',1),
+        ('Переговорная Training','Здание Training','#16a37a',2),
+        ('Переговорная Тренинг-центр','Тренинг-центр','#d9821a',3)`);
+    }
+    _roomsReady = true;
+  } catch (e) { console.error('rooms schema:', e.message); }
 }
+ensureRooms();
+
+async function listRooms() {
+  await ensureRooms();
+  const r = await pool.query(`SELECT id, name, building, color FROM ticketsmodule_calendar_rooms WHERE active=true ORDER BY position, id`);
+  return r.rows.map(x => ({ id: 'r' + x.id, sid: String(x.id), rid: x.id, name: x.name, building: x.building || '', color: x.color || '#2f6bed' }));
+}
+async function roomBookings(from, to) {
+  await ensureRooms();
+  const r = await pool.query(
+    `SELECT id, room_id, title, booker_name, start_at, end_at FROM ticketsmodule_room_bookings
+      WHERE start_at < ($2::date + 1) AND end_at >= $1::date ORDER BY start_at`, [from, to]);
+  return r.rows.map(x => ({ id: x.id, room: 'r' + x.room_id, title: x.title || 'Бронь', who: x.booker_name || '',
+    startRaw: x.start_at, endRaw: x.end_at }));
+}
+// Создать бронь (с проверкой пересечения). Бросает «…занята» при конфликте.
+async function bookRoom(roomId, title, startLocal, endLocal, user) {
+  await ensureRooms();
+  const rid = parseInt(roomId, 10);
+  if (!rid) throw new Error('Не указана переговорная');
+  const sL = String(startLocal).slice(0, 16), eL = String(endLocal).slice(0, 16);
+  const clash = await pool.query(
+    `SELECT 1 FROM ticketsmodule_room_bookings WHERE room_id=$1
+       AND start_at < ($3)::timestamp AT TIME ZONE '${TZ}' AND end_at > ($2)::timestamp AT TIME ZONE '${TZ}' LIMIT 1`,
+    [rid, sL, eL]);
+  if (clash.rows.length) throw new Error('На это время переговорная уже занята');
+  const r = await pool.query(
+    `INSERT INTO ticketsmodule_room_bookings (room_id, title, user_id, booker_name, start_at, end_at, source)
+     VALUES ($1,$2,$3,$4, ($5)::timestamp AT TIME ZONE '${TZ}', ($6)::timestamp AT TIME ZONE '${TZ}','cup') RETURNING id`,
+    [rid, String(title || '').slice(0, 300), user && user.id, (user && (user.display_name || user.username)) || '', sL, eL]);
+  return r.rows[0].id;
+}
+
 router.get('/rooms', requireAuth(), async (req, res) => {
   await ensure();
   const from = okDate(req.query.from) ? req.query.from : new Date().toISOString().slice(0, 10);
   const to = okDate(req.query.to) ? req.query.to : from;
   try {
-    const data = await bitrixRooms(from, to);
-    res.json(Object.assign({ ok: true }, data));
-  } catch (e) {
-    console.error('cal rooms:', e.message);
-    res.json({ ok: true, rooms: DEFAULT_ROOMS.slice(), bookings: [], source: 'fallback', warn: e.message });
-  }
+    const rooms = await listRooms();
+    const bookings = await roomBookings(from, to);
+    res.json({ ok: true, rooms, bookings, source: 'cup', canManage: isAdmin(req) });
+  } catch (e) { console.error('cal rooms:', e.message); res.json({ ok: true, rooms: [], bookings: [], warn: e.message }); }
+});
+router.post('/rooms/book', requireAuth(), express.json(), async (req, res) => {
+  await ensure();
+  try {
+    const b = req.body || {};
+    if (!okDateTime(b.start) || !okDateTime(b.end)) return res.status(400).json({ ok: false, error: 'Нужны начало и конец (со временем)' });
+    if (b.end.slice(0, 16) <= b.start.slice(0, 16)) return res.status(400).json({ ok: false, error: 'Конец должен быть позже начала' });
+    const id = await bookRoom(b.sectionId || b.roomId, b.title, b.start, b.end, req.user);
+    try { await auditLog(req.user.id, req.user.username, 'ROOM_BOOK', null, { roomId: b.sectionId || b.roomId, title: b.title, from: b.start, to: b.end }, req.ip, req.headers['user-agent']); } catch (e) {}
+    res.json({ ok: true, id });
+  } catch (e) { const occ = /занята/.test(e.message); res.status(occ ? 409 : 500).json({ ok: false, error: e.message }); }
+});
+// Отменить бронь (свою; админ — любую).
+router.delete('/rooms/book/:id', requireAuth(), async (req, res) => {
+  await ensureRooms();
+  try {
+    const id = parseInt(req.params.id, 10);
+    const cur = await pool.query(`SELECT user_id FROM ticketsmodule_room_bookings WHERE id=$1`, [id]);
+    if (!cur.rows.length) return res.json({ ok: true });
+    if (cur.rows[0].user_id !== req.user.id && !isAdmin(req)) return res.status(403).json({ ok: false, error: 'Можно отменять только свою бронь' });
+    await pool.query(`DELETE FROM ticketsmodule_room_bookings WHERE id=$1`, [id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: 'Ошибка' }); }
+});
+// Управление переговорными (админ): список/добавить/изменить.
+router.get('/rooms/manage', requireAuth(), async (req, res) => { await ensureRooms(); const r = await pool.query(`SELECT id,name,building,color,active,position FROM ticketsmodule_calendar_rooms ORDER BY position,id`); res.json({ ok: true, rooms: r.rows, canEdit: isAdmin(req) }); });
+router.post('/rooms/manage', requireAuth(), express.json(), async (req, res) => { await ensureRooms(); if (!isAdmin(req)) return res.status(403).json({ ok: false, error: 'Только администратор' }); try { const b = req.body || {}; const name = String(b.name || '').trim().slice(0, 200); if (!name) return res.status(400).json({ ok: false, error: 'Нужно название' }); const color = /^#[0-9a-fA-F]{6}$/.test(b.color || '') ? b.color : '#2f6bed'; const p = await pool.query(`SELECT COALESCE(MAX(position),0)+1 AS p FROM ticketsmodule_calendar_rooms`); const r = await pool.query(`INSERT INTO ticketsmodule_calendar_rooms (name,building,color,position) VALUES ($1,$2,$3,$4) RETURNING id`, [name, String(b.building || '').slice(0, 200), color, p.rows[0].p]); res.json({ ok: true, id: r.rows[0].id }); } catch (e) { res.status(500).json({ ok: false, error: 'Ошибка' }); } });
+router.patch('/rooms/manage/:id', requireAuth(), express.json(), async (req, res) => { await ensureRooms(); if (!isAdmin(req)) return res.status(403).json({ ok: false, error: 'Только администратор' }); try { const id = parseInt(req.params.id, 10); const b = req.body || {}; const sets = [], vals = []; let n = 1; if (typeof b.name === 'string') { sets.push(`name=$${n++}`); vals.push(b.name.slice(0, 200)); } if (typeof b.building === 'string') { sets.push(`building=$${n++}`); vals.push(b.building.slice(0, 200)); } if (/^#[0-9a-fA-F]{6}$/.test(b.color || '')) { sets.push(`color=$${n++}`); vals.push(b.color); } if ('active' in b) { sets.push(`active=$${n++}`); vals.push(!!b.active); } if (!sets.length) return res.json({ ok: true }); vals.push(id); await pool.query(`UPDATE ticketsmodule_calendar_rooms SET ${sets.join(', ')} WHERE id=$${n}`, vals); res.json({ ok: true }); } catch (e) { res.status(500).json({ ok: false, error: 'Ошибка' }); } });
+// Разовый импорт существующих броней Bitrix «Conference room» в комнату ЦУП (админ).
+router.post('/rooms/import-bitrix', requireAuth(), express.json(), async (req, res) => {
+  await ensureRooms();
+  if (!isAdmin(req)) return res.status(403).json({ ok: false, error: 'Только администратор' });
+  try {
+    const rid = parseInt(req.body && req.body.roomId, 10);
+    if (!rid) return res.status(400).json({ ok: false, error: 'Укажите комнату ЦУП (roomId) для импорта' });
+    const { b24 } = require('../bitrix');
+    const pd = n => new Date(Date.now() + n * 864e5).toISOString().slice(0, 19);
+    const r = await b24('calendar.event.get', { type: 'location', ownerId: 0, from: req.body.from || pd(-150), to: req.body.to || pd(200) });
+    const evs = (r && r.result) || [];
+    let added = 0, skipped = 0;
+    for (const ev of (Array.isArray(evs) ? evs : [])) {
+      const bxId = String(ev.ID || ''); const tsF = +ev.DATE_FROM_TS_UTC, tsT = +ev.DATE_TO_TS_UTC;
+      if (!bxId || !tsF || !tsT) { skipped++; continue; }
+      try {
+        const ins = await pool.query(
+          `INSERT INTO ticketsmodule_room_bookings (room_id,title,booker_name,start_at,end_at,source,bitrix_event_id)
+           VALUES ($1,$2,$3, to_timestamp($4), to_timestamp($5),'bitrix',$6)
+           ON CONFLICT (bitrix_event_id) DO NOTHING RETURNING id`,
+          [rid, String(ev.NAME || 'Бронь').slice(0, 300), String(ev.NAME || '').slice(0, 200), tsF, tsT, bxId]);
+        if (ins.rows.length) added++; else skipped++;
+      } catch (e) { skipped++; }
+    }
+    res.json({ ok: true, added, skipped, total: (evs || []).length });
+  } catch (e) { console.error('rooms import:', e.message); res.status(500).json({ ok: false, error: e.message }); }
 });
 // Сырой ответ Bitrix для диагностики сопоставления переговорных (только админ).
 // Пробуем батарею методов, чтобы точно понять, как заведены переговорные.
@@ -359,4 +430,4 @@ router.get('/rooms/raw', requireAuth(), async (req, res) => {
   res.json({ ok: true, from, to, out });
 });
 
-module.exports = { router };
+module.exports = { router, bookRoom, listRooms, roomBookings };
