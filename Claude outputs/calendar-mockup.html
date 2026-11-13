@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Календарь ЦУП — пример</title>
+<style>
+:root{
+  --bg:#fbfcfd; --surface:#ffffff; --surface-2:#f6f8fa;
+  --text:#121722; --text-2:#3d4756; --text-3:#8893a3; --faint:#aab3c0;
+  --line:#eceff3; --line-2:#e1e6ec;
+  --accent:#2f6bed;
+  --c-meet:#2f6bed; --c-task:#7a4ecc; --c-trip:#0ea5a4; --c-vac:#16a37a;
+  --c-bd:#e0569b; --c-agent:#d9821a; --c-imp:#e5484d;
+  --shadow:0 1px 2px rgba(20,25,35,.04),0 8px 30px rgba(20,25,35,.06);
+  --shadow-pop:0 18px 50px rgba(20,25,35,.18);
+  --r:14px;
+  --f:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--f);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+button{font-family:inherit;cursor:pointer}
+.app{display:flex;flex:1;min-height:0}
+
+/* ─── Sidebar ─── */
+.side{width:256px;flex:none;border-right:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column;padding:16px 14px;gap:16px;overflow:auto}
+.brand{display:flex;align-items:center;gap:10px;padding:2px 4px}
+.brand .mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(140deg,#3f78f0,#2f6bed);display:flex;align-items:center;justify-content:center;color:#fff;flex:none}
+.brand b{font-size:15px;font-weight:800;letter-spacing:-.02em}
+.brand span{display:block;font-size:11px;color:var(--text-3);font-weight:600;margin-top:-1px}
+.create{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:0;background:var(--accent);color:#fff;font-size:13.5px;font-weight:700;padding:11px;border-radius:12px;box-shadow:0 4px 14px rgba(47,107,237,.28)}
+.create:hover{filter:brightness(1.04)}
+
+/* mini month */
+.mini{user-select:none}
+.mini-h{display:flex;align-items:center;justify-content:space-between;padding:0 4px 8px}
+.mini-h b{font-size:12.5px;font-weight:700}
+.mini-h .nav{display:flex;gap:2px}
+.mini-h .nav button{border:0;background:none;color:var(--text-3);width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center}
+.mini-h .nav button:hover{background:var(--surface-2);color:var(--text)}
+.mini-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;text-align:center}
+.mini-grid .wd{font-size:9.5px;color:var(--faint);font-weight:700;padding:3px 0;text-transform:uppercase}
+.mini-grid .d{font-size:11px;color:var(--text-2);padding:5px 0;border-radius:7px;position:relative}
+.mini-grid .d.mut{color:var(--faint)}
+.mini-grid .d.today{background:var(--accent);color:#fff;font-weight:700}
+.mini-grid .d.has::after{content:"";position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:3px;height:3px;border-radius:50%;background:var(--accent)}
+.mini-grid .d.today.has::after{background:#fff}
+
+.cats{display:flex;flex-direction:column;gap:2px}
+.cats .ct{font-size:10.5px;color:var(--faint);font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:4px 4px 6px}
+.cat{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:9px;font-size:13px;color:var(--text-2);font-weight:600}
+.cat:hover{background:var(--surface-2)}
+.cat .dot{width:11px;height:11px;border-radius:4px;flex:none}
+.cat.off{opacity:.4}
+.cat .chk{margin-left:auto;color:var(--text-3)}
+.cat.off .chk{opacity:0}
+
+/* ─── Main ─── */
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.bar{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--surface)}
+.bar .today{border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);font-size:13px;font-weight:700;padding:8px 14px;border-radius:10px}
+.bar .today:hover{border-color:var(--text-3);color:var(--text)}
+.bar .chev{display:flex;gap:2px}
+.bar .chev button{border:0;background:none;color:var(--text-3);width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center}
+.bar .chev button:hover{background:var(--surface-2);color:var(--text)}
+.bar h2{font-size:19px;font-weight:800;letter-spacing:-.02em;margin:0;min-width:210px}
+.bar h2 span{color:var(--text-3);font-weight:600}
+.bar .sp{flex:1}
+.seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:3px}
+.seg button{border:0;background:none;color:var(--text-3);font-size:12.5px;font-weight:700;padding:7px 14px;border-radius:8px}
+.seg button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(20,25,35,.1)}
+.view{flex:1;min-height:0;overflow:auto}
+
+/* ─── Month grid (недельные ряды + непрерывные линии-плашки) ─── */
+.mweek-h{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--line);background:var(--surface);position:sticky;top:0;z-index:2}
+.mweek-h div{padding:10px 12px;font-size:11px;font-weight:800;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em}
+.mweek-h div.we{color:var(--c-imp)}
+.mbody{display:flex;flex-direction:column;border-left:1px solid var(--line)}
+.mweek{position:relative;border-bottom:1px solid var(--line)}
+.mcells{position:absolute;inset:0;display:grid;grid-template-columns:repeat(7,1fr)}
+.mcell{border-right:1px solid var(--line);padding:6px 7px}
+.mcell.mut{background:#fcfdfe}
+.mcell .dn{font-size:12.5px;font-weight:700;color:var(--text-2);width:25px;height:25px;display:flex;align-items:center;justify-content:center;border-radius:50%}
+.mcell.mut .dn{color:var(--faint)}
+.mcell.today .dn{background:var(--accent);color:#fff}
+.movl{position:absolute;inset:0;pointer-events:none}
+.mbar{position:absolute;height:19px;line-height:19px;margin-left:3px;color:#fff;font-size:11.5px;font-weight:700;padding:0 9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:auto;cursor:pointer;box-shadow:0 1px 2px rgba(20,25,35,.1)}
+.mbar:hover{filter:brightness(.96)}
+.mtimed{position:absolute;height:19px;line-height:19px;margin-left:3px;display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:var(--text);pointer-events:auto;cursor:pointer;overflow:hidden}
+.mtimed .cd{width:7px;height:7px;border-radius:50%;flex:none}
+.mtimed .tm{color:var(--text-3);font-weight:700;font-size:10.5px;flex:none}
+.mtimed .tt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mmore{position:absolute;height:17px;line-height:17px;margin-left:3px;font-size:10.5px;color:var(--text-3);font-weight:700;pointer-events:auto;cursor:pointer}
+/* all-day band в виде «Неделя» */
+.wkallday{display:grid;grid-template-columns:56px repeat(7,1fr);border-bottom:1px solid var(--line);background:var(--surface)}
+.wkband{grid-column:2/9;position:relative}
+.wkbar{position:absolute;height:19px;line-height:19px;margin-left:3px;color:#fff;font-size:11px;font-weight:700;padding:0 9px;border-radius:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;box-shadow:0 1px 2px rgba(20,25,35,.1)}
+/* админ-настройка цветов */
+.gear{border:1px solid var(--line-2);background:var(--surface);color:var(--text-3);width:38px;height:38px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.gear:hover{color:var(--text);border-color:var(--text-3)}
+.crow{display:flex;align-items:center;gap:12px}
+.crow .dot{width:13px;height:13px;border-radius:5px;flex:none}
+.crow .nm{flex:1;font-size:13.5px;font-weight:600}
+.crow input[type=color]{width:40px;height:30px;border:1px solid var(--line-2);border-radius:8px;background:none;padding:2px;cursor:pointer}
+.chint{font-size:11.5px;color:var(--text-3);padding-top:2px;line-height:1.5}
+
+/* ─── Agenda ─── */
+.agenda{max-width:720px;margin:0 auto;padding:20px 20px 60px}
+.aday{display:flex;gap:18px;padding:14px 0;border-bottom:1px solid var(--line)}
+.aday:last-child{border-bottom:0}
+.aday .date{width:54px;flex:none;text-align:center;padding-top:2px}
+.aday .date .dn{font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1}
+.aday .date .wd{font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase;margin-top:3px}
+.aday.today .date .dn{color:var(--accent)}
+.aday.today .date .wd{color:var(--accent)}
+.aevs{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}
+.aev{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px 13px;box-shadow:var(--shadow)}
+.aev:hover{border-color:var(--line-2)}
+.aev .bar-c{width:4px;align-self:stretch;border-radius:4px;flex:none}
+.aev .tm{font-size:12px;color:var(--text-3);font-weight:700;width:92px;flex:none}
+.aev .ti{font-size:14px;font-weight:600;flex:1;min-width:0}
+.aev .ti small{display:block;color:var(--text-3);font-weight:500;font-size:12px;margin-top:1px}
+.aev .tag{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;padding:3px 8px;border-radius:20px;flex:none}
+
+/* ─── Week ─── */
+.wkhead{display:grid;grid-template-columns:56px repeat(7,1fr);border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);z-index:2}
+.wkhead .cnr{border-right:1px solid var(--line)}
+.wkhead .wd{padding:9px 6px;text-align:center;border-right:1px solid var(--line)}
+.wkhead .wd .d{font-size:18px;font-weight:800;letter-spacing:-.02em}
+.wkhead .wd .n{font-size:10.5px;color:var(--text-3);font-weight:700;text-transform:uppercase}
+.wkhead .wd.today .d{color:var(--accent)}
+.wkbody{display:grid;grid-template-columns:56px repeat(7,1fr);position:relative}
+.wkbody .hours{border-right:1px solid var(--line)}
+.wkbody .hours .h{height:48px;font-size:10.5px;color:var(--faint);font-weight:700;text-align:right;padding:2px 7px 0;position:relative;top:-7px}
+.wkcol{border-right:1px solid var(--line);position:relative}
+.wkcol .slot{height:48px;border-bottom:1px solid var(--line)}
+.wev{position:absolute;left:3px;right:3px;border-radius:8px;padding:4px 7px;font-size:11px;font-weight:700;color:#fff;overflow:hidden;box-shadow:0 2px 6px rgba(20,25,35,.14)}
+.wev small{display:block;font-weight:600;opacity:.92;font-size:10px}
+
+/* popover */
+.pop-ov{position:fixed;inset:0;z-index:50;background:rgba(18,23,34,.14);display:none;align-items:center;justify-content:center;padding:20px}
+.pop-ov.on{display:flex}
+.pop{width:100%;max-width:400px;background:var(--surface);border-radius:18px;box-shadow:var(--shadow-pop);overflow:hidden}
+.pop .ph{padding:18px 18px 14px;display:flex;gap:12px}
+.pop .ph .cc{width:5px;border-radius:5px;flex:none}
+.pop .ph h3{margin:0;font-size:17px;font-weight:800;letter-spacing:-.01em;line-height:1.3}
+.pop .ph .x{margin-left:auto;border:0;background:var(--surface-2);color:var(--text-3);width:28px;height:28px;border-radius:8px;font-size:17px;line-height:1;flex:none}
+.pop .pb{padding:0 18px 18px;display:flex;flex-direction:column;gap:11px}
+.pop .row{display:flex;align-items:center;gap:11px;font-size:13.5px;color:var(--text-2)}
+.pop .row svg{color:var(--text-3);flex:none}
+.pop .tagline{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;padding:4px 10px;border-radius:20px;align-self:flex-start}
+.pop .actions{display:flex;gap:8px;padding-top:4px}
+.pop .actions button{flex:1;border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);font-size:13px;font-weight:700;padding:9px;border-radius:10px}
+.pop .actions button.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(10px);background:#121722;color:#fff;font-size:13px;font-weight:600;padding:10px 16px;border-radius:11px;opacity:0;transition:.2s;z-index:80;pointer-events:none}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+svg{display:block}
+/* выбор календаря */
+.cals{display:flex;flex-direction:column;gap:2px}
+.calitem{display:flex;align-items:center;gap:10px;padding:8px 9px;border-radius:10px;font-size:13.5px;font-weight:700;color:var(--text-2);border:1px solid transparent;background:none;text-align:left;width:100%;font-family:inherit}
+.calitem:hover{background:var(--surface-2)}
+.calitem.on{background:#eef3fe;color:var(--accent);border-color:#dbe6fe}
+.calitem .ci{width:23px;height:23px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff;flex:none}
+/* переговорные (ресурсный вид по дню) */
+.rinfo{max-width:1000px;margin:14px auto 2px;display:flex;align-items:center;gap:9px;background:#f3f7ff;border:1px solid #dbe6fe;color:#2b4b8f;font-size:12.5px;font-weight:600;padding:10px 14px;border-radius:11px}
+.rmhead{display:grid;grid-template-columns:56px repeat(3,1fr);border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);z-index:2;margin-top:12px}
+.rmhead .cnr{border-right:1px solid var(--line)}
+.rmhead .rm{padding:12px 14px;font-size:13.5px;font-weight:800;border-right:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.rmhead .rmdot{width:10px;height:10px;border-radius:50%;flex:none}
+.rmbody{display:grid;grid-template-columns:56px repeat(3,1fr)}
+.rmbody .hours{border-right:1px solid var(--line)}
+.rmbody .hours .h{height:52px;font-size:10.5px;color:var(--faint);font-weight:700;text-align:right;padding:2px 7px 0;position:relative;top:-7px}
+.rmcol{border-right:1px solid var(--line);position:relative}
+.rmcol .slot{height:52px;border-bottom:1px solid var(--line)}
+.rev{position:absolute;left:5px;right:5px;border-radius:10px;padding:6px 10px;font-size:12.5px;font-weight:700;color:#fff;overflow:hidden;box-shadow:0 2px 8px rgba(20,25,35,.16);cursor:pointer}
+.rev small{display:block;font-weight:600;opacity:.92;font-size:10.5px;margin-top:2px}
+@media(max-width:860px){.side{display:none}.bar h2{min-width:0;font-size:17px}.bar .today{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="side">
+    <div class="brand">
+      <div class="mark"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg></div>
+      <div><b>Календарь</b><span>ЦУП · ProLabSupport</span></div>
+    </div>
+    <button class="create" onclick="toast('Здесь откроется форма нового события')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      Создать
+    </button>
+
+    <div class="cals">
+      <div class="ct">Календари</div>
+      <button class="calitem on" data-scope="company" onclick="switchScope('company')">
+        <span class="ci" style="background:#2f6bed"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16M14 21V9h5a1 1 0 0 1 1 1v11M7 8h2M7 12h2M7 16h2"/></svg></span>Компания
+      </button>
+      <button class="calitem" data-scope="personal" onclick="switchScope('personal')">
+        <span class="ci" style="background:#16a37a"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/></svg></span>Личный
+      </button>
+      <button class="calitem" data-scope="rooms" onclick="switchScope('rooms')">
+        <span class="ci" style="background:#7a4ecc"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v18M14 3 6 5v15l8 1M6 20H4M16 21h4M11 12h.01"/></svg></span>Переговорные
+      </button>
+    </div>
+
+    <div class="mini">
+      <div class="mini-h"><b id="miniLbl">Ноябрь 2026</b>
+        <div class="nav"><button onclick="toast('Прошлый месяц')">‹</button><button onclick="toast('Следующий месяц')">›</button></div>
+      </div>
+      <div class="mini-grid" id="miniGrid"></div>
+    </div>
+
+    <div class="cats" id="catBox">
+      <div class="ct">Категории</div>
+      <div class="cat" data-cat="meet"><span class="dot" style="background:var(--c-meet)"></span>Встречи<span class="chk">✓</span></div>
+      <div class="cat" data-cat="task"><span class="dot" style="background:var(--c-task)"></span>Задачи и дела<span class="chk">✓</span></div>
+      <div class="cat" data-cat="trip"><span class="dot" style="background:var(--c-trip)"></span>Командировки<span class="chk">✓</span></div>
+      <div class="cat" data-cat="vac"><span class="dot" style="background:var(--c-vac)"></span>Отпуска<span class="chk">✓</span></div>
+      <div class="cat" data-cat="bd"><span class="dot" style="background:var(--c-bd)"></span>Дни рождения<span class="chk">✓</span></div>
+      <div class="cat" data-cat="agent"><span class="dot" style="background:var(--c-agent)"></span>От агента ЦУП<span class="chk">✓</span></div>
+    </div>
+    <div class="cats" id="roomBox" style="display:none">
+      <div class="ct">Переговорные</div>
+      <div class="cat"><span class="dot" style="background:#2f6bed"></span>Переговорная 1</div>
+      <div class="cat"><span class="dot" style="background:#16a37a"></span>Переговорная 2</div>
+      <div class="cat"><span class="dot" style="background:#d9821a"></span>Малая переговорная</div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="bar">
+      <button class="today" onclick="toast('К сегодняшнему дню')">Сегодня</button>
+      <div class="chev"><button onclick="toast('Назад')">‹</button><button onclick="toast('Вперёд')">›</button></div>
+      <h2 id="title">Ноябрь <span>2026</span></h2>
+      <div class="sp"></div>
+      <div class="seg" id="seg">
+        <button data-v="agenda" class="on">Повестка</button>
+        <button data-v="month">Месяц</button>
+        <button data-v="week">Неделя</button>
+      </div>
+      <button class="gear" id="gearBtn" title="Цвета событий (для админа)" onclick="openColors()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 13.5a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
+      </button>
+    </div>
+    <div class="view" id="view"></div>
+  </div>
+</div>
+
+<div class="pop-ov" id="popOv" onclick="if(event.target===this)closePop()"><div class="pop" id="pop"></div></div>
+<div class="pop-ov" id="colorOv" onclick="if(event.target===this)closeColors()"><div class="pop" style="max-width:384px">
+  <div class="ph"><div class="cc" style="background:var(--accent)"></div><h3>Цвета событий</h3><button class="x" onclick="closeColors()">×</button></div>
+  <div class="pb" id="colorBody"></div>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const TODAY = new Date(2026,10,13); // 13 ноя 2026, пятница
+const WD = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+const WD_FULL = ['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье'];
+const MON = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const CATS = {
+  meet:{c:'var(--c-meet)',label:'Встреча'}, task:{c:'var(--c-task)',label:'Задача'},
+  trip:{c:'var(--c-trip)',label:'Командировка'}, vac:{c:'var(--c-vac)',label:'Отпуск'},
+  bd:{c:'var(--c-bd)',label:'День рождения'}, agent:{c:'var(--c-agent)',label:'Агент ЦУП'}
+};
+const CATC = {meet:'#2f6bed',task:'#7a4ecc',trip:'#0ea5a4',vac:'#16a37a',bd:'#e0569b',agent:'#d9821a'};
+
+// d: 'YYYY-MM-DD', t: 'HH:MM' (optional → all-day)
+const EV = [
+  {d:'2026-11-13',t:'10:00',e:'11:00',cat:'meet',title:'Встреча с Waters по ВЭЖХ',place:'Офис, переговорная 2',who:'Вы, Семён'},
+  {d:'2026-11-13',t:'15:30',e:'16:00',cat:'meet',title:'Созвон с сервис-инженерами',place:'Google Meet'},
+  {d:'2026-11-13',cat:'task',title:'Подготовить КП для ТОО «Казхром»'},
+  {d:'2026-11-13',cat:'agent',title:'Напомнить: продлить лицензию ChemStation',note:'Создано агентом ЦУП'},
+  {d:'2026-11-13',cat:'bd',title:'День рождения — Азат К.'},
+  {d:'2026-11-14',cat:'task',title:'Отправить акт выполненных работ'},
+  {d:'2026-11-14',t:'12:00',e:'13:00',cat:'meet',title:'Обед с партнёром из Астаны',place:'ресторан «Алаша»'},
+  {d:'2026-11-16',e2:'2026-11-20',cat:'trip',title:'Командировка — Астана (пусконаладка ГХ)',place:'ТОО «Национальные лаборатории»',who:'Орхан'},
+  {d:'2026-11-17',cat:'task',title:'Проверить склад реагентов (ВАР)'},
+  {d:'2026-11-17',e2:'2026-11-28',cat:'vac',title:'Отпуск — Семён Ж.'},
+  {d:'2026-11-18',t:'11:00',e:'11:45',cat:'meet',title:'Демо дашборда дебиторки'},
+  {d:'2026-11-18',cat:'agent',title:'Напомнить: дедлайн по договору №318',note:'Создано агентом ЦУП'},
+  {d:'2026-11-19',cat:'bd',title:'День рождения — Волкан Б.'},
+  {d:'2026-11-20',t:'16:00',e:'17:00',cat:'meet',title:'Квартальная сверка с бухгалтерией'},
+  {d:'2026-11-21',cat:'task',title:'Закрыть заявку по хроматографу Agilent'},
+  {d:'2026-11-24',t:'10:30',e:'11:30',cat:'meet',title:'Планёрка отдела сервиса',place:'переговорная 1'},
+  {d:'2026-11-24',cat:'task',title:'Согласовать график ТО на декабрь'},
+  {d:'2026-11-25',cat:'bd',title:'День рождения — Марат С.'},
+  {d:'2026-11-26',e2:'2026-11-27',cat:'trip',title:'Командировка — Шымкент (сервис ААС)',who:'Азат'},
+  {d:'2026-11-27',t:'14:00',e:'15:00',cat:'meet',title:'Встреча с ЦУП по планам 2027'},
+  {d:'2026-11-28',cat:'agent',title:'Напомнить: подать заявку на поверку'},
+];
+
+// «Мои» события (для личного календаря)
+const MINE=['Waters','Созвон','КП','ChemStation','акт выполненных','Обед','склад реагентов','Демо дашборда','договор №318','Квартальная','Закрыть заявку','Планёрка','график ТО','планам 2027','поверку'];
+EV.forEach(ev=>{ev.mine = MINE.some(m=>ev.title.includes(m))});
+
+// Переговорные — данные из Bitrix24 (здесь пример на сегодня)
+const ROOMS=[{id:'r1',name:'Переговорная 1',c:'#2f6bed'},{id:'r2',name:'Переговорная 2',c:'#16a37a'},{id:'r3',name:'Малая переговорная',c:'#d9821a'}];
+const RBOOK=[
+  {room:'r1',t:'09:30',e:'10:30',title:'Планёрка отдела сервиса',who:'Семён Ж.'},
+  {room:'r1',t:'14:00',e:'15:30',title:'Собеседование инженера',who:'HR'},
+  {room:'r2',t:'10:00',e:'11:00',title:'Встреча с Waters по ВЭЖХ',who:'Вы'},
+  {room:'r2',t:'15:30',e:'16:00',title:'Созвон с сервис-инженерами',who:'Вы'},
+  {room:'r3',t:'11:30',e:'12:00',title:'Обсуждение проекта ВАР',who:'Азат К.'},
+  {room:'r3',t:'13:00',e:'14:00',title:'Разбор заявки Agilent',who:'Орхан'},
+];
+
+const OFF = new Set();
+function iso(dt){return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0')}
+function parse(s){const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)}
+function visible(ev){if(OFF.has(ev.cat))return false;if(SCOPE==='personal'&&!ev.mine)return false;return true}
+function spanDays(ev){const a=parse(ev.d),b=ev.e2?parse(ev.e2):a;const out=[];for(let x=new Date(a);x<=b;x.setDate(x.getDate()+1))out.push(iso(x));return out}
+
+let VIEW='agenda', SCOPE='company';
+function switchScope(s){
+  SCOPE=s;
+  document.querySelectorAll('.calitem').forEach(b=>b.classList.toggle('on',b.dataset.scope===s));
+  document.getElementById('catBox').style.display = s==='rooms'?'none':'';
+  document.getElementById('roomBox').style.display = s==='rooms'?'':'none';
+  document.getElementById('seg').style.display = s==='rooms'?'none':'';
+  render();miniMonth();
+}
+
+/* ── mini month ── */
+function miniMonth(){
+  const g=document.getElementById('miniGrid');let h='';
+  WD.forEach(w=>h+=`<div class="wd">${w[0]}</div>`);
+  const first=new Date(2026,10,1);let start=(first.getDay()+6)%7;
+  const prevDays=start;const dim=new Date(2026,11,0).getDate();
+  const has=new Set();if(SCOPE!=='rooms')EV.forEach(ev=>{if(!visible(ev))return;spanDays(ev).forEach(d=>{if(d.startsWith('2026-11'))has.add(+d.slice(8))})});
+  for(let i=0;i<prevDays;i++)h+=`<div class="d mut"></div>`;
+  for(let d=1;d<=dim;d++){const t=(d===13);h+=`<div class="d ${t?'today':''} ${has.has(d)?'has':''}">${d}</div>`}
+  g.innerHTML=h;
+}
+
+/* ── render dispatch ── */
+function render(){
+  const v=document.getElementById('view');
+  if(SCOPE==='rooms'){
+    v.innerHTML=renderRooms();
+    document.getElementById('title').innerHTML='Переговорные · <span>Пт, 13 ноя</span>';
+    return;
+  }
+  document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.v===VIEW));
+  if(VIEW==='agenda')v.innerHTML=renderAgenda();
+  else if(VIEW==='month')v.innerHTML=renderMonth();
+  else v.innerHTML=renderWeek();
+  v.querySelectorAll('[data-ev]').forEach(el=>el.onclick=()=>openPop(+el.dataset.ev));
+  const pre = SCOPE==='personal' ? 'Личный · ' : '';
+  document.getElementById('title').innerHTML = (VIEW==='week' ? pre+'Неделя <span>16–22 ноя</span>' : pre+'Ноябрь <span>2026</span>');
+}
+function renderRooms(){
+  let h='<div class="rinfo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>Брони подтягиваются из Bitrix24. Создание брони прямо из ЦУП добавим на следующем этапе.</div>';
+  h+='<div class="rmhead"><div class="cnr"></div>';
+  ROOMS.forEach(r=>h+=`<div class="rm"><span class="rmdot" style="background:${r.c}"></span>${r.name}</div>`);
+  h+='</div><div class="rmbody"><div class="hours">';
+  for(let hr=8;hr<=19;hr++)h+=`<div class="h">${hr}:00</div>`;
+  h+='</div>';
+  ROOMS.forEach(r=>{
+    h+='<div class="rmcol">';
+    for(let hr=8;hr<=19;hr++)h+='<div class="slot"></div>';
+    RBOOK.filter(b=>b.room===r.id).forEach(b=>{
+      const[sh,sm]=b.t.split(':').map(Number),[eh,em]=b.e.split(':').map(Number);
+      const top=((sh-8)*60+sm)/60*52, hgt=Math.max(30,((eh*60+em)-(sh*60+sm))/60*52-3);
+      h+=`<div class="rev" style="top:${top}px;height:${hgt}px;background:${r.c}" onclick="toast('Бронь из Bitrix: ${b.title} · ${b.who}')">${b.title}<small>${b.t}–${b.e} · ${b.who}</small></div>`;
+    });
+    h+='</div>';
+  });
+  return h+'</div>';
+}
+
+/* ── Agenda ── */
+function renderAgenda(){
+  const byDay={};
+  EV.forEach((ev,i)=>{if(!visible(ev))return;spanDays(ev).forEach((d,idx)=>{(byDay[d]=byDay[d]||[]).push({ev,i,idx,multi:ev.e2})})});
+  const days=Object.keys(byDay).filter(d=>d>=iso(TODAY)).sort().slice(0,12);
+  let h='<div class="agenda">';
+  days.forEach(d=>{
+    const dt=parse(d);const isT=d===iso(TODAY);
+    const items=byDay[d].sort((a,b)=>(a.ev.t||'00:00').localeCompare(b.ev.t||'00:00'));
+    h+=`<div class="aday ${isT?'today':''}"><div class="date"><div class="dn">${dt.getDate()}</div><div class="wd">${WD[(dt.getDay()+6)%7]}</div></div><div class="aevs">`;
+    items.forEach(({ev,i,idx})=>{
+      const c=CATC[ev.cat];
+      const tm=ev.t?`${ev.t}${ev.e?'–'+ev.e:''}`:(ev.e2?(idx===0?'начало':(d===ev.e2?'конец':'весь день')):'весь день');
+      h+=`<div class="aev" data-ev="${i}"><div class="bar-c" style="background:${c}"></div><div class="tm">${tm}</div><div class="ti">${ev.title}${ev.place?`<small>${ev.place}</small>`:''}</div><div class="tag" style="background:${c}1a;color:${c}">${CATS[ev.cat].label}</div></div>`;
+    });
+    h+='</div></div>';
+  });
+  return h+'</div>';
+}
+
+/* ── Month (недельные ряды, многодневные — одной линией) ── */
+function catColor(c){return CATC[c]}
+function isAllDay(ev){return !ev.t || !!ev.e2}
+function weeksOfMonth(){
+  const start=(new Date(2026,10,1).getDay()+6)%7;
+  const cells=[];for(let i=0;i<start;i++)cells.push(new Date(2026,10,1-(start-i)));
+  const dim=new Date(2026,11,0).getDate();for(let d=1;d<=dim;d++)cells.push(new Date(2026,10,d));
+  let tail=1;while(cells.length%7)cells.push(new Date(2026,11,tail++));
+  const weeks=[];for(let i=0;i<cells.length;i+=7)weeks.push(cells.slice(i,i+7));
+  return weeks;
+}
+function renderMonth(){
+  const NUMH=30, LANEH=22, MAXROWS=4;
+  let h='<div class="mweek-h">'+WD.map((w,i)=>`<div class="${i>4?'we':''}">${w}</div>`).join('')+'</div><div class="mbody">';
+  weeksOfMonth().forEach(week=>{
+    const wkStart=week[0], wkEnd=week[6];
+    // многодневные и «весь день» → линии-плашки
+    const spans=[];
+    EV.forEach((ev,i)=>{
+      if(!visible(ev)||!isAllDay(ev))return;
+      const a=parse(ev.d), b=ev.e2?parse(ev.e2):a;
+      if(b<wkStart||a>wkEnd)return;
+      spans.push({ev,i,sc:Math.max(0,Math.round((a-wkStart)/864e5)),ec:Math.min(6,Math.round((b-wkStart)/864e5)),contL:a<wkStart,contR:b>wkEnd});
+    });
+    spans.sort((x,y)=>x.sc-y.sc||(y.ec-y.sc)-(x.ec-x.sc));
+    const lanes=[];
+    spans.forEach(s=>{let L=0;while(lanes[L]&&lanes[L].some(o=>!(s.ec<o.sc||s.sc>o.ec)))L++;(lanes[L]=lanes[L]||[]).push(s);s.lane=L});
+    const nLanes=lanes.length;
+    // события со временем → по своим дням
+    const timed={};
+    week.forEach((dt,col)=>{const d=iso(dt);EV.forEach((ev,i)=>{if(!visible(ev)||isAllDay(ev)||ev.d!==d)return;(timed[col]=timed[col]||[]).push({ev,i})})});
+    const avail=Math.max(0,MAXROWS-nLanes);
+    const maxTimed=Math.min(avail,Math.max(0,...week.map((_,c)=>(timed[c]||[]).length)));
+    const overflow=week.some((_,c)=>(timed[c]||[]).length>maxTimed);
+    const bodyRows=nLanes+maxTimed+(overflow?1:0);
+    h+=`<div class="mweek" style="min-height:${NUMH+bodyRows*LANEH+8}px">`;
+    h+='<div class="mcells">'+week.map(dt=>{const mut=dt.getMonth()!==10;const isT=iso(dt)===iso(TODAY);return `<div class="mcell ${mut?'mut':''} ${isT?'today':''}"><div class="dn">${dt.getDate()}</div></div>`}).join('')+'</div>';
+    h+='<div class="movl">';
+    spans.forEach(s=>{
+      const c=catColor(s.ev.cat), left=s.sc/7*100, width=(s.ec-s.sc+1)/7*100, top=NUMH+s.lane*LANEH;
+      const rl=s.contL?'0':'7px', rr=s.contR?'0':'7px';
+      h+=`<div class="mbar" data-ev="${s.i}" style="left:${left}%;width:calc(${width}% - 6px);top:${top}px;background:${c};border-radius:${rl} ${rr} ${rr} ${rl}">${s.contL?'‹ ':''}${s.ev.title}</div>`;
+    });
+    week.forEach((dt,col)=>{
+      const arr=(timed[col]||[]);
+      arr.slice(0,maxTimed).forEach((t,k)=>{
+        const c=catColor(t.ev.cat), left=col/7*100, top=NUMH+(nLanes+k)*LANEH;
+        h+=`<div class="mtimed" data-ev="${t.i}" style="left:${left}%;width:calc(${100/7}% - 6px);top:${top}px"><span class="cd" style="background:${c}"></span><span class="tm">${t.ev.t}</span><span class="tt">${t.ev.title}</span></div>`;
+      });
+      if(arr.length>maxTimed){const left=col/7*100, top=NUMH+(nLanes+maxTimed)*LANEH;h+=`<div class="mmore" data-ev="${arr[maxTimed].i}" style="left:${left}%;top:${top}px">+ ещё ${arr.length-maxTimed}</div>`}
+    });
+    h+='</div></div>';
+  });
+  return h+'</div>';
+}
+
+/* ── Week (16–22 ноя) ── */
+function renderWeek(){
+  const monday=new Date(2026,10,16);
+  const days=[];for(let i=0;i<7;i++){const x=new Date(monday);x.setDate(16+i);days.push(x)}
+  let h='<div class="wkhead"><div class="cnr"></div>';
+  days.forEach(dt=>{const isT=iso(dt)===iso(TODAY);h+=`<div class="wd ${isT?'today':''}"><div class="d">${dt.getDate()}</div><div class="n">${WD[(dt.getDay()+6)%7]}</div></div>`});
+  h+='</div>';
+  // полоса многодневных / «весь день» — одной линией
+  const wkStart=days[0], wkEnd=days[6], spans=[];
+  EV.forEach((ev,i)=>{if(!visible(ev)||!isAllDay(ev))return;const a=parse(ev.d),b=ev.e2?parse(ev.e2):a;if(b<wkStart||a>wkEnd)return;spans.push({ev,i,sc:Math.max(0,Math.round((a-wkStart)/864e5)),ec:Math.min(6,Math.round((b-wkStart)/864e5)),contL:a<wkStart,contR:b>wkEnd})});
+  spans.sort((x,y)=>x.sc-y.sc||(y.ec-y.sc)-(x.ec-x.sc));
+  const lanes=[];spans.forEach(s=>{let L=0;while(lanes[L]&&lanes[L].some(o=>!(s.ec<o.sc||s.sc>o.ec)))L++;(lanes[L]=lanes[L]||[]).push(s);s.lane=L});
+  if(spans.length){
+    h+=`<div class="wkallday"><div></div><div class="wkband" style="height:${lanes.length*22+6}px">`;
+    spans.forEach(s=>{const c=catColor(s.ev.cat),rl=s.contL?'0':'7px',rr=s.contR?'0':'7px';h+=`<div class="wkbar" data-ev="${s.i}" style="left:${s.sc/7*100}%;width:calc(${(s.ec-s.sc+1)/7*100}% - 6px);top:${s.lane*22}px;background:${c};border-radius:${rl} ${rr} ${rr} ${rl}">${s.contL?'‹ ':''}${s.ev.title}</div>`});
+    h+='</div></div>';
+  }
+  h+='<div class="wkbody"><div class="hours">';
+  for(let hr=8;hr<=19;hr++)h+=`<div class="h">${hr}:00</div>`;
+  h+='</div>';
+  days.forEach(dt=>{
+    const d=iso(dt);h+='<div class="wkcol">';
+    for(let hr=8;hr<=19;hr++)h+='<div class="slot"></div>';
+    EV.forEach((ev,i)=>{
+      if(!visible(ev)||!ev.t)return;
+      const inDay = ev.e2 ? spanDays(ev).includes(d) : ev.d===d;
+      if(!inDay)return;
+      const[sh,sm]=ev.t.split(':').map(Number);const[eh,em]=(ev.e||ev.t).split(':').map(Number);
+      const top=((sh-8)*60+sm)/60*48;const hgt=Math.max(26,((eh*60+em)-(sh*60+sm))/60*48-3);
+      const c=CATC[ev.cat];
+      h+=`<div class="wev" data-ev="${i}" style="top:${top}px;height:${hgt}px;background:${c}">${ev.title}<small>${ev.t}–${ev.e||''}</small></div>`;
+    });
+    h+='</div>';
+  });
+  return h+'</div>';
+}
+
+/* ── popover ── */
+function openPop(i){
+  const ev=EV[i];const c=CATC[ev.cat];
+  const when = ev.e2 ? `${parse(ev.d).getDate()} ${MON[parse(ev.d).getMonth()].toLowerCase()} – ${parse(ev.e2).getDate()} ${MON[parse(ev.e2).getMonth()].toLowerCase()}`
+            : `${WD_FULL[(parse(ev.d).getDay()+6)%7]}, ${parse(ev.d).getDate()} ${MON[parse(ev.d).getMonth()].toLowerCase()}`;
+  const time = ev.t?`${ev.t}${ev.e?' – '+ev.e:''}`:'Весь день';
+  let rows=`<div class="tagline" style="background:${c}1a;color:${c}"><span style="width:8px;height:8px;border-radius:50%;background:${c}"></span>${CATS[ev.cat].label}</div>`;
+  rows+=`<div class="row">${ic('cal')}${when}</div>`;
+  rows+=`<div class="row">${ic('clock')}${time}</div>`;
+  if(ev.place)rows+=`<div class="row">${ic('pin')}${ev.place}</div>`;
+  if(ev.who)rows+=`<div class="row">${ic('user')}${ev.who}</div>`;
+  if(ev.note)rows+=`<div class="row">${ic('info')}${ev.note}</div>`;
+  const editable = (ev.cat==='meet'||ev.cat==='task'||ev.cat==='agent');
+  const actions = editable
+    ? '<button onclick="actEdit()">Изменить</button><button class="pri" onclick="actOpen()">Открыть</button>'
+    : '<button class="pri" onclick="actOpen()">Открыть источник</button>';
+  document.getElementById('pop').innerHTML=`<div class="ph"><div class="cc" style="background:${c}"></div><h3>${ev.title}</h3><button class="x" onclick="closePop()">×</button></div><div class="pb">${rows}<div class="actions">${actions}</div></div>`;
+  document.getElementById('popOv').classList.add('on');
+}
+function actEdit(){toast('Здесь откроется редактирование события')}
+function actOpen(){toast('Откроется связанный модуль (задача, профиль, сделка)')}
+
+/* ── админ-настройка цветов категорий ── */
+const CNAME={meet:'Встречи',task:'Задачи и дела',trip:'Командировки',vac:'Отпуска',bd:'Дни рождения',agent:'От агента ЦУП'};
+const CSSVAR={meet:'--c-meet',task:'--c-task',trip:'--c-trip',vac:'--c-vac',bd:'--c-bd',agent:'--c-agent'};
+function openColors(){
+  document.getElementById('colorBody').innerHTML =
+    Object.keys(CNAME).map(c=>`<label class="crow"><span class="dot" id="sw-${c}" style="background:${CATC[c]}"></span><span class="nm">${CNAME[c]}</span><input type="color" value="${CATC[c]}" oninput="setCat('${c}',this.value)"></label>`).join('')
+    + '<div class="chint">Доступно администратору. Выбранные цвета применяются ко всему календарю для всех сотрудников.</div>';
+  document.getElementById('colorOv').classList.add('on');
+}
+function closeColors(){document.getElementById('colorOv').classList.remove('on')}
+function setCat(c,val){CATC[c]=val;document.documentElement.style.setProperty(CSSVAR[c],val);const sw=document.getElementById('sw-'+c);if(sw)sw.style.background=val;render();miniMonth()}
+function closePop(){document.getElementById('popOv').classList.remove('on')}
+function ic(n){const p={cal:'<rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',pin:'<path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',user:'<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/>',info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>'}[n];return `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`}
+
+/* ── interactions ── */
+document.querySelectorAll('#seg button').forEach(b=>b.onclick=()=>{VIEW=b.dataset.v;render()});
+document.querySelectorAll('.cat').forEach(el=>el.onclick=()=>{const c=el.dataset.cat;if(OFF.has(c))OFF.delete(c);else OFF.add(c);el.classList.toggle('off');render();miniMonth()});
+let tT;function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('on'),1800)}
+
+miniMonth();render();
+</script>
+</body>
+</html>

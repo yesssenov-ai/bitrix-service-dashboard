@@ -7,7 +7,9 @@ const { requireAuth, pool } = require('../auth');
 const nct = require('../nct-api');
 const ai = require('../nct-ai');
 
-const ROLES = ['admin', 'coordinator', 'manager', 'engineer'];
+// 'tc' допущена: НКТ — утилита подготовки номенклатуры (не финансы), отдельного
+// режима «только чтение» у неё нет, поэтому ТЦ получает рабочий доступ к инструменту.
+const ROLES = ['admin', 'coordinator', 'manager', 'engineer', 'tc'];
 
 // ── Таблица реестра/черновиков ──────────────────────────────────────────────────
 let _ready = false, _ensuring = null;

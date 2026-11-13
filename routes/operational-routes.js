@@ -73,6 +73,29 @@ function requireCap(cap) {
   }];
 }
 
+// ── Ограничение для роли «тренинг-центр» (tc): только свои сделки ────────────
+// Реализация раскрывает воронку и суммы по всем отделам. ТЦ видит строго свои
+// сделки (ответственный = сам пользователь) — через существующий фильтр
+// managerIds (его нельзя обойти параметром запроса, т.к. мы его перезаписываем).
+function tcScopeFilters(req, filters) {
+  if (req.user && req.user.role === 'tc') {
+    const bid = req.user.bitrix_user_id ? parseInt(req.user.bitrix_user_id, 10) : -1;
+    filters.managerIds = [bid];
+  }
+  return filters;
+}
+// Доступ к карточке конкретной сделки для tc — только если сделка своя.
+async function tcDealGuard(req, res, dealId) {
+  if (!req.user || req.user.role !== 'tc') return true;
+  const bid = req.user.bitrix_user_id ? parseInt(req.user.bitrix_user_id, 10) : -1;
+  try {
+    const { rows } = await pool.query('SELECT assigned_by_id FROM ticketsmodule_stat_deals WHERE deal_id=$1', [dealId]);
+    if (rows[0] && rows[0].assigned_by_id === bid) return true;
+  } catch (e) { /* падаем в отказ ниже */ }
+  res.status(403).json({ ok: false, error: 'Доступны только свои сделки' });
+  return false;
+}
+
 const splitInts = s => String(s).split(',').map(x => parseInt(x, 10)).filter(n => !Number.isNaN(n));
 const splitStrs = s => String(s).split(',').map(x => x.trim()).filter(x => x && x !== 'all');
 
@@ -93,7 +116,7 @@ function parseFilters(q) {
 // GET /api/operational/board — funnel + detail rows + filter options
 router.get('/board', requireCap('view'), async (req, res) => {
   try {
-    const board = await getBoard(parseFilters(req.query));
+    const board = await getBoard(tcScopeFilters(req, parseFilters(req.query)));
     res.json(board);
   } catch (e) {
     console.error('GET /api/operational/board error:', e.message);
@@ -109,6 +132,7 @@ router.get('/deal/:id', requireCap('view'), async (req, res) => {
   try {
     const dealId = parseInt(req.params.id, 10);
     if (!dealId) return res.status(400).json({ ok: false, error: 'Неверный ID сделки' });
+    if (!(await tcDealGuard(req, res, dealId))) return;
     const detail = await getDealDetail(dealId, false, false);
     res.json(detail);
   } catch (e) {
@@ -122,6 +146,7 @@ router.post('/deal/:id/refresh', requireCap('view'), async (req, res) => {
   try {
     const dealId = parseInt(req.params.id, 10);
     if (!dealId) return res.status(400).json({ ok: false, error: 'Неверный ID сделки' });
+    if (!(await tcDealGuard(req, res, dealId))) return;
     const detail = await getDealDetail(dealId, true);
     res.json(detail);
   } catch (e) {
@@ -172,7 +197,7 @@ router.get('/export', requireCap('view'), async (req, res) => {
   try {
     const format = req.query.format === 'xlsx' ? 'xlsx' : 'pdf';
     const type = req.query.type === 'detailed' ? 'detailed' : 'simple';
-    const board = await getBoard(parseFilters(req.query));
+    const board = await getBoard(tcScopeFilters(req, parseFilters(req.query)));
     let rows = board.rows || [];
     if (req.query.flag) rows = rows.filter(r => (r.flags || []).includes(req.query.flag));
 
@@ -200,6 +225,8 @@ router.get('/export', requireCap('view'), async (req, res) => {
 // изменения, ближайшие поставки). HTML открывается в браузере, PDF скачивается.
 router.get('/report', requireCap('view'), async (req, res) => {
   try {
+    // Экзекьютив-отчёт — сводка по всей компании, «своих» в нём нет. Для ТЦ закрыт.
+    if (req.user.role === 'tc') return res.status(403).send('Отчёт доступен руководителям');
     const { computeReport, renderHtml, buildPdf } = require('../operational-report');
     const rep = await computeReport({ commit: false });
     if (req.query.format === 'pdf') {

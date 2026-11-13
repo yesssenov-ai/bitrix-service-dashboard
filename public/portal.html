@@ -286,6 +286,8 @@ footer{text-align:center;color:var(--text-faint);font-size:11.5px;padding:20px;f
     </a>
   </div>
 
+  <div id="agenda" style="display:none"></div>
+
   <div id="today" style="display:none"></div>
 
   <div id="myday" style="display:none"></div>
@@ -662,6 +664,34 @@ async function loadMyDay(user){
   }));
 }
 
+/* ── Блок «Повестка» (ближайшие события календаря ЦУП) ── */
+const CAL_COL={meet:'#2f6bed',task:'#7a4ecc',trip:'#0ea5a4',vac:'#16a37a',sick:'#e8821f',bd:'#e0569b',agent:'#d9821a',imp:'#e5484d'};
+async function loadAgenda(){
+  try{
+    const isoD=d=>d.toISOString().slice(0,10);
+    const today=new Date(); const tIso=isoD(today); const to=new Date(today.getTime()+10*864e5);
+    const r=await fetch('/api/calendar/events?from='+tIso+'&to='+isoD(to)+'&scope=personal',{credentials:'same-origin'});
+    if(!r.ok) return; const d=await r.json(); if(!d||!d.ok) return;
+    const el=document.getElementById('agenda'); if(!el) return;
+    const keyOf=e=>(String(e.start).length>10?String(e.start).replace('T',' '):String(e.start)+' 00:00');
+    let evs=(d.events||[]).filter(e=>String(e.end||e.start).slice(0,10)>=tIso).sort((a,b)=>keyOf(a).localeCompare(keyOf(b))).slice(0,6);
+    if(!evs.length){ el.style.display='none'; return; }
+    const MON=['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+    const WDS=['вс','пн','вт','ср','чт','пт','сб'];
+    const dayLabel=s=>{ const p=String(s).slice(0,10).split('-'); const dt=new Date(+p[0],+p[1]-1,+p[2]); return (String(s).slice(0,10)===tIso?'сегодня':(WDS[dt.getDay()]+', '+(+p[2])+' '+MON[+p[1]-1])); };
+    const rows=evs.map(e=>{ const c=CAL_COL[e.category]||'#8893a3'; const allDay=!(String(e.start).length>10); const tm=allDay?'весь день':String(e.start).slice(11,16);
+      return `<a href="/calendar.html" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;text-decoration:none;color:inherit">
+        <span style="width:9px;height:9px;border-radius:50%;background:${c};flex:none"></span>
+        <span style="color:var(--text-3);font-size:12px;font-weight:700;width:104px;flex:none">${dayLabel(e.start)}</span>
+        <span style="color:var(--text-3);font-size:12px;font-weight:700;width:58px;flex:none">${tm}</span>
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.title)}</span></a>`; }).join('');
+    el.innerHTML=`<div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 18px;margin:16px 0 4px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><b style="font-size:15px">Повестка</b><span style="flex:1"></span><a href="/calendar.html" style="color:var(--accent);font-weight:600;font-size:12.5px;text-decoration:none">Открыть календарь →</a></div>
+      <div style="display:flex;flex-direction:column;gap:6px">${rows}</div></div>`;
+    el.style.display='';
+  }catch(e){}
+}
+
 /* ── Блок «Сегодня в компании» ── */
 // Строгие line-иконки (без эмодзи) — единый стиль, нейтральный/акцентный окрас.
 const PT_ICO = {
@@ -784,6 +814,7 @@ async function init(){
     document.getElementById('helloLine').textContent = `${greeting} · роль: ${user.role}`;
     loadMyDay(user);
     loadToday();
+    loadAgenda();
 
     let allowedCodes = [];
     try{

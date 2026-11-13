@@ -15,7 +15,8 @@ const OWN_ONLY = ['engineer', 'accountant', 'marketolog'];
 // Роли, которые в ПЕРЕЧНЕ видят только свои закупки. Бухгалтер (accountant) сюда
 // НЕ входит: он видит ВСЕ закупки (для сверки/контроля), но действует только по
 // своим — это проверяется на самих операциях через ownScopedOk/ownsRequest.
-const LIST_OWN_ONLY = ['engineer', 'marketolog'];
+// 'tc' видит в списке ТОЛЬКО свои заявки (viewGate пускает по гранту модуля PROC).
+const LIST_OWN_ONLY = ['engineer', 'marketolog', 'tc'];
 // Удаление закупок — БЕЗ store (store может всё, кроме удаления).
 const DEL_ROLES = ['admin', 'coordinator'];
 // Роли редактирования: полный доступ + marketolog (только к своим — проверяется ownsRequest).

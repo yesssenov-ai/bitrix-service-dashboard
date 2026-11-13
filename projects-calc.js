@@ -59,18 +59,23 @@ function bucketOf(st, stageId) {
   return null;
 }
 
-async function getProjects() {
+async function getProjects(ownerBid = null) {
   const rate = await getTodayRate();
   const base = dealBaseUrl();
   const url = id => base ? (base + id + '/') : null;
   const sumOf = d => (d.currency_id === 'USD' ? (parseFloat(d.opportunity) || 0) * rate : (parseFloat(d.opportunity) || 0));
 
   // Только проектные сделки (поле «В рамках проекта» заполнено реальным проектом).
+  // ownerBid != null → фильтр «по своим» (ответственный): используется ролью tc.
+  const params = [];
+  let ownWhere = '';
+  if (ownerBid != null) { params.push(parseInt(ownerBid, 10)); ownWhere = ' AND assigned_by_id = $1'; }
   const { rows } = await pool.query(
     `SELECT deal_id, company_id, company_name, assigned_by_id, stage_id, category_id,
             opportunity, currency_id, department_id, deal_title, project_tag
        FROM ticketsmodule_stat_deals
-      WHERE project_tag IS NOT NULL AND project_tag <> ''`
+      WHERE project_tag IS NOT NULL AND project_tag <> ''` + ownWhere,
+    params
   );
 
   // Назначения КАМ (проект → КАМ) из справочника ЦУП.

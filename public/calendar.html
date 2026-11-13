@@ -91,6 +91,14 @@ button{font-family:inherit;cursor:pointer}
 .mcell .dn{font-size:12px;font-weight:700;color:var(--text-2);width:25px;height:25px;display:flex;align-items:center;justify-content:center;border-radius:50%}
 .mcell.mut .dn{color:var(--faint)}
 .mcell.today .dn{background:var(--accent);color:#fff}
+/* нерабочие дни производственного календаря РК */
+.mcell.wknd{background:#fbfcfe}
+.mcell.wknd.mut{background:#eef1f5}
+.mcell.hol{background:#fff5f5}
+.mcell.hol.mut{background:#f6eded}
+.mcell.hol .dn{color:var(--c-imp)}
+.mcell.hol.today .dn{background:var(--c-imp);color:#fff}
+.hol-tag{position:absolute;top:7px;right:7px;max-width:calc(100% - 38px);font-size:10px;font-weight:700;color:var(--c-imp);line-height:1.15;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none}
 .movl{position:absolute;inset:0;pointer-events:none}
 .mbar{position:absolute;height:18px;line-height:18px;margin-left:3px;color:#fff;font-size:11px;font-weight:700;padding:0 9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:auto;cursor:pointer;box-shadow:0 1px 2px rgba(20,25,35,.1)}
 .mbar:hover{filter:brightness(.96)}
@@ -303,6 +311,30 @@ function evEnd(ev){return parseD(ev.end||ev.start)}
 function spanDays(ev){const a=evStart(ev),b=evEnd(ev),out=[];for(let x=new Date(a);x<=b;x=addDays(x,1))out.push(iso(x));return out}
 function isAllDay(ev){return ev.allDay || !timeOf(ev.start)}
 function isMultiDay(ev){return String(ev.start).slice(0,10)!==String(ev.end||ev.start).slice(0,10)}
+
+/* ── Производственный календарь РК (официальные нерабочие дни) ──────────────
+   Источник: Трудовой кодекс РК + производственные календари 2026/2027.
+   ПЕРЕНОСЫ выходных на 2027 пока НЕ утверждены Минтруда — добавить сюда, когда
+   выйдет постановление (формат: 'YYYY-MM-DD':'Короткое имя'). Курбан айт —
+   предварительно по календарю ДУМК (16.05.2027). */
+const HOLIDAYS_KZ={
+  // 2026
+  '2026-01-01':'Новый год','2026-01-02':'Новый год','2026-01-07':'Рождество',
+  '2026-03-08':'Женский день','2026-03-21':'Наурыз','2026-03-22':'Наурыз','2026-03-23':'Наурыз',
+  '2026-03-27':'Курбан айт','2026-05-01':'Единство народа','2026-05-07':'День защитника',
+  '2026-05-09':'День Победы','2026-07-06':'День Столицы','2026-08-30':'День Конституции',
+  '2026-10-25':'День Республики','2026-12-16':'Независимость','2026-12-17':'Независимость',
+  // 2027
+  '2027-01-01':'Новый год','2027-01-02':'Новый год','2027-01-07':'Рождество',
+  '2027-03-08':'Женский день','2027-03-21':'Наурыз','2027-03-22':'Наурыз','2027-03-23':'Наурыз',
+  '2027-05-01':'Единство народа','2027-05-07':'День защитника','2027-05-09':'День Победы',
+  '2027-05-16':'Курбан айт','2027-07-06':'День Столицы','2027-08-30':'День Конституции',
+  '2027-10-25':'День Республики','2027-12-16':'Независимость'
+};
+function holidayName(isoDate){return HOLIDAYS_KZ[isoDate]||null}
+function isWeekend(d){const w=d.getDay();return w===0||w===6}
+function isNonWorking(d){return isWeekend(d)||!!HOLIDAYS_KZ[iso(d)]}
+function nonWorkingLabel(d){const h=HOLIDAYS_KZ[iso(d)];if(h)return h;return isWeekend(d)?(d.getDay()===0?'воскресенье':'суббота'):null}
 function asBar(ev){return isAllDay(ev)||isMultiDay(ev)}
 
 let tT;function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('on'),1900)}
@@ -377,13 +409,15 @@ function weekTitle(){return '<span>'+weekRangeTxt()+'</span>'}
 function renderAgenda(){
   const byDay={};
   EVENTS.forEach(ev=>{if(!visible(ev))return;spanDays(ev).forEach((d,idx)=>{(byDay[d]=byDay[d]||[]).push({ev,idx})})});
-  const days=Object.keys(byDay).filter(d=>d>=todayIso()).sort().slice(0,40);
+  const t0=todayIso();const holSet={};for(let i=0;i<70;i++){const ds=iso(addDays(new Date(),i));if(HOLIDAYS_KZ[ds])holSet[ds]=1}
+  const days=[...new Set([...Object.keys(byDay),...Object.keys(holSet)])].filter(d=>d>=t0).sort().slice(0,40);
   if(!days.length)return '<div class="empty">Ближайших событий нет. Нажмите «Создать», чтобы добавить встречу или дело.</div>';
   let h='<div class="agenda">';
   days.forEach(d=>{
-    const dt=parseD(d);const isT=d===todayIso();
-    const items=byDay[d].sort((a,b)=>(timeOf(a.ev.start)||'00:00').localeCompare(timeOf(b.ev.start)||'00:00'));
+    const dt=parseD(d);const isT=d===todayIso();const hol=holidayName(d);
+    const items=(byDay[d]||[]).sort((a,b)=>(timeOf(a.ev.start)||'00:00').localeCompare(timeOf(b.ev.start)||'00:00'));
     h+=`<div class="aday ${isT?'today':''}"><div class="date"><div class="dn">${dt.getDate()}</div><div class="wd">${WD[(dt.getDay()+6)%7]}</div></div><div class="aevs">`;
+    if(hol)h+=`<div class="aev"><div class="bar-c" style="background:var(--c-imp)"></div><div class="tm">нерабочий</div><div class="ti">${esc(hol)}</div><div class="tag" style="background:#e5484d1a;color:var(--c-imp)">РК</div></div>`;
     items.forEach(({ev,idx})=>{
       const c=catColor(ev.category);
       const tm=isAllDay(ev)?((ev.end&&ev.end.slice(0,10)!==ev.start.slice(0,10))?(idx===0?'начало':(d===ev.end.slice(0,10)?'конец':'весь день')):'весь день'):(timeOf(ev.start)+(timeOf(ev.end)&&ev.end!==ev.start?'–'+timeOf(ev.end):''));
@@ -412,7 +446,7 @@ function renderMonth(){
     const timed={};week.forEach((dt,col)=>{const d=iso(dt);EVENTS.forEach(ev=>{if(!visible(ev)||asBar(ev)||ev.start.slice(0,10)!==d)return;(timed[col]=timed[col]||[]).push(ev)})});
     const avail=Math.max(0,MAXROWS-nLanes);const maxTimed=Math.min(avail,Math.max(0,...week.map((_,c)=>(timed[c]||[]).length)));
     const overflow=week.some((_,c)=>(timed[c]||[]).length>maxTimed);const bodyRows=nLanes+maxTimed+(overflow?1:0);
-    h+=`<div class="mweek" style="min-height:${Math.max(MINH,NUMH+bodyRows*LANEH+8)}px"><div class="mcells">`+week.map(dt=>{const mut=dt.getMonth()!==curM;const isT=iso(dt)===todayIso();return `<div class="mcell ${mut?'mut':''} ${isT?'today':''}"><div class="dn">${dt.getDate()}</div></div>`}).join('')+'</div><div class="movl">';
+    h+=`<div class="mweek" style="min-height:${Math.max(MINH,NUMH+bodyRows*LANEH+8)}px"><div class="mcells">`+week.map(dt=>{const mut=dt.getMonth()!==curM;const isT=iso(dt)===todayIso();const hol=holidayName(iso(dt));const we=isWeekend(dt);return `<div class="mcell ${mut?'mut':''} ${we?'wknd':''} ${hol?'hol':''} ${isT?'today':''}"><div class="dn">${dt.getDate()}</div>${hol?`<div class="hol-tag" title="${esc(hol)}">${esc(hol)}</div>`:''}</div>`}).join('')+'</div><div class="movl">';
     spans.forEach(s=>{const c=catColor(s.ev.category),left=s.sc/7*100,width=(s.ec-s.sc+1)/7*100,top=NUMH+s.lane*LANEH,rl=s.contL?'0':'7px',rr=s.contR?'0':'7px';h+=`<div class="mbar" data-ev="${s.ev.id}" style="left:${left}%;width:calc(${width}% - 6px);top:${top}px;background:${c};border-radius:${rl} ${rr} ${rr} ${rl}">${s.contL?'‹ ':''}${esc(s.ev.title)}</div>`});
     week.forEach((dt,col)=>{const arr=(timed[col]||[]);arr.slice(0,maxTimed).forEach((ev,k)=>{const c=catColor(ev.category),left=col/7*100,top=NUMH+(nLanes+k)*LANEH;h+=`<div class="mtimed" data-ev="${ev.id}" style="left:${left}%;width:calc(${100/7}% - 6px);top:${top}px"><span class="cd" style="background:${c}"></span><span class="tm">${timeOf(ev.start)}</span><span class="tt">${esc(ev.title)}</span></div>`});
       if(arr.length>maxTimed){const left=col/7*100,top=NUMH+(nLanes+maxTimed)*LANEH;h+=`<div class="mmore" data-ev="${arr[maxTimed].id}" style="left:${left}%;top:${top}px">+ ещё ${arr.length-maxTimed}</div>`}});
@@ -425,7 +459,7 @@ function renderMonth(){
 function renderWeek(){
   const m=mondayOf(CUR),days=[];for(let i=0;i<7;i++)days.push(addDays(m,i));
   let h='<div class="wkhead"><div class="cnr"></div>';
-  days.forEach(dt=>{const isT=iso(dt)===todayIso();h+=`<div class="wd ${isT?'today':''}"><div class="d">${dt.getDate()}</div><div class="n">${WD[(dt.getDay()+6)%7]}</div></div>`});
+  days.forEach(dt=>{const isT=iso(dt)===todayIso();const hol=holidayName(iso(dt));h+=`<div class="wd ${isT?'today':''} ${hol?'hol':''}" ${hol?`title="${esc(hol)}"`:''}><div class="d">${dt.getDate()}</div><div class="n">${hol?esc(hol):WD[(dt.getDay()+6)%7]}</div></div>`});
   h+='</div>';
   const wkStart=days[0],wkEnd=days[6],spans=[];
   EVENTS.forEach(ev=>{if(!visible(ev)||!asBar(ev))return;const a=evStart(ev),b=evEnd(ev);if(b<wkStart||a>wkEnd)return;spans.push({ev,sc:Math.max(0,Math.round((a-wkStart)/864e5)),ec:Math.min(6,Math.round((b-wkStart)/864e5)),contL:a<wkStart,contR:b>wkEnd})});
@@ -466,7 +500,7 @@ function renderRooms(){
 function renderRoomsWeek(){
   const m=mondayOf(CUR),days=[];for(let i=0;i<7;i++)days.push(addDays(m,i));
   let h='<div class="wkhead"><div class="cnr"></div>';
-  days.forEach(dt=>{const isT=iso(dt)===todayIso();h+=`<div class="wd ${isT?'today':''}"><div class="d">${dt.getDate()}</div><div class="n">${WD[(dt.getDay()+6)%7]}</div></div>`});
+  days.forEach(dt=>{const isT=iso(dt)===todayIso();const hol=holidayName(iso(dt));h+=`<div class="wd ${isT?'today':''} ${hol?'hol':''}" ${hol?`title="${esc(hol)}"`:''}><div class="d">${dt.getDate()}</div><div class="n">${hol?esc(hol):WD[(dt.getDay()+6)%7]}</div></div>`});
   h+='</div><div class="wkbody"><div class="hours">';
   for(let hr=8;hr<=19;hr++)h+=`<div class="h">${hr}:00</div>`;
   h+='</div>';
@@ -547,6 +581,7 @@ function renderEdit(){
   h+=`<label class="tgl"><input type="checkbox" id="eAllday" ${e.allDay?'checked':''}> Весь день</label>`;
   h+=`<div class="two"><div class="fld"><label>Начало</label><input type="date" id="eSd" value="${sD}"></div><div class="fld" id="eStWrap" ${e.allDay?'style="display:none"':''}><label>Время</label><input type="time" id="eSt" value="${sT}"></div></div>`;
   h+=`<div class="two"><div class="fld"><label>Конец</label><input type="date" id="eEd" value="${eD}"></div><div class="fld" id="eEtWrap" ${e.allDay?'style="display:none"':''}><label>Время</label><input type="time" id="eEt" value="${eT}"></div></div>`;
+  h+=`<div id="nwkWarn" style="display:none;margin:-2px 0 10px;padding:8px 11px;border-radius:9px;background:#fff5f5;border:1px solid #f3cccc;color:#b4342f;font-size:12px;font-weight:600;line-height:1.3"></div>`;
   h+=`<div class="fld"><label>Место</label><input id="eLoc" value="${esc(e.location)}" placeholder="Необязательно"></div>`;
   h+=`<div class="fld"><label>Заметка</label><textarea id="eNote" placeholder="Необязательно">${esc(e.note)}</textarea></div>`;
   h+=`<div class="actions">${e.id?'<button class="danger" onclick="delEvent()">Удалить</button>':''}<button onclick="closeEdit()">Отмена</button><button class="pri" onclick="saveEvent()">Сохранить</button></div></div>`;
@@ -554,6 +589,8 @@ function renderEdit(){
   document.getElementById('editOv').classList.add('on');
   document.querySelectorAll('#eCat button').forEach(b=>b.onclick=()=>{EDIT.category=b.dataset.c;document.querySelectorAll('#eCat button').forEach(x=>x.classList.toggle('on',x===b));document.querySelector('#editModal .cc').style.background=catColor(b.dataset.c)});
   document.getElementById('eAllday').onchange=ev2=>{const on=ev2.target.checked;document.getElementById('eStWrap').style.display=on?'none':'';document.getElementById('eEtWrap').style.display=on?'none':''};
+  const nwkCheck=()=>{const v=document.getElementById('eSd').value;const el=document.getElementById('nwkWarn');if(!v){el.style.display='none';return;}const lbl=nonWorkingLabel(parseD(v));if(lbl){el.textContent='⚠️ '+v.split('-').reverse().join('.')+' — нерабочий день ('+lbl+')';el.style.display='';}else{el.style.display='none';}};
+  document.getElementById('eSd').addEventListener('change',nwkCheck);nwkCheck();
 }
 function closeEdit(){document.getElementById('editOv').classList.remove('on')}
 async function saveEvent(){

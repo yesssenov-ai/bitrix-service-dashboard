@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { requireAuth, pool } = require('../auth');
+const { requireAuth, requireModuleApi, pool } = require('../auth');
 const fetch = require('node-fetch');
 let companies = [];
 let companiesLoaded = false;
@@ -92,7 +92,10 @@ const PRODUCT_COLORS = {
 };
 
 // ── GET /licenses/data ───────────────────────────────────────────────────────
-router.get('/data', requireAuth(), async (req, res) => {
+// Полный датасет лицензий/разрешений — гейтим по модулю LIC (был requireAuth():
+// любой вошедший мог получить его по URL, хотя плитка скрыта). Карточные
+// лукапы (/map-click, /resolve/:bin и т.п.) не трогаем — они используются BIN-обогащением.
+router.get('/data', requireModuleApi('LIC'), async (req, res) => {
   if (!companiesLoaded) {
     // Wait up to 5s for companies to load
     let waited = 0;

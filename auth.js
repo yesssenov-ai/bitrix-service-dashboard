@@ -16,9 +16,9 @@ for (const key of REQUIRED_ENV) {
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
-  max: 10,
+  max: 20,                        // запас под 70–100 пользователей онлайн (ищите пулер Supabase, если упрётесь)
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
+  connectionTimeoutMillis: 8000,
 });
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -1192,6 +1192,14 @@ function canDelete(user, moduleCode) {
 async function userModuleCodes(user) {
   if (!user) return new Set();
   if (isAdminLike(user.role)) return null; // null = все модули (admin и superadmin)
+  // Роль «тренинг-центр»: модули заданы матрицей роли, а не таблицей грантов.
+  // Возвращаем РОВНО разрешённый набор — пять финансовых модулей (LIC, KP,
+  // BONUS, ADV, CASHFLOW) в него не входят и попасть не могут, даже если их
+  // по ошибке выдали в ticketsmodule_module_access.
+  if (user.role === 'tc') {
+    const { TC_TILE_CODES } = require('./constants');
+    return new Set(TC_TILE_CODES);
+  }
   let bid = user.bitrix_user_id || null;
   if (!bid && user.engineer_name) {
     const { USERS } = require('./constants');

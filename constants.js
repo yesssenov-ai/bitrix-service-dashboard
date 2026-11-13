@@ -64,6 +64,17 @@ const COORDINATORS = new Set([26, 79]);
 // service — сервисный инженер (правит свои назначенные заявки, как прежний engineer).
 const VALID_ROLES = new Set(['superadmin', 'admin', 'manager', 'logist', 'coordinator', 'engineer', 'service', 'sales', 'sales_head', 'store', 'accountant', 'marketolog', 'viewer', 'tc']);
 
+// Матрица доступа роли «тренинг-центр» (tc). Это ЕДИНСТВЕННЫЙ источник правды
+// по тому, какие плитки/модули видит сотрудник ТЦ. Пять финансовых модулей
+// (LIC, KP, BONUS, ADV, CASHFLOW) сюда НЕ входят и жёстко скрыты в auth.js:
+// userModuleCodes возвращает роли tc ровно этот набор, поэтому выдать ей
+// скрытый модуль через таблицу грантов нельзя.
+//  • Полный ТЦ: TC, TC_WK, TC_EQ, TC_ST, TC_QM, TC_AN
+//  • Чтение по своим сделкам: SALE, PROJ, OPS (по ответственному), DEBT/STOCK/QUALITY (по отделу), PROC (свои заявки)
+//  • Обзорные только для чтения: STATS, CMP, LOG, CAM; утилита: NKT
+const TC_TILE_CODES = ['TC', 'TC_WK', 'TC_EQ', 'TC_ST', 'TC_QM', 'TC_AN',
+  'STATS', 'SALE', 'PROJ', 'OPS', 'LOG', 'CMP', 'NKT', 'CAM', 'DEBT', 'QUALITY', 'STOCK', 'PROC'];
+
 // ── Гидратация справочника сотрудников из Bitrix (глобально для ВСЕХ модулей) ──
 // Статический USERS выше — курируемый минимум; сотрудники с новыми ID (49, 66, 92…)
 // в нём отсутствовали и показывались как «#49». Здесь один раз при старте сервера
@@ -107,4 +118,4 @@ async function hydrateUsers() {
   return added;
 }
 
-module.exports = { USERS, USER_EMAILS, SERVICE_TYPES, COORDINATORS, VALID_ROLES, hydrateUsers };
+module.exports = { USERS, USER_EMAILS, SERVICE_TYPES, COORDINATORS, VALID_ROLES, TC_TILE_CODES, hydrateUsers };

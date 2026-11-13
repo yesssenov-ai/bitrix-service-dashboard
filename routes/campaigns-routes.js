@@ -4,7 +4,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../auth');
 
-const VIEW = ['admin', 'coordinator', 'manager', 'store', 'engineer', 'viewer', 'marketolog'];
+const VIEW = ['admin', 'coordinator', 'manager', 'store', 'engineer', 'viewer', 'marketolog', 'tc'];
 const EDIT = ['admin', 'coordinator', 'manager', 'marketolog'];
 
 // Аудитория

@@ -586,8 +586,9 @@ app.get('/api/users', requireAuth(), (_, res) => {
 app.get('/api/portal/my-access', requireAuth(), async (req, res) => {
   try {
     if (req.user.role === 'admin' || req.user.role === 'superadmin') return res.json({ ok: true, admin: true });
-    // Роль «тренинг-центр»: видит ровно плитки ТЦ, без привязки к Bitrix и грантам.
-    if (req.user.role === 'tc') return res.json({ ok: true, enforced: true, modules: TC_CODES.slice() });
+    // Роль «тренинг-центр»: видит ровно плитки матрицы ТЦ (constants.TC_TILE_CODES),
+    // без привязки к Bitrix и таблице грантов. Пять финансовых модулей сюда не входят.
+    if (req.user.role === 'tc') return res.json({ ok: true, enforced: true, modules: require('./constants').TC_TILE_CODES.slice() });
     let bitrixUserId = req.user.bitrix_user_id || null;
     if (!bitrixUserId && req.user.engineer_name) {
       const found = Object.entries(USERS).find(([, name]) => name === req.user.engineer_name);

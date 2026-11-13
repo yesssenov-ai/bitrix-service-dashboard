@@ -3,13 +3,19 @@ const router = express.Router();
 const { requireAuth } = require('../auth');
 const { memo } = require('../cache');
 
-const VIEW_ROLES = ['admin', 'superadmin', 'coordinator', 'manager', 'store', 'accountant'];
+const VIEW_ROLES = ['admin', 'superadmin', 'coordinator', 'manager', 'store', 'accountant', 'tc'];
 const EDIT_ROLES = ['admin', 'superadmin', 'coordinator'];   // кто назначает КАМ на проект
 
 // GET /api/projects — проекты (по полю «В рамках проекта») + вид по компаниям + аудит.
 router.get('/', requireAuth(VIEW_ROLES), async (req, res) => {
   try {
     res.set('Cache-Control', 'no-store');
+    // ТЦ: проекты строго по своим сделкам (ответственный = сам пользователь).
+    // Проекты раскрывают суммы сделок, поэтому полный просмотр для tc исключён.
+    if (req.user.role === 'tc') {
+      const bid = req.user.bitrix_user_id ? parseInt(req.user.bitrix_user_id, 10) : -1;
+      return res.json(await memo('proj:board:tc:' + bid, 120 * 1000, () => require('../projects-calc').getProjects(bid)));
+    }
     res.json(await memo('proj:board', 120 * 1000, () => require('../projects-calc').getProjects()));
   } catch (e) {
     console.error('GET /api/projects error:', e.message);

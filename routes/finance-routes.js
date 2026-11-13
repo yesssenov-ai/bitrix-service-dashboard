@@ -4,7 +4,7 @@
 // тому выдан грант.
 const express = require('express');
 const router = express.Router();
-const { requireAuth, isAdminLike, auditLog } = require('../auth');
+const { requireAuth, requireModuleApi, isAdminLike, auditLog } = require('../auth');
 const { EMPLOYEE_DEPT } = require('../dept-map');
 const { USERS } = require('../constants');
 const { memo, bust } = require('../cache');
@@ -106,18 +106,22 @@ router.get('/stock', requireAuth(VIEW), async (req, res) => {
 router.post('/stock/refresh', requireAuth(VIEW), (req, res) => doManualRefresh(req, res, 'Склад', () => require('../finance-stock-calc').syncStock()));
 
 // ── Авансы (счёт 3510 + оплаты 1210/1010-1030) ──────────────────────────────
-router.get('/advances', requireAuth(VIEW), async (req, res) => {
+// Авансы — данные НЕ скоупятся (getAdvancesBoard отдаёт всё). Поэтому гейтим
+// строго по модулю ADV (а не «любой авторизованный»): так скрытый для ТЦ модуль
+// нельзя получить и напрямую по URL. Было requireAuth(VIEW=[]) — любой вошедший.
+router.get('/advances', requireModuleApi('ADV'), async (req, res) => {
   try { res.json(await memo('fin:advances', FIN_TTL, () => require('../finance-advances-calc').getAdvancesBoard())); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
-router.post('/advances/refresh', requireAuth(VIEW), (req, res) => doManualRefresh(req, res, 'Авансы', () => require('../finance-advances-calc').syncAdvances()));
+router.post('/advances/refresh', requireModuleApi('ADV'), (req, res) => doManualRefresh(req, res, 'Авансы', () => require('../finance-advances-calc').syncAdvances()));
 
 // ── Cash Flow (13-недельный прогноз ликвидности; приток из Дебета 1210) ──────
-router.get('/cashflow', requireAuth(VIEW), async (req, res) => {
+// Cash Flow — так же не скоупится; гейтим по модулю CASHFLOW (был requireAuth(VIEW=[])).
+router.get('/cashflow', requireModuleApi('CASHFLOW'), async (req, res) => {
   try { res.json(await memo('fin:cashflow', FIN_TTL, () => require('../finance-cashflow-calc').getCashflowBoard())); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
-router.post('/cashflow/refresh', requireAuth(VIEW), (req, res) => doManualRefresh(req, res, 'Cash Flow', () => require('../finance-cashflow-calc').syncCashflow()));
+router.post('/cashflow/refresh', requireModuleApi('CASHFLOW'), (req, res) => doManualRefresh(req, res, 'Cash Flow', () => require('../finance-cashflow-calc').syncCashflow()));
 
 // ── Качество (сверка контрактов 1С ↔ сделок Битрикса) ───────────────────────
 router.get('/quality', requireAuth(VIEW), async (req, res) => {

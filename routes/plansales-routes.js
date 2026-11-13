@@ -23,7 +23,9 @@ function resolveBitrixId(user) {
 // а API — любому авторизованному с доступом; ограничим ролями просмотра аналитики.
 // engineer (менеджеры продаж) тоже видят план и могут редактировать СВОИ сделки —
 // редактирование ограничено canCommentDeal (свои + свой отдел), просмотр общий.
-const VIEW_ROLES = ['admin', 'coordinator', 'manager', 'engineer', 'sales', 'sales_head', 'store', 'accountant'];
+// 'tc' (тренинг-центр) допущена к просмотру: НЕ входит в fullView ниже, поэтому
+// видит план строго по своему отделу (deptManagerIds) — чужих продаж не видит.
+const VIEW_ROLES = ['admin', 'coordinator', 'manager', 'engineer', 'sales', 'sales_head', 'store', 'accountant', 'tc'];
 
 // Набор Bitrix-ID «моего отдела» (+ я) по карте EMPLOYEE_DEPT — для скоупинга.
 function deptManagerIds(bid, EMPLOYEE_DEPT) {
