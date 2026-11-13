@@ -147,6 +147,27 @@ async function execute(kind, params, user) {
       [user && user.id, String(params.title || '').slice(0, 300), String(params.note || ''), params.due_date || null]);
     return 'Напоминание создано в ЦУП: «' + (params.title || '') + '»';
   }
+  if (kind === 'create_event') {
+    const title = String(params.title || 'Событие').slice(0, 500);
+    const rawS = String(params.start || '');
+    if (!/^\d{4}-\d{2}-\d{2}/.test(rawS)) throw new Error('Не указана дата события');
+    const allDay = !!params.allDay || !/T\d{2}:\d{2}/.test(rawS);
+    let startVal, endVal;
+    if (allDay) {
+      const sd = rawS.slice(0, 10);
+      const ed = /^\d{4}-\d{2}-\d{2}/.test(String(params.end || '')) ? String(params.end).slice(0, 10) : sd;
+      startVal = sd + 'T00:00'; endVal = ed + 'T00:00';
+    } else {
+      startVal = rawS.slice(0, 16);
+      endVal = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(String(params.end || '')) ? String(params.end).slice(0, 16) : startVal;
+    }
+    const cat = ['meet', 'task', 'imp', 'agent'].includes(params.category) ? params.category : 'meet';
+    await pool.query(
+      `INSERT INTO ticketsmodule_calendar_events (owner_id, title, category, start_at, end_at, all_day, location, note, source, created_by)
+       VALUES ($1,$2,$3, ($4)::timestamp AT TIME ZONE 'Asia/Almaty', ($5)::timestamp AT TIME ZONE 'Asia/Almaty', $6,$7,$8,'agent',$9)`,
+      [user && user.id, title, cat, startVal, endVal, allDay, String(params.location || '').slice(0, 300), String(params.note || '').slice(0, 2000), (user && user.username) || 'agent']);
+    return 'Событие добавлено в календарь ЦУП: «' + title + '»' + (allDay ? (' на ' + startVal.slice(0, 10)) : (' ' + startVal.slice(0, 10) + ' ' + startVal.slice(11, 16)));
+  }
   throw new Error('Неизвестный тип действия: ' + kind);
 }
 

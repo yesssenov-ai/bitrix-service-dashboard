@@ -28,15 +28,38 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
   crossOriginResourcePolicy: false,
 }));
-// Rate limiting
+// Rate limiting.
+// ВАЖНО: ключ лимита — по ПОЛЬЗОВАТЕЛЮ (id из JWT-cookie), а не по IP. Весь офис
+// выходит в интернет под одним публичным IP, поэтому привязка к IP превращала
+// лимит в общий бюджет «на всех сразу»: при массовом входе (и даже при ~10
+// активных — мессенджер опрашивает сервер каждые 3.5с) все упирались в общий
+// потолок и ловили 429 («превышено количество…»). Теперь у каждого свой бюджет;
+// для неавторизованных запросов — откат на IP.
+const _jwtRL = require('jsonwebtoken');
+const _ipHelper = (typeof rateLimit.ipKeyGenerator === 'function') ? rateLimit.ipKeyGenerator : null;
+function _ipKey(req) { try { return _ipHelper ? _ipHelper(req.ip) : (req.ip || 'ip'); } catch (e) { return req.ip || 'ip'; } }
+function userRateKey(req) {
+  const raw = req.headers.cookie || '';
+  const m = raw.match(/(?:^|;\s*)token=([^;]+)/);
+  if (m) {
+    try { const p = _jwtRL.verify(decodeURIComponent(m[1]), process.env.JWT_SECRET); if (p && p.userId) return 'u:' + p.userId; } catch (e) { /* невалидный токен → ниже по IP */ }
+  }
+  return 'ip:' + _ipKey(req);
+}
 const apiLimiter = rateLimit({
-  windowMs: 60000, max: 120,
+  windowMs: 60000, max: 600,                 // на каждого пользователя в минуту (с запасом на поллинг мессенджера и несколько вкладок)
   standardHeaders: true, legacyHeaders: false,
+  keyGenerator: userRateKey,
   skip: (req) => req.path === '/api/health',
+  validate: false,
+  message: { ok: false, error: 'Слишком много запросов за минуту. Подождите немного и повторите.' },
 });
 const authLimiter = rateLimit({
-  windowMs: 60000, max: 30,
+  windowMs: 60000, max: 150,                 // вход/2FA: с запасом на массовый вход из офиса под одним IP
   standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req) => 'ip:' + _ipKey(req),
+  validate: false,
+  message: { ok: false, error: 'Слишком много попыток входа. Подождите минуту и попробуйте снова.' },
 });
 app.use('/api/', apiLimiter);
 app.use('/auth/login', authLimiter);
@@ -162,6 +185,7 @@ app.get('/login.html', (_, res) => res.sendFile(path.join(__dirname, 'public', '
 app.get('/', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'portal.html')));
 app.get('/portal.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'portal.html')));
 app.get('/board.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'board.html')));
+app.get('/calendar.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'calendar.html')));
 app.get('/tc.html', requireAnyModule(TC_CODES, ['tc']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'tc.html')));
 app.get('/messenger.html', requirePageAuth(), (_, res) => res.sendFile(path.join(__dirname, 'public', 'messenger.html')));
 app.get('/knowledge.html', requirePageAuth(['admin']), (_, res) => res.sendFile(path.join(__dirname, 'public', 'knowledge.html')));
@@ -228,6 +252,7 @@ app.use('/api/feedback', require('./routes/feedback-routes').router);
 app.use('/api/myday', require('./routes/myday-routes').router);
 app.use('/api/search', require('./routes/search-routes').router);
 app.use('/api/board', require('./routes/board-routes').router);
+app.use('/api/calendar', require('./routes/calendar-routes').router);
 app.use('/api/msg', require('./routes/messenger-routes').router);
 app.use('/api/kb', require('./routes/knowledge-routes').router);
 app.use('/api/plsai', require('./routes/plsai-routes').router);
