@@ -86,8 +86,8 @@ button{font-family:inherit;cursor:pointer}
 .mbody{display:flex;flex-direction:column;border-left:1px solid var(--line)}
 .mweek{position:relative;border-bottom:1px solid var(--line)}
 .mcells{position:absolute;inset:0;display:grid;grid-template-columns:repeat(7,1fr)}
-.mcell{border-right:1px solid var(--line);padding:6px 7px}
-.mcell.mut{background:#fcfdfe}
+.mcell{border-right:1px solid var(--line);padding:6px 7px;background:#ffffff}
+.mcell.mut{background:#eef1f5}
 .mcell .dn{font-size:12.5px;font-weight:700;color:var(--text-2);width:25px;height:25px;display:flex;align-items:center;justify-content:center;border-radius:50%}
 .mcell.mut .dn{color:var(--faint)}
 .mcell.today .dn{background:var(--accent);color:#fff}
@@ -302,6 +302,8 @@ function evStart(ev){return parseD(ev.start)}
 function evEnd(ev){return parseD(ev.end||ev.start)}
 function spanDays(ev){const a=evStart(ev),b=evEnd(ev),out=[];for(let x=new Date(a);x<=b;x=addDays(x,1))out.push(iso(x));return out}
 function isAllDay(ev){return ev.allDay || !timeOf(ev.start)}
+function isMultiDay(ev){return String(ev.start).slice(0,10)!==String(ev.end||ev.start).slice(0,10)}
+function asBar(ev){return isAllDay(ev)||isMultiDay(ev)}
 
 let tT;function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('on'),1900)}
 async function api(method,path,body){
@@ -403,11 +405,11 @@ function renderMonth(){
   let h='<div class="mweek-h">'+WD.map((w,i)=>`<div class="${i>4?'we':''}">${w}</div>`).join('')+'</div><div class="mbody">';
   weeksGrid().forEach(week=>{
     const wkStart=week[0],wkEnd=week[6],spans=[];
-    EVENTS.forEach(ev=>{if(!visible(ev)||!isAllDay(ev))return;const a=evStart(ev),b=evEnd(ev);if(b<wkStart||a>wkEnd)return;spans.push({ev,sc:Math.max(0,Math.round((a-wkStart)/864e5)),ec:Math.min(6,Math.round((b-wkStart)/864e5)),contL:a<wkStart,contR:b>wkEnd})});
+    EVENTS.forEach(ev=>{if(!visible(ev)||!asBar(ev))return;const a=evStart(ev),b=evEnd(ev);if(b<wkStart||a>wkEnd)return;spans.push({ev,sc:Math.max(0,Math.round((a-wkStart)/864e5)),ec:Math.min(6,Math.round((b-wkStart)/864e5)),contL:a<wkStart,contR:b>wkEnd})});
     spans.sort((x,y)=>x.sc-y.sc||(y.ec-y.sc)-(x.ec-x.sc));
     const lanes=[];spans.forEach(s=>{let L=0;while(lanes[L]&&lanes[L].some(o=>!(s.ec<o.sc||s.sc>o.ec)))L++;(lanes[L]=lanes[L]||[]).push(s);s.lane=L});
     const nLanes=lanes.length;
-    const timed={};week.forEach((dt,col)=>{const d=iso(dt);EVENTS.forEach(ev=>{if(!visible(ev)||isAllDay(ev)||ev.start.slice(0,10)!==d)return;(timed[col]=timed[col]||[]).push(ev)})});
+    const timed={};week.forEach((dt,col)=>{const d=iso(dt);EVENTS.forEach(ev=>{if(!visible(ev)||asBar(ev)||ev.start.slice(0,10)!==d)return;(timed[col]=timed[col]||[]).push(ev)})});
     const avail=Math.max(0,MAXROWS-nLanes);const maxTimed=Math.min(avail,Math.max(0,...week.map((_,c)=>(timed[c]||[]).length)));
     const overflow=week.some((_,c)=>(timed[c]||[]).length>maxTimed);const bodyRows=nLanes+maxTimed+(overflow?1:0);
     h+=`<div class="mweek" style="min-height:${NUMH+bodyRows*LANEH+8}px"><div class="mcells">`+week.map(dt=>{const mut=dt.getMonth()!==curM;const isT=iso(dt)===todayIso();return `<div class="mcell ${mut?'mut':''} ${isT?'today':''}"><div class="dn">${dt.getDate()}</div></div>`}).join('')+'</div><div class="movl">';
@@ -426,7 +428,7 @@ function renderWeek(){
   days.forEach(dt=>{const isT=iso(dt)===todayIso();h+=`<div class="wd ${isT?'today':''}"><div class="d">${dt.getDate()}</div><div class="n">${WD[(dt.getDay()+6)%7]}</div></div>`});
   h+='</div>';
   const wkStart=days[0],wkEnd=days[6],spans=[];
-  EVENTS.forEach(ev=>{if(!visible(ev)||!isAllDay(ev))return;const a=evStart(ev),b=evEnd(ev);if(b<wkStart||a>wkEnd)return;spans.push({ev,sc:Math.max(0,Math.round((a-wkStart)/864e5)),ec:Math.min(6,Math.round((b-wkStart)/864e5)),contL:a<wkStart,contR:b>wkEnd})});
+  EVENTS.forEach(ev=>{if(!visible(ev)||!asBar(ev))return;const a=evStart(ev),b=evEnd(ev);if(b<wkStart||a>wkEnd)return;spans.push({ev,sc:Math.max(0,Math.round((a-wkStart)/864e5)),ec:Math.min(6,Math.round((b-wkStart)/864e5)),contL:a<wkStart,contR:b>wkEnd})});
   spans.sort((x,y)=>x.sc-y.sc||(y.ec-y.sc)-(x.ec-x.sc));
   const lanes=[];spans.forEach(s=>{let L=0;while(lanes[L]&&lanes[L].some(o=>!(s.ec<o.sc||s.sc>o.ec)))L++;(lanes[L]=lanes[L]||[]).push(s);s.lane=L});
   if(spans.length){h+=`<div class="wkallday"><div></div><div class="wkband" style="height:${lanes.length*22+6}px">`;
@@ -436,7 +438,7 @@ function renderWeek(){
   for(let hr=8;hr<=19;hr++)h+=`<div class="h">${hr}:00</div>`;
   h+='</div>';
   days.forEach(dt=>{const d=iso(dt);h+='<div class="wkcol">';for(let hr=8;hr<=19;hr++)h+='<div class="slot"></div>';
-    EVENTS.forEach(ev=>{if(!visible(ev)||isAllDay(ev)||ev.start.slice(0,10)!==d)return;const[sh,sm]=timeOf(ev.start).split(':').map(Number);const[eh,em]=(timeOf(ev.end)||timeOf(ev.start)).split(':').map(Number);const top=((sh-8)*60+sm)/60*48,hgt=Math.max(26,((eh*60+em)-(sh*60+sm))/60*48-3);const c=catColor(ev.category);h+=`<div class="wev" data-ev="${ev.id}" style="top:${top}px;height:${hgt}px;background:${c}">${esc(ev.title)}<small>${timeOf(ev.start)}–${timeOf(ev.end)||''}</small></div>`});
+    EVENTS.forEach(ev=>{if(!visible(ev)||asBar(ev)||ev.start.slice(0,10)!==d)return;const[sh,sm]=timeOf(ev.start).split(':').map(Number);const[eh,em]=(timeOf(ev.end)||timeOf(ev.start)).split(':').map(Number);const top=((sh-8)*60+sm)/60*48,hgt=Math.max(26,((eh*60+em)-(sh*60+sm))/60*48-3);const c=catColor(ev.category);h+=`<div class="wev" data-ev="${ev.id}" style="top:${top}px;height:${hgt}px;background:${c}">${esc(ev.title)}<small>${timeOf(ev.start)}–${timeOf(ev.end)||''}</small></div>`});
     h+='</div>';});
   return h+'</div>';
 }
@@ -659,6 +661,17 @@ async function boot(){
   [document.getElementById('popOv'),document.getElementById('editOv'),document.getElementById('colorOv'),document.getElementById('bookOv')].forEach(ov=>ov.onclick=e=>{if(e.target===ov)ov.classList.remove('on')});
   loadEvents();
 }
+// Глобальные иконки ЦУП (помощь/поиск/связь) инжектятся фиксированно вверху слева и
+// наезжают на заголовок — переносим их в правый край панели календаря.
+(function(){
+  const IDS=['pls-help-btn','pls-sr-btn','pls-fb-btn'];
+  function dock(){
+    const bar=document.querySelector('.bar'); if(!bar) return;
+    IDS.forEach(id=>{ const el=document.getElementById(id); if(el && el.parentNode!==bar){ el.style.position='static'; el.style.top=el.style.left=el.style.right=el.style.bottom='auto'; el.style.margin='0'; el.style.transform='none'; bar.appendChild(el); } });
+  }
+  [200,600,1500,3000,5000].forEach(t=>setTimeout(dock,t));
+  window.addEventListener('resize',dock);
+})();
 boot();
 </script>
 </body>
