@@ -207,6 +207,10 @@ th:last-child,td:last-child{text-align:right;}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
             Импорт из Битрикс
           </button>
+          <button class="btn" onclick="assignTcByDept()" title="Назначить роль «Тренинг-центр» всем активным сотрудникам отдела Тренинг-центр из Bitrix (admin/superadmin не затрагиваются)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg>
+            Роль ТЦ по отделу
+          </button>
           <button class="btn btn-primary" onclick="openCreate()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Добавить пользователя
@@ -532,6 +536,26 @@ function copyTgLink(userId) {
 }
 
 // ── Массовый импорт учёток по сотрудникам Bitrix ──────────────────────────────
+async function assignTcByDept() {
+  let prev;
+  try {
+    const r = await fetch('/admin/assign-role-by-department', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: 'tc', apply: false }) });
+    prev = await r.json();
+  } catch (e) { toast('Ошибка связи', 'error'); return; }
+  if (!prev || !prev.ok) { toast((prev && prev.error) || 'Ошибка', 'error'); return; }
+  const willChange = (prev.matched || []).filter(m => m.willChange);
+  const note = `В отделе Тренинг-центр (Bitrix): ${prev.membersCount || 0}. Сопоставлено с учётками ЦУП: ${(prev.matched || []).length}.`;
+  if (!willChange.length) { alert('Назначать некого.\n\n' + note + '\n\n(У всех сопоставленных уже нужная роль, либо это admin/superadmin — их не трогаем.)'); return; }
+  const list = willChange.map(m => '• ' + m.name + ' (' + m.currentRole + ' → tc)').join('\n');
+  if (!confirm('Назначить роль «Тренинг-центр» ' + willChange.length + ' сотрудникам?\n\n' + note + '\n\n' + list)) return;
+  try {
+    const r = await fetch('/admin/assign-role-by-department', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: 'tc', apply: true }) });
+    const d = await r.json();
+    if (d && d.ok) { toast('Роль ТЦ назначена: ' + d.applied + ' сотр.', 'success'); loadUsers(); }
+    else toast((d && d.error) || 'Ошибка', 'error');
+  } catch (e) { toast('Ошибка связи', 'error'); }
+}
+
 async function importBitrixUsers() {
   if (!confirm('Создать учётки по всем сотрудникам Bitrix?\n\n• Логин — корпоративная почта\n• Пароль у всех: 123qwerty (сменят сами)\n• Роль по умолчанию: Просмотр\n• Имя — как в Bitrix, привязка к Bitrix — сразу\n\nСуществующие учётки НЕ меняются. Можно запускать повторно.')) return;
   const btn = document.getElementById('btnImportBitrix');

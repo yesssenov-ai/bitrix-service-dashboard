@@ -13,6 +13,56 @@ function validateRole(role) {
   return VALID_ROLES.has(role);
 }
 
+// Массовое назначение роли сотрудникам отдела Bitrix (по умолчанию — Тренинг-центр).
+// apply:false → только превью (кого затронет), apply:true → применить.
+// Никогда не трогает admin/superadmin. Сопоставление ЦУП↔Bitrix по bitrix_user_id.
+router.post('/assign-role-by-department', requireAuth(['superadmin']), async (req, res) => {
+  try {
+    const { b24 } = require('../bitrix');
+    const role = String((req.body && req.body.role) || '');
+    const apply = !!(req.body && req.body.apply);
+    if (!VALID_ROLES.has(role)) return res.status(400).json({ ok: false, error: 'Недопустимая роль' });
+    let deptId = (req.body && req.body.departmentId) ? String(req.body.departmentId) : null;
+    if (!deptId) {
+      try {
+        let start = 0;
+        for (let g = 0; g < 15 && !deptId; g++) {
+          const dr = await b24('department.get', { start });
+          const list = (dr && dr.result) || [];
+          const d = list.find(x => /тренинг|training|учебн/i.test(x.NAME || ''));
+          if (d) deptId = String(d.ID);
+          const next = dr && dr.next; if (next == null) break; start = next;
+        }
+      } catch (e) {}
+    }
+    if (!deptId) return res.status(400).json({ ok: false, error: 'Не удалось определить отдел «Тренинг-центр» в Bitrix' });
+    const members = []; let start = 0;
+    for (let g = 0; g < 15; g++) {
+      let r; try { r = await b24('user.get', { FILTER: { UF_DEPARTMENT: deptId, ACTIVE: true }, start }); } catch (e) { break; }
+      const us = (r && r.result) || [];
+      for (const u of us) members.push({ bid: String(u.ID), name: [u.LAST_NAME, u.NAME].filter(Boolean).join(' ') || ('#' + u.ID) });
+      const next = r && r.next; if (next == null) break; start = next;
+    }
+    if (!members.length) return res.json({ ok: true, departmentId: deptId, membersCount: 0, matched: [], applied: 0, note: 'В отделе не найдено активных сотрудников Bitrix.' });
+    const bidSet = new Set(members.map(m => m.bid));
+    const { rows } = await pool.query(`SELECT id, display_name, role, bitrix_user_id FROM ticketsmodule_users WHERE active=true AND bitrix_user_id IS NOT NULL`);
+    const matched = rows.filter(u => bidSet.has(String(u.bitrix_user_id))).map(u => ({
+      id: u.id, name: u.display_name, currentRole: u.role, bid: String(u.bitrix_user_id),
+      willChange: u.role !== role && !['admin', 'superadmin'].includes(u.role),
+    }));
+    let applied = 0; const changed = [];
+    if (apply) {
+      for (const m of matched) {
+        if (!m.willChange) continue;
+        await pool.query(`UPDATE ticketsmodule_users SET role=$1, updated_at=NOW() WHERE id=$2`, [role, m.id]);
+        applied++; changed.push(m.name);
+      }
+      try { await auditLog(req.user.id, req.user.username, 'BULK_ROLE_BY_DEPT', null, { departmentId: deptId, role, applied, changed }, req.ip, req.headers['user-agent']); } catch (e) {}
+    }
+    res.json({ ok: true, departmentId: deptId, membersCount: members.length, matched, applied, changed });
+  } catch (e) { console.error('assign-role-by-department:', e.message); res.status(500).json({ ok: false, error: 'Ошибка' }); }
+});
+
 function sanitizeError(e, res) {
   console.error('Admin route error:', e.message);
   res.status(500).json({ ok: false, error: 'Внутренняя ошибка сервера' });
