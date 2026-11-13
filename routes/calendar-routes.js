@@ -341,14 +341,22 @@ router.get('/rooms', requireAuth(), async (req, res) => {
     res.json({ ok: true, rooms: DEFAULT_ROOMS.slice(), bookings: [], source: 'fallback', warn: e.message });
   }
 });
-// Сырой ответ Bitrix для диагностики сопоставления (только админ).
+// Сырой ответ Bitrix для диагностики сопоставления переговорных (только админ).
+// Пробуем батарею методов, чтобы точно понять, как заведены переговорные.
 router.get('/rooms/raw', requireAuth(), async (req, res) => {
   if (!isAdmin(req)) return res.status(403).json({ ok: false });
   const { b24 } = require('../bitrix');
   const out = {};
-  try { out.resource_list = await b24('calendar.resource.list', {}); } catch (e) { out.resource_list_err = e.message; }
-  try { out.resource_booking_list = await b24('calendar.resource.booking.list', { }); } catch (e) { out.resource_booking_list_err = e.message; }
-  res.json({ ok: true, out });
+  const pd = n => { const d = new Date(Date.now() + n * 864e5); return d.toISOString().slice(0, 19); };
+  const from = pd(-30), to = pd(30);
+  async function probe(key, method, params) { try { const r = await b24(method, params); out[key] = (r && r.result !== undefined) ? r.result : r; } catch (e) { out[key + '_err'] = e.message; } }
+  await probe('resource_list', 'calendar.resource.list', {});
+  await probe('section_location', 'calendar.section.get', { type: 'location', ownerId: 0 });
+  await probe('event_location', 'calendar.event.get', { type: 'location', ownerId: 0, from, to });
+  await probe('rt_list', 'calendar.resource.type.list', {});
+  await probe('booking_all', 'calendar.resource.booking.list', { filter: { resourceTypeIdList: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], from, to } });
+  await probe('meeting_rooms', 'calendar.meeting.room.list', {});
+  res.json({ ok: true, from, to, out });
 });
 
 module.exports = { router };
