@@ -138,6 +138,7 @@ async function boot(){
     ITEMS=l.items||[]; STAGES=l.stages||[]; META=m||META;
   }catch(e){ document.getElementById('cards').innerHTML='<div class="empty">Не удалось загрузить. Проверьте доступ к Bitrix.</div>'; return; }
   renderChips(); renderList();
+  const qid=new URLSearchParams(location.search).get('id'); if(qid) openDetail(parseInt(qid,10));
 }
 function renderChips(){
   const cnt=id=>ITEMS.filter(i=>i.stageId===id).length;
