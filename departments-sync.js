@@ -42,10 +42,24 @@ async function refreshStaffRef() {
     active BOOLEAN,
     synced_at TIMESTAMPTZ DEFAULT NOW()
   )`);
+  // Отдел менеджера (из карты user_admin Bitrix, dept-map.js) — чтобы считать
+  // продажи «по отделу» через ОТВЕТСТВЕННОГО, минуя часто пустое поле «Отдел» сделки.
+  await pool.query(`ALTER TABLE ticketsmodule_staff_ref ADD COLUMN IF NOT EXISTS department VARCHAR(80)`);
   await pool.query(`INSERT INTO ticketsmodule_staff_ref (id, name, username, bitrix_user_id, job_title, active, synced_at)
     SELECT id, display_name, username, bitrix_user_id, job_title, active, NOW() FROM ticketsmodule_users
     ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, username=EXCLUDED.username,
       bitrix_user_id=EXCLUDED.bitrix_user_id, job_title=EXCLUDED.job_title, active=EXCLUDED.active, synced_at=NOW()`);
+  // Проставляем отдел по bitrix_user_id из карты EMPLOYEE_DEPT.
+  try {
+    const { EMPLOYEE_DEPT } = require('./dept-map');
+    const entries = Object.entries(EMPLOYEE_DEPT || {});
+    if (entries.length) {
+      const values = entries.map((_, i) => `($${i * 2 + 1}::int,$${i * 2 + 2})`).join(',');
+      const params = entries.flatMap(([bid, dep]) => [parseInt(bid, 10), dep]);
+      await pool.query(`UPDATE ticketsmodule_staff_ref s SET department = v.dep
+        FROM (VALUES ${values}) AS v(bid, dep) WHERE s.bitrix_user_id = v.bid`, params);
+    }
+  } catch (e) { console.warn('staff_ref department map:', e.message); }
   const n = (await pool.query('SELECT COUNT(*)::int c FROM ticketsmodule_staff_ref')).rows[0].c;
   return { ok: true, staff: n };
 }
