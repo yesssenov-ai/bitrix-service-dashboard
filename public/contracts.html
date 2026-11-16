@@ -54,6 +54,8 @@
   .fsel>label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--dim2);font-weight:600;margin-bottom:5px}
   .ms{position:relative}
   .ms-btn{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:11px;padding:10px 12px;font-size:13.5px;font-weight:600;cursor:pointer;transition:.2s;backdrop-filter:blur(12px)}
+  .yearsel-f{width:100%;background:var(--panel);border:1px solid var(--border);border-radius:11px;padding:10px 12px;font-size:13.5px;font-weight:700;color:var(--text);font-family:inherit;cursor:pointer;outline:none;-webkit-appearance:none;appearance:none}
+  .yearsel-f option{background:var(--surface);color:var(--text)}
   .ms-btn:hover{border-color:rgba(255,255,255,.18)}
   .ms-btn .ms-lab{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ms-btn svg{opacity:.5;flex-shrink:0;transition:transform .2s}
@@ -255,7 +257,6 @@
       <div class="logo"><div class="lg1">Pro Lab <span>Support</span></div><div class="lg2">Контракты · портфель и выполнение плана</div></div>
     </div>
     <div class="hctl">
-      <div class="yearsel">Год: <select id="yearSel"></select></div>
       <button class="refresh-btn" id="refreshBtn" onclick="refreshNow()" title="Подтянуть из Битрикса сделки, изменённые после последнего обновления">
         <svg class="ri" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
         <span class="rl">Обновить</span>
@@ -269,6 +270,9 @@
   </header>
 
   <div class="filterbar">
+    <div class="fsel"><label>Год</label>
+      <select id="yearSel" class="yearsel-f"></select>
+    </div>
     <div class="fsel"><label>Производитель</label>
       <div class="ms" data-k="manuf"><div class="ms-btn" onclick="toggleMS('manuf')"><span class="ms-lab">Все</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></div><div class="ms-panel"><input class="ms-search" placeholder="Поиск…" oninput="msSearch('manuf',this.value)"><div class="ms-opts"></div></div></div>
     </div>

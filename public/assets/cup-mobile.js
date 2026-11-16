@@ -83,11 +83,15 @@
     bell:'<path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
     ai:'<rect x="4.5" y="8" width="15" height="11" rx="3"/><path d="M12 8V4.5M8.5 4.5h7"/><circle cx="9.5" cy="13.3" r="1.1"/><circle cx="14.5" cy="13.3" r="1.1"/>',
     theme:'<path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.6 6.6 0 0 0 9.8 9.8z"/>',
-    fb:'<path d="M21 15a2 2 0 0 1-2 2H8l-4 3V6a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/>'
+    fb:'<path d="M21 15a2 2 0 0 1-2 2H8l-4 3V6a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/>',
+    msg:'<path d="M20 11.5a7.5 7.5 0 0 1-10.9 6.7L4 20l1.8-4.9A7.5 7.5 0 1 1 20 11.5z"/><path d="M8.5 10.5h7M8.5 13.5h4.5"/>',
+    cal:'<rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/>'
   };
   function tactSvg(n){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+TACT[n]+'</svg>'; }
   function clusterHTML(){
-    return '<button class="cup-tb-ic cup-tb-bell" data-act="bell" aria-label="Уведомления">'+tactSvg('bell')+'</button>'+
+    return '<button class="cup-tb-ic" data-act="msg" aria-label="Мессенджер">'+tactSvg('msg')+'</button>'+
+           '<button class="cup-tb-ic" data-act="cal" aria-label="Календарь">'+tactSvg('cal')+'</button>'+
+           '<button class="cup-tb-ic cup-tb-bell" data-act="bell" aria-label="Уведомления">'+tactSvg('bell')+'</button>'+
            '<button class="cup-tb-ic" data-act="ai" aria-label="Ассистент">'+tactSvg('ai')+'</button>'+
            '<button class="cup-tb-ic" data-act="theme" aria-label="Тема">'+tactSvg('theme')+'</button>'+
            '<button class="cup-tb-ic" data-act="fb" aria-label="Обратная связь">'+tactSvg('fb')+'</button>';
@@ -95,7 +99,9 @@
   function wireCluster(root){
     root.addEventListener('click',function(e){ var b=e.target.closest('button[data-act]'); if(!b) return;
       var a=b.getAttribute('data-act');
-      if(a==='bell') openBell();
+      if(a==='msg') go('/messenger.html');
+      else if(a==='cal') go('/calendar.html');
+      else if(a==='bell') openBell();
       else if(a==='ai') clickId('pai-fab');
       else if(a==='theme') clickId('themeToggle');
       else if(a==='fb') clickId('pls-fb-btn'); });
@@ -454,7 +460,8 @@
     task:'<path d="M9 11l3 3L20 6"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>',
     search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
     kb:'<path d="M4 5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2zM8 7h7M8 11h7"/>',
-    msg:'<path d="M21 11.5a8.4 8.4 0 0 1-12 7.6L3 21l1.9-5.7A8.4 8.4 0 1 1 21 11.5z"/>'
+    msg:'<path d="M21 11.5a8.4 8.4 0 0 1-12 7.6L3 21l1.9-5.7A8.4 8.4 0 1 1 21 11.5z"/>',
+    cal:'<rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/>'
   };
   function gsvg(n){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'+GACT[n]+'</svg>'; }
   function greetWord(){ var h=new Date().getHours(); return h<6?'Доброй ночи':h<12?'Доброе утро':h<18?'Добрый день':'Добрый вечер'; }
@@ -469,7 +476,7 @@
       '<div class="cup-greet-hi">'+esc(greetWord())+'</div>'+
       '<div class="cup-greet-name" id="cupGreetName">на сегодня</div>'+
       '<div class="cup-greet-acts">'+
-        '<button data-g="kb" class="cup-greet-kb" style="display:none"><span>'+gsvg('kb')+'</span>База знаний</button>'+
+        '<button data-g="cal"><span>'+gsvg('cal')+'</span>Календарь</button>'+
         '<button data-g="msg"><span>'+gsvg('msg')+'</span>Мессенджер</button>'+
         '<button data-g="search"><span>'+gsvg('search')+'</span>Поиск</button>'+
       '</div>';
@@ -479,7 +486,7 @@
     else if(mn) mn.insertBefore(card, mn.firstChild);
     card.querySelector('.cup-greet-acts').addEventListener('click',function(e){
       var b=e.target.closest('button'); if(!b) return; var g=b.getAttribute('data-g');
-      if(g==='kb') go('/knowledge.html');
+      if(g==='cal') go('/calendar.html');
       else if(g==='msg') go('/messenger.html');
       else if(g==='search'){ if(!clickId('pls-sr-btn')) openSearch(); } });
     setGreetName();
