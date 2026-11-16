@@ -857,8 +857,8 @@ async function getMeetStages() {
 }
 function mapMeetItem(it, plannerId, stageName) {
   return {
-    id: it.id, title: it.title, assignedById: it.assignedById || null,
-    stageId: it.stageId, stage: stageName || it.stageId,
+    id: it.id, title: it.title, short: it[MEET_SHORT] || '', assignedById: it.assignedById || null,
+    stageId: it.stageId, stage: stageName || it.stageId, sem: null,
     date: _bxDate(it[MEET_DATE]), loc: it[MEET_LOC] || '', comment: it[MEET_COMMENT] || '',
     companyId: it.companyId || null, plannerId: plannerId || null,
   };

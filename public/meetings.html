@@ -12,43 +12,77 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);-webkit-font-smoothing:antialiased}
 a{color:inherit}
-.hdr{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;height:56px;padding:0 16px;
-  background:color-mix(in srgb,var(--surface) 86%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.hdr{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;height:56px;padding:0 16px;background:color-mix(in srgb,var(--surface) 86%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
 .hdr .brand{display:flex;align-items:center;gap:8px;font-weight:800;letter-spacing:-.2px;text-decoration:none;color:var(--text)}
 .hdr .brand img{height:22px}
 .hdr .sub{color:var(--text-3);font-weight:600;font-size:13px;border-left:1px solid var(--line-2);padding-left:12px}
 .hdr .sp{flex:1}
-.btn{display:inline-flex;align-items:center;gap:7px;border-radius:9px;border:1px solid var(--line-2);background:var(--surface);
-  color:var(--text);font:600 13px/1 var(--font);padding:9px 13px;cursor:pointer;transition:.14s;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;gap:7px;border-radius:9px;border:1px solid var(--line-2);background:var(--surface);color:var(--text);font:600 13px/1 var(--font);padding:9px 13px;cursor:pointer;transition:.14s;white-space:nowrap}
 .btn:hover{background:var(--surface-2)}
-.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
-.btn.pri:hover{filter:brightness(.96)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}.btn.pri:hover{filter:brightness(.96)}
 .btn svg{width:16px;height:16px}
-.back{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);text-decoration:none}
-.back:hover{color:var(--text)}
-.wrap{max-width:980px;margin:0 auto;padding:20px 16px 60px}
-.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
-.chips{display:flex;gap:7px;flex-wrap:wrap}
-.chip{border-radius:999px;border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);
-  font:600 12.5px/1 var(--font);padding:7px 13px;cursor:pointer;transition:.14s}
-.chip:hover{background:var(--surface-2)}
-.chip.on{background:var(--text);border-color:var(--text);color:var(--surface)}
+.back{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);text-decoration:none}.back:hover{color:var(--text)}
+.wrap{max-width:1080px;margin:0 auto;padding:18px 20px 60px}
+.toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.chips{display:flex;gap:7px;flex-wrap:wrap;flex:1;min-width:0}
+.chip{border-radius:999px;border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);font:600 12.5px/1 var(--font);padding:7px 13px;cursor:pointer;transition:.14s}
+.chip:hover{background:var(--surface-2)}.chip.on{background:var(--text);border-color:var(--text);color:var(--surface)}
 .chip .n{font-family:var(--f-mono,monospace);opacity:.7;margin-left:5px}
-.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
-.lc{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:15px 16px;cursor:pointer;transition:.14s}
-.lc:hover{border-color:var(--line-2);box-shadow:var(--shadow-sm,0 2px 10px rgba(0,0,0,.05));transform:translateY(-1px)}
-.lc .nm{font-weight:700;font-size:15px;margin-bottom:3px}
-.lc .per{color:var(--text-2);font-size:13px;font-variant-numeric:tabular-nums}
-.lc .meta{color:var(--text-3);font-size:12.5px;margin-top:7px;display:flex;gap:10px;flex-wrap:wrap}
-.sb{display:inline-block;font:700 10px/1 var(--font);text-transform:uppercase;letter-spacing:.4px;padding:5px 9px;border-radius:999px;margin-bottom:9px}
-.sb.neutral{background:color-mix(in srgb,var(--text-3) 15%,var(--surface));color:var(--text-2)}
-.sb.amber{background:color-mix(in srgb,#e8821f 16%,var(--surface));color:#b9600f}
-.sb.blue{background:color-mix(in srgb,#2f6bed 15%,var(--surface));color:#2256c9}
-.sb.green{background:color-mix(in srgb,#16a37a 16%,var(--surface));color:#0e7d5c}
-.sb.red{background:color-mix(in srgb,#e5484d 15%,var(--surface));color:#c0343a}
+/* view toggle */
+.vt{display:flex;gap:2px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:3px}
+.vt button{display:grid;place-items:center;width:34px;height:30px;border:none;background:none;border-radius:7px;cursor:pointer;color:var(--text-3);transition:.12s}
+.vt button svg{width:17px;height:17px}
+.vt button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(16,24,40,.08)}
+/* avatar */
+.av{flex:none;display:grid;place-items:center;border-radius:50%;color:#fff;font-weight:700;letter-spacing:.01em}
+.av.none{background:var(--surface-2)!important;color:var(--text-3);border:1px solid var(--line-2)}
+/* status pill */
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:5px 10px;border-radius:999px;white-space:nowrap}
+.pill .d{width:7px;height:7px;border-radius:50%;flex:none}
+.pill.amber{background:#fdf3e8;color:#b9600f}.pill.amber .d{background:#e8821f}
+.pill.blue{background:#eaf1fe;color:#2256c9}.pill.blue .d{background:#2f6bed}
+.pill.green{background:#e9f7f1;color:#0e7d5c}.pill.green .d{background:#16a37a}
+.pill.red{background:#fdeceD;color:#c0343a}.pill.red .d{background:#e5484d}
+/* ── CARDS (B) ── */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px 19px;cursor:pointer;transition:.16s;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+.card:hover{box-shadow:0 8px 28px rgba(16,24,40,.09);transform:translateY(-2px);border-color:var(--line-2)}
+.card .top{display:flex;align-items:center;gap:10px;margin-bottom:13px}
+.card .av{width:34px;height:34px;font-size:13px}
+.card .who{flex:1;min-width:0}.card .who .n{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .who .r{color:var(--text-3);font-size:11.5px}
+.card .t{font-weight:700;font-size:16px;line-height:1.3;letter-spacing:-.01em;margin:0 0 14px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card .foot{display:flex;gap:8px;flex-wrap:wrap}
+.tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);background:var(--surface-2);padding:6px 11px;border-radius:9px;font-variant-numeric:tabular-nums}
+.tag svg{width:13px;height:13px;opacity:.6}
+/* ── LIST (A) ── */
+.list{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.list .row{display:flex;align-items:center;gap:14px;padding:13px 18px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .12s}
+.list .row:last-child{border-bottom:none}.list .row:hover{background:var(--surface-2)}
+.list .dot{width:8px;height:8px;border-radius:50%;flex:none}
+.list .ti{flex:1;min-width:0}
+.list .ti .t{font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list .ti .s{color:var(--text-3);font-size:12.5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list .st{font-size:11px;font-weight:600;color:var(--text-2);padding:4px 10px;border-radius:999px;background:var(--surface-2);white-space:nowrap}
+.list .dt{font-variant-numeric:tabular-nums;color:var(--text-2);font-size:13px;min-width:48px;text-align:right}
+.list .av{width:28px;height:28px;font-size:11px}
+/* ── BOARD (C) ── */
+.kb{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(260px,1fr);gap:14px;overflow-x:auto;padding-bottom:6px}
+.col{background:var(--surface-2);border:1px solid var(--line);border-radius:16px;padding:12px;min-width:260px}
+.col .ch{display:flex;align-items:center;gap:8px;padding:4px 6px 12px;font-weight:700;font-size:13px}
+.col .ch .c{width:9px;height:9px;border-radius:50%}
+.col .ch .cnt{margin-left:auto;font:600 11px/1 var(--f-mono,monospace);color:var(--text-3);background:var(--surface);padding:4px 8px;border-radius:999px;border:1px solid var(--line)}
+.kc{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 13px;margin-bottom:9px;cursor:pointer;transition:.14s}
+.kc:hover{box-shadow:0 4px 14px rgba(16,24,40,.07);transform:translateY(-1px)}
+.kc .t{font-weight:600;font-size:13.5px;line-height:1.35;margin-bottom:9px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.kc .m{display:flex;align-items:center;gap:8px}
+.kc .av{width:22px;height:22px;font-size:10px}
+.kc .m .nm2{font-size:11.5px;color:var(--text-2)}
+.kc .m .dt{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--text-3);font-size:12px}
 .empty{text-align:center;color:var(--text-3);padding:60px 0;font-size:14px}
-.skel{height:92px;border-radius:14px;background:linear-gradient(90deg,var(--surface),var(--surface-2),var(--surface));background-size:200% 100%;animation:sh 1.2s linear infinite;border:1px solid var(--line)}
+.skel{height:120px;border-radius:18px;background:linear-gradient(90deg,var(--surface),var(--surface-2),var(--surface));background-size:200% 100%;animation:sh 1.2s linear infinite;border:1px solid var(--line)}
 @keyframes sh{to{background-position:-200% 0}}
+/* panel */
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.28);backdrop-filter:blur(2px);z-index:60;display:none;justify-content:flex-end}
 .ov.open{display:flex}
 .pan{width:min(460px,100vw);height:100%;background:var(--surface);box-shadow:-4px 0 30px rgba(0,0,0,.14);display:flex;flex-direction:column;animation:slide .18s ease}
@@ -59,30 +93,20 @@ a{color:inherit}
 .pf{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;background:var(--surface-2)}
 .x{width:32px;height:32px;border-radius:8px;border:1px solid var(--line-2);background:var(--surface);cursor:pointer;color:var(--text-2);font-size:17px;display:flex;align-items:center;justify-content:center}
 .fl{display:block;font:700 10.5px/1 var(--font);text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin:0 0 6px}
-.fg{margin-bottom:14px}
-.fg2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.fg{margin-bottom:14px}.fg2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
 .in{width:100%;background:var(--bg);border:1px solid var(--line-2);border-radius:9px;padding:10px 12px;font:500 15px/1.2 var(--font);color:var(--text);outline:none;transition:border .12s}
-.in:focus{border-color:var(--accent)}
-textarea.in{resize:vertical;min-height:62px}
+.in:focus{border-color:var(--accent)}textarea.in{resize:vertical;min-height:62px}
 select.in{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239a9a9a' stroke-width='2.4'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
 .dl{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
-.dl .k{color:var(--text-3);font-size:13px}
-.dl .v{font-weight:600;font-size:13.5px;text-align:right}
+.dl .k{color:var(--text-3);font-size:13px}.dl .v{font-weight:600;font-size:13.5px;text-align:right}
 .stageflow{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 2px}
 .sp2{font:600 11px/1 var(--font);padding:6px 10px;border-radius:999px;border:1px solid var(--line-2);color:var(--text-3);background:var(--surface)}
 .sp2.cur{background:var(--text);border-color:var(--text);color:var(--surface)}
-.sp2.done{background:color-mix(in srgb,#16a37a 14%,var(--surface));border-color:transparent;color:#0e7d5c}
-.lnk{display:inline-flex;align-items:center;gap:6px;color:var(--accent);text-decoration:none;font-weight:600;font-size:13px}
-.lnk:hover{text-decoration:underline}
+.sp2.done{background:#e9f7f1;border-color:transparent;color:#0e7d5c}
+.lnk{display:inline-flex;align-items:center;gap:6px;color:var(--accent);text-decoration:none;font-weight:600;font-size:13px}.lnk:hover{text-decoration:underline}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:var(--surface);padding:11px 18px;border-radius:10px;font:600 13px/1 var(--font);z-index:90;opacity:0;transition:.2s;pointer-events:none;box-shadow:0 6px 24px rgba(0,0,0,.2)}
 .toast.show{opacity:1}
-@media(max-width:560px){
-  .wrap{padding:16px 14px 50px}
-  .cards{grid-template-columns:1fr}
-  .hdr .sub{display:none}
-  .fg2{grid-template-columns:1fr}
-  .pan{width:100vw}
-}
+@media(max-width:560px){.wrap{padding:16px 14px 50px}.grid{grid-template-columns:1fr}.hdr .sub{display:none}.fg2{grid-template-columns:1fr}.pan{width:100vw}.btn.pri span{display:none}.btn.pri{padding:9px 11px}}
 </style>
 </head>
 <body>
@@ -91,39 +115,54 @@ select.in{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
   <a class="brand" href="/"><img src="/assets/logo-icon.png" alt="">ProLabSupport</a>
   <span class="sub">Встречи</span>
   <span class="sp"></span>
-  <button class="btn pri" onclick="openCreate()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Новая встреча</button>
+  <button class="btn pri" onclick="openCreate()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>Новая встреча</span></button>
 </header>
 
 <div class="wrap">
-  <div class="toolbar"><div class="chips" id="chips"></div></div>
-  <div class="cards" id="cards"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+  <div class="toolbar">
+    <div class="chips" id="chips"></div>
+    <div class="vt" id="vt">
+      <button data-v="cards" title="Карточки"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></button>
+      <button data-v="list" title="Список"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg></button>
+      <button data-v="board" title="Доска"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="11" rx="1.5"/><rect x="17" y="4" width="4" height="7" rx="1.5"/></svg></button>
+    </div>
+  </div>
+  <div id="view"><div class="grid"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div></div>
 </div>
 
 <div class="ov" id="ov" onclick="if(event.target===this)closePanel()">
-  <div class="pan">
-    <div class="ph"><span class="t" id="panTitle">Встреча</span><button class="x" onclick="closePanel()">&times;</button></div>
-    <div class="pb" id="panBody"></div>
-    <div class="pf" id="panFoot"></div>
-  </div>
+  <div class="pan"><div class="ph"><span class="t" id="panTitle">Встреча</span><button class="x" onclick="closePanel()">&times;</button></div>
+  <div class="pb" id="panBody"></div><div class="pf" id="panFoot"></div></div>
 </div>
 <div class="toast" id="toast"></div>
 
 <script src="/assets/cup-theme.js" defer></script>
 <script>
-let ITEMS=[], STAGES=[], STAFF=[], FILTER='all', CUR=null;
+let ITEMS=[], STAGES=[], STAFF=[], FILTER='all', CUR=null, VIEW='cards';
+try{ const v=localStorage.getItem('meetView'); if(v) VIEW=v; }catch(e){}
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const dmy=d=>{ if(!d)return'—'; const[y,m,dd]=String(d).slice(0,10).split('-'); return dd+'.'+m+'.'+y; };
-const staffName=bid=>{ const s=STAFF.find(x=>String(x.bid)===String(bid)); return s?s.name:(bid?('#'+bid):'—'); };
+const dmy=(d,full)=>{ if(!d)return'—'; const[y,m,dd]=String(d).slice(0,10).split('-'); return full?(dd+'.'+m+'.'+y):(dd+'.'+m); };
+const PAL=['#2f6bed','#7a5cd0','#13a08a','#e0569b','#e8821f','#0e8f9e','#C53B2F'];
+function ini(n){const p=String(n||'').trim().split(/\s+/);return (((p[0]||'')[0]||'')+((p[1]||'')[0]||'')).toUpperCase()||'—';}
+function pcol(n){let h=0;for(const ch of String(n||''))h=(h*31+ch.charCodeAt(0))>>>0;return PAL[h%PAL.length];}
+function nameOf(bid){ const s=STAFF.find(x=>String(x.bid)===String(bid)); return s?s.name:''; }
+function av(name,cls){ const n=name||''; if(!n) return `<div class="av none ${cls||''}">—</div>`; return `<div class="av ${cls||''}" style="background:${pcol(n)}">${esc(ini(n))}</div>`; }
 const semOf=id=>{ const s=STAGES.find(x=>x.id===id); return s?s.sem:null; };
 const clsOf=id=>{ const sem=semOf(id); return sem==='S'?'green':sem==='F'?'red':'amber'; };
+// Чистый заголовок: краткое название, иначе первый осмысленный сегмент (без дат/пустот).
+function cleanTitle(i){
+  const s=String(i.short||'').trim(); if(s) return s;
+  const segs=String(i.title||'').split(/\s*[-–]\s*/).map(x=>x.trim()).filter(x=>x && !/^\d{1,2}\.\d{1,2}\.\d{4}$/.test(x));
+  return segs[0] || 'Встреча';
+}
 function toast(t){ const el=document.getElementById('toast'); el.textContent=t; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2200); }
 
 async function boot(){
   try{
     const [l,m]=await Promise.all([ fetch('/api/planner/meetings').then(r=>r.json()), fetch('/api/planner/leave-meta').then(r=>r.json()) ]);
     ITEMS=l.items||[]; STAGES=l.stages||[]; STAFF=(m&&m.staff)||[];
-  }catch(e){ document.getElementById('cards').innerHTML='<div class="empty">Не удалось загрузить. Проверьте доступ к Bitrix.</div>'; return; }
-  renderChips(); renderList();
+  }catch(e){ document.getElementById('view').innerHTML='<div class="empty">Не удалось загрузить. Проверьте доступ к Bitrix.</div>'; return; }
+  setView(VIEW,true); renderChips(); render();
   const qid=new URLSearchParams(location.search).get('id'); if(qid) openDetail(parseInt(qid,10));
 }
 function renderChips(){
@@ -133,94 +172,106 @@ function renderChips(){
     h+=`<button class="chip ${FILTER===s.id?'on':''}" onclick="setFilter('${s.id}')">${esc(s.name)}<span class="n">${n}</span></button>`; }
   document.getElementById('chips').innerHTML=h;
 }
-function setFilter(f){ FILTER=f; renderChips(); renderList(); }
-function renderList(){
-  const list=FILTER==='all'?ITEMS:ITEMS.filter(i=>i.stageId===FILTER);
-  const el=document.getElementById('cards');
-  if(!list.length){ el.innerHTML='<div class="empty">Пока нет встреч в этой стадии.</div>'; return; }
-  el.innerHTML=list.map(i=>{
-    const loc=i.loc?`<span>${esc(i.loc)}</span>`:'';
-    return `<div class="lc" onclick="openDetail(${i.id})">
-      <span class="sb ${clsOf(i.stageId)}">${esc(i.stage)}</span>
-      <div class="nm">${esc(i.title||'Встреча')}</div>
-      <div class="per">${dmy(i.date)}${i.assignedById?(' · '+esc(staffName(i.assignedById))):''}</div>
-      <div class="meta">${loc}${i.plannerId?'<span>В планировщике</span>':''}</div>
-    </div>`;
-  }).join('');
+function setFilter(f){ FILTER=f; renderChips(); render(); }
+function setView(v,silent){ VIEW=v; try{localStorage.setItem('meetView',v);}catch(e){}
+  document.querySelectorAll('#vt button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  if(!silent) render();
 }
+document.getElementById('vt').addEventListener('click',e=>{const b=e.target.closest('button');if(b)setView(b.dataset.v);});
+
+function render(){
+  const list=FILTER==='all'?ITEMS:ITEMS.filter(i=>i.stageId===FILTER);
+  const el=document.getElementById('view');
+  if(!list.length){ el.innerHTML='<div class="empty">Пока нет встреч.</div>'; return; }
+  if(VIEW==='list') el.innerHTML=renderList(list);
+  else if(VIEW==='board') el.innerHTML=renderBoard();
+  else el.innerHTML=renderCards(list);
+}
+function renderCards(list){
+  return '<div class="grid">'+list.map(i=>{
+    const nm=nameOf(i.assignedById);
+    return `<div class="card" onclick="openDetail(${i.id})">
+      <div class="top">${av(nm)}<div class="who"><div class="n">${esc(nm||'Не назначен')}</div><div class="r">Ответственный</div></div>
+        <span class="pill ${clsOf(i.stageId)}"><span class="d"></span>${esc(i.stage)}</span></div>
+      <div class="t">${esc(cleanTitle(i))}</div>
+      <div class="foot"><span class="tag">${CAL}${dmy(i.date,true)}</span>${i.loc?`<span class="tag">${PIN}${esc(i.loc)}</span>`:''}</div>
+    </div>`;
+  }).join('')+'</div>';
+}
+function renderList(list){
+  return '<div class="list">'+list.map(i=>{
+    const nm=nameOf(i.assignedById);
+    return `<div class="row" onclick="openDetail(${i.id})"><span class="dot" style="background:${semOf(i.stageId)==='S'?'#16a37a':semOf(i.stageId)==='F'?'#e5484d':'#e8821f'}"></span>
+      <div class="ti"><div class="t">${esc(cleanTitle(i))}</div><div class="s">${esc(nm||'Не назначен')}${i.loc?' · '+esc(i.loc):''}</div></div>
+      <span class="st">${esc(i.stage)}</span><span class="dt">${dmy(i.date)}</span>${av(nm)}</div>`;
+  }).join('')+'</div>';
+}
+function renderBoard(){
+  const cols=STAGES.filter(s=>s.sem!=='F');
+  return '<div class="kb">'+cols.map(s=>{
+    const items=ITEMS.filter(i=>i.stageId===s.id);
+    const c=s.sem==='S'?'#16a37a':'#e8821f';
+    return `<div class="col"><div class="ch"><span class="c" style="background:${c}"></span>${esc(s.name)}<span class="cnt">${items.length}</span></div>`+
+      (items.map(i=>{const nm=nameOf(i.assignedById);return `<div class="kc" onclick="openDetail(${i.id})"><div class="t">${esc(cleanTitle(i))}</div><div class="m">${av(nm)}<span class="nm2">${esc((nm||'—').split(' ')[0])}</span><span class="dt">${dmy(i.date)}</span></div></div>`;}).join('')||'<div style="color:var(--text-3);font-size:12px;padding:8px 6px">—</div>')+
+      '</div>';
+  }).join('')+'</div>';
+}
+const CAL='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>';
+const PIN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>';
 
 function openCreate(){
-  CUR=null;
-  document.getElementById('panTitle').textContent='Новая встреча';
+  CUR=null; document.getElementById('panTitle').textContent='Новая встреча';
   const sOpts=['<option value="">—</option>',...STAFF.map(s=>`<option value="${esc(s.name)}">${esc(s.name)}</option>`)].join('');
   document.getElementById('panBody').innerHTML=`
     <div class="fg"><label class="fl">Тема встречи</label><input class="in" id="mTitle" placeholder="С кем и о чём…"></div>
-    <div class="fg2">
-      <div><label class="fl">Дата</label><input class="in" type="date" id="mDate"></div>
-      <div><label class="fl">Ответственный</label><select class="in" id="mRes">${sOpts}</select></div>
-    </div>
+    <div class="fg2"><div><label class="fl">Дата</label><input class="in" type="date" id="mDate"></div>
+      <div><label class="fl">Ответственный</label><select class="in" id="mRes">${sOpts}</select></div></div>
     <div class="fg"><label class="fl">Локация</label><input class="in" id="mLoc" placeholder="Город / адрес / онлайн…"></div>
     <div class="fg"><label class="fl">Комментарий</label><textarea class="in" id="mComment" placeholder="Детали встречи…"></textarea></div>`;
   document.getElementById('panFoot').innerHTML=`<button class="btn" onclick="closePanel()">Отмена</button><button class="btn pri" id="mSave" onclick="saveCreate()">Создать</button>`;
   document.getElementById('ov').classList.add('open');
 }
 async function saveCreate(){
-  const title=document.getElementById('mTitle').value.trim();
-  const date=document.getElementById('mDate').value;
+  const title=document.getElementById('mTitle').value.trim(), date=document.getElementById('mDate').value;
   if(!title||!date){ toast('Укажите тему и дату'); return; }
   const body={ title, date, resource:document.getElementById('mRes').value||'', loc:document.getElementById('mLoc').value||'', comment:document.getElementById('mComment').value||'' };
   const btn=document.getElementById('mSave'); btn.disabled=true; btn.textContent='Создаю…';
   try{
     const r=await fetch('/api/planner/meetings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    const d=await r.json();
-    if(!r.ok||!d.ok){ toast(d.error||'Не удалось'); btn.disabled=false; btn.textContent='Создать'; return; }
+    const d=await r.json(); if(!r.ok||!d.ok){ toast(d.error||'Не удалось'); btn.disabled=false; btn.textContent='Создать'; return; }
     closePanel(); toast('Встреча создана — в Bitrix и Планировщике'); boot();
   }catch(e){ toast('Ошибка сети'); btn.disabled=false; btn.textContent='Создать'; }
 }
-
 async function openDetail(id){
-  CUR=ITEMS.find(i=>i.id===id)||{id};
-  document.getElementById('panTitle').textContent='Встреча';
-  document.getElementById('panBody').innerHTML='<div class="empty">Загрузка…</div>';
-  document.getElementById('panFoot').innerHTML='';
+  CUR=ITEMS.find(i=>i.id===id)||{id}; document.getElementById('panTitle').textContent='Встреча';
+  document.getElementById('panBody').innerHTML='<div class="empty">Загрузка…</div>'; document.getElementById('panFoot').innerHTML='';
   document.getElementById('ov').classList.add('open');
   try{ const d=await fetch('/api/planner/meetings/'+id).then(r=>r.json()); if(d.item){ CUR=d.item; STAGES=d.stages||STAGES; } }catch(e){}
   renderDetail();
 }
 function renderDetail(){
-  const i=CUR; const idx=STAGES.findIndex(s=>s.id===i.stageId);
-  const flow=STAGES.filter(s=>s.sem!=='F').map(s=>{
-    const myIdx=STAGES.findIndex(x=>x.id===s.id);
-    const cls=s.id===i.stageId?'cur':(myIdx<idx?'done':''); return `<span class="sp2 ${cls}">${esc(s.name)}</span>`;
-  }).join('');
+  const i=CUR; const nm=nameOf(i.assignedById); const idx=STAGES.findIndex(s=>s.id===i.stageId);
+  const flow=STAGES.filter(s=>s.sem!=='F').map(s=>{const myIdx=STAGES.findIndex(x=>x.id===s.id);const cls=s.id===i.stageId?'cur':(myIdx<idx?'done':'');return `<span class="sp2 ${cls}">${esc(s.name)}</span>`;}).join('');
   document.getElementById('panBody').innerHTML=`
-    <div style="font-weight:800;font-size:17px;margin-bottom:2px">${esc(i.title||'Встреча')}</div>
-    <div style="color:var(--text-2);font-size:13.5px;margin-bottom:14px">${dmy(i.date)}${i.assignedById?(' · '+esc(staffName(i.assignedById))):''}</div>
-    <div class="fl" style="margin-bottom:7px">Стадия</div>
-    <div class="stageflow">${flow}</div>
+    <div style="display:flex;align-items:center;gap:11px;margin-bottom:14px">${av(nm)}<div><div style="font-weight:800;font-size:16px;line-height:1.3">${esc(cleanTitle(i))}</div><div style="color:var(--text-2);font-size:13px;margin-top:2px">${dmy(i.date,true)}${nm?(' · '+esc(nm)):''}</div></div></div>
+    <div class="fl" style="margin-bottom:7px">Стадия</div><div class="stageflow">${flow}</div>
     <div style="margin-top:14px">
       <div class="dl"><span class="k">Локация</span><span class="v">${esc(i.loc||'—')}</span></div>
       <div class="dl"><span class="k">Текущая стадия</span><span class="v">${esc(i.stage)}</span></div>
       ${i.comment?`<div class="dl"><span class="k">Комментарий</span><span class="v" style="max-width:60%;font-weight:500">${esc(i.comment)}</span></div>`:''}
     </div>
     <div style="margin-top:16px">${i.plannerId?`<a class="lnk" href="/planner.html">В Планировщике ↗</a>`:''}</div>`;
-  const next=STAGES[idx+1]; let foot='';
-  const fail=STAGES.find(s=>s.sem==='F');
-  if(next && semOf(i.stageId)!=='S' && semOf(i.stageId)!=='F'){
-    if(fail) foot+=`<button class="btn" onclick="moveStage('${esc(fail.id)}')">Отменить</button>`;
-    foot+=`<button class="btn pri" onclick="moveStage('${esc(next.id)}')">→ ${esc(next.name)}</button>`;
-  }
+  const next=STAGES[idx+1]; const fail=STAGES.find(s=>s.sem==='F'); let foot='';
+  if(next && semOf(i.stageId)!=='S' && semOf(i.stageId)!=='F'){ if(fail) foot+=`<button class="btn" onclick="moveStage('${esc(fail.id)}')">Отменить</button>`; foot+=`<button class="btn pri" onclick="moveStage('${esc(next.id)}')">→ ${esc(next.name)}</button>`; }
   document.getElementById('panFoot').innerHTML=foot||`<button class="btn" onclick="closePanel()">Закрыть</button>`;
 }
 async function moveStage(stageId){
   if(!stageId||!CUR)return;
   try{
     const r=await fetch('/api/planner/meetings/'+CUR.id+'/stage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({stageId})});
-    const d=await r.json();
-    if(!r.ok||!d.ok){ toast(d.error||'Не удалось'); return; }
-    CUR.stageId=d.stageId; CUR.stage=d.stage;
-    const it=ITEMS.find(x=>x.id===CUR.id); if(it){ it.stageId=d.stageId; it.stage=d.stage; }
-    renderDetail(); renderChips(); renderList(); toast('Стадия: '+d.stage);
+    const d=await r.json(); if(!r.ok||!d.ok){ toast(d.error||'Не удалось'); return; }
+    CUR.stageId=d.stageId; CUR.stage=d.stage; const it=ITEMS.find(x=>x.id===CUR.id); if(it){ it.stageId=d.stageId; it.stage=d.stage; }
+    renderDetail(); renderChips(); render(); toast('Стадия: '+d.stage);
   }catch(e){ toast('Ошибка сети'); }
 }
 function closePanel(){ document.getElementById('ov').classList.remove('open'); }
