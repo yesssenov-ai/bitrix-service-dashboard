@@ -26,13 +26,14 @@
   (document.head || document.documentElement).appendChild(st);
   var SVG = {
     msg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5a7.5 7.5 0 0 1-10.9 6.7L4 20l1.8-4.9A7.5 7.5 0 1 1 20 11.5z"/><path d="M8.5 10.5h7M8.5 13.5h4.5"/></svg>',
-    kb: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H19v3H6.5A2.5 2.5 0 0 1 4 20.5z"/></svg>'
+    kb: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H19v3H6.5A2.5 2.5 0 0 1 4 20.5z"/></svg>',
+    cal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg>'
   };
   var here = (location.pathname || '');
   var isAdmin = false;
   // ЕДИНЫЙ порядок иконок во всех модулях ЦУП (идентично messenger.html/knowledge.html):
-  // Мессенджер · База знаний · Агент · Поиск · Помощь · Связь · Тема.
-  var ORDER = ['pls-tb-msg', 'pls-tb-kb', 'pai-fab', 'pls-sr-btn', 'pls-help-btn', 'pls-fb-btn', 'themeToggle'];
+  // Мессенджер · База знаний · Календарь · Агент · Поиск · Помощь · Связь · Тема.
+  var ORDER = ['pls-tb-msg', 'pls-tb-kb', 'pls-tb-cal', 'pai-fab', 'pls-sr-btn', 'pls-help-btn', 'pls-fb-btn', 'themeToggle'];
   function bar() { var b = document.getElementById('pls-toolbar'); if (!b) { b = document.createElement('div'); b.id = 'pls-toolbar'; document.body.appendChild(b); } return b; }
   function mk(id, href, title, svg, cur) { if (document.getElementById(id)) return document.getElementById(id); var a = document.createElement('a'); a.id = id; a.href = href; a.title = title; a.className = 'pls-tb-ic' + (cur ? ' cur' : ''); a.innerHTML = svg; return a; }
   function align(b) { var h = document.querySelector('.topbar') || document.querySelector('.top') || document.querySelector('header'); if (!h) return; var r = h.getBoundingClientRect(); var bh = b.offsetHeight || 30; b.style.top = Math.max(4, Math.round(r.top + (r.height - bh) / 2)) + 'px'; }
@@ -40,6 +41,7 @@
     var b = bar();
     var m = mk('pls-tb-msg', '/messenger.html', 'Мессенджер', SVG.msg, /messenger\.html/.test(here)); if (m.parentNode !== b) b.appendChild(m);
     if (isAdmin) { var k = mk('pls-tb-kb', '/knowledge.html', 'База знаний', SVG.kb, /knowledge\.html/.test(here)); if (k.parentNode !== b) b.appendChild(k); }
+    var cl = mk('pls-tb-cal', '/calendar.html', 'Календарь', SVG.cal, /calendar\.html/.test(here)); if (cl.parentNode !== b) b.appendChild(cl);
     ['pai-fab', 'pls-help-btn', 'pls-sr-btn', 'pls-fb-btn', 'themeToggle'].forEach(function (id) { var el = document.getElementById(id); if (el && el.parentNode !== b) b.appendChild(el); });
     ORDER.forEach(function (id) { var el = document.getElementById(id); if (el && el.parentNode === b) b.appendChild(el); });
     align(b);
@@ -165,6 +167,7 @@
     {c:'TC_QM',n:'СМК (ISO 17025)',h:'/tc.html#qms',g:'lab'},
     {c:'TC_AN',n:'Аналитика ТЦ',h:'/tc.html#analytics',g:'lab'},
     {c:'MSG',n:'Мессенджер',h:'/messenger.html',g:'system'},
+    {c:'CAL',n:'Календарь',h:'/calendar.html',g:'system'},
     {c:'KB',n:'База знаний',h:'/knowledge.html',g:'system'},
     {c:'ADM',n:'Управление',h:'/admin.html',g:'system'}
   ];
@@ -220,7 +223,8 @@
     TC_AN:'<path d="M12 3a9 9 0 1 0 9 9h-9V3z"/><path d="M14 3.5A9 9 0 0 1 20.5 10H14V3.5z"/>',
     ADM:'<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2 2M16.7 16.7l2 2M18.7 5.3l-2 2M7.3 16.7l-2 2"/>',
     MSG:'<path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.4 9 9 0 0 1-3.9-.9L3 21l1.9-5.1A8.4 8.4 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.5 8.5 0 0 1 21 11.5z"/>',
-    KB:'<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19a2 2 0 0 1 2-2h13"/><path d="M8 7h7M8 11h7"/>'
+    KB:'<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19a2 2 0 0 1 2-2h13"/><path d="M8 7h7M8 11h7"/>',
+    CAL:'<rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/>'
   };
   function micon(code, g){ var p=MICON[code]||CICON[g]||CICON.system;
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>'; }
@@ -265,7 +269,7 @@
   }
   function visibleModules(){
     return MODULES.filter(function(m){
-      if(m.c==='MSG') return true;                  // мессенджер — всем сотрудникам
+      if(m.c==='MSG'||m.c==='CAL') return true;     // мессенджер и календарь — всем сотрудникам
       if(m.c==='KB') return ROLE==='admin'||ROLE==='superadmin'; // база знаний — админам
       if(m.c==='ADM') return ROLE==='superadmin';
       if(ALLOWED===null) return true;               // admin

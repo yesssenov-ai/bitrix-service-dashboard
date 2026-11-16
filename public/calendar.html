@@ -88,7 +88,7 @@ button{font-family:inherit;cursor:pointer}
 .mcells{position:absolute;inset:0;display:grid;grid-template-columns:repeat(7,1fr)}
 .mcell{border-right:1px solid var(--line);padding:6px 7px;background:#ffffff}
 .mcell.mut{background:#eef1f5}
-.mcell .dn{font-size:12px;font-weight:700;color:var(--text-2);width:25px;height:25px;display:flex;align-items:center;justify-content:center;border-radius:50%}
+.mcell .dn{font-size:11.5px;font-weight:700;color:var(--text-2);width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:50%}
 .mcell.mut .dn{color:var(--faint)}
 .mcell.today .dn{background:var(--accent);color:#fff}
 /* нерабочие дни производственного календаря РК */
@@ -98,15 +98,18 @@ button{font-family:inherit;cursor:pointer}
 .mcell.hol.mut{background:#f6eded}
 .mcell.hol .dn{color:var(--c-imp)}
 .mcell.hol.today .dn{background:var(--c-imp);color:#fff}
-.hol-tag{position:absolute;top:7px;right:7px;max-width:calc(100% - 38px);font-size:10px;font-weight:700;color:var(--c-imp);line-height:1.15;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none}
+/* сегодня — вся ячейка светло-синим (ставится после wknd/hol, чтобы перебить фон) */
+.mcell.today{background:rgba(47,107,237,.09)}
+.hol-tag{position:absolute;top:6px;right:6px;max-width:calc(100% - 34px);font-size:9.5px;font-weight:700;color:var(--c-imp);line-height:1.15;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none}
 .movl{position:absolute;inset:0;pointer-events:none}
-.mbar{position:absolute;height:18px;line-height:18px;margin-left:3px;color:#fff;font-size:11px;font-weight:700;padding:0 9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:auto;cursor:pointer;box-shadow:0 1px 2px rgba(20,25,35,.1)}
+.mbar{position:absolute;height:16px;line-height:16px;margin-left:3px;color:#fff;font-size:10.5px;font-weight:700;padding:0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:auto;cursor:pointer;box-shadow:0 1px 2px rgba(20,25,35,.1)}
 .mbar:hover{filter:brightness(.96)}
-.mtimed{position:absolute;height:18px;line-height:18px;margin-left:3px;display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--text);pointer-events:auto;cursor:pointer;overflow:hidden}
-.mtimed .cd{width:7px;height:7px;border-radius:50%;flex:none}
-.mtimed .tm{color:var(--text-3);font-weight:700;font-size:10.5px;flex:none}
+.mbar.roll{font-weight:800;display:flex;align-items:center}
+.mtimed{position:absolute;height:16px;line-height:16px;margin-left:3px;display:flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;color:var(--text);pointer-events:auto;cursor:pointer;overflow:hidden}
+.mtimed .cd{width:6px;height:6px;border-radius:50%;flex:none}
+.mtimed .tm{color:var(--text-3);font-weight:700;font-size:10px;flex:none}
 .mtimed .tt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mmore{position:absolute;height:17px;line-height:17px;margin-left:3px;font-size:10.5px;color:var(--text-3);font-weight:700;pointer-events:auto;cursor:pointer}
+.mmore{position:absolute;height:16px;line-height:16px;margin-left:3px;font-size:10px;color:var(--text-3);font-weight:700;pointer-events:auto;cursor:pointer}
 /* all-day band в виде «Неделя» */
 .wkallday{display:grid;grid-template-columns:56px repeat(7,1fr);border-bottom:1px solid var(--line);background:var(--surface)}
 .wkband{grid-column:2/9;position:relative}
@@ -121,22 +124,22 @@ button{font-family:inherit;cursor:pointer}
 .chint{font-size:11.5px;color:var(--text-3);padding-top:2px;line-height:1.5}
 
 /* ─── Agenda ─── */
-.agenda{max-width:720px;margin:0 auto;padding:20px 20px 60px}
-.aday{display:flex;gap:18px;padding:14px 0;border-bottom:1px solid var(--line)}
+.agenda{max-width:720px;margin:0 auto;padding:16px 18px 56px}
+.aday{display:flex;gap:14px;padding:9px 0;border-bottom:1px solid var(--line)}
 .aday:last-child{border-bottom:0}
-.aday .date{width:54px;flex:none;text-align:center;padding-top:2px}
-.aday .date .dn{font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1}
-.aday .date .wd{font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase;margin-top:3px}
+.aday .date{width:46px;flex:none;text-align:center;padding-top:2px}
+.aday .date .dn{font-size:19px;font-weight:800;letter-spacing:-.02em;line-height:1}
+.aday .date .wd{font-size:10px;color:var(--text-3);font-weight:700;text-transform:uppercase;margin-top:3px}
 .aday.today .date .dn{color:var(--accent)}
 .aday.today .date .wd{color:var(--accent)}
-.aevs{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}
-.aev{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px 13px;box-shadow:var(--shadow);cursor:pointer}
+.aevs{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.aev{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 11px;box-shadow:var(--shadow);cursor:pointer}
 .aev:hover{border-color:var(--line-2)}
-.aev .bar-c{width:4px;align-self:stretch;border-radius:4px;flex:none;min-height:18px}
-.aev .tm{font-size:12px;color:var(--text-3);font-weight:700;width:92px;flex:none}
-.aev .ti{font-size:14px;font-weight:600;flex:1;min-width:0}
-.aev .ti small{display:block;color:var(--text-3);font-weight:500;font-size:12px;margin-top:1px}
-.aev .tag{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;padding:3px 8px;border-radius:20px;flex:none}
+.aev .bar-c{width:3px;align-self:stretch;border-radius:3px;flex:none;min-height:16px}
+.aev .tm{font-size:11.5px;color:var(--text-3);font-weight:700;width:82px;flex:none}
+.aev .ti{font-size:12.5px;font-weight:600;flex:1;min-width:0;line-height:1.3}
+.aev .ti small{display:block;color:var(--text-3);font-weight:500;font-size:11px;margin-top:1px}
+.aev .tag{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;padding:2px 7px;border-radius:20px;flex:none}
 
 /* ─── Week ─── */
 .wkhead{display:grid;grid-template-columns:56px repeat(7,1fr);border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);z-index:2}
@@ -206,17 +209,41 @@ button{font-family:inherit;cursor:pointer}
 .rev{position:absolute;left:5px;right:5px;border-radius:10px;padding:6px 10px;font-size:12.5px;font-weight:700;color:#fff;overflow:hidden;box-shadow:0 2px 8px rgba(20,25,35,.16);cursor:pointer}
 .rev small{display:block;font-weight:600;opacity:.92;font-size:10.5px;margin-top:2px}
 svg{display:block}
-@media(max-width:860px){.side{display:none}.bar h2{min-width:0;font-size:17px}.bar .today{display:none}}
+/* Липкая верхняя строка: бренд + бургер + выход. Всегда на экране. */
+.topstrip{display:flex;align-items:center;gap:12px;height:50px;flex:none;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--line);position:relative;z-index:40}
+.ts-burger{display:none;border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);width:34px;height:34px;border-radius:9px;align-items:center;justify-content:center;flex:none;cursor:pointer}
+.ts-burger:hover{color:var(--accent);border-color:var(--accent)}
+.ts-brand{display:flex;align-items:center;gap:9px;text-decoration:none;flex:none}
+.ts-brand .m{width:28px;height:28px;border-radius:8px;background:linear-gradient(140deg,#3f78f0,#2f6bed);display:flex;align-items:center;justify-content:center;color:#fff;flex:none}
+.ts-brand b{font-size:14px;font-weight:800;letter-spacing:-.02em;color:var(--text);display:block;line-height:1.12}
+.ts-brand span{font-size:10.5px;color:var(--text-3);font-weight:600}
+.ts-sp{flex:1}
+.ts-exit{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);font-size:12.5px;font-weight:700;padding:7px 12px;border-radius:9px;text-decoration:none;flex:none}
+.ts-exit:hover{color:var(--accent);border-color:var(--accent)}
+.side-ov{display:none;position:fixed;inset:0;background:rgba(10,15,25,.3);z-index:55}
+.side-ov.on{display:block}
+@media(max-width:860px){
+  .side{display:none;position:fixed;top:50px;left:0;bottom:0;z-index:60;box-shadow:var(--shadow-pop)}
+  .side.open{display:flex}
+  .ts-burger{display:inline-flex}
+  .bar h2{min-width:0;font-size:17px}.bar .today{display:none}
+}
 </style>
 </head>
 <body>
+<header class="topstrip">
+  <button class="ts-burger" id="tsBurger" aria-label="Боковая панель"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <a class="ts-brand" href="/portal.html" title="На портал">
+    <span class="m"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg></span>
+    <span><b>ProLab · Календарь</b><span>ЦУП · ProLabSupport</span></span>
+  </a>
+  <div class="ts-sp"></div>
+  <a class="ts-exit" href="/portal.html" title="Вернуться на портал"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>На портал</a>
+</header>
+<div class="side-ov" id="sideOv"></div>
 <div class="app">
   <!-- Sidebar -->
   <aside class="side">
-    <div class="brand">
-      <a class="mark" href="/portal.html" title="На портал"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg></a>
-      <div><b>Календарь</b><span>ЦУП · ProLabSupport</span></div>
-    </div>
     <button class="create" id="createBtn">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
       Создать
@@ -323,7 +350,7 @@ const HOLIDAYS_KZ={
   '2026-03-08':'Женский день','2026-03-21':'Наурыз','2026-03-22':'Наурыз','2026-03-23':'Наурыз',
   '2026-03-27':'Курбан айт','2026-05-01':'Единство народа','2026-05-07':'День защитника',
   '2026-05-09':'День Победы','2026-07-06':'День Столицы','2026-08-30':'День Конституции',
-  '2026-10-25':'День Республики','2026-12-16':'Независимость','2026-12-17':'Независимость',
+  '2026-10-25':'День Республики','2026-12-16':'Независимость',
   // 2027
   '2027-01-01':'Новый год','2027-01-02':'Новый год','2027-01-07':'Рождество',
   '2027-03-08':'Женский день','2027-03-21':'Наурыз','2027-03-22':'Наурыз','2027-03-23':'Наурыз',
@@ -335,6 +362,14 @@ function holidayName(isoDate){return HOLIDAYS_KZ[isoDate]||null}
 function isWeekend(d){const w=d.getDay();return w===0||w===6}
 function isNonWorking(d){return isWeekend(d)||!!HOLIDAYS_KZ[iso(d)]}
 function nonWorkingLabel(d){const h=HOLIDAYS_KZ[iso(d)];if(h)return h;return isWeekend(d)?(d.getDay()===0?'воскресенье':'суббота'):null}
+
+/* Месяц: командировки (trip) и отпуска (vac) по умолчанию СВЁРНУТЫ в одну полосу
+   «N командировок / N отпусков». Клик по полосе — раскрыть их отдельно (ключ wi:cat). */
+const MEXP={};
+const ROLL_CATS=['trip','vac'];
+function plural(n,one,few,many){const d=n%10,dd=n%100;if(d===1&&dd!==11)return one;if(d>=2&&d<=4&&(dd<12||dd>14))return few;return many}
+function rollWord(cat,n){return cat==='trip'?('командиров'+plural(n,'ка','ки','ок')):('отпуск'+plural(n,'','а','ов'))}
+const CHEV_SVG='<svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px"><path d="M9 6l6 6-6 6"/></svg>';
 function asBar(ev){return isAllDay(ev)||isMultiDay(ev)}
 
 let tT;function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('on'),1900)}
@@ -391,6 +426,7 @@ function render(){
     document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.v===VIEW));
     v.innerHTML = VIEW==='agenda'?renderAgenda() : VIEW==='month'?renderMonth() : renderWeek();
     v.querySelectorAll('[data-ev]').forEach(el=>el.onclick=()=>openEvent(el.dataset.ev));
+    v.querySelectorAll('[data-roll]').forEach(el=>el.onclick=()=>{const k=el.dataset.roll;MEXP[k]=!MEXP[k];render();});
   }
   if(ld)v.appendChild(ld);
   updTitle();
@@ -435,19 +471,37 @@ function weeksGrid(){
   const weeks=[];for(let i=0;i<42;i+=7)weeks.push(cells.slice(i,i+7));return weeks;
 }
 function renderMonth(){
-  const NUMH=30,LANEH=22,MAXROWS=6,MINH=118,curM=CUR.getMonth();
+  const NUMH=28,LANEH=19,MAXROWS=6,MINH=104,curM=CUR.getMonth();
   let h='<div class="mweek-h">'+WD.map((w,i)=>`<div class="${i>4?'we':''}">${w}</div>`).join('')+'</div><div class="mbody">';
-  weeksGrid().forEach(week=>{
-    const wkStart=week[0],wkEnd=week[6],spans=[];
-    EVENTS.forEach(ev=>{if(!visible(ev)||!asBar(ev))return;const a=evStart(ev),b=evEnd(ev);if(b<wkStart||a>wkEnd)return;spans.push({ev,sc:Math.max(0,Math.round((a-wkStart)/864e5)),ec:Math.min(6,Math.round((b-wkStart)/864e5)),contL:a<wkStart,contR:b>wkEnd})});
-    spans.sort((x,y)=>x.sc-y.sc||(y.ec-y.sc)-(x.ec-x.sc));
-    const lanes=[];spans.forEach(s=>{let L=0;while(lanes[L]&&lanes[L].some(o=>!(s.ec<o.sc||s.sc>o.ec)))L++;(lanes[L]=lanes[L]||[]).push(s);s.lane=L});
+  weeksGrid().forEach((week,wi)=>{
+    const wkStart=week[0],wkEnd=week[6];
+    const toSpan=ev=>{const a=evStart(ev),b=evEnd(ev);if(b<wkStart||a>wkEnd)return null;return {ev,sc:Math.max(0,Math.round((a-wkStart)/864e5)),ec:Math.min(6,Math.round((b-wkStart)/864e5)),contL:a<wkStart,contR:b>wkEnd}};
+    const bars=[];
+    // Командировки/отпуска: свёрнуты в одну полосу, если их 2+ и не раскрыты.
+    ROLL_CATS.forEach(cat=>{
+      if(OFF.has(cat))return;
+      const list=EVENTS.filter(ev=>ev.category===cat&&asBar(ev)).map(toSpan).filter(Boolean);
+      if(!list.length)return;
+      const key=wi+':'+cat;
+      if(list.length===1||MEXP[key]){ list.forEach(s=>bars.push(s)); }
+      else{
+        const sc=Math.min(...list.map(s=>s.sc)),ec=Math.max(...list.map(s=>s.ec));
+        bars.push({roll:key,cat,count:list.length,sc,ec,contL:list.some(s=>s.contL&&s.sc===sc),contR:list.some(s=>s.contR&&s.ec===ec)});
+      }
+    });
+    // Прочие многодневные/all-day (встречи, задачи, ДР, агент) — как есть.
+    EVENTS.forEach(ev=>{if(!visible(ev)||!asBar(ev)||ROLL_CATS.includes(ev.category))return;const s=toSpan(ev);if(s)bars.push(s)});
+    bars.sort((x,y)=>x.sc-y.sc||(y.ec-y.sc)-(x.ec-x.sc));
+    const lanes=[];bars.forEach(s=>{let L=0;while(lanes[L]&&lanes[L].some(o=>!(s.ec<o.sc||s.sc>o.ec)))L++;(lanes[L]=lanes[L]||[]).push(s);s.lane=L});
     const nLanes=lanes.length;
     const timed={};week.forEach((dt,col)=>{const d=iso(dt);EVENTS.forEach(ev=>{if(!visible(ev)||asBar(ev)||ev.start.slice(0,10)!==d)return;(timed[col]=timed[col]||[]).push(ev)})});
     const avail=Math.max(0,MAXROWS-nLanes);const maxTimed=Math.min(avail,Math.max(0,...week.map((_,c)=>(timed[c]||[]).length)));
     const overflow=week.some((_,c)=>(timed[c]||[]).length>maxTimed);const bodyRows=nLanes+maxTimed+(overflow?1:0);
-    h+=`<div class="mweek" style="min-height:${Math.max(MINH,NUMH+bodyRows*LANEH+8)}px"><div class="mcells">`+week.map(dt=>{const mut=dt.getMonth()!==curM;const isT=iso(dt)===todayIso();const hol=holidayName(iso(dt));const we=isWeekend(dt);return `<div class="mcell ${mut?'mut':''} ${we?'wknd':''} ${hol?'hol':''} ${isT?'today':''}"><div class="dn">${dt.getDate()}</div>${hol?`<div class="hol-tag" title="${esc(hol)}">${esc(hol)}</div>`:''}</div>`}).join('')+'</div><div class="movl">';
-    spans.forEach(s=>{const c=catColor(s.ev.category),left=s.sc/7*100,width=(s.ec-s.sc+1)/7*100,top=NUMH+s.lane*LANEH,rl=s.contL?'0':'7px',rr=s.contR?'0':'7px';h+=`<div class="mbar" data-ev="${s.ev.id}" style="left:${left}%;width:calc(${width}% - 6px);top:${top}px;background:${c};border-radius:${rl} ${rr} ${rr} ${rl}">${s.contL?'‹ ':''}${esc(s.ev.title)}</div>`});
+    h+=`<div class="mweek" style="min-height:${Math.max(MINH,NUMH+bodyRows*LANEH+6)}px"><div class="mcells">`+week.map(dt=>{const mut=dt.getMonth()!==curM;const isT=iso(dt)===todayIso();const hol=holidayName(iso(dt));const we=isWeekend(dt);return `<div class="mcell ${mut?'mut':''} ${we?'wknd':''} ${hol?'hol':''} ${isT?'today':''}"><div class="dn">${dt.getDate()}</div>${hol?`<div class="hol-tag" title="${esc(hol)}">${esc(hol)}</div>`:''}</div>`}).join('')+'</div><div class="movl">';
+    bars.forEach(s=>{const left=s.sc/7*100,width=(s.ec-s.sc+1)/7*100,top=NUMH+s.lane*LANEH,rl=s.contL?'0':'6px',rr=s.contR?'0':'6px';
+      if(s.roll){const c=catColor(s.cat);h+=`<div class="mbar roll" data-roll="${s.roll}" style="left:${left}%;width:calc(${width}% - 6px);top:${top}px;background:${c};border-radius:${rl} ${rr} ${rr} ${rl}">${CHEV_SVG}${s.count} ${rollWord(s.cat,s.count)}</div>`;}
+      else{const c=catColor(s.ev.category);h+=`<div class="mbar" data-ev="${s.ev.id}" style="left:${left}%;width:calc(${width}% - 6px);top:${top}px;background:${c};border-radius:${rl} ${rr} ${rr} ${rl}">${s.contL?'‹ ':''}${esc(s.ev.title)}</div>`;}
+    });
     week.forEach((dt,col)=>{const arr=(timed[col]||[]);arr.slice(0,maxTimed).forEach((ev,k)=>{const c=catColor(ev.category),left=col/7*100,top=NUMH+(nLanes+k)*LANEH;h+=`<div class="mtimed" data-ev="${ev.id}" style="left:${left}%;width:calc(${100/7}% - 6px);top:${top}px"><span class="cd" style="background:${c}"></span><span class="tm">${timeOf(ev.start)}</span><span class="tt">${esc(ev.title)}</span></div>`});
       if(arr.length>maxTimed){const left=col/7*100,top=NUMH+(nLanes+maxTimed)*LANEH;h+=`<div class="mmore" data-ev="${arr[maxTimed].id}" style="left:${left}%;top:${top}px">+ ещё ${arr.length-maxTimed}</div>`}});
     h+='</div></div>';
@@ -589,7 +643,7 @@ function renderEdit(){
   document.getElementById('editOv').classList.add('on');
   document.querySelectorAll('#eCat button').forEach(b=>b.onclick=()=>{EDIT.category=b.dataset.c;document.querySelectorAll('#eCat button').forEach(x=>x.classList.toggle('on',x===b));document.querySelector('#editModal .cc').style.background=catColor(b.dataset.c)});
   document.getElementById('eAllday').onchange=ev2=>{const on=ev2.target.checked;document.getElementById('eStWrap').style.display=on?'none':'';document.getElementById('eEtWrap').style.display=on?'none':''};
-  const nwkCheck=()=>{const v=document.getElementById('eSd').value;const el=document.getElementById('nwkWarn');if(!v){el.style.display='none';return;}const lbl=nonWorkingLabel(parseD(v));if(lbl){el.textContent='⚠️ '+v.split('-').reverse().join('.')+' — нерабочий день ('+lbl+')';el.style.display='';}else{el.style.display='none';}};
+  const nwkCheck=()=>{const v=document.getElementById('eSd').value;const el=document.getElementById('nwkWarn');if(!v){el.style.display='none';return;}const lbl=nonWorkingLabel(parseD(v));if(lbl){el.innerHTML='<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>'+esc(v.split('-').reverse().join('.'))+' — нерабочий день ('+esc(lbl)+')';el.style.display='';}else{el.style.display='none';}};
   document.getElementById('eSd').addEventListener('change',nwkCheck);nwkCheck();
 }
 function closeEdit(){document.getElementById('editOv').classList.remove('on')}
@@ -695,6 +749,13 @@ async function boot(){
   document.getElementById('createBtn').onclick=openCreate;
   document.getElementById('gearBtn').onclick=openColors;
   document.getElementById('bookBtn').onclick=openBook;
+  // Бургер: на узком экране открывает/закрывает боковую панель оверлеем.
+  (function(){const side=document.querySelector('.side'),ov=document.getElementById('sideOv');
+    const close=()=>{side.classList.remove('open');ov.classList.remove('on')};
+    const bg=document.getElementById('tsBurger');if(bg)bg.onclick=()=>{const on=side.classList.toggle('open');ov.classList.toggle('on',on)};
+    if(ov)ov.onclick=close;
+    side.addEventListener('click',e=>{if(e.target.closest('.calitem')||e.target.closest('.create')||e.target.closest('.d[data-d]'))close()});
+  })();
   [document.getElementById('popOv'),document.getElementById('editOv'),document.getElementById('colorOv'),document.getElementById('bookOv')].forEach(ov=>ov.onclick=e=>{if(e.target===ov)ov.classList.remove('on')});
   loadEvents();
 }

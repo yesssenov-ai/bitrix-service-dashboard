@@ -309,9 +309,10 @@ async function ensureRooms() {
     if (!c.rows[0].n) {
       await pool.query(`INSERT INTO ticketsmodule_calendar_rooms (name, building, color, position) VALUES
         ('Переговорная EXPO','Здание EXPO','#2f6bed',1),
-        ('Переговорная Training','Здание Training','#16a37a',2),
-        ('Переговорная Тренинг-центр','Тренинг-центр','#d9821a',3)`);
+        ('Переговорная Training','Здание Training','#16a37a',2)`);
     }
+    // Разовая чистка: «Переговорная Тренинг-центр» лишняя (Training и есть ТЦ) — скрываем.
+    await pool.query(`UPDATE ticketsmodule_calendar_rooms SET active=false WHERE name='Переговорная Тренинг-центр' AND active=true`);
     _roomsReady = true;
   } catch (e) { console.error('rooms schema:', e.message); }
 }

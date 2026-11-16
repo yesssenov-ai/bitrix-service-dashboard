@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Календарь компании — финал</title>
+<style>
+:root{
+  --bg:#fbfcfd; --surface:#ffffff; --surface-2:#f6f8fa;
+  --text:#121722; --text-2:#3d4756; --text-3:#8893a3; --faint:#aab3c0;
+  --line:#eceff3; --line-2:#e1e6ec; --accent:#2f6bed;
+  --c-meet:#2f6bed; --c-task:#7a4ecc; --c-trip:#0ea5a4; --c-vac:#16a37a;
+  --c-bd:#e0569b; --c-imp:#e5484d;
+  --f:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f);-webkit-font-smoothing:antialiased;padding:18px}
+.wrap{max-width:1120px;margin:0 auto}
+h1{font-size:18px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px}
+.sub{font-size:12px;color:var(--text-3);margin:0 0 14px;line-height:1.5}
+.ctrl{display:flex;align-items:center;gap:16px;margin-bottom:12px;flex-wrap:wrap}
+.flt{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;color:var(--text-2);cursor:pointer;user-select:none;border:1px solid var(--line-2);background:var(--surface);padding:7px 12px;border-radius:10px}
+.flt i{width:11px;height:11px;border-radius:3px;display:inline-block}
+.flt .bx{width:16px;height:16px;border-radius:5px;border:1.5px solid var(--line-2);display:inline-flex;align-items:center;justify-content:center;color:#fff}
+.flt.on .bx{background:var(--accent);border-color:var(--accent)}
+.flt .bx svg{width:11px;height:11px;opacity:0}
+.flt.on .bx svg{opacity:1}
+.hint{font-size:11.5px;color:var(--text-3)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,25,35,.04),0 8px 30px rgba(20,25,35,.05)}
+.mh{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--line)}
+.mh div{padding:7px 9px;font-size:10px;font-weight:700;letter-spacing:.03em;color:var(--text-3);text-transform:uppercase}
+.mh div.we{color:var(--c-imp)}
+.mweek{position:relative;border-bottom:1px solid var(--line)}
+.mweek:last-child{border-bottom:0}
+.mcells{position:absolute;inset:0;display:grid;grid-template-columns:repeat(7,1fr)}
+.mcell{border-right:1px solid var(--line);padding:4px 6px;background:#fff}
+.mcell:last-child{border-right:0}
+.mcell.mut{background:#f3f5f8}
+.mcell.wknd{background:#fcfdff}
+.mcell.hol{background:#fff5f5}
+.dn{font-size:11px;font-weight:700;color:var(--text-2);width:20px;height:20px;display:flex;align-items:center;justify-content:center;border-radius:50%}
+.mcell.mut .dn{color:var(--faint)}
+.mcell.today .dn{background:var(--accent);color:#fff}
+.mcell.hol .dn{color:var(--c-imp)}
+.hol-tag{position:absolute;top:5px;right:6px;font-size:9px;font-weight:700;color:var(--c-imp);pointer-events:none}
+.movl{position:absolute;inset:0;pointer-events:none}
+.bar{position:absolute;height:15px;line-height:15px;margin-left:2px;color:#fff;font-size:10px;font-weight:700;padding:0 7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:auto;cursor:pointer}
+.bar:hover{filter:brightness(.95)}
+.bar.roll{font-weight:800;display:flex;align-items:center;gap:5px}
+.bar.roll svg{width:10px;height:10px;flex:none}
+.timed{position:absolute;height:15px;line-height:15px;display:flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:var(--text);overflow:hidden;pointer-events:auto;padding-left:3px}
+.timed .cd{width:6px;height:6px;border-radius:50%;flex:none}
+.timed .tm{color:var(--text-3);font-weight:700}
+.more{position:absolute;font-size:9.5px;font-weight:700;color:var(--text-3);cursor:pointer;padding-left:4px}
+.more:hover{color:var(--accent)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin:12px 2px 0;font-size:11px;color:var(--text-2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:3px}
+.note{font-size:11.5px;color:var(--text-3);margin-top:12px;line-height:1.55}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#1b2330;color:#fff;font-size:12.5px;font-weight:600;padding:9px 15px;border-radius:10px;opacity:0;transition:.2s;pointer-events:none;max-width:80vw}
+.toast.on{opacity:1}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){--bg:#0f141b;--surface:#161c24;--text:#eef2f7;--text-2:#b7c0cc;--text-3:#7d8794;--faint:#5c6672;--line:#232b35;--line-2:#2d3742}
+  :root:not([data-theme="light"]) .mcell{background:#161c24}
+  :root:not([data-theme="light"]) .mcell.mut{background:#12171e}
+  :root:not([data-theme="light"]) .mcell.wknd{background:#171e27}
+  :root:not([data-theme="light"]) .mcell.hol{background:#231a1c}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Календарь компании · месяц (финал — вариант B)</h1>
+  <p class="sub">Командировки и отпуска сворачиваются в одну полосу. Клик по ней — раскрыть все отдельно, клик ещё раз — свернуть. Галочки сверху включают/выключают их целиком.</p>
+
+  <div class="ctrl">
+    <span class="flt on" id="fTrip"><span class="bx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12l5 5L20 6"/></svg></span><i style="background:var(--c-trip)"></i>Командировки</span>
+    <span class="flt on" id="fVac"><span class="bx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12l5 5L20 6"/></svg></span><i style="background:var(--c-vac)"></i>Отпуска</span>
+    <span class="hint">← включены по умолчанию (свёрнуты). Снимешь галочку — исчезнут с календаря.</span>
+  </div>
+
+  <div class="card"><div class="mh" id="mh"></div><div class="mbody" id="mbody"></div></div>
+
+  <div class="legend">
+    <span><i style="background:var(--c-trip)"></i>Командировка</span>
+    <span><i style="background:var(--c-vac)"></i>Отпуск</span>
+    <span><i style="background:var(--c-meet)"></i>Встреча</span>
+    <span><i style="background:var(--c-task)"></i>Задача</span>
+    <span><i style="background:var(--c-bd)"></i>День рождения</span>
+    <span><i style="background:var(--c-imp)"></i>Праздник РК</span>
+  </div>
+  <p class="note">Клик по полосе «N командировок» / «N отпусков» раскрывает их списком прямо в сетке; второй клик — сворачивает обратно. Встречи, задачи и дни рождения всегда показываются отдельно (их немного).</p>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const WD=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+const COL={trip:'#0ea5a4',vac:'#16a37a',meet:'#2f6bed',task:'#7a4ecc',bd:'#e0569b',imp:'#e5484d'};
+function iso(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function parseD(s){const p=s.split('-').map(Number);return new Date(p[0],p[1]-1,p[2])}
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
+function mondayOf(d){const x=new Date(d);const w=(x.getDay()+6)%7;x.setDate(x.getDate()-w);x.setHours(0,0,0,0);return x}
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/'/g,'&#39;');
+const HOL={}; // праздники РК в проде
+
+function trip(id,cl,instr,who,s,e){return{id,cat:'trip',title:id+' - 2026 - '+cl+' - '+instr+' — '+who,start:s,end:e}}
+const EVENTS=[
+  trip('432','Meditec','Установка Agilent 1260 Infinity III','Жандос Кунаев','2026-10-26','2026-11-01'),
+  trip('271','ZHANALAB','Заявка Malvern ASD TerraSpec 4','Арман М.','2026-10-28','2026-11-01'),
+  trip('235','MKTU','Установка Metrohm Eco IC','Дарын Н.','2026-10-27','2026-10-31'),
+  trip('212','MUKrg','ТО Agilent 1260 Infinity II','Каха Ч.','2026-10-26','2026-10-31'),
+  trip('446','KMGE','Заявка Metrohm 930 Compact IC','Арман М.','2026-10-28','2026-11-02'),
+  trip('389','SGS','Установка Agilent ICP-OES 5800','Аскат К.','2026-10-29','2026-11-03'),
+  trip('461','SGS','Заявка Agilent ICP-OES 5800','Аскат К.','2026-10-29','2026-11-02'),
+  trip('459','ZhGOK','Заявка Malvern Epsilon 4','Талант А.','2026-10-28','2026-11-01'),
+  trip('246','NACEKS-SHYM','ТО Agilent 7890','Жандос К.','2026-10-30','2026-11-03'),
+  trip('415','SaryArka_Copper','ТО Agilent','Талант А.','2026-10-30','2026-11-02'),
+  {id:'m1',cat:'meet',title:'Встреча с КФК и ALS — Виталий К.',start:'2026-10-30',end:'2026-10-30'},
+  {id:'bd1',cat:'bd',title:'День рождения — Азамат А.',start:'2026-10-30',end:'2026-10-30'},
+  {id:'v1',cat:'vac',title:'Отпуск — Арман Манаспаев',start:'2026-11-02',end:'2026-11-08'},
+  {id:'v2',cat:'vac',title:'Отпуск — Семён Жаров',start:'2026-11-03',end:'2026-11-07'},
+  trip('449','Kazzinc','ТО Malvern Zetium','Талант А.','2026-11-02','2026-11-06'),
+  trip('416','KAZ Minerals','Установка Struers Accutom-100','Аскат К.','2026-11-02','2026-11-07'),
+  trip('447','NOBEL','ТО Agilent 8890','Жандос К.','2026-11-03','2026-11-07'),
+  {id:'t1',cat:'task',title:'Обучение в Германии ICP-MS — Нурхат О.',start:'2026-11-02','end':'2026-11-06'},
+  {id:'m2',cat:'meet',title:'Планёрка отдела сервиса',start:'2026-11-04',end:'2026-11-04'},
+  trip('480','KAL','ТО Malvern Epsilon 3XLE','Нурбек И.','2026-11-09','2026-11-13'),
+  trip('481','KAL','ТО Agilent ICP-OES 5100','Нурбек И.','2026-11-10','2026-11-13'),
+  {id:'m3',cat:'meet',title:'Демо прибора — клиент CGS',start:'2026-11-11',end:'2026-11-11'},
+  {id:'bd2',cat:'bd',title:'День рождения — Дамели С.',start:'2026-11-12',end:'2026-11-12'},
+];
+const TODAY='2026-11-13';
+const SHOW={trip:true,vac:true};
+const EXP={}; // 'w{idx}:{cat}' -> true (раскрыто)
+
+function weeks(){const s=mondayOf(new Date(2026,10,1));const w=[];for(let i=0;i<42;i+=7){const r=[];for(let j=0;j<7;j++)r.push(addDays(s,i+j));w.push(r)}return w}
+function isMulti(e){return e.end!==e.start}
+function plural(n,one,few,many){const d=n%10,dd=n%100;if(d===1&&dd!==11)return one;if(d>=2&&d<=4&&(dd<12||dd>14))return few;return many}
+
+function spanObjs(list,a,b){return list.map(e=>{const s=parseD(e.start),en=parseD(e.end);return{e,s,en}}).filter(t=>!(t.en<a||t.s>b))
+  .map(t=>({e:t.e,sc:Math.max(0,Math.round((t.s-a)/864e5)),ec:Math.min(6,Math.round((t.en-a)/864e5)),cl:t.s<a,cr:t.en>b}))
+  .sort((x,y)=>x.sc-y.sc||(y.ec-y.sc)-(x.ec-x.sc))}
+function packLanes(sp,base){sp.forEach(s=>{let i=0;const L=base;while(L[i]&&L[i].some(o=>!(s.ec<o.sc||s.sc>o.ec)))i++;(L[i]=L[i]||[]).push(s);s.lane=i});return base.length}
+
+const NUMH=25,LANEH=17;
+function cell(dt,curM){const mut=dt.getMonth()!==curM;const we=((dt.getDay()+6)%7)>=5;const hol=HOL[iso(dt)];const today=iso(dt)===TODAY;
+  return `<div class="mcell ${mut?'mut':''} ${we?'wknd':''} ${hol?'hol':''} ${today?'today':''}"><div class="dn">${dt.getDate()}</div>${hol?`<div class="hol-tag">${esc(hol)}</div>`:''}</div>`}
+const CHEV='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
+
+function draw(){
+  document.getElementById('mh').innerHTML=WD.map((w,i)=>`<div class="${i>=5?'we':''}">${w}</div>`).join('');
+  let H='';const curM=10;
+  weeks().forEach((week,wi)=>{
+    const a=week[0],b=week[6];
+    const laneBox=[];const bars=[];
+    // роллап командировок / отпусков
+    [['trip','командировк'],['vac','отпуск']].forEach(([cat])=>{
+      if(!SHOW[cat])return;
+      const items=EVENTS.filter(e=>e.cat===cat&&isMulti(e));
+      const sp=spanObjs(items,a,b);
+      if(!sp.length)return;
+      const key='w'+wi+':'+cat;
+      if(sp.length===1||EXP[key]){
+        // раскрыто (или всего одна) — отдельными полосами
+        packLanes(sp,laneBox);
+        sp.forEach(s=>bars.push(barHtml(s,COL[cat],key,sp.length>1)));
+      }else{
+        // свёрнуто — одна полоса на union
+        const sc=Math.min(...sp.map(s=>s.sc)),ec=Math.max(...sp.map(s=>s.ec));
+        const cl=sp.some(s=>s.cl&&s.sc===sc),cr=sp.some(s=>s.cr&&s.ec===ec);
+        const lane=laneBox.length;laneBox.push([{sc,ec}]);
+        const word=cat==='trip'?('командировк'+plural(sp.length,'а','и','ок')):('отпуск'+plural(sp.length,'','а','ов'));
+        bars.push(`<div class="bar roll" data-key="${key}" style="left:${sc/7*100}%;width:calc(${(ec-sc+1)/7*100}% - 4px);top:${NUMH+lane*LANEH}px;background:${COL[cat]};border-radius:${cl?'0':'5px'} ${cr?'0':'5px'} ${cr?'0':'5px'} ${cl?'0':'5px'}">${CHEV}${sp.length} ${word}</div>`);
+      }
+    });
+    // встречи/задачи/ДР многодневные (на всякий) — тонкими, но их мало
+    // однодневные по колонкам
+    const timed={};week.forEach((dt,c)=>{const d=iso(dt);EVENTS.forEach(e=>{if(isMulti(e))return;if(e.start!==d)return;if(e.cat==='trip'&&!SHOW.trip)return;if(e.cat==='vac'&&!SHOW.vac)return;(timed[c]=timed[c]||[]).push(e)})});
+    const lanesN=laneBox.length;
+    const maxT=Math.max(0,...week.map((_,c)=>(timed[c]||[]).length));
+    const rows=lanesN+Math.min(3,maxT)+(maxT>3?1:0);
+    H+=`<div class="mweek" data-wi="${wi}" style="min-height:${Math.max(92,NUMH+rows*LANEH+6)}px"><div class="mcells">`+week.map(dt=>cell(dt,curM)).join('')+'</div><div class="movl">'+bars.join('');
+    week.forEach((dt,col)=>{const t=(timed[col]||[]);t.slice(0,3).forEach((e,k)=>{H+=`<div class="timed" data-ev="${e.id}" style="left:${col/7*100}%;width:calc(${100/7}% - 4px);top:${NUMH+(lanesN+k)*LANEH}px"><span class="cd" style="background:${COL[e.cat]}"></span><span class="tt">${esc(e.title)}</span></div>`});
+      if(t.length>3)H+=`<div class="more" data-ev="${t[3].id}" style="left:${col/7*100}%;top:${NUMH+(lanesN+3)*LANEH}px">+ ещё ${t.length-3}</div>`});
+    H+='</div></div>';
+  });
+  document.getElementById('mbody').innerHTML=H;
+}
+function barHtml(s,c,key,expandable){
+  return `<div class="bar" ${expandable?`data-key="${key}"`:''} style="left:${s.sc/7*100}%;width:calc(${(s.ec-s.sc+1)/7*100}% - 4px);top:${NUMH+s.lane*LANEH}px;background:${c};border-radius:${s.cl?'0':'5px'} ${s.cr?'0':'5px'} ${s.cr?'0':'5px'} ${s.cl?'0':'5px'}" title="${esc(s.e.title)}">${s.cl?'‹':''}${esc(s.e.title)}</div>`;
+}
+
+document.getElementById('mbody').addEventListener('click',e=>{
+  const roll=e.target.closest('[data-key]');
+  if(roll){const k=roll.getAttribute('data-key');EXP[k]=!EXP[k];draw();return;}
+  const ev=e.target.closest('[data-ev]');const bar=e.target.closest('.bar[title]');
+  if(ev){const id=ev.getAttribute('data-ev');const o=EVENTS.find(x=>x.id===id);if(o)toast(o.title);}
+  else if(bar&&bar.title)toast(bar.title);
+});
+function tgl(id,cat){const el=document.getElementById(id);el.addEventListener('click',()=>{SHOW[cat]=!SHOW[cat];el.classList.toggle('on',SHOW[cat]);draw();});}
+tgl('fTrip','trip');tgl('fVac','vac');
+let _t;function toast(m){const el=document.getElementById('toast');el.textContent=m;el.classList.add('on');clearTimeout(_t);_t=setTimeout(()=>el.classList.remove('on'),2400)}
+draw();
+</script>
+</body>
+</html>
