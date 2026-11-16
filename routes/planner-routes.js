@@ -749,5 +749,68 @@ router.get('/leave-meta', requireAuth(), async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Карточный модуль «Отпуска» (раздел «Процессы») ────────────────────────
+// Данные живут в Bitrix (смарт-процесс 1108); карточка читает их оттуда, связка
+// с Планировщиком — по bitrix_item_id. Стадии процесса:
+const LEAVE_STAGES = [
+  { id: 'DT1108_23:NEW', name: 'Заявка на отпуск' },
+  { id: 'DT1108_23:PREPARATION', name: 'Согласование' },
+  { id: 'DT1108_23:CLIENT', name: 'Издание приказа и выплаты' },
+  { id: 'DT1108_23:UC_0FQVY5', name: 'Отпуск' },
+  { id: 'DT1108_23:UC_KWS3UL', name: 'Отпуск завершён' },
+  { id: 'DT1108_23:SUCCESS', name: 'Успех' },
+  { id: 'DT1108_23:FAIL', name: 'Провал' },
+];
+const LEAVE_STAGE_NAME = Object.fromEntries(LEAVE_STAGES.map(s => [s.id, s.name]));
+const _bxDate = d => { const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(d || '')); return m ? m[1] : null; };
+function mapLeaveItem(it, plannerId) {
+  return {
+    id: it.id, title: it.title, assignedById: it.assignedById || null,
+    stageId: it.stageId, stage: LEAVE_STAGE_NAME[it.stageId] || it.stageId,
+    start: _bxDate(it[LEAVE_START]), end: _bxDate(it[LEAVE_END]),
+    typeId: it[LEAVE_TYPE] || null, days: it[LEAVE_DAYS] || null,
+    supervisorBid: it[LEAVE_SUPERVISOR] || null, plannerId: plannerId || null,
+  };
+}
+// Список отпусков (из 1108) + связка с событиями Планировщика.
+router.get('/leaves', requireAuth(), async (req, res) => {
+  try {
+    let items = [];
+    try {
+      const r = await b24('crm.item.list', { entityTypeId: LEAVE_ETID, order: { id: 'desc' }, select: ['*', 'uf_*'] });
+      items = (r && r.result && r.result.items) || [];
+    } catch (e) { return res.status(502).json({ error: 'Bitrix недоступен: ' + e.message }); }
+    const ids = items.map(i => i.id).filter(Boolean);
+    const links = {};
+    if (ids.length) {
+      try {
+        const lr = await pool.query('SELECT bitrix_item_id, id FROM ticketsmodule_planner_events WHERE bitrix_item_id = ANY($1::int[])', [ids]);
+        lr.rows.forEach(x => { links[x.bitrix_item_id] = x.id; });
+      } catch (e) {}
+    }
+    res.json({ items: items.map(i => mapLeaveItem(i, links[i.id])), stages: LEAVE_STAGES });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Деталь одного отпуска.
+router.get('/leaves/:id(\\d+)', requireAuth(), async (req, res) => {
+  try {
+    const r = await b24('crm.item.get', { entityTypeId: LEAVE_ETID, id: parseInt(req.params.id, 10) });
+    const it = r && r.result && r.result.item;
+    if (!it) return res.status(404).json({ error: 'Не найдено' });
+    let plannerId = null;
+    try { const lr = await pool.query('SELECT id FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1 LIMIT 1', [it.id]); if (lr.rows.length) plannerId = lr.rows[0].id; } catch (e) {}
+    res.json({ item: mapLeaveItem(it, plannerId), stages: LEAVE_STAGES });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Движение по стадии (обновляет Bitrix; Планировщик подхватит дату при правках).
+router.post('/leaves/:id(\\d+)/stage', requireAuth(), express.json(), async (req, res) => {
+  try {
+    const stageId = String((req.body || {}).stageId || '');
+    if (!LEAVE_STAGE_NAME[stageId]) return res.status(400).json({ error: 'Неверная стадия' });
+    await b24('crm.item.update', { entityTypeId: LEAVE_ETID, id: parseInt(req.params.id, 10), fields: { stageId } });
+    res.json({ ok: true, stageId, stage: LEAVE_STAGE_NAME[stageId] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = { router, rowToEvent, SELECT_COLS, TZ, syncStaffFromBitrix, fetchAllActiveUsers, computeSyncHash, resolveBitrixUserId };
 
