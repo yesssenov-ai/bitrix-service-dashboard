@@ -922,5 +922,61 @@ router.post('/meetings', requireAuth(), express.json(), async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Карточный модуль «Командировки» (раздел «Процессы») ───────────────────
+// Данные — смарт-процесс Bitrix 1074 «Заявка на командировку», воронка 15.
+const TRIP_ETID = 1074, TRIP_CAT = 15;
+const TRIP_START = 'ufCrm12_1732867277610', TRIP_END = 'ufCrm12_1732867286706';
+const TRIP_DEST = 'ufCrm12_1732867225794', TRIP_PURPOSE = 'ufCrm12_1732867109113';
+const TRIP_ROUTE = 'ufCrm12_1732867267601', TRIP_NUMBER = 'ufCrm12_1763384122385';
+const TRIP_STAGES = [
+  { id: 'DT1074_15:NEW', name: 'Запрос' },
+  { id: 'DT1074_15:PREPARATION', name: 'Согласование' },
+  { id: 'DT1074_15:CLIENT', name: 'Выдача командировочных' },
+  { id: 'DT1074_15:1', name: 'В командировке' },
+  { id: 'DT1074_15:2', name: 'Отчёт' },
+  { id: 'DT1074_15:3', name: 'Закрытие' },
+  { id: 'DT1074_15:SUCCESS', name: 'Завершена' },
+  { id: 'DT1074_15:FAIL', name: 'Не состоялась' },
+];
+const TRIP_STAGE_NAME = Object.fromEntries(TRIP_STAGES.map(s => [s.id, s.name]));
+const _tv = v => Array.isArray(v) ? (v[0] || '') : (v || '');
+function mapTripItem(it, plannerId) {
+  return {
+    id: it.id, title: it.title, assignedById: it.assignedById || null,
+    stageId: it.stageId, stage: TRIP_STAGE_NAME[it.stageId] || it.stageId,
+    start: _bxDate(it[TRIP_START]), end: _bxDate(it[TRIP_END]),
+    dest: _tv(it[TRIP_DEST]), purpose: _tv(it[TRIP_PURPOSE]), route: _tv(it[TRIP_ROUTE]),
+    number: it[TRIP_NUMBER] || '', plannerId: plannerId || null,
+  };
+}
+router.get('/trips', requireAuth(), async (req, res) => {
+  try {
+    let items = [];
+    try { const r = await b24('crm.item.list', { entityTypeId: TRIP_ETID, filter: { categoryId: TRIP_CAT }, order: { id: 'desc' }, select: ['*', 'uf_*'] }); items = (r && r.result && r.result.items) || []; }
+    catch (e) { return res.status(502).json({ error: 'Bitrix недоступен: ' + e.message }); }
+    const ids = items.map(i => i.id).filter(Boolean); const links = {};
+    if (ids.length) { try { const lr = await pool.query('SELECT bitrix_item_id, id FROM ticketsmodule_planner_events WHERE bitrix_item_id = ANY($1::int[])', [ids]); lr.rows.forEach(x => { links[x.bitrix_item_id] = x.id; }); } catch (e) {} }
+    res.json({ items: items.map(i => mapTripItem(i, links[i.id])), stages: TRIP_STAGES });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.get('/trips/:id(\\d+)', requireAuth(), async (req, res) => {
+  try {
+    const r = await b24('crm.item.get', { entityTypeId: TRIP_ETID, id: parseInt(req.params.id, 10) });
+    const it = r && r.result && r.result.item;
+    if (!it) return res.status(404).json({ error: 'Не найдено' });
+    let plannerId = null;
+    try { const lr = await pool.query('SELECT id FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1 LIMIT 1', [it.id]); if (lr.rows.length) plannerId = lr.rows[0].id; } catch (e) {}
+    res.json({ item: mapTripItem(it, plannerId), stages: TRIP_STAGES });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.post('/trips/:id(\\d+)/stage', requireAuth(), express.json(), async (req, res) => {
+  try {
+    const stageId = String((req.body || {}).stageId || '');
+    if (!TRIP_STAGE_NAME[stageId]) return res.status(400).json({ error: 'Неверная стадия' });
+    await b24('crm.item.update', { entityTypeId: TRIP_ETID, id: parseInt(req.params.id, 10), fields: { stageId } });
+    res.json({ ok: true, stageId, stage: TRIP_STAGE_NAME[stageId] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = { router, rowToEvent, SELECT_COLS, TZ, syncStaffFromBitrix, fetchAllActiveUsers, computeSyncHash, resolveBitrixUserId };
 
