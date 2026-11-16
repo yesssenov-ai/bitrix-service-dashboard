@@ -163,6 +163,15 @@ async function salesSignals(pool, now) {
     const a = await q('SELECT COUNT(*)::int n FROM ticketsmodule_stat_deals WHERE date_create >= $1', [iso(wk)]);
     const b = await q('SELECT COUNT(*)::int n FROM ticketsmodule_stat_deals WHERE date_create >= $1 AND date_create < $2', [iso(pw), iso(wk)]);
     out.newThisWeek = a[0] ? a[0].n : 0; out.newPrevWeek = b[0] ? b[0].n : 0;
+    // Текущая неделя ещё НЕ завершена: newThisWeek — это только Пн..сегодня.
+    // Честное сравнение — с тем же отрезком прошлой недели (Пн..тот же день недели).
+    const prevEnd = new Date(pw); prevEnd.setDate(pw.getDate() + dow + 1);    // exclusive
+    const c = await q('SELECT COUNT(*)::int n FROM ticketsmodule_stat_deals WHERE date_create >= $1 AND date_create < $2', [iso(pw), iso(prevEnd)]);
+    out.newPrevWeekToDate = c[0] ? c[0].n : 0;      // аналогичный момент прошлой недели
+    // Временной контекст — чтобы ИИ не принимал «мало за неделю» в утро понедельника за обвал.
+    const WD = ['понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота', 'воскресенье'];
+    out.weekday = WD[dow]; out.daysElapsedThisWeek = dow + 1; out.hourOfDay = d.getHours();
+    out.weekJustStarted = (dow === 0 && d.getHours() < 14);   // утро/день понедельника
     const big = await q("SELECT deal_title, company_name, opportunity, assigned_by_id FROM ticketsmodule_stat_deals WHERE opportunity > 0 ORDER BY opportunity DESC LIMIT 5");
     out.biggestDeals = big.map(r => ({ title: String(r.deal_title || '').slice(0, 70), company: r.company_name || '', mln: mln(r.opportunity), mgr: nm(r.assigned_by_id) }));
     const ind = await q("SELECT COALESCE(NULLIF(industry,''),'—') g, COUNT(*)::int n FROM ticketsmodule_stat_deals GROUP BY 1 ORDER BY n DESC LIMIT 6");
@@ -220,7 +229,10 @@ async function _genAi(ctx) {
   const key = process.env.ANTHROPIC_API_KEY; if (!key) { _ai.state = 'no-key'; return ''; }
   let debt = null; try { debt = await debtRisk(); } catch (e) {}
   const full = debt ? Object.assign({}, ctx, { debt }) : ctx;
-  const sys = 'Ты — ассистент технического директора лабораторной компании ProLabSupport (сервис и продажи аналитического оборудования). Тебе дают сигналы за день: сделки в работе/закрытые, динамика новых сделок за неделю (sales.newThisWeek vs newPrevWeek), крупнейшие сделки (sales.biggestDeals), распределение по сферам (sales.byIndustry) и менеджерам (sales.byManager), объём воронки (sales.pipelineMln), дебиторка (debt) и отсутствия. ВЫБЕРИ ОДНО самое заметное за сегодня и дай один короткий деловой вывод на русском (1–2 предложения, максимум 40 слов) с КОНКРЕТНЫМ действием. Это НЕ обязательно дебиторка — бери то, что реально выделяется: резкий рост или спад новых сделок за неделю; необычно крупная сделка (назови её и менеджера); сильный перекос нагрузки на одного менеджера; концентрация в одной сфере; ИЛИ серьёзный риск по долгам (просрочка >90–180 дней либо крупная сумма — тогда назови контрагента, срок и сумму и порекомендуй напоминание/эскалацию/взыскание). Разнообразь темы день ото дня, не повторяй одно и то же. Суммы в млн ₸. Строго, по делу, без приветствий, без воды, без эмодзи. Если данных мало или помечено isDemo — нейтрально, без тревоги.';
+  const sys = 'Ты — ассистент технического директора лабораторной компании ProLabSupport (сервис и продажи аналитического оборудования). Тебе дают сигналы за день: сделки в работе/закрытые, динамика новых сделок за неделю, крупнейшие сделки (sales.biggestDeals), распределение по сферам (sales.byIndustry) и менеджерам (sales.byManager), объём воронки (sales.pipelineMln), дебиторка (debt) и отсутствия. '
+    + 'ВРЕМЕННОЙ КОНТЕКСТ — учитывай ОБЯЗАТЕЛЬНО перед любым выводом о динамике: sales.weekday (день недели), sales.daysElapsedThisWeek (сколько дней недели уже прошло из 7), sales.hourOfDay (час), sales.weekJustStarted. sales.newThisWeek — это НЕ полная неделя, а только период Пн..сегодня (ещё идёт). Поэтому сравнивай newThisWeek ТОЛЬКО с sales.newPrevWeekToDate (тот же отрезок прошлой недели), а НЕ с newPrevWeek (это полная прошлая неделя, 7 дней, для справки). '
+    + 'НЕ бей тревогу и НЕ пиши про «обвал/спад потока», «сбой CRM», «ноль лидов», если причина — просто раннее время: в начале недели (weekJustStarted) или утром низкие числа новых сделок и лидов НОРМАЛЬНЫ, их ещё не успели завести. В таком случае либо выбери другую, содержательную тему (крупная сделка, перекос по менеджеру, сфера, долги), либо дай спокойный нейтральный вывод. Тревогу по входящему потоку поднимай, только если newThisWeek заметно ниже newPrevWeekToDate при сопоставимом отрезке. '
+    + 'ВЫБЕРИ ОДНО самое заметное за сегодня и дай один короткий деловой вывод на русском (1–2 предложения, максимум 40 слов) с КОНКРЕТНЫМ действием. Бери то, что реально выделяется: честная динамика новых сделок (с учётом отрезка); необычно крупная сделка (назови её и менеджера); сильный перекос нагрузки на одного менеджера; концентрация в одной сфере; ИЛИ серьёзный риск по долгам (просрочка >90–180 дней либо крупная сумма — назови контрагента, срок и сумму и порекомендуй напоминание/эскалацию/взыскание). Разнообразь темы день ото дня, не повторяй одно и то же. Суммы в млн ₸. Строго, по делу, без приветствий, без воды, без эмодзи. Если данных мало или помечено isDemo — нейтрально, без тревоги.';
   const model = process.env.PLSAI_AGENT_MODEL || process.env.PLSAI_MODEL || 'claude-haiku-5-5';
   const msgs = [{ role: 'user', content: 'Цифры на сегодня:\n' + JSON.stringify(full) }];
   // Разные модели требуют разный способ отключить «размышление»: новые — between_tools,

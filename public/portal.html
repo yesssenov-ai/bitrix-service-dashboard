@@ -248,6 +248,17 @@ footer{text-align:center;color:var(--text-faint);font-size:11.5px;padding:20px;f
 .pt-d-sub{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);margin:9px 0 2px}
 .pt-d-mut{color:var(--text-3)}
 .pt-d-per{color:var(--text-3);font-size:11.5px;font-variant-numeric:tabular-nums}
+/* Переключатели типов отсутствий (командировки/отпуска/прочее) */
+.abs-chips{display:flex;flex-wrap:wrap;gap:7px;margin:2px 0 4px}
+.abs-chip{display:inline-flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--line-2);
+  border-radius:999px;padding:5px 11px;font-size:12px;font-weight:600;color:var(--text-2);cursor:pointer;transition:.14s;line-height:1}
+.abs-chip:hover{background:var(--surface-2)}
+.abs-chip .abs-dot{width:9px;height:9px;border-radius:50%;background:var(--cc);flex:none;transition:.14s}
+.abs-chip .abs-n{font-family:var(--f-mono);font-size:10.5px;font-weight:700;color:var(--cc);
+  background:color-mix(in srgb,var(--cc) 14%,var(--surface));border-radius:999px;padding:1px 6px;min-width:16px;text-align:center}
+.abs-chip.off{color:var(--text-3);border-style:dashed}
+.abs-chip.off .abs-dot{background:var(--line-2);box-shadow:none}
+.abs-chip.off .abs-n{color:var(--text-3);background:var(--surface-2)}
 </style>
 </head>
 <body>
@@ -660,6 +671,39 @@ async function loadToday(){
 const PT_CHEV='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
 function yearsWord(n){ const a=n%10,b=n%100; return (a===1&&b!==11)?'год':(a>=2&&a<=4&&(b<10||b>=20))?'года':'лет'; }
 function shortName(n){ const p=String(n||'').trim().split(/\s+/); return p.length>=2?(p[0]+' '+p[1]):(n||''); }
+// ── Фильтр блока «Сегодня отсутствуют» по типам (как категории десктоп-календаря) ──
+const ABS_OFF=new Set();        // какие типы сейчас скрыты
+let _ABS=[];                     // отсутствия текущего дня
+const absKey=a=>a.kind==='trip'?'trip':(a.kind==='vacation'?'vac':'other');
+const ABS_LABELS={trip:'Командировки',vac:'Отпуска',other:'Прочее'};
+const ABS_COLORS={trip:'#0ea5a4',vac:'#16a37a',other:'#e8821f'};
+function absRowHTML(){
+  if(!_ABS.length) return ptRow('suitcase','#13a08a','Сегодня отсутствуют','Все на месте','');
+  const kinds=['trip','vac','other'].filter(k=>_ABS.some(a=>absKey(a)===k));
+  const vis=_ABS.filter(a=>!ABS_OFF.has(absKey(a)));
+  const sum=vis.length
+    ? `${vis.length} · `+vis.slice(0,2).map(a=>esc(shortName(a.name))).join(', ')+(vis.length>2?' …':'')
+    : 'Все типы скрыты';
+  // Чипы — только для типов, которые реально есть сегодня; тап снимает/возвращает тип.
+  const chips=kinds.length>1?`<div class="abs-chips">`+kinds.map(k=>{
+    const off=ABS_OFF.has(k), n=_ABS.filter(a=>absKey(a)===k).length;
+    return `<button type="button" class="abs-chip${off?' off':''}" onclick="absToggle('${k}')" style="--cc:${ABS_COLORS[k]}"><span class="abs-dot"></span>${ABS_LABELS[k]}<span class="abs-n">${n}</span></button>`;
+  }).join('')+`</div>`:'';
+  const grp=k=>{ const arr=_ABS.filter(a=>absKey(a)===k); if(!arr.length||ABS_OFF.has(k)) return '';
+    return `<div class="pt-d-sub">${ABS_LABELS[k]}</div>`+arr.map(a=>{
+      const dest=a.dest?` <span class="pt-d-mut">· ${esc(a.dest)}</span>`:'';
+      const per=ptPeriod(a.from_date,a.to_date), perH=per?` <span class="pt-d-per">${esc(per)}</span>`:'';
+      return `<div class="pt-d-row">${esc(a.name)}${dest}${perH}</div>`;}).join('');
+  };
+  return ptRow('suitcase','#c98a1e','Сегодня отсутствуют',sum,chips+grp('trip')+grp('vac')+grp('other'));
+}
+function absToggle(k){
+  if(ABS_OFF.has(k)) ABS_OFF.delete(k); else ABS_OFF.add(k);
+  const wrap=document.getElementById('ptAbsWrap'); if(!wrap) return;
+  const wasOpen=wrap.querySelector('.pt-row')&&wrap.querySelector('.pt-row').classList.contains('open');
+  wrap.innerHTML=absRowHTML();
+  if(wasOpen){ const r=wrap.querySelector('.pt-row'); if(r) r.classList.add('open'); }
+}
 function ptToggle(h){ const r=h.closest('.pt-row'); if(r) r.classList.toggle('open'); }
 // Строка сводки: иконка + заголовок + краткое описание; детали раскрываются по тапу.
 function ptRow(icon,color,title,summary,details){
@@ -699,20 +743,9 @@ function renderToday(d){
     }).join('');
     rowOtd=ptRow('cal','#2f6ad9','В этот день',sum,det);
   }
-  // ── Сегодня отсутствуют (разделяем командировки и отпуска) ──
-  let rowAbs='';
-  if(d.absences&&d.absences.length){
-    const trips=d.absences.filter(a=>a.kind==='trip');
-    const vacs=d.absences.filter(a=>a.kind==='vacation');
-    const other=d.absences.filter(a=>a.kind!=='trip'&&a.kind!=='vacation');
-    const sum=`${d.absences.length} · `+d.absences.slice(0,2).map(a=>esc(shortName(a.name))).join(', ')+(d.absences.length>2?' …':'');
-    const grp=(t,arr)=> arr.length?`<div class="pt-d-sub">${t}</div>`+arr.map(a=>{
-      const dest=a.dest?` <span class="pt-d-mut">· ${esc(a.dest)}</span>`:'';
-      const per=ptPeriod(a.from_date,a.to_date); const perH=per?` <span class="pt-d-per">${esc(per)}</span>`:'';
-      return `<div class="pt-d-row">${esc(a.name)}${dest}${perH}</div>`;}).join(''):'';
-    const det=grp('Командировки',trips)+grp('Отпуска',vacs)+grp('Прочее',other);
-    rowAbs=ptRow('suitcase','#c98a1e','Сегодня отсутствуют',sum,det);
-  } else rowAbs=ptRow('suitcase','#13a08a','Сегодня отсутствуют','Все на месте','');
+  // ── Сегодня отсутствуют (чипы-переключатели по типам, см. absRowHTML) ──
+  _ABS = d.absences||[];
+  const rowAbs = `<div id="ptAbsWrap">${absRowHTML()}</div>`;
   // ── Факт дня: ИИ-вывод в строке (если готов), сводка+факт в раскрытии ──
   const F=d.fact||{};
   const hasObj=(typeof F==='object');

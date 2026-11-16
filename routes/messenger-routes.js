@@ -445,34 +445,32 @@ async function pushNewMessage(cid, authorUserId, authorName, body) {
 async function runAgentInChannel(cid, user, rawBody) {
   const q = rawBody.replace(MENTION, ' ').replace(/\s+/g, ' ').trim();
   if (!q) return;
-  // ВСЕГДА подмешиваем недавнюю переписку как контекст (память диалога). Сильная
-  // модель сама решает: вопрос самодостаточный — отвечает по нему; это продолжение
-  // («этот отдел», «по данной теме», «за 10-е», «а в декабре») — понимает по истории
-  // и делает НОВЫЙ запрос с нужным фильтром. Так агент больше не «теряет» прошлые
-  // сообщения, даже если новый вопрос — целым предложением или через паузу.
-  let prompt = q;
-  let history = '';
+  // Память диалога — передаём недавнюю переписку как НАСТОЯЩИЕ ходы чата
+  // (role user/assistant), а не текстовым блобом внутри одного промпта. Так модель
+  // чётко видит: последняя реплика пользователя = текущий вопрос, прошлое = контекст.
+  // Раньше блоб приводил к тому, что агент цеплялся за старую тему и отвечал не на тот
+  // вопрос («нового вопроса нет», хотя вопрос был).
+  let history = [];
   try {
     const h = await pool.query(`
-      SELECT m.author_id, m.kind, m.body, u.display_name AS who
-      FROM ticketsmodule_msg_messages m LEFT JOIN ticketsmodule_users u ON u.id=m.author_id
+      SELECT m.kind, m.body
+      FROM ticketsmodule_msg_messages m
       WHERE m.channel_id=$1 AND m.deleted_at IS NULL AND m.kind IN ('text','ai')
         AND m.body IS NOT NULL AND char_length(m.body) > 0
       ORDER BY m.id DESC LIMIT 10`, [cid]);
     const rows = h.rows.reverse();
+    // Текущее сообщение пользователя уже записано в БД — убираем его из истории,
+    // оно уйдёт отдельным (последним) ходом как сам вопрос.
     if (rows.length && rows[rows.length - 1].kind === 'text' && (rows[rows.length - 1].body || '').trim() === rawBody.trim()) rows.pop();
-    history = rows.map(r => (r.kind === 'ai' ? 'Агент' : (r.who || 'Сотрудник')) + ': ' + String(r.body || '').replace(/\s+/g, ' ').slice(0, 400)).join('\n');
+    history = rows.map(r => ({
+      role: r.kind === 'ai' ? 'assistant' : 'user',
+      content: String(r.body || '').replace(/\s+/g, ' ').slice(0, 600),
+    }));
   } catch (e) {}
-  if (history) {
-    prompt = 'Это рабочий чат ЦУП — ниже недавняя переписка для контекста (это ТВОЯ память диалога, ты её ВИДИШЬ). '
-      + 'Если новое сообщение самодостаточно — ответь по нему. Если это продолжение (ссылки вроде «этот отдел», «эти менеджеры», «по данной теме», «за 10-е», «а по второму», «а в декабре») — пойми по переписке, о чём речь. '
-      + 'ВАЖНО: если сообщение меняет период, месяц, число, отдел, менеджера или любой фильтр — ты ОБЯЗАН выполнить НОВЫЙ запрос к данным с изменённым фильтром и показать НОВЫЕ цифры, НЕ копируй прошлый ответ. '
-      + 'Никогда не говори «я не получал прошлых вопросов» — вся недавняя переписка у тебя перед глазами ниже. Не переспрашивай, если смысл ясен из контекста.\n\nПереписка:\n' + history + '\n\nНовое сообщение сотрудника: ' + q;
-  }
   let answer = '', payload = null;
   try {
     const { runAgent } = require('../plsai-agent');
-    const out = await runAgent(prompt, user);
+    const out = await runAgent(q, user, { history });
     answer = (out && out.answer) || 'Не удалось сформировать ответ.';
     if (out && (out.table || out.steps || out.exportToken || out.actions)) payload = { table: out.table || null, steps: out.steps || null, exportToken: out.exportToken || null, actions: out.actions || null };
   } catch (e) { answer = 'Агент временно недоступен: ' + e.message; }

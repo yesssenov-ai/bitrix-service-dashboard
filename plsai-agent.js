@@ -327,6 +327,8 @@ function buildSystem(user, allowed, examples) {
     '',
     `Сегодня: ${new Date().toISOString().slice(0, 10)} (в БД это CURRENT_DATE). Относительные даты считай от сегодня: «за 11 число» = 11-е число ТЕКУЩЕГО месяца, «за последнюю неделю» = последние 7 дней, «вчера», «за этот месяц» и т.п. Для фильтра по дате создания используй поле date_create (приводи к дате: date_create::date).`,
     '',
+    'ДИАЛОГ: это рабочий чат, тебе видны предыдущие реплики как ходы беседы. ВСЕГДА отвечай на ПОСЛЕДНЮЮ реплику пользователя — именно она текущий вопрос. Прошлые ходы — лишь контекст: используй их, только если текущая реплика без них непонятна (ссылки вроде «этот отдел», «а в декабре», «по ним»). Если последняя реплика самодостаточна (например «дай контракты отдела Хроматографии за 2025») — выполни её напрямую и НЕ привязывайся к прежней теме. Если новый вопрос меняет период/отдел/менеджера/фильтр — сделай НОВЫЙ run_sql с новым фильтром и покажи НОВЫЕ числа, не копируй прошлый ответ. Никогда не говори «нового вопроса нет» или «я не получал вопрос» — последняя реплика пользователя и есть вопрос.',
+    '',
     'Правила:',
     '0) ВАЖНО про период: если в вопросе есть дата или период («за 11 число», «за неделю», «за октябрь», «вчера») — фильтруй ИМЕННО по нему и НИКОГДА молча не подменяй на «сегодня». «Сегодня» бери только если пользователь явно написал «сегодня» или период вообще не указан. Если по указанному периоду 0 строк — так и скажи про ЭТОТ период (а не про сегодня).',
     '1) Чтобы ответить на вопрос о данных — вызывай run_sql. Не выдумывай числа; бери их только из результата запроса.',
@@ -569,11 +571,31 @@ async function exportAgentTable(token, user) {
 }
 
 // ── Главная функция: прогнать вопрос через агента ───────────────────────────
-async function runAgent(qRaw, user) {
+// Приводим историю диалога к валидной для API последовательности реплик:
+// только user/assistant, строки, чередование ролей (подряд одинаковые — склеиваем),
+// обязательно начинается с user. Это ПАМЯТЬ диалога как настоящие ходы чата —
+// модель сама видит, что последняя реплика пользователя и есть текущий вопрос,
+// а прошлое — контекст. Никаких текстовых «блобов» истории внутри одного промпта.
+function normalizeTurns(turns) {
+  const out = [];
+  for (const t of (Array.isArray(turns) ? turns : [])) {
+    const content = String((t && t.content) || '').trim();
+    if (!content) continue;
+    const role = (t && t.role === 'assistant') ? 'assistant' : 'user';
+    if (out.length && out[out.length - 1].role === role) out[out.length - 1].content += '\n' + content;
+    else out.push({ role, content });
+  }
+  while (out.length && out[0].role !== 'user') out.shift();   // первый ход — всегда user
+  return out;
+}
+
+async function runAgent(qRaw, user, opts) {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return { ok: false, error: 'ANTHROPIC_API_KEY не задан' };
   const q = String(qRaw || '').trim().slice(0, 1000);
   if (!q) return { ok: false, error: 'Пустой запрос' };
+  // История диалога (предыдущие реплики канала) — как настоящие ходы чата.
+  const history = normalizeTurns(opts && opts.history).slice(-8);
 
   const ctx = await buildCtx(user);
   const allowed = ctx.allowed;
@@ -584,7 +606,10 @@ async function runAgent(qRaw, user) {
   let system = buildSystem(user, allowed, examples);
   // База знаний: подмешиваем релевантные регламенты/инструкции компании (RAG).
   try { const kbCtx = await require('./knowledge-calc').kbContext(q); if (kbCtx) system += '\n\n' + kbCtx; } catch (e) {}
-  const messages = [{ role: 'user', content: q }];
+  // Текущий вопрос — последним ходом user; история идёт перед ним как контекст.
+  // normalizeTurns гарантирует чередование и склеивает подряд идущие user-реплики
+  // (история + текущий вопрос), так что первый ход — user, а API не падает.
+  const messages = normalizeTurns([...history, { role: 'user', content: q }]);
   const steps = [];
 
   for (let i = 0; i < MAX_STEPS; i++) {
