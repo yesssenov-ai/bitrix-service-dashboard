@@ -138,6 +138,10 @@ router.post('/events', requireAuth(), async (req, res) => {
 
     const created = await fetchByIds(client, ids);
     await client.query('COMMIT');
+    // Если отпуск сразу создан подтверждённым — заводим его в Bitrix (1108).
+    if (type === 'leave' && !!confirmed) {
+      createLeaveInBitrix(primary.id, resource, start, end).catch(e => console.error('leave→bitrix create (POST):', e.message));
+    }
     res.json({ events: created.map(rowToEvent) });
   } catch (e) {
     await client.query('ROLLBACK');
@@ -149,14 +153,50 @@ router.post('/events', requireAuth(), async (req, res) => {
 });
 
 // ── PUT /api/planner/events/:id — update (syncs co-assignee group) ────────
-// ── Outbound push: planner edit → Bitrix (dates + engineer only) ──────────
-async function pushEventToBitrix(bitrixItemId, resource, start, end) {
+// ── Отпуска: смарт-процесс Bitrix 1108 «Отпуска» ──────────────────────────
+// Поля (из probe): ответственный = assignedById, даты — ufCrm19_*. Воронка 23.
+const LEAVE_ETID = 1108, LEAVE_CAT = 23;
+const LEAVE_START = 'ufCrm19_1782732324', LEAVE_END = 'ufCrm19_1782732517';
+const _ddmmyyyy = d => { const [y, m, dd] = String(d).slice(0, 10).split('-'); return `${dd}.${m}.${y}`; };
+// Создать отпуск в Bitrix (1108) из подтверждённого события Планировщика и
+// привязать его id к событию (дальше правки дат пушатся как обычно, type-aware).
+async function createLeaveInBitrix(id, resource, start, end) {
   const engineerId = await resolveBitrixUserId(resource);
+  const s = String(start).slice(0, 10), e = String(end).slice(0, 10);
+  const title = `Отпуск ${resource} (${_ddmmyyyy(s)} - ${_ddmmyyyy(e)})`;
+  try {
+    const fields = { title, categoryId: LEAVE_CAT, [LEAVE_START]: s, [LEAVE_END]: e };
+    if (engineerId) fields.assignedById = engineerId;
+    const r = await b24('crm.item.add', { entityTypeId: LEAVE_ETID, fields });
+    const item = r && r.result && r.result.item;
+    const bid = item && item.id;
+    if (bid) await pool.query('UPDATE ticketsmodule_planner_events SET bitrix_item_id=$1 WHERE id=$2', [bid, id]);
+    return bid || null;
+  } catch (e) {
+    console.error(`createLeaveInBitrix failed for planner event ${id}:`, e.message);
+    return null;
+  }
+}
+
+// ── Outbound push: planner edit → Bitrix (dates + engineer only) ──────────
+// Type-aware: отпуск (leave) → процесс 1108 (ufCrm19_*), остальное → 1058 (ufCrm8_*).
+async function pushEventToBitrix(bitrixItemId, resource, start, end, type) {
+  const engineerId = await resolveBitrixUserId(resource);
+  const sDateOnly = start.slice(0, 10), eDateOnly = end.slice(0, 10);
+  if (type === 'leave') {
+    try {
+      const fields = { [LEAVE_START]: sDateOnly, [LEAVE_END]: eDateOnly };
+      if (engineerId) fields.assignedById = engineerId;
+      await b24('crm.item.update', { entityTypeId: LEAVE_ETID, id: bitrixItemId, fields });
+    } catch (e) {
+      console.error(`Outbound push (отпуск) failed for item ${bitrixItemId}:`, e.message);
+    }
+    return;
+  }
   if (!engineerId) {
     console.warn(`Outbound push: no Bitrix user ID found for "${resource}" — skipping push for item ${bitrixItemId}`);
     return;
   }
-  const sDateOnly = start.slice(0, 10), eDateOnly = end.slice(0, 10);
   const hash = computeSyncHash(engineerId, sDateOnly, eDateOnly);
   try {
     await b24('crm.item.update', {
@@ -220,7 +260,7 @@ router.put('/events/:id', requireAuth(), async (req, res) => {
   try {
     await client.query('BEGIN');
     const { rows: existingRows } = await client.query(
-      `SELECT group_id, bitrix_item_id, resource, fields, clients,
+      `SELECT group_id, bitrix_item_id, resource, fields, clients, confirmed AS confirmed_old, type AS type_old,
         to_char(start_at AT TIME ZONE '${TZ}', 'YYYY-MM-DD') AS start_date_old,
         to_char(end_at AT TIME ZONE '${TZ}', 'YYYY-MM-DD') AS end_date_old
        FROM ticketsmodule_planner_events WHERE id=$1`, [id]
@@ -276,12 +316,20 @@ router.put('/events/:id', requireAuth(), async (req, res) => {
 
     const result = await fetchByIds(client, ids);
     await client.query('COMMIT');
-    if (bitrixItemId) {
-      pushEventToBitrix(bitrixItemId, resource, start, end).catch(()=>{});
-      const engineerChanged = oldRow.resource !== resource;
-      const datesChanged = oldRow.start_date_old !== start.slice(0,10) || oldRow.end_date_old !== end.slice(0,10);
-      if (engineerChanged || datesChanged) {
-        notifyOutboundChange(bitrixItemId, resource, start, end, oldRow, { engineerChanged, datesChanged }).catch(e=>console.error('notifyOutboundChange error:', e.message));
+    // Создание ОТПУСКА в Bitrix при первом подтверждении (галочка «Подтверждено»),
+    // если отпуск заведён в Планировщике и ещё не связан с Bitrix.
+    if (type === 'leave' && !!confirmed && !oldRow.confirmed_old && !bitrixItemId) {
+      createLeaveInBitrix(id, resource, start, end).catch(e => console.error('leave→bitrix create:', e.message));
+    } else if (bitrixItemId) {
+      pushEventToBitrix(bitrixItemId, resource, start, end, type).catch(()=>{});
+      // Уведомления о смене инженера/дат — только для сервисных выездов (1058),
+      // логика notifyOutboundChange завязана на 1058; для отпусков не шлём.
+      if (type !== 'leave') {
+        const engineerChanged = oldRow.resource !== resource;
+        const datesChanged = oldRow.start_date_old !== start.slice(0,10) || oldRow.end_date_old !== end.slice(0,10);
+        if (engineerChanged || datesChanged) {
+          notifyOutboundChange(bitrixItemId, resource, start, end, oldRow, { engineerChanged, datesChanged }).catch(e=>console.error('notifyOutboundChange error:', e.message));
+        }
       }
     }
     res.json({ events: result.map(rowToEvent) });
