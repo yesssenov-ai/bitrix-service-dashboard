@@ -445,33 +445,29 @@ async function pushNewMessage(cid, authorUserId, authorName, body) {
 async function runAgentInChannel(cid, user, rawBody) {
   const q = rawBody.replace(MENTION, ' ').replace(/\s+/g, ' ').trim();
   if (!q) return;
-  // Короткая/неполная реплика («за 10», «а по второму», «да, покажи») понимается
-  // только из контекста — тогда (и ТОЛЬКО тогда) подмешиваем недавнюю историю.
-  // Полноценный вопрос отвечаем «с чистого листа», без истории — иначе сильная
-  // модель залипает на старую тему из прошлых сообщений.
-  const words = q.split(/\s+/).filter(Boolean).length;
-  const shortRef = /^(а|и|за|по|ещё|еще|да|нет|теперь|тогда|их|те|эти|этот|эту|эт|ок)\b/i.test(q) || /^[\d\s.,-]+$/.test(q);
-  const isFollowup = words <= 4 || (words <= 6 && shortRef);
+  // ВСЕГДА подмешиваем недавнюю переписку как контекст (память диалога). Сильная
+  // модель сама решает: вопрос самодостаточный — отвечает по нему; это продолжение
+  // («этот отдел», «по данной теме», «за 10-е», «а в декабре») — понимает по истории
+  // и делает НОВЫЙ запрос с нужным фильтром. Так агент больше не «теряет» прошлые
+  // сообщения, даже если новый вопрос — целым предложением или через паузу.
   let prompt = q;
-  if (isFollowup) {
-    let history = '';
-    try {
-      const h = await pool.query(`
-        SELECT m.author_id, m.kind, m.body, u.display_name AS who
-        FROM ticketsmodule_msg_messages m LEFT JOIN ticketsmodule_users u ON u.id=m.author_id
-        WHERE m.channel_id=$1 AND m.deleted_at IS NULL AND m.kind IN ('text','ai')
-          AND m.body IS NOT NULL AND char_length(m.body) > 0
-        ORDER BY m.id DESC LIMIT 8`, [cid]);
-      const rows = h.rows.reverse();
-      if (rows.length && rows[rows.length - 1].kind === 'text' && (rows[rows.length - 1].body || '').trim() === rawBody.trim()) rows.pop();
-      history = rows.map(r => (r.kind === 'ai' ? 'Агент' : (r.who || 'Сотрудник')) + ': ' + String(r.body || '').replace(/\s+/g, ' ').slice(0, 400)).join('\n');
-    } catch (e) {}
-    if (history) {
-      prompt = 'Это продолжение диалога. Ниже недавняя переписка — используй её, чтобы понять короткую реплику сотрудника '
-        + '(например «за 10» = та же тема, но за 10-е число; «а по второму» = про второй пункт из прошлого ответа). '
-        + 'ВАЖНО: если реплика меняет период, месяц, число, отдел или любой фильтр (например «а в декабре» = ТОТ ЖЕ вопрос, но за ДЕКАБРЬ; «а за ноябрь», «а по сервису»), ты ОБЯЗАН выполнить НОВЫЙ запрос к данным с ИЗМЕНЁННЫМ фильтром и показать НОВЫЕ цифры. НЕ копируй и НЕ повторяй прошлый ответ — данные прошлого ответа относятся к ПРЕДЫДУЩЕМУ фильтру и для нового периода неверны. '
-        + 'Не переспрашивай, если смысл ясен из контекста.\n\nПереписка:\n' + history + '\n\nРеплика сотрудника: ' + q;
-    }
+  let history = '';
+  try {
+    const h = await pool.query(`
+      SELECT m.author_id, m.kind, m.body, u.display_name AS who
+      FROM ticketsmodule_msg_messages m LEFT JOIN ticketsmodule_users u ON u.id=m.author_id
+      WHERE m.channel_id=$1 AND m.deleted_at IS NULL AND m.kind IN ('text','ai')
+        AND m.body IS NOT NULL AND char_length(m.body) > 0
+      ORDER BY m.id DESC LIMIT 10`, [cid]);
+    const rows = h.rows.reverse();
+    if (rows.length && rows[rows.length - 1].kind === 'text' && (rows[rows.length - 1].body || '').trim() === rawBody.trim()) rows.pop();
+    history = rows.map(r => (r.kind === 'ai' ? 'Агент' : (r.who || 'Сотрудник')) + ': ' + String(r.body || '').replace(/\s+/g, ' ').slice(0, 400)).join('\n');
+  } catch (e) {}
+  if (history) {
+    prompt = 'Это рабочий чат ЦУП — ниже недавняя переписка для контекста (это ТВОЯ память диалога, ты её ВИДИШЬ). '
+      + 'Если новое сообщение самодостаточно — ответь по нему. Если это продолжение (ссылки вроде «этот отдел», «эти менеджеры», «по данной теме», «за 10-е», «а по второму», «а в декабре») — пойми по переписке, о чём речь. '
+      + 'ВАЖНО: если сообщение меняет период, месяц, число, отдел, менеджера или любой фильтр — ты ОБЯЗАН выполнить НОВЫЙ запрос к данным с изменённым фильтром и показать НОВЫЕ цифры, НЕ копируй прошлый ответ. '
+      + 'Никогда не говори «я не получал прошлых вопросов» — вся недавняя переписка у тебя перед глазами ниже. Не переспрашивай, если смысл ясен из контекста.\n\nПереписка:\n' + history + '\n\nНовое сообщение сотрудника: ' + q;
   }
   let answer = '', payload = null;
   try {
