@@ -811,6 +811,37 @@ router.post('/leaves/:id(\\d+)/stage', requireAuth(), express.json(), async (req
     res.json({ ok: true, stageId, stage: LEAVE_STAGE_NAME[stageId] });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// Создание отпуска из карточки: заводим в Bitrix (1108, стадия «Заявка») И блок в
+// Планировщике (type=leave, подтверждён, связан по bitrix_item_id) — «садится» в план.
+router.post('/leaves', requireAuth(), express.json(), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const resource = String(b.resource || '').trim();
+    const start = String(b.start || '').slice(0, 10);
+    const end = String(b.end || start).slice(0, 10);
+    if (!resource || !start) return res.status(400).json({ error: 'Нужны сотрудник и дата начала' });
+    const engineerId = await resolveBitrixUserId(resource);
+    const days = _daysBetween(start, end);
+    const title = `Отпуск ${resource} (${_ddmmyyyy(start)} - ${_ddmmyyyy(end)})`;
+    const fields = { title, categoryId: LEAVE_CAT, [LEAVE_START]: start, [LEAVE_END]: end };
+    if (engineerId) fields.assignedById = engineerId;
+    if (days) fields[LEAVE_DAYS] = days;
+    if (b.leaveType) fields[LEAVE_TYPE] = b.leaveType;
+    if (b.supervisorBid) fields[LEAVE_SUPERVISOR] = b.supervisorBid;
+    let bid = null;
+    try { const r = await b24('crm.item.add', { entityTypeId: LEAVE_ETID, fields }); bid = (r && r.result && r.result.item && r.result.item.id) || null; }
+    catch (e) { return res.status(502).json({ error: 'Bitrix: ' + e.message }); }
+    try {
+      const evFields = JSON.stringify({ leaveType: b.leaveType || null, supervisorBid: b.supervisorBid || null, leaveDays: days || null });
+      const ev = await pool.query(
+        `INSERT INTO ticketsmodule_planner_events (group_id, resource, title, type, start_at, end_at, all_day, confirmed, fields, bitrix_item_id, source, created_by)
+         VALUES (0,$1,$2,'leave',$3::timestamp AT TIME ZONE '${TZ}',$4::timestamp AT TIME ZONE '${TZ}',true,true,$5,$6,'manual',$7) RETURNING id`,
+        [resource, title, start + 'T09:00', end + 'T18:00', evFields, bid, (req.user && req.user.username) || null]);
+      await pool.query('UPDATE ticketsmodule_planner_events SET group_id=$1 WHERE id=$1', [ev.rows[0].id]);
+    } catch (e) { console.error('leave card → planner block:', e.message); }
+    res.json({ ok: true, id: bid });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 module.exports = { router, rowToEvent, SELECT_COLS, TZ, syncStaffFromBitrix, fetchAllActiveUsers, computeSyncHash, resolveBitrixUserId };
 
