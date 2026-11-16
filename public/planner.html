@@ -435,7 +435,8 @@ const ROW_H = 52; // single source of truth for row height (sidebar rows + grid 
 document.documentElement.style.setProperty('--row-h', ROW_H + 'px');
 const ET = {
   trip:         {label:'Командировка',           icon:'✈️', bg:'#f5c842', fg:'#4a3500', bd:'#d4a800'},
-  trip_confirm: {label:'Командировка (подтв.)',  icon:'✈️', bg:'#4caf7d', fg:'#0d2e1a', bd:'#2e8a55'},
+  trip_pending: {label:'Командировка (на согл.)', icon:'✈️', bg:'#8ad3ab', fg:'#154028', bd:'#57bd89'},
+  trip_confirm: {label:'Командировка (согл.)',   icon:'✈️', bg:'#16a37a', fg:'#ffffff', bd:'#0e7d5c'},
   leave:        {label:'Отпуск',                 icon:'🏖', bg:'#64b5e8', fg:'#0b2540', bd:'#2980b9'},
   train:        {label:'Обучение',               icon:'📚', bg:'#8B6547', fg:'#fff',    bd:'#6b4c35'},
   meeting:      {label:'Встреча',                icon:'🤝', bg:'#e0569b', fg:'#fff',    bd:'#c43d80'},
@@ -1246,8 +1247,13 @@ function renderEvents() {
     const laneH = (ROW_H-8)/lanes;
     const top = ri*ROW_H + 4 + lane*laneH;
 
-    // Use confirmed variant for trips
-    const evType = (ev.type==='trip' && ev.confirmed) ? 'trip_confirm' : ev.type;
+    // Командировка из процесса (связана с Bitrix): светло-зелёная пока не
+    // согласована полностью, насыщенно-зелёная после подписания (tripApproved
+    // приходит с сервера по актуальной стадии 1074 → автоперекрас). Ручные
+    // (без bitrixItemId) ниже красятся нейтрально.
+    let evType = ev.type;
+    if (ev.type==='trip' && ev.bitrixItemId) evType = ev.tripApproved ? 'trip_confirm' : 'trip_pending';
+    else if (ev.type==='trip' && ev.confirmed) evType = 'trip_confirm';
     const t=ET[evType]||ET.trip;
     // Событие без связи с Bitrix создано вручную в самом Планировщике (не из
     // модулей Процессов) — красим нейтрально со слейт-рамкой, чтобы отличать.

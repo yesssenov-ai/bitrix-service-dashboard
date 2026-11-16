@@ -99,11 +99,44 @@ router.get('/events/version', requireAuth(), async (req, res) => {
   }
 });
 
+// Командировка считается «полностью согласованной» начиная со стадии «Выдача
+// командировочных» (деньги выдают после подписи главбуха). До неё — на согласовании.
+const TRIP_APPROVED_STAGES = new Set(['DT1074_15:CLIENT','DT1074_15:1','DT1074_15:2','DT1074_15:3','DT1074_15:SUCCESS']);
+let _tripStageCache = { map: {}, at: 0 };
+function invalidateTripStageCache() { _tripStageCache.at = 0; }
+// Текущие стадии командировок (1074) по их id — батчем, с кэшем ~60с, fail-open.
+async function fetchTripStages(ids) {
+  if (!ids.length) return {};
+  if (Date.now() - _tripStageCache.at < 60e3) return _tripStageCache.map;
+  const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 6000));
+  try {
+    const r = await Promise.race([b24('crm.item.list', { entityTypeId: 1074, filter: { '@id': ids }, select: ['id', 'stageId'] }), timeout]);
+    const map = {};
+    for (const it of ((r && r.result && r.result.items) || [])) map[it.id] = it.stageId;
+    _tripStageCache = { map, at: Date.now() };
+    return map;
+  } catch (e) { return _tripStageCache.map; } // не смогли — красим по последнему известному
+}
+// Проставляет командировкам tripApproved (полностью согласована) — Планировщик
+// красит светло-/насыщенно-зелёным и автоматически перекрашивает после подписи.
+async function enrichTripApproval(events) {
+  const ids = [...new Set(events.filter(e => e.type === 'trip' && e.bitrixItemId).map(e => e.bitrixItemId))];
+  if (!ids.length) return;
+  const map = await fetchTripStages(ids);
+  for (const e of events) {
+    if (e.type === 'trip' && e.bitrixItemId && map[e.bitrixItemId]) {
+      e.tripApproved = TRIP_APPROVED_STAGES.has(map[e.bitrixItemId]);
+    }
+  }
+}
+
 // ── GET /api/planner/events — full list ────────────────────────────────────
 router.get('/events', requireAuth(), async (req, res) => {
   try {
     const { rows } = await pool.query(`SELECT ${SELECT_COLS} FROM ticketsmodule_planner_events ORDER BY id`);
-    res.json({ events: rows.map(rowToEvent) });
+    const events = rows.map(rowToEvent);
+    await enrichTripApproval(events);
+    res.json({ events });
   } catch (e) {
     console.error('GET /api/planner/events error:', e.message);
     res.status(500).json({ error: 'Server error' });
@@ -969,6 +1002,7 @@ router.post('/trips/:id(\\d+)/stage', requireAuth(), express.json(), async (req,
     const stageId = String((req.body || {}).stageId || '');
     if (!TRIP_STAGE_NAME[stageId]) return res.status(400).json({ error: 'Неверная стадия' });
     await b24('crm.item.update', { entityTypeId: TRIP_ETID, id: parseInt(req.params.id, 10), fields: { stageId } });
+    invalidateTripStageCache();
     res.json({ ok: true, stageId, stage: TRIP_STAGE_NAME[stageId] });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1081,6 +1115,7 @@ router.post('/trips', requireAuth(), express.json(), async (req, res) => {
         [resource, title, start + 'T09:00', end + 'T18:00', evFields, bid, (req.user && req.user.username) || null]);
       await pool.query('UPDATE ticketsmodule_planner_events SET group_id=$1 WHERE id=$1', [ev.rows[0].id]);
     } catch (e) { console.error('trip card → planner block:', e.message); }
+    invalidateTripStageCache();
     res.json({ ok: true, id: bid });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
