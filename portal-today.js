@@ -275,6 +275,33 @@ async function absencesToday(pool, now) {
   } catch (e) { return []; }
 }
 
+// Кто сегодня в разъездах по ПЛАНИРОВЩИКУ (ticketsmodule_planner_events).
+// Это основной источник выездов инженеров: командировка/отпуск/обучение,
+// активные сегодня. Именно из-за него Повестка календаря показывала поездки,
+// а блок «Сегодня отсутствуют» молчал — планировщик там не учитывался.
+async function plannerAbsences(pool, now) {
+  try {
+    const iso = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Almaty' }).format(now || new Date());
+    const { rows } = await pool.query(
+      `SELECT resource, title, type,
+              to_char((start_at AT TIME ZONE 'Asia/Almaty'), 'YYYY-MM-DD') AS from_date,
+              to_char((end_at   AT TIME ZONE 'Asia/Almaty'), 'YYYY-MM-DD') AS to_date
+         FROM ticketsmodule_planner_events
+        WHERE (start_at AT TIME ZONE 'Asia/Almaty')::date <= $1::date
+          AND (end_at   AT TIME ZONE 'Asia/Almaty')::date >= $1::date`, [iso]);
+    const out = [];
+    for (const r of rows) {
+      const name = String(r.resource || '').trim();
+      if (!name) continue;
+      // leave → отпуск; trip/train (обучение) → командировка/выезд.
+      const kind = r.type === 'leave' ? 'vacation' : 'trip';
+      out.push({ name, kind, from_date: r.from_date, to_date: r.to_date,
+        dest: String(r.title || '').trim() });
+    }
+    return out;
+  } catch (e) { return []; }
+}
+
 // ── Смарт-процессы Bitrix: «Командировки» и «Отпуска» ──────────────────────────
 // Для каждого процесса автоопределяем entityTypeId по названию. Командировки —
 // строго по этапу «В командировке»; отпуска — актуальные на сегодня по датам
@@ -513,12 +540,25 @@ async function build(pool, now) {
   now = now || new Date();
   const res = { date: { d: now.getDate(), m: now.getMonth() + 1 },
     birthdays: birthdays(now), onThisDay: [], absences: [], pulse: {}, fact: {} };
-  const [otd, pls, absM, smart] = await Promise.allSettled([
-    onThisDay(now), pulse(now), absencesToday(pool, now), smartAbsences(now)]);
+  const [otd, pls, absM, smart, plan] = await Promise.allSettled([
+    onThisDay(now), pulse(now), absencesToday(pool, now), smartAbsences(now),
+    plannerAbsences(pool, now)]);
   if (otd.status === 'fulfilled') res.onThisDay = otd.value;
   if (pls.status === 'fulfilled') res.pulse = pls.value;
-  let abs = (absM.status === 'fulfilled' && absM.value) ? absM.value : [];
-  if (smart.status === 'fulfilled' && smart.value) abs = abs.concat(smart.value);
+  // Собираем отсутствия из трёх источников: ручная таблица HR, смарт-процессы
+  // Bitrix и планировщик инженеров. Дедуп — по типу + нормализованному ФИО
+  // (сортируем слова, чтобы «Имя Фамилия» и «Фамилия Имя» схлопывались).
+  const merged = [];
+  if (absM.status === 'fulfilled' && absM.value) merged.push(...absM.value);
+  if (smart.status === 'fulfilled' && smart.value) merged.push(...smart.value);
+  if (plan.status === 'fulfilled' && plan.value) merged.push(...plan.value);
+  const normName = s => String(s || '').toLowerCase().replace(/ё/g, 'е')
+    .replace(/[^a-zа-яё0-9\s]/gi, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
+  const seen = new Set(); const abs = [];
+  for (const a of merged) {
+    const k = (a.kind || '') + '|' + normName(a.name);
+    if (seen.has(k)) continue; seen.add(k); abs.push(a);
+  }
   res.absences = abs;
   // «Факт дня»: живая сводка + ИИ-вывод (кэш на день, генерится в фоне) + резервный факт.
   let sales = {}; try { sales = await salesSignals(pool, now); } catch (e) {}
