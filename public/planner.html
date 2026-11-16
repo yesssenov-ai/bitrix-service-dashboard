@@ -1571,6 +1571,12 @@ function renderForm(ev){
         <div class="frow"><label class="flbl">Согласующий руководитель</label><select class="fi" id="fLeaveSup"><option value="">—</option></select></div>
         <div class="frow"><label class="flbl">Количество дней</label><input class="fi" id="fLeaveDays" readonly value="${esc(f.leaveDays||'')}" style="background:var(--bg)"></div>
       </div>
+      <div id="meetingBlock" style="display:${curType==='meeting'?'':'none'}">
+        <div class="fsep"></div>
+        <div class="fsec">Встреча · заведётся в Bitrix (воронка «Встречи»)</div>
+        <div class="frow"><label class="flbl">Локация</label><input class="fi" id="fMeetLoc" value="${esc(f.meetLoc||'')}" placeholder="Город / адрес / онлайн…"></div>
+        <div class="frow"><label class="flbl">Комментарий по встрече</label><textarea class="fi" id="fMeetComment" rows="2" style="resize:vertical">${esc(f.meetComment||'')}</textarea></div>
+      </div>
       <div class="frow"><label class="flbl">Примечание</label><textarea class="fi" id="fNote" rows="2" style="resize:vertical">${esc(ev.note||'')}</textarea></div>
     </div>
     <div id="tb-clients" style="display:none">
@@ -1622,6 +1628,7 @@ function selType(t,el){
   const cr=document.getElementById('fConfirmRow'); if(cr) cr.style.display=['trip','meeting','leave'].includes(t)?'':'none';
   const tb=document.getElementById('tripBlock'); if(tb) tb.style.display=t==='trip'?'':'none';
   const lb=document.getElementById('leaveBlock'); if(lb) lb.style.display=t==='leave'?'':'none';
+  const mb=document.getElementById('meetingBlock'); if(mb) mb.style.display=t==='meeting'?'':'none';
   if(t==='leave'){ ensureLeaveMeta(); recalcLeaveDays(); }
 }
 // ── Модуль Отпуска: справочники (типы отпуска + руководители) и расчёт дней ──
@@ -1713,6 +1720,11 @@ async function saveEv(){
     const lt=document.getElementById('fLeaveType'); if(lt&&lt.value) fields.leaveType=lt.value;
     const ls=document.getElementById('fLeaveSup'); if(ls&&ls.value) fields.supervisorBid=ls.value;
     const dd=document.getElementById('fLeaveDays'); if(dd&&dd.value) fields.leaveDays=dd.value;
+  }
+  // Модуль Встречи: локация и комментарий встречи.
+  if(curType==='meeting'){
+    const ml=document.getElementById('fMeetLoc'); if(ml&&ml.value) fields.meetLoc=ml.value;
+    const mc=document.getElementById('fMeetComment'); if(mc&&mc.value) fields.meetComment=mc.value;
   }
   const clients=[]; let i=0;
   while(document.getElementById('cl_n_'+i)){

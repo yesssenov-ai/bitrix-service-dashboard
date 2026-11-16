@@ -142,7 +142,7 @@ router.post('/events', requireAuth(), async (req, res) => {
     if (type === 'leave' && !!confirmed) {
       createLeaveInBitrix(primary.id, resource, start, end, fields).catch(e => console.error('leave→bitrix create (POST):', e.message));
     } else if (type === 'meeting' && !!confirmed) {
-      createMeetingInBitrix(primary.id, resource, start, end, title, note).catch(e => console.error('meeting→bitrix create (POST):', e.message));
+      createMeetingInBitrix(primary.id, resource, start, end, title, note, fields).catch(e => console.error('meeting→bitrix create (POST):', e.message));
     }
     res.json({ events: created.map(rowToEvent) });
   } catch (e) {
@@ -198,15 +198,19 @@ async function createLeaveInBitrix(id, resource, start, end, extra) {
 // краткое название ufCrm_1736508064357, ответственный assignedById.
 const MEET_ETID = 2, MEET_CAT = 4;
 const MEET_DATE = 'ufCrm_1736508416174', MEET_LOC = 'ufCrm_1736508501960', MEET_SHORT = 'ufCrm_1736508064357';
+const MEET_COMMENT = 'ufCrm_1736509203015'; // Общий комментарий по встрече
 // Создать встречу в Bitrix (сделка в воронке «Встречи») из подтверждённого события.
-async function createMeetingInBitrix(id, resource, start, end, title, note) {
+// extra (из fields события) — локация и комментарий встречи.
+async function createMeetingInBitrix(id, resource, start, end, title, note, extra) {
   const engineerId = await resolveBitrixUserId(resource);
   const s = String(start).slice(0, 10);
   const name = String(title || '').trim() || `Встреча ${resource} (${_ddmmyyyy(s)})`;
+  const x = extra || {};
   try {
     const fields = { title: name, categoryId: MEET_CAT, [MEET_DATE]: s, [MEET_SHORT]: name.slice(0, 250) };
     if (engineerId) fields.assignedById = engineerId;
-    const loc = String(note || '').trim(); if (loc) fields[MEET_LOC] = loc.slice(0, 250);
+    const loc = String(x.meetLoc || note || '').trim(); if (loc) fields[MEET_LOC] = loc.slice(0, 250);
+    const cmt = String(x.meetComment || '').trim(); if (cmt) fields[MEET_COMMENT] = cmt.slice(0, 2000);
     const r = await b24('crm.item.add', { entityTypeId: MEET_ETID, fields });
     const item = r && r.result && r.result.item;
     const bid = item && item.id;
@@ -373,7 +377,7 @@ router.put('/events/:id', requireAuth(), async (req, res) => {
     if (type === 'leave' && justConfirmed) {
       createLeaveInBitrix(id, resource, start, end, fields).catch(e => console.error('leave→bitrix create:', e.message));
     } else if (type === 'meeting' && justConfirmed) {
-      createMeetingInBitrix(id, resource, start, end, title, note).catch(e => console.error('meeting→bitrix create:', e.message));
+      createMeetingInBitrix(id, resource, start, end, title, note, fields).catch(e => console.error('meeting→bitrix create:', e.message));
     } else if (bitrixItemId) {
       pushEventToBitrix(bitrixItemId, resource, start, end, type).catch(()=>{});
       // Уведомления о смене инженера/дат — только для сервисных выездов (1058);
