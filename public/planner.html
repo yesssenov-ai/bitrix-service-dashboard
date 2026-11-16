@@ -1503,6 +1503,7 @@ function openEdit(id){
   // Карточные модули раздела «Процессы»: отпуск, заведённый в Bitrix, открываем
   // в его карточке (модуль «Отпуска»), а не в общей форме Планировщика.
   if(ev.type==='leave' && ev.bitrixItemId){ location.href='/leaves.html?id='+ev.bitrixItemId; return; }
+  if(ev.type==='meeting' && ev.bitrixItemId){ location.href='/meetings.html?id='+ev.bitrixItemId; return; }
   curType=ev.type||'trip';
   document.getElementById('pTitle').textContent = canEditRole ? 'Редактировать событие' : 'Событие';
   // Delete only for admin/coordinator; Save only for roles that may edit

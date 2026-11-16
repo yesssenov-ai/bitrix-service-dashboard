@@ -376,6 +376,7 @@ footer{text-align:center;color:var(--text-faint);font-size:11.5px;padding:20px;f
 const MODULES = [
   { code:'PLN', name:'Планировщик', desc:'Календарь занятости инженеров, выезды и командировки, синхронизация с заявками Bitrix.', href:'/planner.html', roles:['admin','coordinator','engineer','viewer'] },
   { code:'LEAVES', name:'Отпуска', desc:'Заявки на отпуск: оформление и согласование по стадиям, синхронизация со смарт-процессом «Отпуска» Bitrix и Планировщиком.', href:'/leaves.html', roles:['admin','coordinator','manager','engineer'] },
+  { code:'MEET', name:'Встречи', desc:'Встречи с клиентами: оформление и ведение по стадиям, синхронизация с воронкой «Встречи» в Сделках Bitrix и Планировщиком.', href:'/meetings.html', roles:['admin','coordinator','manager','engineer'] },
   { code:'SVC', name:'Сервисные заявки', desc:'Учёт и обработка заявок на сервисное обслуживание оборудования.', href:'/index.html', roles:['admin','coordinator','engineer'] },
   { code:'EQP', name:'Карта оборудования', desc:'География установленного оборудования клиентов по всей стране.', href:'/equipment-map.html', roles:['admin','coordinator','engineer'] },
   { code:'LIC', name:'Карта лицензий ГМК', desc:'Реестр недропользователей и лицензий на добычу.', href:'/licenses-map.html', roles:['admin','coordinator'] },
@@ -412,7 +413,7 @@ const ACCOUNT_CARD = { code:'КАБ', name:'Мой кабинет', href:'/accou
 
 const CAT_OF = {
   SALE:'sales', KP:'sales', PROJ:'sales', REL:'sales', CMP:'sales', LIC:'sales',
-  PLN:'process', LEAVES:'process', PROC:'process',
+  PLN:'process', LEAVES:'process', MEET:'process', PROC:'process',
   SVC:'service', EQP:'service', BONUS:'service',
   OPS:'supply', LOG:'supply', STOCK:'supply', NKT:'supply',
   DEBT:'finance', ADV:'finance', CASHFLOW:'finance', CONTR:'finance', QUALITY:'finance',

@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Встречи · ProLabSupport</title>
+<link rel="stylesheet" href="/assets/cup-ui.css">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/favicon-180.png">
+<style>
+:root{ --font:var(--f-ui); }
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.hdr{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;height:56px;padding:0 16px;
+  background:color-mix(in srgb,var(--surface) 86%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.hdr .brand{display:flex;align-items:center;gap:8px;font-weight:800;letter-spacing:-.2px;text-decoration:none;color:var(--text)}
+.hdr .brand img{height:22px}
+.hdr .sub{color:var(--text-3);font-weight:600;font-size:13px;border-left:1px solid var(--line-2);padding-left:12px}
+.hdr .sp{flex:1}
+.btn{display:inline-flex;align-items:center;gap:7px;border-radius:9px;border:1px solid var(--line-2);background:var(--surface);
+  color:var(--text);font:600 13px/1 var(--font);padding:9px 13px;cursor:pointer;transition:.14s;white-space:nowrap}
+.btn:hover{background:var(--surface-2)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.pri:hover{filter:brightness(.96)}
+.btn svg{width:16px;height:16px}
+.back{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);text-decoration:none}
+.back:hover{color:var(--text)}
+.wrap{max-width:980px;margin:0 auto;padding:20px 16px 60px}
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.chips{display:flex;gap:7px;flex-wrap:wrap}
+.chip{border-radius:999px;border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);
+  font:600 12.5px/1 var(--font);padding:7px 13px;cursor:pointer;transition:.14s}
+.chip:hover{background:var(--surface-2)}
+.chip.on{background:var(--text);border-color:var(--text);color:var(--surface)}
+.chip .n{font-family:var(--f-mono,monospace);opacity:.7;margin-left:5px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.lc{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:15px 16px;cursor:pointer;transition:.14s}
+.lc:hover{border-color:var(--line-2);box-shadow:var(--shadow-sm,0 2px 10px rgba(0,0,0,.05));transform:translateY(-1px)}
+.lc .nm{font-weight:700;font-size:15px;margin-bottom:3px}
+.lc .per{color:var(--text-2);font-size:13px;font-variant-numeric:tabular-nums}
+.lc .meta{color:var(--text-3);font-size:12.5px;margin-top:7px;display:flex;gap:10px;flex-wrap:wrap}
+.sb{display:inline-block;font:700 10px/1 var(--font);text-transform:uppercase;letter-spacing:.4px;padding:5px 9px;border-radius:999px;margin-bottom:9px}
+.sb.neutral{background:color-mix(in srgb,var(--text-3) 15%,var(--surface));color:var(--text-2)}
+.sb.amber{background:color-mix(in srgb,#e8821f 16%,var(--surface));color:#b9600f}
+.sb.blue{background:color-mix(in srgb,#2f6bed 15%,var(--surface));color:#2256c9}
+.sb.green{background:color-mix(in srgb,#16a37a 16%,var(--surface));color:#0e7d5c}
+.sb.red{background:color-mix(in srgb,#e5484d 15%,var(--surface));color:#c0343a}
+.empty{text-align:center;color:var(--text-3);padding:60px 0;font-size:14px}
+.skel{height:92px;border-radius:14px;background:linear-gradient(90deg,var(--surface),var(--surface-2),var(--surface));background-size:200% 100%;animation:sh 1.2s linear infinite;border:1px solid var(--line)}
+@keyframes sh{to{background-position:-200% 0}}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.28);backdrop-filter:blur(2px);z-index:60;display:none;justify-content:flex-end}
+.ov.open{display:flex}
+.pan{width:min(460px,100vw);height:100%;background:var(--surface);box-shadow:-4px 0 30px rgba(0,0,0,.14);display:flex;flex-direction:column;animation:slide .18s ease}
+@keyframes slide{from{transform:translateX(24px);opacity:.6}to{transform:none;opacity:1}}
+.ph{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.ph .t{font-weight:800;font-size:16px;flex:1}
+.pb{flex:1;overflow-y:auto;padding:16px}
+.pf{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;background:var(--surface-2)}
+.x{width:32px;height:32px;border-radius:8px;border:1px solid var(--line-2);background:var(--surface);cursor:pointer;color:var(--text-2);font-size:17px;display:flex;align-items:center;justify-content:center}
+.fl{display:block;font:700 10.5px/1 var(--font);text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin:0 0 6px}
+.fg{margin-bottom:14px}
+.fg2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.in{width:100%;background:var(--bg);border:1px solid var(--line-2);border-radius:9px;padding:10px 12px;font:500 15px/1.2 var(--font);color:var(--text);outline:none;transition:border .12s}
+.in:focus{border-color:var(--accent)}
+textarea.in{resize:vertical;min-height:62px}
+select.in{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239a9a9a' stroke-width='2.4'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
+.dl{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.dl .k{color:var(--text-3);font-size:13px}
+.dl .v{font-weight:600;font-size:13.5px;text-align:right}
+.stageflow{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 2px}
+.sp2{font:600 11px/1 var(--font);padding:6px 10px;border-radius:999px;border:1px solid var(--line-2);color:var(--text-3);background:var(--surface)}
+.sp2.cur{background:var(--text);border-color:var(--text);color:var(--surface)}
+.sp2.done{background:color-mix(in srgb,#16a37a 14%,var(--surface));border-color:transparent;color:#0e7d5c}
+.lnk{display:inline-flex;align-items:center;gap:6px;color:var(--accent);text-decoration:none;font-weight:600;font-size:13px}
+.lnk:hover{text-decoration:underline}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:var(--surface);padding:11px 18px;border-radius:10px;font:600 13px/1 var(--font);z-index:90;opacity:0;transition:.2s;pointer-events:none;box-shadow:0 6px 24px rgba(0,0,0,.2)}
+.toast.show{opacity:1}
+@media(max-width:560px){
+  .wrap{padding:16px 14px 50px}
+  .cards{grid-template-columns:1fr}
+  .hdr .sub{display:none}
+  .fg2{grid-template-columns:1fr}
+  .pan{width:100vw}
+}
+</style>
+</head>
+<body>
+<header class="hdr">
+  <a class="back" href="/planner.html" title="Планировщик">&#8592;</a>
+  <a class="brand" href="/"><img src="/assets/logo-icon.png" alt="">ProLabSupport</a>
+  <span class="sub">Встречи</span>
+  <span class="sp"></span>
+  <button class="btn pri" onclick="openCreate()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Новая встреча</button>
+</header>
+
+<div class="wrap">
+  <div class="toolbar"><div class="chips" id="chips"></div></div>
+  <div class="cards" id="cards"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+</div>
+
+<div class="ov" id="ov" onclick="if(event.target===this)closePanel()">
+  <div class="pan">
+    <div class="ph"><span class="t" id="panTitle">Встреча</span><button class="x" onclick="closePanel()">&times;</button></div>
+    <div class="pb" id="panBody"></div>
+    <div class="pf" id="panFoot"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="/assets/cup-theme.js" defer></script>
+<script>
+let ITEMS=[], STAGES=[], STAFF=[], FILTER='all', CUR=null;
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const dmy=d=>{ if(!d)return'—'; const[y,m,dd]=String(d).slice(0,10).split('-'); return dd+'.'+m+'.'+y; };
+const staffName=bid=>{ const s=STAFF.find(x=>String(x.bid)===String(bid)); return s?s.name:(bid?('#'+bid):'—'); };
+const semOf=id=>{ const s=STAGES.find(x=>x.id===id); return s?s.sem:null; };
+const clsOf=id=>{ const sem=semOf(id); return sem==='S'?'green':sem==='F'?'red':'amber'; };
+function toast(t){ const el=document.getElementById('toast'); el.textContent=t; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2200); }
+
+async function boot(){
+  try{
+    const [l,m]=await Promise.all([ fetch('/api/planner/meetings').then(r=>r.json()), fetch('/api/planner/leave-meta').then(r=>r.json()) ]);
+    ITEMS=l.items||[]; STAGES=l.stages||[]; STAFF=(m&&m.staff)||[];
+  }catch(e){ document.getElementById('cards').innerHTML='<div class="empty">Не удалось загрузить. Проверьте доступ к Bitrix.</div>'; return; }
+  renderChips(); renderList();
+  const qid=new URLSearchParams(location.search).get('id'); if(qid) openDetail(parseInt(qid,10));
+}
+function renderChips(){
+  const cnt=id=>ITEMS.filter(i=>i.stageId===id).length;
+  let h=`<button class="chip ${FILTER==='all'?'on':''}" onclick="setFilter('all')">Все<span class="n">${ITEMS.length}</span></button>`;
+  for(const s of STAGES){ const n=cnt(s.id); if(!n && s.sem==='F')continue;
+    h+=`<button class="chip ${FILTER===s.id?'on':''}" onclick="setFilter('${s.id}')">${esc(s.name)}<span class="n">${n}</span></button>`; }
+  document.getElementById('chips').innerHTML=h;
+}
+function setFilter(f){ FILTER=f; renderChips(); renderList(); }
+function renderList(){
+  const list=FILTER==='all'?ITEMS:ITEMS.filter(i=>i.stageId===FILTER);
+  const el=document.getElementById('cards');
+  if(!list.length){ el.innerHTML='<div class="empty">Пока нет встреч в этой стадии.</div>'; return; }
+  el.innerHTML=list.map(i=>{
+    const loc=i.loc?`<span>${esc(i.loc)}</span>`:'';
+    return `<div class="lc" onclick="openDetail(${i.id})">
+      <span class="sb ${clsOf(i.stageId)}">${esc(i.stage)}</span>
+      <div class="nm">${esc(i.title||'Встреча')}</div>
+      <div class="per">${dmy(i.date)}${i.assignedById?(' · '+esc(staffName(i.assignedById))):''}</div>
+      <div class="meta">${loc}${i.plannerId?'<span>В планировщике</span>':''}</div>
+    </div>`;
+  }).join('');
+}
+
+function openCreate(){
+  CUR=null;
+  document.getElementById('panTitle').textContent='Новая встреча';
+  const sOpts=['<option value="">—</option>',...STAFF.map(s=>`<option value="${esc(s.name)}">${esc(s.name)}</option>`)].join('');
+  document.getElementById('panBody').innerHTML=`
+    <div class="fg"><label class="fl">Тема встречи</label><input class="in" id="mTitle" placeholder="С кем и о чём…"></div>
+    <div class="fg2">
+      <div><label class="fl">Дата</label><input class="in" type="date" id="mDate"></div>
+      <div><label class="fl">Ответственный</label><select class="in" id="mRes">${sOpts}</select></div>
+    </div>
+    <div class="fg"><label class="fl">Локация</label><input class="in" id="mLoc" placeholder="Город / адрес / онлайн…"></div>
+    <div class="fg"><label class="fl">Комментарий</label><textarea class="in" id="mComment" placeholder="Детали встречи…"></textarea></div>`;
+  document.getElementById('panFoot').innerHTML=`<button class="btn" onclick="closePanel()">Отмена</button><button class="btn pri" id="mSave" onclick="saveCreate()">Создать</button>`;
+  document.getElementById('ov').classList.add('open');
+}
+async function saveCreate(){
+  const title=document.getElementById('mTitle').value.trim();
+  const date=document.getElementById('mDate').value;
+  if(!title||!date){ toast('Укажите тему и дату'); return; }
+  const body={ title, date, resource:document.getElementById('mRes').value||'', loc:document.getElementById('mLoc').value||'', comment:document.getElementById('mComment').value||'' };
+  const btn=document.getElementById('mSave'); btn.disabled=true; btn.textContent='Создаю…';
+  try{
+    const r=await fetch('/api/planner/meetings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json();
+    if(!r.ok||!d.ok){ toast(d.error||'Не удалось'); btn.disabled=false; btn.textContent='Создать'; return; }
+    closePanel(); toast('Встреча создана — в Bitrix и Планировщике'); boot();
+  }catch(e){ toast('Ошибка сети'); btn.disabled=false; btn.textContent='Создать'; }
+}
+
+async function openDetail(id){
+  CUR=ITEMS.find(i=>i.id===id)||{id};
+  document.getElementById('panTitle').textContent='Встреча';
+  document.getElementById('panBody').innerHTML='<div class="empty">Загрузка…</div>';
+  document.getElementById('panFoot').innerHTML='';
+  document.getElementById('ov').classList.add('open');
+  try{ const d=await fetch('/api/planner/meetings/'+id).then(r=>r.json()); if(d.item){ CUR=d.item; STAGES=d.stages||STAGES; } }catch(e){}
+  renderDetail();
+}
+function renderDetail(){
+  const i=CUR; const idx=STAGES.findIndex(s=>s.id===i.stageId);
+  const flow=STAGES.filter(s=>s.sem!=='F').map(s=>{
+    const myIdx=STAGES.findIndex(x=>x.id===s.id);
+    const cls=s.id===i.stageId?'cur':(myIdx<idx?'done':''); return `<span class="sp2 ${cls}">${esc(s.name)}</span>`;
+  }).join('');
+  document.getElementById('panBody').innerHTML=`
+    <div style="font-weight:800;font-size:17px;margin-bottom:2px">${esc(i.title||'Встреча')}</div>
+    <div style="color:var(--text-2);font-size:13.5px;margin-bottom:14px">${dmy(i.date)}${i.assignedById?(' · '+esc(staffName(i.assignedById))):''}</div>
+    <div class="fl" style="margin-bottom:7px">Стадия</div>
+    <div class="stageflow">${flow}</div>
+    <div style="margin-top:14px">
+      <div class="dl"><span class="k">Локация</span><span class="v">${esc(i.loc||'—')}</span></div>
+      <div class="dl"><span class="k">Текущая стадия</span><span class="v">${esc(i.stage)}</span></div>
+      ${i.comment?`<div class="dl"><span class="k">Комментарий</span><span class="v" style="max-width:60%;font-weight:500">${esc(i.comment)}</span></div>`:''}
+    </div>
+    <div style="margin-top:16px">${i.plannerId?`<a class="lnk" href="/planner.html">В Планировщике ↗</a>`:''}</div>`;
+  const next=STAGES[idx+1]; let foot='';
+  const fail=STAGES.find(s=>s.sem==='F');
+  if(next && semOf(i.stageId)!=='S' && semOf(i.stageId)!=='F'){
+    if(fail) foot+=`<button class="btn" onclick="moveStage('${esc(fail.id)}')">Отменить</button>`;
+    foot+=`<button class="btn pri" onclick="moveStage('${esc(next.id)}')">→ ${esc(next.name)}</button>`;
+  }
+  document.getElementById('panFoot').innerHTML=foot||`<button class="btn" onclick="closePanel()">Закрыть</button>`;
+}
+async function moveStage(stageId){
+  if(!stageId||!CUR)return;
+  try{
+    const r=await fetch('/api/planner/meetings/'+CUR.id+'/stage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({stageId})});
+    const d=await r.json();
+    if(!r.ok||!d.ok){ toast(d.error||'Не удалось'); return; }
+    CUR.stageId=d.stageId; CUR.stage=d.stage;
+    const it=ITEMS.find(x=>x.id===CUR.id); if(it){ it.stageId=d.stageId; it.stage=d.stage; }
+    renderDetail(); renderChips(); renderList(); toast('Стадия: '+d.stage);
+  }catch(e){ toast('Ошибка сети'); }
+}
+function closePanel(){ document.getElementById('ov').classList.remove('open'); }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape')closePanel(); });
+boot();
+</script>
+</body>
+</html>

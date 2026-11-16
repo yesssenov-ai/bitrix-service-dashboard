@@ -843,5 +843,84 @@ router.post('/leaves', requireAuth(), express.json(), async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Карточный модуль «Встречи» (раздел «Процессы») ────────────────────────
+// Данные — сделки Bitrix в воронке 4 «Встречи»; стадии тянем из Bitrix (кэш 1ч).
+let _meetStages = null, _meetStagesAt = 0;
+async function getMeetStages() {
+  if (_meetStages && Date.now() - _meetStagesAt < 3600e3) return _meetStages;
+  try {
+    const r = await b24('crm.status.list', { filter: { ENTITY_ID: 'DEAL_STAGE_' + MEET_CAT }, order: { SORT: 'ASC' } });
+    const rows = (r && r.result) || [];
+    if (rows.length) { _meetStages = rows.map(s => ({ id: s.STATUS_ID, name: s.NAME, sem: s.SEMANTICS })); _meetStagesAt = Date.now(); }
+  } catch (e) { /* оставим прежний кэш */ }
+  return _meetStages || [];
+}
+function mapMeetItem(it, plannerId, stageName) {
+  return {
+    id: it.id, title: it.title, assignedById: it.assignedById || null,
+    stageId: it.stageId, stage: stageName || it.stageId,
+    date: _bxDate(it[MEET_DATE]), loc: it[MEET_LOC] || '', comment: it[MEET_COMMENT] || '',
+    companyId: it.companyId || null, plannerId: plannerId || null,
+  };
+}
+router.get('/meetings', requireAuth(), async (req, res) => {
+  try {
+    const stages = await getMeetStages(); const sn = Object.fromEntries(stages.map(s => [s.id, s.name]));
+    let items = [];
+    try { const r = await b24('crm.item.list', { entityTypeId: MEET_ETID, filter: { categoryId: MEET_CAT }, order: { id: 'desc' }, select: ['*', 'uf_*'] }); items = (r && r.result && r.result.items) || []; }
+    catch (e) { return res.status(502).json({ error: 'Bitrix недоступен: ' + e.message }); }
+    const ids = items.map(i => i.id).filter(Boolean); const links = {};
+    if (ids.length) { try { const lr = await pool.query('SELECT bitrix_item_id, id FROM ticketsmodule_planner_events WHERE bitrix_item_id = ANY($1::int[])', [ids]); lr.rows.forEach(x => { links[x.bitrix_item_id] = x.id; }); } catch (e) {} }
+    res.json({ items: items.map(i => mapMeetItem(i, links[i.id], sn[i.stageId])), stages });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.get('/meetings/:id(\\d+)', requireAuth(), async (req, res) => {
+  try {
+    const stages = await getMeetStages(); const sn = Object.fromEntries(stages.map(s => [s.id, s.name]));
+    const r = await b24('crm.item.get', { entityTypeId: MEET_ETID, id: parseInt(req.params.id, 10) });
+    const it = r && r.result && r.result.item;
+    if (!it) return res.status(404).json({ error: 'Не найдено' });
+    let plannerId = null;
+    try { const lr = await pool.query('SELECT id FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1 LIMIT 1', [it.id]); if (lr.rows.length) plannerId = lr.rows[0].id; } catch (e) {}
+    res.json({ item: mapMeetItem(it, plannerId, sn[it.stageId]), stages });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.post('/meetings/:id(\\d+)/stage', requireAuth(), express.json(), async (req, res) => {
+  try {
+    const stageId = String((req.body || {}).stageId || '');
+    const stages = await getMeetStages(); const st = stages.find(s => s.id === stageId);
+    if (!st) return res.status(400).json({ error: 'Неверная стадия' });
+    await b24('crm.item.update', { entityTypeId: MEET_ETID, id: parseInt(req.params.id, 10), fields: { stageId } });
+    res.json({ ok: true, stageId, stage: st.name });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Создание встречи из карточки: сделка в воронке 4 + блок в Планировщике.
+router.post('/meetings', requireAuth(), express.json(), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const resource = String(b.resource || '').trim();
+    const date = String(b.date || '').slice(0, 10);
+    const name = String(b.title || '').trim();
+    if (!name || !date) return res.status(400).json({ error: 'Нужны тема и дата встречи' });
+    const engineerId = resource ? await resolveBitrixUserId(resource) : null;
+    const fields = { title: name, categoryId: MEET_CAT, [MEET_DATE]: date, [MEET_SHORT]: name.slice(0, 250) };
+    if (engineerId) fields.assignedById = engineerId;
+    if (b.loc) fields[MEET_LOC] = String(b.loc).slice(0, 250);
+    if (b.comment) fields[MEET_COMMENT] = String(b.comment).slice(0, 2000);
+    let bid = null;
+    try { const r = await b24('crm.item.add', { entityTypeId: MEET_ETID, fields }); bid = (r && r.result && r.result.item && r.result.item.id) || null; }
+    catch (e) { return res.status(502).json({ error: 'Bitrix: ' + e.message }); }
+    try {
+      const evFields = JSON.stringify({ meetLoc: b.loc || null, meetComment: b.comment || null });
+      const ev = await pool.query(
+        `INSERT INTO ticketsmodule_planner_events (group_id, resource, title, type, start_at, end_at, all_day, confirmed, fields, bitrix_item_id, source, created_by)
+         VALUES (0,$1,$2,'meeting',$3::timestamp AT TIME ZONE '${TZ}',$4::timestamp AT TIME ZONE '${TZ}',false,true,$5,$6,'manual',$7) RETURNING id`,
+        [resource || name, name, date + 'T10:00', date + 'T11:00', evFields, bid, (req.user && req.user.username) || null]);
+      await pool.query('UPDATE ticketsmodule_planner_events SET group_id=$1 WHERE id=$1', [ev.rows[0].id]);
+    } catch (e) { console.error('meeting card → planner block:', e.message); }
+    res.json({ ok: true, id: bid });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = { router, rowToEvent, SELECT_COLS, TZ, syncStaffFromBitrix, fetchAllActiveUsers, computeSyncHash, resolveBitrixUserId };
 

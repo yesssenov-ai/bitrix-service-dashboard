@@ -195,6 +195,7 @@ app.get('/knowledge.html', requirePageAuth(['admin']), (_, res) => res.sendFile(
 app.get('/index.html', requireModule('SVC'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/planner.html', requireModule('PLN'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'planner.html')));
 app.get('/leaves.html', requireModule('PLN'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'leaves.html')));
+app.get('/meetings.html', requireModule('PLN'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'meetings.html')));
 app.get('/equipment-map.html', requireModule('EQP'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'equipment-map.html')));
 app.get('/licenses-map.html', requireModule('LIC'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'licenses-map.html')));
 app.get('/relations.html', requireModule('REL'), (_, res) => res.sendFile(path.join(__dirname, 'public', 'relations.html')));
