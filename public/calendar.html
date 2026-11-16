@@ -223,10 +223,36 @@ svg{display:block}
 .side-ov{display:none;position:fixed;inset:0;background:rgba(10,15,25,.3);z-index:55}
 .side-ov.on{display:block}
 @media(max-width:860px){
-  .side{display:none;position:fixed;top:50px;left:0;bottom:0;z-index:60;box-shadow:var(--shadow-pop)}
+  /* У календаря своя навигация (строка сверху + бургер + боковая панель), поэтому
+     общую мобильную оболочку ЦУП на этой странице гасим, чтобы ничего не наезжало. */
+  #cupMobNav,#cupTopbar,.cup-greet,.cup-homefav,.cup-topacts,.cup-burger,.cup-burger-float,#pls-toolbar{display:none!important}
+  .topstrip,.topstrip.cup-nativehdr-hide{display:flex!important}
+  body.cup-has-topbar{padding-top:0!important}
+
+  /* Боковая панель — выезжающий оверлей по бургеру, со скроллом и поверх всего. */
+  .side{display:none;position:fixed;top:50px;left:0;bottom:0;width:min(300px,86vw);z-index:70;box-shadow:var(--shadow-pop);overflow:auto;padding:14px 12px;gap:14px}
   .side.open{display:flex}
+  .side-ov{z-index:65}
   .ts-burger{display:inline-flex}
-  .bar h2{min-width:0;font-size:17px}.bar .today{display:none}
+
+  /* Панель инструментов — переносим управление на 2-ю строку, ничего не наезжает. */
+  .bar{flex-wrap:wrap;gap:8px 10px;padding:10px 14px}
+  .bar .today{display:none}
+  .bar h2{min-width:0;font-size:16px}
+  .bar .sp{flex-basis:100%;height:0;min-width:0;margin:0}
+  .seg{flex-wrap:wrap}
+  .seg button{padding:7px 12px;font-size:12px}
+}
+@media(max-width:560px){
+  .ts-brand .sub{display:none}
+  .ts-brand b{font-size:13px}
+  .ts-exit .ts-exit-lbl{display:none}
+  .ts-exit{padding:7px 9px}
+  .ts-exit svg{margin:0}
+  .bar{padding:9px 12px;gap:7px 8px}
+  .bar h2{font-size:15px}
+  .bar .chev button{width:28px;height:28px}
+  .seg button{padding:6px 10px}
 }
 </style>
 </head>
@@ -235,10 +261,10 @@ svg{display:block}
   <button class="ts-burger" id="tsBurger" aria-label="Боковая панель"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
   <a class="ts-brand" href="/portal.html" title="На портал">
     <span class="m"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg></span>
-    <span><b>ProLab · Календарь</b><span>ЦУП · ProLabSupport</span></span>
+    <span><b>ProLab · Календарь</b><span class="sub">ЦУП · ProLabSupport</span></span>
   </a>
   <div class="ts-sp"></div>
-  <a class="ts-exit" href="/portal.html" title="Вернуться на портал"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>На портал</a>
+  <a class="ts-exit" href="/portal.html" title="Вернуться на портал"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg><span class="ts-exit-lbl">На портал</span></a>
 </header>
 <div class="side-ov" id="sideOv"></div>
 <div class="app">
