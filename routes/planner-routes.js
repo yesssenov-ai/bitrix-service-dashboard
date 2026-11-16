@@ -978,5 +978,39 @@ router.post('/trips/:id(\\d+)/stage', requireAuth(), express.json(), async (req,
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Probe полей командировки (1074) — для сборки формы создания (Фаза 2) ──
+// Отдаёт структуру всех полей (тип, обязательность, enum-значения, настройки
+// привязок), пример элемента (?id=NN) и явную раскладку 12 обязательных кодов,
+// чтобы понять, что из них enum/iblock/crm-привязка, прежде чем строить форму.
+const TRIP_DEPT = 'ufCrm12_1732866897', TRIP_SUPERVISOR = 'ufCrm12_1732866961';
+const TRIP_CONTRACT = 'ufCrm12_1732867028', TRIP_CITY = 'ufCrm12_1732867174';
+const TRIP_TRANSPORT = 'ufCrm12_1732867253410', TRIP_TICKETS = 'ufCrm12_1732867331114';
+const TRIP_LODGING = 'ufCrm12_1732867384914';
+router.get('/trip-fields', requireAuth(), requirePlannerAdmin, async (req, res) => {
+  try {
+    const out = {};
+    try {
+      const fr = await b24('crm.item.fields', { entityTypeId: TRIP_ETID });
+      const f = (fr && fr.result && fr.result.fields) || {};
+      out.fields = Object.entries(f).map(([code, m]) => ({
+        code, title: (m && m.title) || '', type: (m && m.type) || '',
+        required: !!(m && m.isRequired), multiple: !!(m && m.isMultiple),
+        items: (m && m.items) ? m.items.map(i => ({ id: i.ID != null ? i.ID : i.id, name: i.VALUE != null ? i.VALUE : i.value })) : undefined,
+        settings: (m && m.settings) || undefined,
+      }));
+      const KEY = { dept: TRIP_DEPT, supervisor: TRIP_SUPERVISOR, contract: TRIP_CONTRACT,
+        purpose: TRIP_PURPOSE, city: TRIP_CITY, dest: TRIP_DEST, transport: TRIP_TRANSPORT,
+        route: TRIP_ROUTE, start: TRIP_START, end: TRIP_END, tickets: TRIP_TICKETS, lodging: TRIP_LODGING };
+      out.required12 = Object.fromEntries(Object.entries(KEY).map(([k, code]) => [k, out.fields.find(x => x.code === code) || { code, missing: true }]));
+    } catch (e) { out.fieldsError = e.message; }
+    const id = parseInt(req.query.id, 10) || null;
+    if (id) {
+      try { const ir = await b24('crm.item.get', { entityTypeId: TRIP_ETID, id }); out.sample = (ir && ir.result && ir.result.item) || null; }
+      catch (e) { out.sampleError = e.message; }
+    }
+    res.json(out);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = { router, rowToEvent, SELECT_COLS, TZ, syncStaffFromBitrix, fetchAllActiveUsers, computeSyncHash, resolveBitrixUserId };
 
