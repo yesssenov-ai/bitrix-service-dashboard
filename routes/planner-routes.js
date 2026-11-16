@@ -548,5 +548,56 @@ router.get('/notifications/:bitrixItemId', requireAuth(), async (req, res) => {
   }
 });
 
+// ── Discovery (read-only): структура смарт-процессов для маппинга полей ──────
+// Нужен, чтобы точно понять, в какие поля садить сотрудника/даты/заголовок при
+// создании Командировки (1058) / Отпуска / Встречи из Планировщика. Ничего не
+// пишет в Bitrix — только читает type.list / item.fields / status.list / sample.
+async function probeProcess(reName) {
+  try {
+    const tr = await b24('crm.type.list', {});
+    const types = (tr && tr.result && tr.result.types) || [];
+    const t = types.find(x => reName.test(x.title || ''));
+    if (!t) return { found: false, searched: reName.source, allTypes: types.map(x => ({ id: x.entityTypeId, title: x.title })) };
+    const etid = t.entityTypeId;
+    let fields = [];
+    try {
+      const fr = await b24('crm.item.fields', { entityTypeId: etid });
+      const f = (fr && fr.result && fr.result.fields) || {};
+      fields = Object.entries(f).map(([code, m]) => ({ code, title: (m && m.title) || '', type: (m && m.type) || '', required: !!(m && m.isRequired) }));
+    } catch (e) { fields = [{ error: e.message }]; }
+    let categories = [];
+    try {
+      const cr = await b24('crm.category.list', { entityTypeId: etid });
+      categories = ((cr && cr.result && cr.result.categories) || []).map(c => ({ id: c.id, name: c.name }));
+    } catch (e) {}
+    let stages = [];
+    try {
+      let start = 0, g = 0;
+      while (g++ < 10) {
+        const sr = await b24('crm.status.list', { start });
+        for (const s of (sr && sr.result) || []) {
+          if (String(s.ENTITY_ID || '').indexOf('DYNAMIC_' + etid + '_') === 0) stages.push({ id: s.STATUS_ID, name: s.NAME });
+        }
+        const n = sr && sr.next; if (n === undefined || n === null) break; start = n;
+      }
+    } catch (e) {}
+    let sample = null;
+    try {
+      const ir = await b24('crm.item.list', { entityTypeId: etid, order: { id: 'desc' }, start: 0 });
+      sample = ((ir && ir.result && ir.result.items) || [])[0] || null;
+    } catch (e) {}
+    return { found: true, entityTypeId: etid, title: t.title, categories, stages, fields, sample };
+  } catch (e) { return { found: false, error: e.message, searched: reName.source }; }
+}
+router.get('/bitrix-probe', requireAuth(), requirePlannerAdmin, async (req, res) => {
+  try {
+    res.json({
+      trip: await probeProcess(/командиров/i),
+      leave: await probeProcess(/отпуск/i),
+      meeting: await probeProcess(/встреч/i),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = { router, rowToEvent, SELECT_COLS, TZ, syncStaffFromBitrix, fetchAllActiveUsers, computeSyncHash, resolveBitrixUserId };
 
