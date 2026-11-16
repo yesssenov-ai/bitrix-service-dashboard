@@ -294,6 +294,9 @@ async function absencesToday(pool, now) {
 async function plannerAbsences(pool, now) {
   try {
     const iso = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Almaty' }).format(now || new Date());
+    // Планировщик — единый источник: сюда попадают и командировки/обучение, и
+    // отпуска (в т.ч. оформленные в Bitrix). Тип 'leave'/'dayoff' → отсутствие как
+    // «отпуск/отгул», остальное (trip/train/meeting) → как «командировка/выезд».
     const { rows } = await pool.query(
       `SELECT resource, title, type,
               to_char((start_at AT TIME ZONE 'Asia/Almaty'), 'YYYY-MM-DD') AS from_date,
@@ -305,8 +308,9 @@ async function plannerAbsences(pool, now) {
     for (const r of rows) {
       const name = String(r.resource || '').trim();
       if (!name) continue;
-      // leave → отпуск; trip/train (обучение) → командировка/выезд.
-      const kind = r.type === 'leave' ? 'vacation' : 'trip';
+      // Встреча (meeting) — это рабочее событие, не отсутствие: не показываем в панели.
+      if (r.type === 'meeting') continue;
+      const kind = (r.type === 'leave' || r.type === 'dayoff') ? 'vacation' : 'trip';
       out.push({ name, kind, from_date: r.from_date, to_date: r.to_date,
         dest: String(r.title || '').trim() });
     }

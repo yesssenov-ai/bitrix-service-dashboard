@@ -208,6 +208,8 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 .tc-trip.on{background:#d4a800;color:#fff;}
 .tc-leave.on{background:#2980b9;color:#fff;}
 .tc-train.on{background:#6b4c35;color:#fff;}
+.tc-meeting.on{background:#c43d80;color:#fff;}
+.tc-dayoff.on{background:#0e9488;color:#fff;}
 
 /* Tabs */
 .tabs{display:flex;border-bottom:1px solid var(--stroke);margin-bottom:12px;}
@@ -315,12 +317,6 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
   <span class="hnav-link active">Планировщик</span>
   <div class="hdiv"></div>
   <div class="hdr-r">
-    <div class="leg">
-      <div class="leg-i"><div class="leg-d" style="background:#f5c842"></div>Командировка</div>
-      <div class="leg-i"><div class="leg-d" style="background:#4caf7d"></div>Подтв.</div>
-      <div class="leg-i"><div class="leg-d" style="background:#64b5e8"></div>Отпуск</div>
-      <div class="leg-i"><div class="leg-d" style="background:#8B6547"></div>Обучение</div>
-    </div>
     <button class="hbtn" onclick="openReports()">Отчёты</button>
     <button class="hbtn" onclick="openAdmin()">Управление</button>
     <button class="hbtn" onclick="openDF()">Data&nbsp;Fields</button>
@@ -416,6 +412,8 @@ const ET = {
   trip_confirm: {label:'Командировка (подтв.)',  icon:'✈️', bg:'#4caf7d', fg:'#0d2e1a', bd:'#2e8a55'},
   leave:        {label:'Отпуск',                 icon:'🏖', bg:'#64b5e8', fg:'#0b2540', bd:'#2980b9'},
   train:        {label:'Обучение',               icon:'📚', bg:'#8B6547', fg:'#fff',    bd:'#6b4c35'},
+  meeting:      {label:'Встреча',                icon:'🤝', bg:'#e0569b', fg:'#fff',    bd:'#c43d80'},
+  dayoff:       {label:'Отгул',                  icon:'☕', bg:'#14b8a6', fg:'#06352f', bd:'#0e9488'},
 };
 
 const AREAS = ['Абайская','Азербайджан','Акмолинская','Актюбинская','Алматинская','Алматы',
@@ -1504,7 +1502,7 @@ function renderForm(ev){
   const areaOpts=['<option value="">Выберите…</option>',...AREAS.map(a=>`<option ${f.df1===a?'selected':''}>${esc(a)}</option>`)].join('');
   const svcOpts=['<option value="">Выберите…</option>',...SVC.map(s=>`<option ${f.df3===s?'selected':''}>${esc(s)}</option>`)].join('');
   const instrDatalist=INSTRUMENTS.map(x=>`<option value="${esc(x)}">`).join('');
-  const chips=['trip','leave','train'].map(k=>{const v=ET[k];
+  const chips=['trip','meeting','leave','dayoff','train'].map(k=>{const v=ET[k];
     return `<button class="tc tc-${k}${curType===k?' on':''}" onclick="selType('${k}',this)">${v.icon} ${v.label}</button>`;
   }).join('');
 
@@ -1555,7 +1553,7 @@ function renderForm(ev){
         <div><label class="flbl">Конец</label><input class="fi" type="datetime-local" id="fE" value="${ev.end||''}" step="1800"></div>
       </div>
       <label class="fchk frow"><input type="checkbox" id="fAD" ${ev.allDay?'checked':''}> Весь день</label>
-      ${curType==='trip' ? `<label class="fchk frow" id="fConfirmRow" style="margin-top:6px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:7px 10px;color:#15803d;font-weight:600"><input type="checkbox" id="fConfirm" ${ev.confirmed?'checked':''}> ✅ Подтверждено (блок станет зелёным)</label>` : `<div id="fConfirmRow" style="display:none"></div>`}
+      ${['trip','meeting','leave'].includes(curType) ? `<label class="fchk frow" id="fConfirmRow" style="margin-top:6px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:7px 10px;color:#15803d;font-weight:600"><input type="checkbox" id="fConfirm" ${ev.confirmed?'checked':''}> ✅ Подтверждено${curType==='trip'?' (блок станет зелёным)':' сотрудником'}</label>` : `<div id="fConfirmRow" style="display:none"></div>`}
       <div class="fsep"></div>
       <div class="fsec">Место и тип работы</div>
       <div class="frow"><label class="flbl">Область (Каз)/Страна <span class="req">*</span></label><select class="fi" id="f_df1">${areaOpts}</select></div>
@@ -2386,8 +2384,9 @@ function repComputeData(){
         if (e<from || s>to) return;
         const days = Math.max(0, Math.round((Math.min(+e,+to)-Math.max(+s,+from))/dayMs))+1;
         if (ev.type==='trip') { if (ev.confirmed) tripC+=days; else trip+=days; }
-        else if (ev.type==='leave') leave+=days;
+        else if (ev.type==='leave'||ev.type==='dayoff') leave+=days;
         else if (ev.type==='train') train+=days;
+        // Встречи (meeting) — рабочие события, в загрузку выездов/отсутствий не считаем.
       });
       const total = trip+tripC+leave+train;
       const load = Math.min(100, Math.round(total/totalPeriodDays*100));
