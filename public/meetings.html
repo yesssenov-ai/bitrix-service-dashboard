@@ -12,6 +12,9 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);-webkit-font-smoothing:antialiased}
 a{color:inherit}
+/* у страницы своя шапка — общий плавающий тулбар/шелл ЦУП прячем, чтобы не наезжал */
+#pls-toolbar,#cupMobNav,#cupTopbar,.cup-greet,.cup-homefav,.cup-topacts,.cup-burger,.cup-burger-float{display:none!important}
+body.cup-has-topbar{padding-top:0!important}
 .hdr{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;height:56px;padding:0 16px;background:color-mix(in srgb,var(--surface) 86%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
 .hdr .brand{display:flex;align-items:center;gap:8px;font-weight:800;letter-spacing:-.2px;text-decoration:none;color:var(--text)}
 .hdr .brand img{height:22px}
@@ -74,11 +77,17 @@ a{color:inherit}
 .col .ch .cnt{margin-left:auto;font:600 11px/1 var(--f-mono,monospace);color:var(--text-3);background:var(--surface);padding:4px 8px;border-radius:999px;border:1px solid var(--line)}
 .kc{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 13px;margin-bottom:9px;cursor:pointer;transition:.14s}
 .kc:hover{box-shadow:0 4px 14px rgba(16,24,40,.07);transform:translateY(-1px)}
+.kc[draggable=true]{cursor:grab}.kc.dragging{opacity:.45;cursor:grabbing}
+.col.over{outline:2px dashed var(--accent);outline-offset:-2px;background:color-mix(in srgb,var(--accent) 7%,var(--surface-2))}
 .kc .t{font-weight:600;font-size:13.5px;line-height:1.35;margin-bottom:9px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .kc .m{display:flex;align-items:center;gap:8px}
 .kc .av{width:22px;height:22px;font-size:10px}
 .kc .m .nm2{font-size:11.5px;color:var(--text-2)}
 .kc .m .dt{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--text-3);font-size:12px}
+.mv{display:flex;gap:6px;margin-top:10px;padding-top:9px;border-top:1px solid var(--line)}
+.mvb{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:5px;height:28px;border:1px solid var(--line-2);background:var(--surface);border-radius:8px;color:var(--text-2);font:600 11.5px/1 var(--font);cursor:pointer;transition:.12s}
+.mvb:hover{background:var(--surface-2);color:var(--text)}
+.mvb svg{width:13px;height:13px}.mvb.hid{visibility:hidden}
 .empty{text-align:center;color:var(--text-3);padding:60px 0;font-size:14px}
 .skel{height:120px;border-radius:18px;background:linear-gradient(90deg,var(--surface),var(--surface-2),var(--surface));background-size:200% 100%;animation:sh 1.2s linear infinite;border:1px solid var(--line)}
 @keyframes sh{to{background-position:-200% 0}}
@@ -208,16 +217,41 @@ function renderList(list){
 }
 function renderBoard(){
   const cols=STAGES.filter(s=>s.sem!=='F');
+  const flow=cols.map(s=>s.id);
   return '<div class="kb">'+cols.map(s=>{
     const items=ITEMS.filter(i=>i.stageId===s.id);
     const c=s.sem==='S'?'#16a37a':'#e8821f';
-    return `<div class="col"><div class="ch"><span class="c" style="background:${c}"></span>${esc(s.name)}<span class="cnt">${items.length}</span></div>`+
-      (items.map(i=>{const nm=nameOf(i.assignedById);return `<div class="kc" onclick="openDetail(${i.id})"><div class="t">${esc(cleanTitle(i))}</div><div class="m">${av(nm)}<span class="nm2">${esc((nm||'—').split(' ')[0])}</span><span class="dt">${dmy(i.date)}</span></div></div>`;}).join('')||'<div style="color:var(--text-3);font-size:12px;padding:8px 6px">—</div>')+
+    const fi=flow.indexOf(s.id); const prev=fi>0?flow[fi-1]:null; const next=(fi>=0&&fi<flow.length-1)?flow[fi+1]:null;
+    return `<div class="col" data-stage="${s.id}"><div class="ch"><span class="c" style="background:${c}"></span>${esc(s.name)}<span class="cnt">${items.length}</span></div>`+
+      (items.map(i=>{const nm=nameOf(i.assignedById);
+        const back=prev?`<button class="mvb" onclick="event.stopPropagation();boardMove(${i.id},'${esc(prev)}')">${CHL}Назад</button>`:'<span class="mvb hid"></span>';
+        const fwd=next?`<button class="mvb" onclick="event.stopPropagation();boardMove(${i.id},'${esc(next)}')">Дальше${CHR}</button>`:'<span class="mvb hid"></span>';
+        return `<div class="kc" draggable="true" data-id="${i.id}" onclick="openDetail(${i.id})"><div class="t">${esc(cleanTitle(i))}</div><div class="m">${av(nm)}<span class="nm2">${esc((nm||'—').split(' ')[0])}</span><span class="dt">${dmy(i.date)}</span></div><div class="mv">${back}${fwd}</div></div>`;
+      }).join('')||'<div style="color:var(--text-3);font-size:12px;padding:8px 6px">—</div>')+
       '</div>';
   }).join('')+'</div>';
 }
 const CAL='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>';
 const PIN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>';
+const CHL='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>';
+const CHR='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>';
+// Перенос карточки между стадиями (тап по «Назад/Дальше» или drag-and-drop).
+async function boardMove(id,stageId){
+  const it=ITEMS.find(x=>x.id===id); if(it&&it.stageId===stageId)return;
+  try{
+    const r=await fetch('/api/planner/meetings/'+id+'/stage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({stageId})});
+    const d=await r.json(); if(!r.ok||!d.ok){ toast(d.error||'Не удалось'); return; }
+    if(it){ it.stageId=d.stageId; it.stage=d.stage; } if(CUR&&CUR.id===id){ CUR.stageId=d.stageId; CUR.stage=d.stage; }
+    renderChips(); render(); toast('Стадия: '+d.stage);
+  }catch(e){ toast('Ошибка сети'); }
+}
+// Drag-and-drop по колонкам (десктоп).
+(function(){ const v=document.getElementById('view'); let DRAG=null;
+  v.addEventListener('dragstart',e=>{const c=e.target.closest('.kc');if(c){DRAG=+c.dataset.id;try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',String(DRAG));}catch(_){}c.classList.add('dragging');}});
+  v.addEventListener('dragend',e=>{const c=e.target.closest('.kc');if(c)c.classList.remove('dragging');DRAG=null;v.querySelectorAll('.col.over').forEach(x=>x.classList.remove('over'));});
+  v.addEventListener('dragover',e=>{if(DRAG==null)return;const col=e.target.closest('.col');if(col){e.preventDefault();v.querySelectorAll('.col.over').forEach(x=>x.classList.remove('over'));col.classList.add('over');}});
+  v.addEventListener('drop',e=>{if(DRAG==null)return;const col=e.target.closest('.col');if(col){e.preventDefault();boardMove(DRAG,col.dataset.stage);}v.querySelectorAll('.col.over').forEach(x=>x.classList.remove('over'));DRAG=null;});
+})();
 
 function openCreate(){
   CUR=null; document.getElementById('panTitle').textContent='Новая встреча';
