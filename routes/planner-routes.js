@@ -140,7 +140,7 @@ router.post('/events', requireAuth(), async (req, res) => {
     await client.query('COMMIT');
     // Если событие сразу создано подтверждённым — заводим его в Bitrix.
     if (type === 'leave' && !!confirmed) {
-      createLeaveInBitrix(primary.id, resource, start, end).catch(e => console.error('leave→bitrix create (POST):', e.message));
+      createLeaveInBitrix(primary.id, resource, start, end, fields).catch(e => console.error('leave→bitrix create (POST):', e.message));
     } else if (type === 'meeting' && !!confirmed) {
       createMeetingInBitrix(primary.id, resource, start, end, title, note).catch(e => console.error('meeting→bitrix create (POST):', e.message));
     }
@@ -159,16 +159,29 @@ router.post('/events', requireAuth(), async (req, res) => {
 // Поля (из probe): ответственный = assignedById, даты — ufCrm19_*. Воронка 23.
 const LEAVE_ETID = 1108, LEAVE_CAT = 23;
 const LEAVE_START = 'ufCrm19_1782732324', LEAVE_END = 'ufCrm19_1782732517';
+const LEAVE_TYPE = 'ufCrm19_1782733656';      // Тип отпуска (enum)
+const LEAVE_SUPERVISOR = 'ufCrm19_1782731861'; // Согласующий руководитель (employee)
+const LEAVE_DAYS = 'ufCrm19_1782732922';       // Количество дней (double)
+const LEAVE_PERIOD_FROM = 'ufCrm19_1782737236', LEAVE_PERIOD_TO = 'ufCrm19_1782737287'; // За период работы
 const _ddmmyyyy = d => { const [y, m, dd] = String(d).slice(0, 10).split('-'); return `${dd}.${m}.${y}`; };
+const _daysBetween = (s, e) => { const a = Date.parse(s + 'T00:00:00'), b = Date.parse(e + 'T00:00:00'); return (a && b && b >= a) ? Math.round((b - a) / 864e5) + 1 : null; };
 // Создать отпуск в Bitrix (1108) из подтверждённого события Планировщика и
-// привязать его id к событию (дальше правки дат пушатся как обычно, type-aware).
-async function createLeaveInBitrix(id, resource, start, end) {
+// привязать его id к событию. extra (из fields события) — тип отпуска, согласующий,
+// период работы: если заданы, садим их в соответствующие поля 1108.
+async function createLeaveInBitrix(id, resource, start, end, extra) {
   const engineerId = await resolveBitrixUserId(resource);
   const s = String(start).slice(0, 10), e = String(end).slice(0, 10);
   const title = `Отпуск ${resource} (${_ddmmyyyy(s)} - ${_ddmmyyyy(e)})`;
+  const x = extra || {};
   try {
     const fields = { title, categoryId: LEAVE_CAT, [LEAVE_START]: s, [LEAVE_END]: e };
     if (engineerId) fields.assignedById = engineerId;
+    const days = x.leaveDays || _daysBetween(s, e);
+    if (days) fields[LEAVE_DAYS] = days;
+    if (x.leaveType) fields[LEAVE_TYPE] = x.leaveType;
+    if (x.supervisorBid) fields[LEAVE_SUPERVISOR] = x.supervisorBid;
+    if (x.periodFrom) fields[LEAVE_PERIOD_FROM] = String(x.periodFrom).slice(0, 10);
+    if (x.periodTo) fields[LEAVE_PERIOD_TO] = String(x.periodTo).slice(0, 10);
     const r = await b24('crm.item.add', { entityTypeId: LEAVE_ETID, fields });
     const item = r && r.result && r.result.item;
     const bid = item && item.id;
@@ -358,7 +371,7 @@ router.put('/events/:id', requireAuth(), async (req, res) => {
     // встреча → сделка в воронке «Встречи».
     const justConfirmed = !!confirmed && !oldRow.confirmed_old && !bitrixItemId;
     if (type === 'leave' && justConfirmed) {
-      createLeaveInBitrix(id, resource, start, end).catch(e => console.error('leave→bitrix create:', e.message));
+      createLeaveInBitrix(id, resource, start, end, fields).catch(e => console.error('leave→bitrix create:', e.message));
     } else if (type === 'meeting' && justConfirmed) {
       createMeetingInBitrix(id, resource, start, end, title, note).catch(e => console.error('meeting→bitrix create:', e.message));
     } else if (bitrixItemId) {
@@ -708,6 +721,27 @@ router.get('/deal-probe', requireAuth(), requirePlannerAdmin, async (req, res) =
       catch (e) { out.sampleError = e.message; }
     }
     res.json(out);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Справочники для формы Отпуска (модуль Отпусков) ───────────────────────
+// Типы отпуска (enum из процесса 1108) + список сотрудников (для «согласующего»).
+router.get('/leave-meta', requireAuth(), async (req, res) => {
+  try {
+    let leaveTypes = [];
+    try {
+      const fr = await b24('crm.item.fields', { entityTypeId: LEAVE_ETID });
+      const f = (fr && fr.result && fr.result.fields) || {};
+      const tf = f[LEAVE_TYPE] || {};
+      leaveTypes = (tf.items || []).map(i => ({ id: i.ID != null ? i.ID : i.id, name: i.VALUE != null ? i.VALUE : i.value }));
+    } catch (e) { /* enum недоступен — форма покажет без типов */ }
+    let staff = [];
+    try {
+      const r = await pool.query(
+        "SELECT bitrix_user_id AS bid, name FROM ticketsmodule_staff_ref WHERE bitrix_user_id IS NOT NULL AND (active IS NULL OR active = TRUE) ORDER BY name");
+      staff = r.rows;
+    } catch (e) {}
+    res.json({ leaveTypes, staff });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
