@@ -138,12 +138,11 @@ router.post('/events', requireAuth(), async (req, res) => {
 
     const created = await fetchByIds(client, ids);
     await client.query('COMMIT');
-    // Если событие сразу создано подтверждённым — заводим его в Bitrix.
-    if (type === 'leave' && !!confirmed) {
-      createLeaveInBitrix(primary.id, resource, start, end, fields).catch(e => console.error('leave→bitrix create (POST):', e.message));
-    } else if (type === 'meeting' && !!confirmed) {
-      createMeetingInBitrix(primary.id, resource, start, end, title, note, fields).catch(e => console.error('meeting→bitrix create (POST):', e.message));
-    }
+    // Событие, созданное вручную в самом Планировщике, НЕ заводится в Bitrix —
+    // оно остаётся только в ЦУП-планировщике (без bitrix_item_id → нейтральный
+    // цвет). Процессные события (отпуск/встреча/командировка) создаются из своих
+    // модулей раздела «Процессы» (POST /leaves, /meetings, /trips), где и пишутся
+    // сразу в Bitrix и в Планировщик.
     res.json({ events: created.map(rowToEvent) });
   } catch (e) {
     await client.query('ROLLBACK');
@@ -370,15 +369,11 @@ router.put('/events/:id', requireAuth(), async (req, res) => {
 
     const result = await fetchByIds(client, ids);
     await client.query('COMMIT');
-    // Создание в Bitrix при первом подтверждении (галочка «Подтверждено»), если
-    // событие заведено в Планировщике и ещё не связано с Bitrix: отпуск → 1108,
-    // встреча → сделка в воронке «Встречи».
-    const justConfirmed = !!confirmed && !oldRow.confirmed_old && !bitrixItemId;
-    if (type === 'leave' && justConfirmed) {
-      createLeaveInBitrix(id, resource, start, end, fields).catch(e => console.error('leave→bitrix create:', e.message));
-    } else if (type === 'meeting' && justConfirmed) {
-      createMeetingInBitrix(id, resource, start, end, title, note, fields).catch(e => console.error('meeting→bitrix create:', e.message));
-    } else if (bitrixItemId) {
+    // Обратная синхронизация ТОЛЬКО для событий, уже связанных с Bitrix (из модулей
+    // Процессов или сервисных выездов 1058): правка дат/инженера в Планировщике
+    // уходит в соответствующий элемент Bitrix. Ручные события Планировщика (без
+    // bitrix_item_id) в Bitrix не заводятся и не пушатся — они только в ЦУП.
+    if (bitrixItemId) {
       pushEventToBitrix(bitrixItemId, resource, start, end, type).catch(()=>{});
       // Уведомления о смене инженера/дат — только для сервисных выездов (1058);
       // логика notifyOutboundChange завязана на 1058, для отпуска/встречи не шлём.
@@ -1019,36 +1014,29 @@ router.get('/trip-fields', requireAuth(), requirePlannerAdmin, async (req, res) 
 const TRIP_DEPT_ENUM = 'ufCrm12_1737959461';           // «Подразделение» (enum, 5 опций)
 const TRIP_CONTRACT_SPA = 1036;                        // «Регистрация контрактов»
 let _tripMeta = null, _tripMetaAt = 0;
+const _withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
 router.get('/trip-meta', requireAuth(), async (req, res) => {
   try {
     if (_tripMeta && Date.now() - _tripMetaAt < 600e3 && !req.query.fresh) return res.json(_tripMeta);
-    const out = { staff: [], transport: [], tickets: [], dept: [], contracts: [], cities: [], deptSections: [] };
-    try {
-      const r = await pool.query(
-        "SELECT bitrix_user_id AS bid, name FROM ticketsmodule_staff_ref WHERE bitrix_user_id IS NOT NULL AND (active IS NULL OR active = TRUE) ORDER BY name");
-      out.staff = r.rows;
-    } catch (e) {}
-    try {
-      const fr = await b24('crm.item.fields', { entityTypeId: TRIP_ETID });
-      const f = (fr && fr.result && fr.result.fields) || {};
+    const out = { staff: [], transport: [], tickets: [], dept: [], contracts: [] };
+    // Все обращения параллельно и с таймаутом, чтобы ни одно не подвесило эндпоинт
+    // (иначе шлюз рвёт ответ → форма не получает JSON). Город/подразделение-раздел
+    // (iblock) намеренно не тянем — форма работает на enum + свободном вводе.
+    const [staffR, fieldsR, contractsR] = await Promise.allSettled([
+      pool.query("SELECT bitrix_user_id AS bid, name FROM ticketsmodule_staff_ref WHERE bitrix_user_id IS NOT NULL AND (active IS NULL OR active = TRUE) ORDER BY name"),
+      _withTimeout(b24('crm.item.fields', { entityTypeId: TRIP_ETID }), 8000),
+      _withTimeout(b24('crm.item.list', { entityTypeId: TRIP_CONTRACT_SPA, order: { id: 'desc' }, select: ['id', 'title'] }), 8000),
+    ]);
+    if (staffR.status === 'fulfilled') out.staff = staffR.value.rows || [];
+    if (fieldsR.status === 'fulfilled') {
+      const f = (fieldsR.value && fieldsR.value.result && fieldsR.value.result.fields) || {};
       const en = code => (((f[code] && f[code].items) || []).map(i => ({ id: i.ID != null ? i.ID : i.id, name: i.VALUE != null ? i.VALUE : i.value })));
-      out.transport = en(TRIP_TRANSPORT);
-      out.tickets = en(TRIP_TICKETS);
-      out.dept = en(TRIP_DEPT_ENUM);
-    } catch (e) { out.fieldsErr = e.message; }
-    try {
-      const r = await b24('crm.item.list', { entityTypeId: TRIP_CONTRACT_SPA, order: { id: 'desc' }, select: ['id', 'title'] });
+      out.transport = en(TRIP_TRANSPORT); out.tickets = en(TRIP_TICKETS); out.dept = en(TRIP_DEPT_ENUM);
+    } else { out.fieldsErr = String(fieldsR.reason && fieldsR.reason.message || fieldsR.reason); }
+    if (contractsR.status === 'fulfilled') {
+      const r = contractsR.value;
       out.contracts = ((r && r.result && r.result.items) || []).map(i => ({ id: i.id, title: i.title || ('№ ' + i.id) })).slice(0, 800);
-    } catch (e) { out.contractsErr = e.message; }
-    // iblock-списки (город 17, подразделение-раздел 3) — метод зависит от типа инфоблока
-    try {
-      const r = await b24('lists.element.get', { IBLOCK_TYPE_ID: 'lists', IBLOCK_ID: 17 });
-      out.cities = ((r && r.result) || []).map(s => ({ id: s.ID || s.id, name: s.NAME || s.name })).filter(x => x.id);
-    } catch (e) { out.citiesErr = e.message; }
-    try {
-      const r = await b24('lists.section.get', { IBLOCK_TYPE_ID: 'lists', IBLOCK_ID: 3 });
-      out.deptSections = ((r && r.result) || []).map(s => ({ id: s.ID || s.id, name: s.NAME || s.name })).filter(x => x.id);
-    } catch (e) { out.deptSectionsErr = e.message; }
+    } else { out.contractsErr = String(contractsR.reason && contractsR.reason.message || contractsR.reason); }
     _tripMeta = out; _tripMetaAt = Date.now();
     res.json(out);
   } catch (e) { res.status(500).json({ error: e.message }); }

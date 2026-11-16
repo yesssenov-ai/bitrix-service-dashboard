@@ -126,7 +126,7 @@ body.cup-has-topbar{padding-top:0!important}
 </head>
 <body>
 <header class="hdr">
-  <a class="back" href="/planner.html" title="Планировщик">&#8592;</a>
+  <a class="back" href="/" title="Главная">&#8592;</a>
   <a class="brand" href="/"><img src="/assets/logo-icon.png" alt="">ProLabSupport</a>
   <span class="sub">Командировки</span>
   <span class="sp"></span>
@@ -173,9 +173,17 @@ let META=null;
 async function newTrip(){
   document.getElementById('ovNew').classList.add('open');
   const pb=document.getElementById('newBody');
-  if(!META){ pb.innerHTML='<div class="empty">Загрузка справочников…</div>';
-    try{ META=await fetch('/api/planner/trip-meta').then(r=>r.json()); }
-    catch(e){ pb.innerHTML='<div class="empty">Не удалось загрузить справочники Bitrix.</div>'; return; } }
+  if(!META || !(META.staff&&META.staff.length)){
+    pb.innerHTML='<div class="empty">Загрузка справочников…</div>';
+    try{ const r=await fetch('/api/planner/trip-meta'); if(r.ok){ META=await r.json(); } }catch(e){}
+  }
+  // Форма открывается всегда: если справочники не пришли — enum зашиты фолбэком,
+  // сотрудника/контракт можно ввести вручную.
+  META=META||{};
+  META.transport=(META.transport&&META.transport.length)?META.transport:[{id:'1833',name:'Авиа'},{id:'1834',name:'Жд'},{id:'1835',name:'Авто'}];
+  META.tickets=(META.tickets&&META.tickets.length)?META.tickets:[{id:'1836',name:'Да'},{id:'1837',name:'Нет'}];
+  META.dept=(META.dept&&META.dept.length)?META.dept:[{id:'3465',name:'Технический отдел'},{id:'3466',name:'Отдел продаж'},{id:'3467',name:'Тренинг-центр'},{id:'3468',name:'Иные отделы'},{id:'3469',name:'Руководство'}];
+  META.staff=META.staff||[]; META.contracts=META.contracts||[];
   renderCreateForm();
 }
 function closeNew(){ document.getElementById('ovNew').classList.remove('open'); }

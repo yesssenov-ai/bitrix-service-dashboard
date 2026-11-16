@@ -1249,9 +1249,15 @@ function renderEvents() {
     // Use confirmed variant for trips
     const evType = (ev.type==='trip' && ev.confirmed) ? 'trip_confirm' : ev.type;
     const t=ET[evType]||ET.trip;
+    // Событие без связи с Bitrix создано вручную в самом Планировщике (не из
+    // модулей Процессов) — красим нейтрально со слейт-рамкой, чтобы отличать.
+    const native = !ev.bitrixItemId;
     const block=document.createElement('div');
-    block.className='ev'; block.dataset.id=ev.id;
-    block.style.cssText=`left:${visL+1}px;width:${visR-visL-2}px;top:${top}px;height:${Math.max(12,laneH-2)}px;background:${t.bg};color:${t.fg};`;
+    block.className='ev'+(native?' ev-native':''); block.dataset.id=ev.id;
+    const colCss = native
+      ? `background:#eceff6;color:#54607d;box-shadow:inset 0 0 0 1.5px #97a3c0;`
+      : `background:${t.bg};color:${t.fg};`;
+    block.style.cssText=`left:${visL+1}px;width:${visR-visL-2}px;top:${top}px;height:${Math.max(12,laneH-2)}px;${colCss}`;
     // Build label: client > service type > instrument > title
     const f=ev.fields||{};
     const clients=ev.clients||[];
@@ -1288,7 +1294,8 @@ function showTip(e,ev){
     <div class="tip-row"><span class="tip-lbl">Период:</span>${fmtDT(parseDT(ev.start))} — ${fmtT(parseDT(ev.end))}</div>
     ${f.df1?`<div class="tip-row"><span class="tip-lbl">Область:</span>${esc(f.df1)}</div>`:''}
     ${f.df2?`<div class="tip-row"><span class="tip-lbl">Город:</span>${esc(f.df2)}</div>`:''}
-    ${f.df3?`<div class="tip-row"><span class="tip-lbl">Тип:</span>${esc(f.df3)}</div>`:''}`;
+    ${f.df3?`<div class="tip-row"><span class="tip-lbl">Тип:</span>${esc(f.df3)}</div>`:''}
+    <div class="tip-row"><span class="tip-lbl">Источник:</span>${ev.bitrixItemId?'Процесс Bitrix':'Планировщик (вручную)'}</div>`;
   tip.style.display='block'; moveTip(e);
 }
 function moveTip(e){const t=document.getElementById('tip');t.style.left=(e.clientX+13)+'px';t.style.top=(e.clientY-8)+'px';}
