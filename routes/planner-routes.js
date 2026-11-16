@@ -1012,5 +1012,90 @@ router.get('/trip-fields', requireAuth(), requirePlannerAdmin, async (req, res) 
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Справочники для формы создания командировки (Фаза 2) ──────────────────
+// Сотрудники (ответственный/руководитель), enum транспорта/билетов, простой
+// enum подразделения + список контрактов (смарт-процесс 1036). Город/подразделение
+// как iblock — пробуем вытащить через lists.*; если недоступно, форма их скрывает.
+const TRIP_DEPT_ENUM = 'ufCrm12_1737959461';           // «Подразделение» (enum, 5 опций)
+const TRIP_CONTRACT_SPA = 1036;                        // «Регистрация контрактов»
+let _tripMeta = null, _tripMetaAt = 0;
+router.get('/trip-meta', requireAuth(), async (req, res) => {
+  try {
+    if (_tripMeta && Date.now() - _tripMetaAt < 600e3 && !req.query.fresh) return res.json(_tripMeta);
+    const out = { staff: [], transport: [], tickets: [], dept: [], contracts: [], cities: [], deptSections: [] };
+    try {
+      const r = await pool.query(
+        "SELECT bitrix_user_id AS bid, name FROM ticketsmodule_staff_ref WHERE bitrix_user_id IS NOT NULL AND (active IS NULL OR active = TRUE) ORDER BY name");
+      out.staff = r.rows;
+    } catch (e) {}
+    try {
+      const fr = await b24('crm.item.fields', { entityTypeId: TRIP_ETID });
+      const f = (fr && fr.result && fr.result.fields) || {};
+      const en = code => (((f[code] && f[code].items) || []).map(i => ({ id: i.ID != null ? i.ID : i.id, name: i.VALUE != null ? i.VALUE : i.value })));
+      out.transport = en(TRIP_TRANSPORT);
+      out.tickets = en(TRIP_TICKETS);
+      out.dept = en(TRIP_DEPT_ENUM);
+    } catch (e) { out.fieldsErr = e.message; }
+    try {
+      const r = await b24('crm.item.list', { entityTypeId: TRIP_CONTRACT_SPA, order: { id: 'desc' }, select: ['id', 'title'] });
+      out.contracts = ((r && r.result && r.result.items) || []).map(i => ({ id: i.id, title: i.title || ('№ ' + i.id) })).slice(0, 800);
+    } catch (e) { out.contractsErr = e.message; }
+    // iblock-списки (город 17, подразделение-раздел 3) — метод зависит от типа инфоблока
+    try {
+      const r = await b24('lists.element.get', { IBLOCK_TYPE_ID: 'lists', IBLOCK_ID: 17 });
+      out.cities = ((r && r.result) || []).map(s => ({ id: s.ID || s.id, name: s.NAME || s.name })).filter(x => x.id);
+    } catch (e) { out.citiesErr = e.message; }
+    try {
+      const r = await b24('lists.section.get', { IBLOCK_TYPE_ID: 'lists', IBLOCK_ID: 3 });
+      out.deptSections = ((r && r.result) || []).map(s => ({ id: s.ID || s.id, name: s.NAME || s.name })).filter(x => x.id);
+    } catch (e) { out.deptSectionsErr = e.message; }
+    _tripMeta = out; _tripMetaAt = Date.now();
+    res.json(out);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Создание командировки из карточки: элемент 1074 (стадия «Запрос») + блок в
+// Планировщике (type=trip, подтверждён, связан по bitrix_item_id).
+router.post('/trips', requireAuth(), express.json(), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const resource = String(b.resource || '').trim();
+    const start = String(b.start || '').slice(0, 10);
+    const end = String(b.end || start).slice(0, 10);
+    const purpose = String(b.purpose || '').trim();
+    const dest = String(b.dest || '').trim();
+    const route = String(b.route || '').trim();
+    if (!resource || !start || !purpose || !dest) return res.status(400).json({ error: 'Нужны сотрудник, дата начала, цель и пункт назначения' });
+    const engineerId = await resolveBitrixUserId(resource);
+    const title = `Командировка ${resource} (${dest}, ${_ddmmyyyy(start)} - ${_ddmmyyyy(end)})`;
+    const fields = {
+      title, categoryId: TRIP_CAT,
+      [TRIP_START]: start, [TRIP_END]: end,
+      [TRIP_PURPOSE]: purpose, [TRIP_DEST]: [dest], [TRIP_ROUTE]: route || dest,
+    };
+    if (engineerId) fields.assignedById = engineerId;
+    if (b.supervisorBid) fields[TRIP_SUPERVISOR] = b.supervisorBid;
+    if (Array.isArray(b.transport) && b.transport.length) fields[TRIP_TRANSPORT] = b.transport.map(String);
+    else if (b.transport) fields[TRIP_TRANSPORT] = [String(b.transport)];
+    if (b.tickets) fields[TRIP_TICKETS] = String(b.tickets);
+    if (b.lodging != null && b.lodging !== '') fields[TRIP_LODGING] = Number(b.lodging) || 0;
+    if (b.deptEnum) fields[TRIP_DEPT_ENUM] = String(b.deptEnum);
+    if (b.deptSectionId) fields[TRIP_DEPT] = String(b.deptSectionId);
+    if (b.cityId) fields[TRIP_CITY] = [String(b.cityId)];
+    if (b.contractId) fields[TRIP_CONTRACT] = [`DYNAMIC_${TRIP_CONTRACT_SPA}_${b.contractId}`];
+    let bid = null;
+    try { const r = await b24('crm.item.add', { entityTypeId: TRIP_ETID, fields }); bid = (r && r.result && r.result.item && r.result.item.id) || null; }
+    catch (e) { return res.status(502).json({ error: 'Bitrix: ' + e.message }); }
+    try {
+      const evFields = JSON.stringify({ dest, purpose, route: route || null, supervisorBid: b.supervisorBid || null });
+      const ev = await pool.query(
+        `INSERT INTO ticketsmodule_planner_events (group_id, resource, title, type, start_at, end_at, all_day, confirmed, fields, bitrix_item_id, source, created_by)
+         VALUES (0,$1,$2,'trip',$3::timestamp AT TIME ZONE '${TZ}',$4::timestamp AT TIME ZONE '${TZ}',true,true,$5,$6,'manual',$7) RETURNING id`,
+        [resource, title, start + 'T09:00', end + 'T18:00', evFields, bid, (req.user && req.user.username) || null]);
+      await pool.query('UPDATE ticketsmodule_planner_events SET group_id=$1 WHERE id=$1', [ev.rows[0].id]);
+    } catch (e) { console.error('trip card → planner block:', e.message); }
+    res.json({ ok: true, id: bid });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = { router, rowToEvent, SELECT_COLS, TZ, syncStaffFromBitrix, fetchAllActiveUsers, computeSyncHash, resolveBitrixUserId };
 
