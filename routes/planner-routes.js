@@ -138,9 +138,11 @@ router.post('/events', requireAuth(), async (req, res) => {
 
     const created = await fetchByIds(client, ids);
     await client.query('COMMIT');
-    // Если отпуск сразу создан подтверждённым — заводим его в Bitrix (1108).
+    // Если событие сразу создано подтверждённым — заводим его в Bitrix.
     if (type === 'leave' && !!confirmed) {
       createLeaveInBitrix(primary.id, resource, start, end).catch(e => console.error('leave→bitrix create (POST):', e.message));
+    } else if (type === 'meeting' && !!confirmed) {
+      createMeetingInBitrix(primary.id, resource, start, end, title, note).catch(e => console.error('meeting→bitrix create (POST):', e.message));
     }
     res.json({ events: created.map(rowToEvent) });
   } catch (e) {
@@ -178,8 +180,33 @@ async function createLeaveInBitrix(id, resource, start, end) {
   }
 }
 
+// ── Встречи: ВОРОНКА (категория 4) в Сделках Bitrix (entityTypeId 2) ───────
+// Поля (из deal-probe): дата встречи ufCrm_1736508416174, локация ufCrm_1736508501960,
+// краткое название ufCrm_1736508064357, ответственный assignedById.
+const MEET_ETID = 2, MEET_CAT = 4;
+const MEET_DATE = 'ufCrm_1736508416174', MEET_LOC = 'ufCrm_1736508501960', MEET_SHORT = 'ufCrm_1736508064357';
+// Создать встречу в Bitrix (сделка в воронке «Встречи») из подтверждённого события.
+async function createMeetingInBitrix(id, resource, start, end, title, note) {
+  const engineerId = await resolveBitrixUserId(resource);
+  const s = String(start).slice(0, 10);
+  const name = String(title || '').trim() || `Встреча ${resource} (${_ddmmyyyy(s)})`;
+  try {
+    const fields = { title: name, categoryId: MEET_CAT, [MEET_DATE]: s, [MEET_SHORT]: name.slice(0, 250) };
+    if (engineerId) fields.assignedById = engineerId;
+    const loc = String(note || '').trim(); if (loc) fields[MEET_LOC] = loc.slice(0, 250);
+    const r = await b24('crm.item.add', { entityTypeId: MEET_ETID, fields });
+    const item = r && r.result && r.result.item;
+    const bid = item && item.id;
+    if (bid) await pool.query('UPDATE ticketsmodule_planner_events SET bitrix_item_id=$1 WHERE id=$2', [bid, id]);
+    return bid || null;
+  } catch (e) {
+    console.error(`createMeetingInBitrix failed for planner event ${id}:`, e.message);
+    return null;
+  }
+}
+
 // ── Outbound push: planner edit → Bitrix (dates + engineer only) ──────────
-// Type-aware: отпуск (leave) → процесс 1108 (ufCrm19_*), остальное → 1058 (ufCrm8_*).
+// Type-aware: отпуск → 1108 (ufCrm19_*), встреча → сделка 2 (ufCrm_*), иначе → 1058 (ufCrm8_*).
 async function pushEventToBitrix(bitrixItemId, resource, start, end, type) {
   const engineerId = await resolveBitrixUserId(resource);
   const sDateOnly = start.slice(0, 10), eDateOnly = end.slice(0, 10);
@@ -190,6 +217,16 @@ async function pushEventToBitrix(bitrixItemId, resource, start, end, type) {
       await b24('crm.item.update', { entityTypeId: LEAVE_ETID, id: bitrixItemId, fields });
     } catch (e) {
       console.error(`Outbound push (отпуск) failed for item ${bitrixItemId}:`, e.message);
+    }
+    return;
+  }
+  if (type === 'meeting') {
+    try {
+      const fields = { [MEET_DATE]: sDateOnly };
+      if (engineerId) fields.assignedById = engineerId;
+      await b24('crm.item.update', { entityTypeId: MEET_ETID, id: bitrixItemId, fields });
+    } catch (e) {
+      console.error(`Outbound push (встреча) failed for item ${bitrixItemId}:`, e.message);
     }
     return;
   }
@@ -316,15 +353,19 @@ router.put('/events/:id', requireAuth(), async (req, res) => {
 
     const result = await fetchByIds(client, ids);
     await client.query('COMMIT');
-    // Создание ОТПУСКА в Bitrix при первом подтверждении (галочка «Подтверждено»),
-    // если отпуск заведён в Планировщике и ещё не связан с Bitrix.
-    if (type === 'leave' && !!confirmed && !oldRow.confirmed_old && !bitrixItemId) {
+    // Создание в Bitrix при первом подтверждении (галочка «Подтверждено»), если
+    // событие заведено в Планировщике и ещё не связано с Bitrix: отпуск → 1108,
+    // встреча → сделка в воронке «Встречи».
+    const justConfirmed = !!confirmed && !oldRow.confirmed_old && !bitrixItemId;
+    if (type === 'leave' && justConfirmed) {
       createLeaveInBitrix(id, resource, start, end).catch(e => console.error('leave→bitrix create:', e.message));
+    } else if (type === 'meeting' && justConfirmed) {
+      createMeetingInBitrix(id, resource, start, end, title, note).catch(e => console.error('meeting→bitrix create:', e.message));
     } else if (bitrixItemId) {
       pushEventToBitrix(bitrixItemId, resource, start, end, type).catch(()=>{});
-      // Уведомления о смене инженера/дат — только для сервисных выездов (1058),
-      // логика notifyOutboundChange завязана на 1058; для отпусков не шлём.
-      if (type !== 'leave') {
+      // Уведомления о смене инженера/дат — только для сервисных выездов (1058);
+      // логика notifyOutboundChange завязана на 1058, для отпуска/встречи не шлём.
+      if (type !== 'leave' && type !== 'meeting') {
         const engineerChanged = oldRow.resource !== resource;
         const datesChanged = oldRow.start_date_old !== start.slice(0,10) || oldRow.end_date_old !== end.slice(0,10);
         if (engineerChanged || datesChanged) {
