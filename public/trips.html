@@ -109,6 +109,16 @@ body.cup-has-topbar{padding-top:0!important}
 .sp2{font:600 11px/1 var(--font);padding:6px 10px;border-radius:999px;border:1px solid var(--line-2);color:var(--text-3);background:var(--surface)}
 .sp2.cur{background:var(--text);border-color:var(--text);color:var(--surface)}.sp2.done{background:#e9f7f1;border-color:transparent;color:#0e7d5c}
 .lnk{display:inline-flex;align-items:center;gap:6px;color:var(--accent);text-decoration:none;font-weight:600;font-size:13px}.lnk:hover{text-decoration:underline}
+.ff{margin-bottom:13px}
+.ff2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ff input,.ff select,.ff textarea{width:100%;border:1px solid var(--line-2);border-radius:10px;background:var(--surface);color:var(--text);font:500 13.5px/1.3 var(--font);padding:10px 12px;outline:none;transition:.12s}
+.ff textarea{resize:vertical;min-height:40px}
+.ff input:focus,.ff select:focus,.ff textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 14%,transparent)}
+.ff .fl b{color:#e5484d}
+.chks{display:flex;gap:8px;flex-wrap:wrap}
+.chk{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-2);border-radius:9px;padding:8px 12px;font:600 12.5px/1 var(--font);color:var(--text-2);cursor:pointer;user-select:none}
+.chk input{width:auto;margin:0;accent-color:var(--accent)}
+.chk:has(input:checked){background:color-mix(in srgb,var(--accent) 10%,transparent);border-color:var(--accent);color:var(--text)}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:var(--surface);padding:11px 18px;border-radius:10px;font:600 13px/1 var(--font);z-index:90;opacity:0;transition:.2s;pointer-events:none;box-shadow:0 6px 24px rgba(0,0,0,.2);max-width:90vw;text-align:center}
 .toast.show{opacity:1}
 @media(max-width:560px){.wrap{padding:16px 14px 50px}.grid{grid-template-columns:1fr}.hdr .sub{display:none}.pan{width:100vw}.btn.pri span{display:none}.btn.pri{padding:9px 11px}.tl .head .nmcol,.tl .nmcol{width:130px}}
@@ -137,6 +147,10 @@ body.cup-has-topbar{padding-top:0!important}
   <div class="pan"><div class="ph"><span class="t" id="panTitle">Командировка</span><button class="x" onclick="closePanel()">&times;</button></div>
   <div class="pb" id="panBody"></div><div class="pf" id="panFoot"></div></div>
 </div>
+<div class="ov" id="ovNew" onclick="if(event.target===this)closeNew()">
+  <div class="pan"><div class="ph"><span class="t">Новая командировка</span><button class="x" onclick="closeNew()">&times;</button></div>
+  <div class="pb" id="newBody"></div><div class="pf" id="newFoot"></div></div>
+</div>
 <div class="toast" id="toast"></div>
 <script src="/assets/cup-theme.js" defer></script>
 <script>
@@ -154,8 +168,71 @@ function av(name,cls){ const n=name||''; if(!n) return `<div class="av none ${cl
 const TRIP_CLR={'DT1074_15:NEW':'#e8821f','DT1074_15:PREPARATION':'#2f6bed','DT1074_15:CLIENT':'#7a5cd0','DT1074_15:1':'#16a37a','DT1074_15:2':'#0e8f9e','DT1074_15:3':'#6b7280','DT1074_15:SUCCESS':'#8b929b','DT1074_15:FAIL':'#e5484d'};
 function barColor(id){return TRIP_CLR[id]||'#8b929b';}
 function pillCls(id){const c=TRIP_CLR[id];if(c==='#e5484d')return'red';if(c==='#16a37a')return'green';if(c==='#2f6bed')return'blue';if(c==='#7a5cd0')return'violet';if(c==='#0e8f9e')return'cyan';if(c==='#8b929b'||c==='#6b7280')return'gray';return'amber';}
-function toast(t){ const el=document.getElementById('toast'); el.textContent=t; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2800); }
-function newTrip(){ toast('Создание командировки — следующий шаг (форма со справочниками Bitrix). Пока: просмотр и согласование.'); }
+function toast(t){ const el=document.getElementById('toast'); el.textContent=t; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),3200); }
+let META=null;
+async function newTrip(){
+  document.getElementById('ovNew').classList.add('open');
+  const pb=document.getElementById('newBody');
+  if(!META){ pb.innerHTML='<div class="empty">Загрузка справочников…</div>';
+    try{ META=await fetch('/api/planner/trip-meta').then(r=>r.json()); }
+    catch(e){ pb.innerHTML='<div class="empty">Не удалось загрузить справочники Bitrix.</div>'; return; } }
+  renderCreateForm();
+}
+function closeNew(){ document.getElementById('ovNew').classList.remove('open'); }
+function opts(arr,val,ph){ return (ph?`<option value="">${esc(ph)}</option>`:'')+(arr||[]).map(o=>`<option value="${esc(o.id!=null?o.id:o.bid)}" ${String(o.id!=null?o.id:o.bid)===String(val)?'selected':''}>${esc(o.name||o.title)}</option>`).join(''); }
+function renderCreateForm(){
+  const m=META||{}; const staff=m.staff||[];
+  const sopts=staff.map(s=>`<option value="${esc(s.name)}">`).join('');
+  const today=new Date().toISOString().slice(0,10);
+  const transport=(m.transport||[]).map(t=>`<label class="chk"><input type="checkbox" name="trsp" value="${esc(t.id)}">${esc(t.name)}</label>`).join('');
+  document.getElementById('newBody').innerHTML=`
+    <div class="ff"><label class="fl">Сотрудник <b>*</b></label><input id="f_res" list="f_staff" placeholder="ФИО сотрудника"><datalist id="f_staff">${sopts}</datalist></div>
+    <div class="ff2">
+      <div class="ff"><label class="fl">Начало <b>*</b></label><input id="f_start" type="date" value="${today}"></div>
+      <div class="ff"><label class="fl">Окончание <b>*</b></label><input id="f_end" type="date" value="${today}"></div>
+    </div>
+    <div class="ff"><label class="fl">Пункт назначения <b>*</b></label><input id="f_dest" placeholder="Напр.: Алматы, ТОО «Клиент»"></div>
+    ${(m.cities&&m.cities.length)?`<div class="ff"><label class="fl">Город / Область / Страна</label><select id="f_city">${opts(m.cities,'','— не выбрано —')}</select></div>`:''}
+    <div class="ff"><label class="fl">Цель командировки <b>*</b></label><textarea id="f_purpose" rows="2" placeholder="Напр.: Монтаж и ПНР хроматографа"></textarea></div>
+    <div class="ff"><label class="fl">Маршрут</label><input id="f_route" placeholder="Напр.: Астана → Алматы → Астана"></div>
+    <div class="ff"><label class="fl">Вид транспорта</label><div class="chks">${transport||'<span style="color:var(--text-3);font-size:12px">нет справочника</span>'}</div></div>
+    <div class="ff2">
+      <div class="ff"><label class="fl">Наличие билетов и брони</label><select id="f_tickets">${opts(m.tickets,'','— не выбрано —')}</select></div>
+      <div class="ff"><label class="fl">Проживание, ₸</label><input id="f_lodging" type="number" min="0" step="1" placeholder="0"></div>
+    </div>
+    <div class="ff2">
+      <div class="ff"><label class="fl">Подразделение</label><select id="f_dept">${opts(m.dept,'','— не выбрано —')}</select></div>
+      <div class="ff"><label class="fl">Согласующий руководитель</label><select id="f_sup">${opts(staff.map(s=>({id:s.bid,name:s.name})),'','— не выбрано —')}</select></div>
+    </div>
+    ${(m.deptSections&&m.deptSections.length)?`<div class="ff"><label class="fl">Подразделение (структура)</label><select id="f_deptsec">${opts(m.deptSections,'','— не выбрано —')}</select></div>`:''}
+    <div class="ff"><label class="fl">Контракт</label><input id="f_contract" list="f_contracts" placeholder="Поиск по названию/№"><datalist id="f_contracts">${(m.contracts||[]).map(c=>`<option value="${esc(c.title)}" data-id="${esc(c.id)}">`).join('')}</datalist></div>
+    <p style="color:var(--text-3);font-size:12px;margin:10px 2px 0">Командировка создаётся в Bitrix (стадия «Запрос») и сразу появляется в Планировщике. Остальные поля согласования заполняются по стадиям.</p>`;
+  document.getElementById('newFoot').innerHTML=`<button class="btn" onclick="closeNew()">Отмена</button><button class="btn pri" id="f_submit" onclick="submitCreate()">Создать</button>`;
+}
+async function submitCreate(){
+  const v=id=>{const el=document.getElementById(id);return el?el.value.trim():'';};
+  const resource=v('f_res'), start=v('f_start'), end=v('f_end')||v('f_start'), dest=v('f_dest'), purpose=v('f_purpose');
+  if(!resource){ toast('Укажите сотрудника'); return; }
+  if(!start){ toast('Укажите дату начала'); return; }
+  if(!dest){ toast('Укажите пункт назначения'); return; }
+  if(!purpose){ toast('Укажите цель командировки'); return; }
+  if(end && end<start){ toast('Окончание раньше начала'); return; }
+  const transport=[...document.querySelectorAll('input[name="trsp"]:checked')].map(x=>x.value);
+  const body={ resource, start, end, dest, purpose, route:v('f_route'), transport,
+    tickets:v('f_tickets')||null, lodging:v('f_lodging')||null, deptEnum:v('f_dept')||null,
+    supervisorBid:v('f_sup')||null, deptSectionId:v('f_deptsec')||null, cityId:v('f_city')||null };
+  const cel=document.getElementById('f_contract');
+  if(cel && cel.value){ const o=[...document.querySelectorAll('#f_contracts option')].find(x=>x.value===cel.value); if(o) body.contractId=o.getAttribute('data-id'); }
+  const btn=document.getElementById('f_submit'); if(btn){ btn.disabled=true; btn.textContent='Создаём…'; }
+  try{
+    const r=await fetch('/api/planner/trips',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json();
+    if(!r.ok||!d.ok){ toast(d.error||'Не удалось создать'); if(btn){btn.disabled=false;btn.textContent='Создать';} return; }
+    closeNew(); toast('Командировка создана'); await reloadTrips();
+    if(d.id) openDetail(d.id);
+  }catch(e){ toast('Ошибка сети'); if(btn){btn.disabled=false;btn.textContent='Создать';} }
+}
+async function reloadTrips(){ try{ const l=await fetch('/api/planner/trips').then(r=>r.json()); ITEMS=l.items||[]; STAGES=l.stages||STAGES; renderChips(); render(); }catch(e){} }
 
 async function boot(){
   try{
@@ -271,7 +348,7 @@ function renderDetail(){
   document.getElementById('panFoot').innerHTML=foot||`<button class="btn" onclick="closePanel()">Закрыть</button>`;
 }
 function closePanel(){ document.getElementById('ov').classList.remove('open'); }
-document.addEventListener('keydown',e=>{ if(e.key==='Escape')closePanel(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closePanel(); closeNew(); } });
 boot();
 </script>
 </body>
