@@ -306,6 +306,32 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 .vbig{padding:10px 26px;border:none;background:none;color:var(--text-3);font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font);border-bottom:3px solid transparent;margin-bottom:-1px;transition:all .15s;}
 .vbig:hover{color:var(--text);}
 .vbig.on{color:var(--text);border-bottom-color:var(--brand);}
+/* ── Мобильная адаптация (v1): фокус на удобном создании событий ── */
+@media(max-width:720px){
+  /* общий мобильный шелл ЦУП отключаем — у Планировщика своя шапка */
+  #cupMobNav,#cupTopbar,.cup-greet,.cup-homefav,.cup-topacts,.cup-burger,.cup-burger-float,#pls-toolbar{display:none!important}
+  body.cup-has-topbar{padding-top:0!important}
+  /* шапка компактная: логотип, «Все модули» и «+ Событие»; тяжёлые админ-кнопки прячем */
+  .hdr{gap:5px;padding:0 9px;overflow-x:auto}
+  .hdr::-webkit-scrollbar{display:none}
+  .hnav-link,.hdr .hdiv{display:none}
+  .hdr-r .hbtn:not(.p){display:none}
+  .hbtn{padding:7px 11px;font-size:12.5px;white-space:nowrap}
+  #uChip{display:none}
+  /* панель события — на весь экран, поля в одну колонку, крупнее для тача */
+  .panel{width:100vw!important}
+  .frow2{grid-template-columns:1fr;gap:10px}
+  .fi{font-size:16px;padding:9px 11px}
+  .pbody{padding:14px 15px}
+  .tgrid{gap:6px}
+  .tc{padding:8px 13px;font-size:12.5px}
+  .view-bar{overflow-x:auto}
+  .view-bar::-webkit-scrollbar{display:none}
+}
+@media(max-width:480px){
+  .vbig{padding:10px 16px;font-size:13px}
+  .pfoot .pb,.ph-acts .pb{padding:9px 14px}
+}
 </style>
 </head>
 <body>
