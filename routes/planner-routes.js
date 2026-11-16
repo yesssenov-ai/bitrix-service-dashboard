@@ -598,6 +598,29 @@ router.get('/bitrix-probe', requireAuth(), requirePlannerAdmin, async (req, res)
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// Встречи — это ВОРОНКА (категория) в Сделках (entityTypeId 2), не смарт-процесс.
+// Этот probe показывает воронки сделок, поля сделок и пример сделки (по ?id=),
+// чтобы понять categoryId воронки «Встречи» и в какие поля садить при создании.
+router.get('/deal-probe', requireAuth(), requirePlannerAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.query.id, 10) || null;
+    const out = {};
+    try {
+      const cr = await b24('crm.category.list', { entityTypeId: 2 });
+      out.categories = ((cr && cr.result && cr.result.categories) || []).map(c => ({ id: c.id, name: c.name }));
+    } catch (e) { out.categoriesError = e.message; }
+    try {
+      const fr = await b24('crm.item.fields', { entityTypeId: 2 });
+      const f = (fr && fr.result && fr.result.fields) || {};
+      out.fields = Object.entries(f).map(([code, m]) => ({ code, title: (m && m.title) || '', type: (m && m.type) || '', required: !!(m && m.isRequired) }));
+    } catch (e) { out.fieldsError = e.message; }
+    if (id) {
+      try { const ir = await b24('crm.item.get', { entityTypeId: 2, id }); out.sample = (ir && ir.result && ir.result.item) || null; }
+      catch (e) { out.sampleError = e.message; }
+    }
+    res.json(out);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 module.exports = { router, rowToEvent, SELECT_COLS, TZ, syncStaffFromBitrix, fetchAllActiveUsers, computeSyncHash, resolveBitrixUserId };
 
