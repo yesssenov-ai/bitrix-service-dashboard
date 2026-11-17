@@ -143,6 +143,80 @@ body.cup-has-topbar{padding-top:0!important}
 .fin input{width:100%;border:1px solid var(--line-2);border-radius:9px;background:var(--surface);color:var(--text);font:500 13px/1 var(--font);padding:9px 11px}
 .fin label{display:block;font:600 10.5px/1 var(--font);text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);margin:0 0 5px 2px}
 .fin .ff{margin-bottom:10px}
+/* ── Премиум-редизайн карточки командировки ────────────────────────── */
+#ov .pan{width:min(860px,100vw)}
+.td{display:flex;flex-direction:column;height:100%}
+.td .ic{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.td .ic.sm{width:14px;height:14px}
+.tdhero{position:relative;background:linear-gradient(135deg,#0c1626 0%,#111f38 55%,#14294a 100%);color:#fff;padding:22px 24px 20px;overflow:hidden;flex:none}
+.tdhero::after{content:"";position:absolute;inset:0;background:radial-gradient(520px 180px at 88% -10%,rgba(47,107,237,.28),transparent 70%),repeating-linear-gradient(90deg,rgba(255,255,255,.035) 0 1px,transparent 1px 46px);pointer-events:none}
+.tdhero .t{display:flex;align-items:center;gap:10px;position:relative;z-index:1;margin-bottom:16px}
+.tdhero .num{font:600 11px/1 var(--f-mono,monospace);letter-spacing:.14em;color:#8fa6cf;text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tdhero .status{margin-left:auto;display:inline-flex;align-items:center;gap:7px;font:600 11.5px/1 var(--font);padding:7px 12px;border-radius:999px;white-space:nowrap}
+.tdhero .status .dot{width:6px;height:6px;border-radius:50%}
+.tdhero .closeb{width:32px;height:32px;border-radius:9px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#cdd7e8;display:grid;place-items:center;cursor:pointer}
+.tdhero .route{display:flex;align-items:center;gap:13px;position:relative;z-index:1}
+.tdhero .pin{width:46px;height:46px;border-radius:13px;background:linear-gradient(160deg,rgba(255,255,255,.16),rgba(255,255,255,.04));border:1px solid rgba(255,255,255,.14);display:grid;place-items:center;color:#cfe0ff;flex:none}
+.tdhero h1{margin:0;font:700 24px/1.05 var(--font);letter-spacing:-.6px}
+.tdhero .sub{margin-top:5px;color:#aebad2;font:500 13px/1 var(--font);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tdhero .sub .mono{font-family:var(--f-mono,monospace);font-size:12.5px;color:#d7e0f1}
+.tdhero .who{display:flex;align-items:center;gap:10px;position:relative;z-index:1;margin-top:18px;padding-top:16px;border-top:1px solid rgba(255,255,255,.09)}
+.tdhero .who .av{width:36px;height:36px;font-size:13px;background:linear-gradient(145deg,#3a6fe0,#7a4fd0)}
+.tdhero .who .nm{font:600 14px/1.1 var(--font)}
+.tdhero .who .rl{font:500 12px/1 var(--font);color:#9fb0c6;margin-top:3px}
+.tdhero .who .days{margin-left:auto;text-align:right}
+.tdhero .who .days b{font:700 19px/1 var(--f-mono,monospace);letter-spacing:-.5px}
+.tdhero .who .days span{display:block;font:600 9.5px/1 var(--font);letter-spacing:.1em;text-transform:uppercase;color:#8fa0b8;margin-top:4px}
+.tdscroll{flex:1;overflow-y:auto}
+.tdflow{padding:20px 24px 4px}
+.tdflabel{font:700 10.5px/1 var(--font);letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);margin-bottom:16px}
+.tdsteps{display:flex}
+.tdstep{flex:1;position:relative;display:flex;flex-direction:column;align-items:center;text-align:center}
+.tdstep .bar{position:absolute;top:13px;left:-50%;width:100%;height:2px;background:var(--line-2)}
+.tdstep:first-child .bar{display:none}
+.tdstep.done .bar,.tdstep.active .bar{background:var(--accent-green,#16a37a)}
+.tdstep .node{position:relative;z-index:1;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:2px solid var(--line-2);color:var(--text-3);font:700 11px/1 var(--font)}
+.tdstep.done .node{background:#16a37a;border-color:#16a37a;color:#fff}
+.tdstep.active .node{border-color:var(--text);color:var(--text);box-shadow:0 0 0 4px color-mix(in srgb,var(--text) 10%,transparent)}
+.tdstep.rej .node{background:#e5484d;border-color:#e5484d;color:#fff}
+.tdstep .rl{font:700 9.5px/1 var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);margin-top:9px}
+.tdstep .nm{font:600 12px/1.2 var(--font);color:var(--text);margin-top:4px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tdstep .stt{font:500 10.5px/1 var(--font);margin-top:4px;color:var(--text-3)}
+.tdstep.done .stt{color:#0a6b49}.tdstep.active .stt{color:var(--text)}.tdstep.rej .stt{color:#c0343a}
+.tdstep .x{position:absolute;top:-4px;right:18%;width:16px;height:16px;border:none;background:var(--surface-2);border-radius:50%;color:var(--text-3);cursor:pointer;font-size:12px;line-height:1;display:none}
+.tdstep:hover .x{display:block}
+.tdbody{padding:18px 24px 22px}
+.tdsec{margin-top:24px}.tdsec:first-child{margin-top:6px}
+.tdsechd{display:flex;align-items:center;gap:8px;margin-bottom:13px}
+.tdsechd .i{color:var(--text-3)}.tdsechd h3{margin:0;font:700 12px/1 var(--font);letter-spacing:.04em;text-transform:uppercase;color:var(--text-2)}
+.tdsechd .ln{flex:1;height:1px;background:var(--line)}
+.tdsechd .add{border:1px solid var(--line-2);background:var(--surface);border-radius:8px;color:var(--text-2);font:600 11px/1 var(--font);padding:6px 10px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.tdgrid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.tdkv{background:var(--surface);padding:12px 15px;min-width:0}
+.tdkv .k{font:600 10.5px/1 var(--font);letter-spacing:.04em;text-transform:uppercase;color:var(--text-3);display:flex;align-items:center;gap:6px}
+.tdkv .v{font:600 14px/1.3 var(--font);color:var(--text);margin-top:6px;word-break:break-word}
+.tdkv .v.mono{font-family:var(--f-mono,monospace);font-size:13.5px}
+.tdkv.full{grid-column:1/-1}
+.tdtiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.tdtile{background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:13px 14px}
+.tdtile .k{font:600 10px/1 var(--font);letter-spacing:.05em;text-transform:uppercase;color:var(--text-3)}
+.tdtile .v{font:700 18px/1 var(--f-mono,monospace);letter-spacing:-.5px;margin-top:9px;color:var(--text)}
+.tdtile .v small{font:600 11px/1 var(--font);color:var(--text-3);margin-left:3px}
+.tdtile input{width:100%;border:none;background:none;font:700 17px/1 var(--f-mono,monospace);color:var(--text);padding:0;margin-top:9px;outline:none}
+.tdtile.sum{background:linear-gradient(160deg,#0f1f3a,#14294a);border-color:transparent}
+.tdtile.sum .k{color:#9fb6da}.tdtile.sum .v,.tdtile.sum input{color:#fff}
+.tdorder{display:flex;gap:12px;flex-wrap:wrap}
+.tdorder .tdkv{flex:1;border:1px solid var(--line);border-radius:12px;min-width:150px}
+.tdorder input{width:100%;border:none;background:none;font:600 14px/1.3 var(--f-mono,monospace);color:var(--text);padding:0;margin-top:6px;outline:none}
+.tddrop{flex:1;min-width:180px;border:1.5px dashed var(--line-2);border-radius:12px;display:flex;align-items:center;justify-content:center;gap:8px;color:var(--text-3);font:600 12.5px/1 var(--font);background:var(--surface-2);min-height:58px;text-align:center;padding:10px}
+.tdchk{display:inline-flex;align-items:center;gap:7px;font:600 11.5px/1 var(--font);color:#0e7d5c;background:#e9f7f1;border:1px solid transparent;padding:7px 11px;border-radius:8px}
+.tdhint{font:500 12px/1.5 var(--font);color:var(--text-3);margin-top:10px}
+.tdfoot{flex:none;display:flex;gap:9px;align-items:center;padding:14px 24px;background:color-mix(in srgb,var(--surface) 90%,transparent);backdrop-filter:blur(8px);border-top:1px solid var(--line);flex-wrap:wrap}
+.tdfoot .btn{font-size:12.5px;padding:10px 14px}
+.tdfoot .ok{background:#16a37a;border-color:#16a37a;color:#fff}.tdfoot .ok:hover{filter:brightness(.96)}
+.tdfoot .rw{background:var(--surface);border-color:#e0a14a;color:#b9600f}.tdfoot .rj{background:var(--surface);border-color:#e59aa0;color:#c0343a}
+.tdfoot .sp{margin-left:auto}
+.tdcmt{width:100%;order:-1;border:1px solid var(--line-2);border-radius:10px;background:var(--surface);color:var(--text);font:500 12.5px/1.3 var(--font);padding:9px 11px;resize:vertical;min-height:34px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:var(--surface);padding:11px 18px;border-radius:10px;font:600 13px/1 var(--font);z-index:90;opacity:0;transition:.2s;pointer-events:none;box-shadow:0 6px 24px rgba(0,0,0,.2);max-width:90vw;text-align:center}
 .toast.show{opacity:1}
 @media(max-width:560px){.wrap{padding:16px 14px 50px}.grid{grid-template-columns:1fr}.hdr .sub{display:none}.pan{width:100vw}.btn.pri span{display:none}.btn.pri{padding:9px 11px}.tl .head .nmcol,.tl .nmcol{width:130px}}
@@ -170,8 +244,7 @@ body.cup-has-topbar{padding-top:0!important}
   <div id="view"><div class="grid"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div></div>
 </div>
 <div class="ov" id="ov" onclick="if(event.target===this)closePanel()">
-  <div class="pan"><div class="ph"><span class="t" id="panTitle">Командировка</span><button class="x" onclick="closePanel()">&times;</button></div>
-  <div class="pb" id="panBody"></div><div class="pf" id="panFoot"></div></div>
+  <div class="pan" id="tdPan"></div>
 </div>
 <div class="ov" id="ovNew" onclick="if(event.target===this)closeNew()">
   <div class="pan"><div class="ph"><span class="t">Новая командировка</span><button class="x" onclick="closeNew()">&times;</button></div>
@@ -381,8 +454,8 @@ async function boardMove(id,stageId){
   v.addEventListener('drop',e=>{if(DRAG==null)return;const col=e.target.closest('.col');if(col){e.preventDefault();boardMove(DRAG,col.dataset.stage);}v.querySelectorAll('.col.over').forEach(x=>x.classList.remove('over'));DRAG=null;});
 })();
 async function openDetail(id){
-  CUR=ITEMS.find(i=>i.id===id)||{id}; document.getElementById('panTitle').textContent='Командировка';
-  document.getElementById('panBody').innerHTML='<div class="empty">Загрузка…</div>'; document.getElementById('panFoot').innerHTML='';
+  CUR=ITEMS.find(i=>i.id===id)||{id};
+  document.getElementById('tdPan').innerHTML='<div class="empty" style="padding:80px 0">Загрузка…</div>';
   document.getElementById('ov').classList.add('open');
   try{ const d=await fetch('/api/planner/trips/'+id).then(r=>r.json()); if(d.item){ CUR=d.item; STAGES=d.stages||STAGES; CFG=d.approvers||CFG; ME={bid:d.meBid,admin:!!d.meAdmin}; } }catch(e){}
   renderDetail();
@@ -397,81 +470,103 @@ function buildSteps(){
   steps.push({key:'glav',role:'Главбух',bid:CFG.glav,st:i.ap&&i.ap.glav||{}});
   return steps;
 }
-function badgeOf(st,isActive){
-  const s=st&&st.status;
-  if(s==='approve') return `<span class="apbadge ok">✓ Согласовал${st.date?' · '+fmtWhen(st.date):''}</span>`;
-  if(s==='reject') return `<span class="apbadge rej">✕ Отклонил</span>`;
-  if(s==='rework') return `<span class="apbadge rw">↩ На доработку</span>`;
-  return `<span class="apbadge wait">${isActive?'ожидает решения':'ожидает'}</span>`;
-}
-function renderApproval(){
+const TDI={
+  check:'<svg class="ic sm" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>',
+  x:'<svg class="ic sm" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>',
+  dot:'<svg class="ic sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/></svg>',
+  back:'<svg class="ic" viewBox="0 0 24 24"><path d="M9 17l-5-5 5-5M4 12h12a4 4 0 0 1 0 8h-1"/></svg>',
+  route:'<svg class="ic sm" viewBox="0 0 24 24"><path d="M3 12h18M14 6l6 6-6 6"/></svg>',
+  pin:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/></svg>',
+  copy:'<svg class="ic" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>',
+  target:'<svg class="ic sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  map:'<svg class="ic sm" viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7z"/><circle cx="12" cy="9" r="2"/></svg>',
+  user:'<svg class="ic sm" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="7" r="4"/></svg>',
+};
+function renderDetail(){
+  const i=CUR; const nm=nameOf(i.assignedById); const dd=days(i.start,i.end); const sg=stg(i.stageId);
+  const cf=canFin(); const fin=i.fin||{}; const ord=i.order||{};
   const steps=buildSteps();
   let activeIdx=steps.findIndex(s=>!(s.st&&s.st.status==='approve'));
-  if(activeIdx<0) activeIdx=steps.length; // всё согласовано
-  const rows=steps.map((s,ix)=>{
-    const nm=s.name||nameOf(s.bid)||(s.bid?('#'+s.bid):'не назначен');
+  const allApproved=activeIdx<0; const active=allApproved?null:steps[activeIdx];
+  const stepHtml=steps.map((s,ix)=>{
+    const snm=s.name||nameOf(s.bid)||(s.bid?('#'+s.bid):'не назн.');
     const done=s.st&&s.st.status==='approve'; const rej=s.st&&(s.st.status==='reject'||s.st.status==='rework');
-    const active=ix===activeIdx;
-    const cls=done?'done':(rej?'rej':(active?'active':''));
-    const mine=active && s.bid && (ME.admin || String(ME.bid)===String(s.bid));
-    const noAssignee=(s.key==='buh'||s.key==='glav') && !s.bid;
-    let act='';
-    if(mine){
-      const bidArg=s.key==='extra'?`,'${esc(String(s.bid))}'`:'';
-      act=`<div class="apact"><textarea id="apComment" placeholder="Комментарий / причина (для отказа и доработки — обязательно)"></textarea>
-        <div class="apbtns"><button class="btn ok" onclick="approveStep('${s.key}','approve'${bidArg})">✓ Согласовать</button>
-        <button class="btn rw" onclick="approveStep('${s.key}','rework'${bidArg})">↩ На доработку</button>
-        <button class="btn rj" onclick="approveStep('${s.key}','reject'${bidArg})">✕ Отклонить</button></div></div>`;
-    } else if(active && noAssignee){
-      act=`<div class="apcmt">Исполнитель не назначен — задайте в <a class="lnk" href="#" onclick="closePanel();openSettings();return false">настройках согласования</a>.</div>`;
-    }
-    const rm=(s.key==='extra' && (ME.admin||String(ME.bid)===String(CUR.createdBy))) ? `<button class="aprm" title="Убрать" onclick="removeExtra('${esc(String(s.bid))}')">×</button>`:'';
-    return `<div class="apstep ${cls}"><div class="apnum">${done?'✓':(ix+1)}</div><div class="apmain">
-      <div style="display:flex;align-items:center"><div><div class="aprole">${esc(s.role)}</div><div class="apname">${esc(nm)}</div></div>${rm}</div>
-      ${badgeOf(s.st,active)}
-      ${s.st&&s.st.comment?`<div class="apcmt">${esc(s.st.comment)}</div>`:''}
-      ${act}</div></div>`;
+    const isAct=ix===activeIdx && !allApproved;
+    const cls=done?'done':(rej?'rej':(isAct?'active':''));
+    const node=done?TDI.check:(rej?TDI.x:(isAct?TDI.dot:(ix+1)));
+    const stt=done?('согл.'+(s.st.date?' · '+fmtWhen(s.st.date):'')):(rej?(s.st.status==='rework'?'на доработку':'отклонил'):(isAct?'ожидает':'ожидает'));
+    const rm=(s.key==='extra'&&(ME.admin||String(ME.bid)===String(CUR.createdBy)))?`<button class="x" onclick="event.stopPropagation();removeExtra('${esc(String(s.bid))}')">×</button>`:'';
+    return `<div class="tdstep ${cls}">${rm}<div class="bar"></div><div class="node">${node}</div><div class="rl">${esc(s.role)}</div><div class="nm">${esc(snm)}</div><div class="stt">${esc(stt)}</div></div>`;
   }).join('');
-  // Добавление доп. согласующего — инициатор/админ, до полного согласования
-  const canAdd = ME.admin || String(ME.bid)===String(CUR.createdBy);
-  const addBox = canAdd ? `<div class="addrow"><select id="extraSel"><option value="">+ Добавить согласующего…</option>${STAFF.map(s=>`<option value="${esc(String(s.bid))}">${esc(s.name)}</option>`).join('')}</select><button class="btn" onclick="addExtraApprover()">Добавить</button></div>`:'';
-  return `<div class="sec">Согласование</div>${rows}${addBox}`;
-}
-function renderDetail(){
-  const i=CUR; const nm=nameOf(i.assignedById); const idx=STAGES.findIndex(s=>s.id===i.stageId); const dd=days(i.start,i.end);
-  const flow=STAGES.filter(s=>!s.id.endsWith(':FAIL')).map(s=>{const myIdx=STAGES.findIndex(x=>x.id===s.id);const cls=s.id===i.stageId?'cur':(myIdx<idx?'done':'');return `<span class="sp2 ${cls}">${esc(s.name)}</span>`;}).join('');
-  const fin=i.fin||{}; const ord=i.order||{}; const cf=canFin();
-  const finBlock = `<div class="sec">Финансы</div><div class="fin">
-    <div class="frow2">
-      <div class="ff"><label>Суточные (КЗ), ₸</label><input id="fi_pdkz" type="number" min="0" value="${esc(fin.perdiemKz)}" ${cf?'':'disabled'}></div>
-      <div class="ff"><label>Проживание, ₸</label><input id="fi_lodg" type="number" min="0" value="${esc(fin.lodging)}" ${cf?'':'disabled'}></div>
-      <div class="ff"><label>Визовые, ₸</label><input id="fi_visa" type="number" min="0" value="${esc(fin.visa)}" ${cf?'':'disabled'}></div>
-      <div class="ff"><label>Проезд, ₸</label><input id="fi_trav" type="number" min="0" value="${esc(fin.travel)}" ${cf?'':'disabled'}></div>
-      <div class="ff"><label>Суточные (зарубеж)</label><input id="fi_pdfr" value="${esc(fin.perdiemFr)}" ${cf?'':'disabled'}></div>
-      <div class="ff"><label>Итого</label><input id="fi_total" value="${esc(fin.total)}" ${cf?'':'disabled'}></div>
-    </div>${cf?`<button class="btn pri" style="width:100%;justify-content:center" onclick="saveFinance()">Сохранить финансы</button>`:''}</div>`;
-  const ordBlock = `<div class="sec">Приказ на командировку</div><div class="fin">
-    <div class="frow2">
-      <div class="ff"><label>Номер приказа</label><input id="or_num" value="${esc(ord.num)}" ${cf?'':'disabled'}></div>
-      <div class="ff"><label>Дата приказа</label><input id="or_date" type="date" value="${esc(ord.date||'')}" ${cf?'':'disabled'}></div>
-    </div>${cf?`<button class="btn pri" style="width:100%;justify-content:center" onclick="saveOrder()">Сохранить приказ</button>`:''}
-    ${(ord.files&&ord.files.length)?`<div style="margin-top:8px">${ord.files.map(f=>f.url?`<a class="lnk" href="${esc(f.url)}" target="_blank">📎 ${esc(f.name)}</a>`:`<span class="tag">📎 ${esc(f.name)}</span>`).join(' ')}</div>`:''}
-    <div class="apcmt" style="margin-top:8px">Загрузка файла приказа и финдокументов — в следующем обновлении.</div></div>`;
-  document.getElementById('panBody').innerHTML=`
-    <div style="display:flex;align-items:center;gap:11px;margin-bottom:14px">${av(nm,'card')}<div><div style="font-weight:800;font-size:16px">${esc(nm||'—')}</div><div style="color:var(--text-2);font-size:13px;margin-top:2px">${dmy(i.start,true)} – ${dmy(i.end,true)}${dd?(' · '+dd+' дн.'):''}</div></div></div>
-    <div class="fl">Стадия</div><div class="stageflow">${flow}</div>
-    <div style="margin-top:14px">
-      ${i.number?`<div class="dl"><span class="k">Номер</span><span class="v">${esc(i.number)}</span></div>`:''}
-      <div class="dl"><span class="k">Пункт назначения</span><span class="v">${esc(i.dest||'—')}</span></div>
-      <div class="dl"><span class="k">Цель</span><span class="v">${esc(i.purpose||'—')}</span></div>
-      ${i.route?`<div class="dl"><span class="k">Маршрут</span><span class="v">${esc(i.route)}</span></div>`:''}
+  const canAdd=ME.admin||String(ME.bid)===String(CUR.createdBy);
+  const addRow=canAdd?`<div class="addrow" style="margin-top:14px"><select id="extraSel"><option value="">+ Добавить согласующего…</option>${STAFF.map(s=>`<option value="${esc(String(s.bid))}">${esc(s.name)}</option>`).join('')}</select><button class="btn" onclick="addExtraApprover()">Добавить</button></div>`:'';
+  const tile=(k,label,id,val,dark)=>cf
+    ? `<div class="tdtile ${dark?'sum':''}"><div class="k">${esc(label)}</div><input id="${id}" value="${esc(val)}" placeholder="0"></div>`
+    : `<div class="tdtile ${dark?'sum':''}"><div class="k">${esc(label)}</div><div class="v">${val!==''&&val!=null?esc(val):'—'}</div></div>`;
+  // Футер действий
+  let foot='';
+  if(allApproved){
+    foot=`<span class="tdchk">${TDI.check} Полностью согласовано</span>`+
+      (cf?`<button class="btn sp" onclick="tripChange()">${TDI.copy} Изменение командировки</button>`:`<button class="btn sp" onclick="closePanel()">Закрыть</button>`);
+  } else if(active){
+    const mine=active.bid&&(ME.admin||String(ME.bid)===String(active.bid));
+    const noAss=(active.key==='buh'||active.key==='glav')&&!active.bid;
+    if(mine){
+      const bidArg=active.key==='extra'?`,'${esc(String(active.bid))}'`:'';
+      foot=`<textarea class="tdcmt" id="apComment" placeholder="Комментарий / причина (для отказа и доработки — обязательно)"></textarea>
+        <button class="btn rw" onclick="approveStep('${active.key}','rework'${bidArg})">${TDI.back} На доработку</button>
+        <button class="btn rj" onclick="approveStep('${active.key}','reject'${bidArg})">${TDI.x} Отклонить</button>
+        <button class="btn ok sp" onclick="approveStep('${active.key}','approve'${bidArg})">${TDI.check} Согласовать · ${esc(active.role.toLowerCase())}</button>`;
+    } else if(noAss){
+      foot=`<span class="tdhint">Шаг «${esc(active.role)}» не назначен.</span><button class="btn sp" onclick="openSettings()">Настроить роли</button>`;
+    } else {
+      foot=`<span class="tdhint">Ожидает: ${esc(active.role)} — ${esc(active.name||nameOf(active.bid)||'')}</span><button class="btn sp" onclick="closePanel()">Закрыть</button>`;
+    }
+  }
+  const filesHtml=(ord.files&&ord.files.length)?`<div style="width:100%;margin-top:4px">${ord.files.map(f=>f.url?`<a class="lnk" href="${esc(f.url)}" target="_blank">${esc(f.name)}</a>`:`<span class="tag">${esc(f.name)}</span>`).join(' · ')}</div>`:'';
+  document.getElementById('tdPan').innerHTML=`<div class="td">
+    <div class="tdhero">
+      <div class="t"><span class="num">Командировка${i.number?' · '+esc(i.number):''}</span>
+        <span class="status" style="background:rgba(255,255,255,.1);color:#fff"><span class="dot" style="background:${sg.bar}"></span>${esc(i.stage)}</span>
+        <button class="closeb" onclick="closePanel()">${TDI.x}</button></div>
+      <div class="route"><div class="pin">${TDI.pin}</div>
+        <div style="min-width:0"><h1>${esc(i.dest||'Командировка')}</h1>
+        ${i.route?`<div class="sub">${TDI.route}<span class="mono">${esc(i.route)}</span></div>`:''}</div></div>
+      <div class="who">${av(nm)}<div><div class="nm">${esc(nm||'—')}</div><div class="rl">${esc(i.purpose||'')}</div></div>
+        <div class="days"><b>${dmy(i.start)}–${dmy(i.end)}</b><span>${dd?dd+' дней · ':''}${(String(i.start).slice(0,4))}</span></div></div>
     </div>
-    ${renderApproval()}
-    ${ordBlock}
-    ${finBlock}
-    <div style="margin-top:16px">${i.plannerId?`<a class="lnk" href="/planner.html">В Планировщике ↗</a>`:''}</div>`;
-  document.getElementById('panFoot').innerHTML=`<button class="btn" onclick="closePanel()">Закрыть</button>`;
+    <div class="tdscroll">
+      <div class="tdflow"><div class="tdflabel">Согласование</div><div class="tdsteps">${stepHtml}</div>${addRow}</div>
+      <div class="tdbody">
+        <div class="tdsec"><div class="tdsechd"><span class="i">${TDI.target}</span><h3>Детали</h3><span class="ln"></span></div>
+          <div class="tdgrid">
+            <div class="tdkv"><div class="k">${TDI.map}Пункт назначения</div><div class="v">${esc(i.dest||'—')}</div></div>
+            <div class="tdkv"><div class="k">${TDI.route}Маршрут</div><div class="v">${esc(i.route||'—')}</div></div>
+            <div class="tdkv full"><div class="k">${TDI.target}Цель командировки</div><div class="v">${esc(i.purpose||'—')}</div></div>
+          </div></div>
+        <div class="tdsec"><div class="tdsechd"><span class="i"><svg class="ic" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20M6 15h4"/></svg></span><h3>Финансы</h3><span class="ln"></span></div>
+          <div class="tdtiles">
+            ${tile('perdiemKz','Суточные КЗ','fi_pdkz',fin.perdiemKz)}
+            ${tile('lodging','Проживание','fi_lodg',fin.lodging)}
+            ${tile('travel','Проезд','fi_trav',fin.travel)}
+            ${tile('total','Итого','fi_total',fin.total,true)}
+          </div>
+          ${cf?`<div class="tdtiles" style="margin-top:10px">${tile('visa','Визовые','fi_visa',fin.visa)}${tile('perdiemFr','Суточные (зарубеж)','fi_pdfr',fin.perdiemFr)}<div></div><button class="btn pri" style="align-self:end;justify-content:center" onclick="saveFinance()">Сохранить</button></div>`:''}
+        </div>
+        <div class="tdsec"><div class="tdsechd"><span class="i"><svg class="ic" viewBox="0 0 24 24"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M5 3h9l5 5v13H5z"/><path d="M9 13h6M9 17h6"/></svg></span><h3>Приказ</h3><span class="ln"></span>${cf?`<button class="add" onclick="saveOrder()">${TDI.check} Сохранить</button>`:''}</div>
+          <div class="tdorder">
+            <div class="tdkv"><div class="k">Номер приказа</div>${cf?`<input id="or_num" value="${esc(ord.num)}" placeholder="№">`:`<div class="v mono">${esc(ord.num||'—')}</div>`}</div>
+            <div class="tdkv"><div class="k">Дата приказа</div>${cf?`<input id="or_date" type="date" value="${esc(ord.date||'')}">`:`<div class="v mono">${esc(ord.date||'—')}</div>`}</div>
+            <div class="tddrop">${TDI.copy}Загрузка файла приказа — скоро</div>
+            ${filesHtml}
+          </div></div>
+        ${i.plannerId?`<div style="margin-top:18px"><a class="lnk" href="/planner.html">В Планировщике</a></div>`:''}
+      </div>
+    </div>
+    <div class="tdfoot">${foot}</div>
+  </div>`;
 }
+function tripChange(){ toast('Изменение командировки — следующий этап'); }
 async function approveStep(step,decision,bid){
   const ta=document.getElementById('apComment'); const comment=ta?ta.value.trim():'';
   if((decision==='reject'||decision==='rework') && !comment){ toast('Укажите причину'); return; }
