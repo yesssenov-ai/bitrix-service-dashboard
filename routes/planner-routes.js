@@ -1255,5 +1255,30 @@ router.post('/trips', requireAuth(), express.json(), async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Probe списков iblock (Подразделение УС=3, Город=17, Тип услуг=25) — ищем рабочий
+// метод/тип, чтобы подтягивать опции в форму. ?id=3|17|25.
+router.get('/iblock-probe', requireAuth(), requirePlannerAdmin, async (req, res) => {
+  const iblock = parseInt(req.query.id, 10) || 3;
+  const TO = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+  const call = (method, params) => TO(b24(method, params), 7000).then(r => (r && r.result !== undefined) ? r.result : r).catch(e => ({ _err: e.message }));
+  const jobs = {
+    listsLists: call('lists.get', { IBLOCK_TYPE_ID: 'lists' }),
+    listsProc: call('lists.get', { IBLOCK_TYPE_ID: 'bitrix_processes' }),
+    sec_lists: call('lists.section.get', { IBLOCK_TYPE_ID: 'lists', IBLOCK_ID: iblock }),
+    el_lists: call('lists.element.get', { IBLOCK_TYPE_ID: 'lists', IBLOCK_ID: iblock, select: ['ID', 'NAME'] }),
+    sec_proc: call('lists.section.get', { IBLOCK_TYPE_ID: 'bitrix_processes', IBLOCK_ID: iblock }),
+    el_proc: call('lists.element.get', { IBLOCK_TYPE_ID: 'bitrix_processes', IBLOCK_ID: iblock, select: ['ID', 'NAME'] }),
+  };
+  const keys = Object.keys(jobs);
+  const results = await Promise.all(keys.map(k => jobs[k]));
+  const out = { iblock };
+  keys.forEach((k, i) => {
+    let v = results[i];
+    if (Array.isArray(v)) v = v.slice(0, 60).map(x => ({ ID: x.ID || x.id, NAME: x.NAME || x.name, IBLOCK_TYPE_ID: x.IBLOCK_TYPE_ID, IBLOCK_ID: x.ID }));
+    out[k] = v;
+  });
+  res.json(out);
+});
+
 module.exports = { router, rowToEvent, SELECT_COLS, TZ, syncStaffFromBitrix, fetchAllActiveUsers, computeSyncHash, resolveBitrixUserId };
 
