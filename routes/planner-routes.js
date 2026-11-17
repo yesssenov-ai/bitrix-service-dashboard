@@ -1184,19 +1184,20 @@ const TRIP_DEPT_ENUM = 'ufCrm12_1737959461';           // «Подразделе
 const TRIP_CONTRACT_SPA = 1036;                        // «Регистрация контрактов»
 let _tripMeta = null, _tripMetaAt = 0;
 const _withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+const _lel = (res) => ((res && res.result) || []).map(x => ({ id: x.ID || x.id, name: x.NAME || x.name })).filter(x => x.id && x.name);
 router.get('/trip-meta', requireAuth(), async (req, res) => {
   try {
     if (_tripMeta && Date.now() - _tripMetaAt < 600e3 && !req.query.fresh) return res.json(_tripMeta);
-    const out = { staff: [], transport: [], tickets: [], dept: [], contracts: [] };
-    // Все обращения параллельно и с таймаутом, чтобы ни одно не подвесило эндпоинт
-    // (иначе шлюз рвёт ответ → форма не получает JSON). Город/подразделение-раздел
-    // (iblock) намеренно не тянем — форма работает на enum + свободном вводе.
-    const [staffR, fieldsR, contractsR] = await Promise.allSettled([
-      pool.query("SELECT bitrix_user_id AS bid, name FROM ticketsmodule_staff_ref WHERE bitrix_user_id IS NOT NULL AND (active IS NULL OR active = TRUE) ORDER BY name"),
+    const out = { staff: [], transport: [], tickets: [], dept: [], contracts: [], cities: [], serviceTypes: [], departments: [] };
+    const [staffR, fieldsR, contractsR, citiesR, svcR, depR] = await Promise.allSettled([
+      pool.query("SELECT bitrix_user_id AS bid, name, department, job_title FROM ticketsmodule_staff_ref WHERE bitrix_user_id IS NOT NULL AND (active IS NULL OR active = TRUE) ORDER BY name"),
       _withTimeout(b24('crm.item.fields', { entityTypeId: TRIP_ETID }), 8000),
       _withTimeout(b24('crm.item.list', { entityTypeId: TRIP_CONTRACT_SPA, order: { id: 'desc' }, select: ['id', 'title'] }), 8000),
+      _withTimeout(b24('lists.element.get', { IBLOCK_TYPE_ID: 'lists', IBLOCK_ID: 17, select: ['ID', 'NAME'] }), 8000),
+      _withTimeout(b24('lists.element.get', { IBLOCK_TYPE_ID: 'lists', IBLOCK_ID: 25, select: ['ID', 'NAME'] }), 8000),
+      _withTimeout(b24('department.get', {}), 8000),
     ]);
-    if (staffR.status === 'fulfilled') out.staff = staffR.value.rows || [];
+    if (staffR.status === 'fulfilled') out.staff = (staffR.value.rows || []).map(r => ({ bid: r.bid, name: r.name, dept: r.department || '', job: r.job_title || '' }));
     if (fieldsR.status === 'fulfilled') {
       const f = (fieldsR.value && fieldsR.value.result && fieldsR.value.result.fields) || {};
       const en = code => (((f[code] && f[code].items) || []).map(i => ({ id: i.ID != null ? i.ID : i.id, name: i.VALUE != null ? i.VALUE : i.value })));
@@ -1206,9 +1207,25 @@ router.get('/trip-meta', requireAuth(), async (req, res) => {
       const r = contractsR.value;
       out.contracts = ((r && r.result && r.result.items) || []).map(i => ({ id: i.id, title: i.title || ('№ ' + i.id) })).slice(0, 800);
     } else { out.contractsErr = String(contractsR.reason && contractsR.reason.message || contractsR.reason); }
+    if (citiesR.status === 'fulfilled') out.cities = _lel(citiesR.value);
+    if (svcR.status === 'fulfilled') out.serviceTypes = _lel(svcR.value);
+    if (depR.status === 'fulfilled') {
+      const r = depR.value; const arr = (r && r.result && r.result.result) ? r.result.result : (r && r.result) || [];
+      out.departments = (Array.isArray(arr) ? arr : []).map(d => ({ id: d.ID || d.id, name: d.NAME || d.name })).filter(x => x.id && x.name);
+    }
     _tripMeta = out; _tripMetaAt = Date.now();
     res.json(out);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Живой поиск компаний Б24 (для поля «Заказчик»).
+router.get('/company-search', requireAuth(), async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    if (q.length < 2) return res.json({ items: [] });
+    const r = await _withTimeout(b24('crm.company.list', { filter: { '%TITLE': q }, select: ['ID', 'TITLE'], order: { TITLE: 'ASC' } }), 7000);
+    const items = ((r && r.result) || []).slice(0, 30).map(c => ({ id: c.ID, title: c.TITLE }));
+    res.json({ items });
+  } catch (e) { res.json({ items: [], error: e.message }); }
 });
 // Создание командировки из карточки: элемент 1074 (стадия «Запрос») + блок в
 // Планировщике (type=trip, подтверждён, связан по bitrix_item_id).
@@ -1239,6 +1256,12 @@ router.post('/trips', requireAuth(), express.json(), async (req, res) => {
     if (b.deptSectionId) fields[TRIP_DEPT] = String(b.deptSectionId);
     if (b.cityId) fields[TRIP_CITY] = [String(b.cityId)];
     if (b.contractId) fields[TRIP_CONTRACT] = [`DYNAMIC_${TRIP_CONTRACT_SPA}_${b.contractId}`];
+    if (b.companyId) fields.companyId = Number(b.companyId) || b.companyId;
+    if (b.subject) fields['ufCrm12_1732867088884'] = [String(b.subject)];
+    if (b.perdiemKz != null && b.perdiemKz !== '') fields[TRIP_FIN.perdiemKz] = Number(b.perdiemKz) || 0;
+    if (b.travel != null && b.travel !== '') fields[TRIP_FIN.travel] = Number(b.travel) || 0;
+    if (b.total != null && b.total !== '') fields[TRIP_FIN.total] = String(b.total);
+    if (b.serviceTypeId) fields['ufCrm12_1732867415'] = [String(b.serviceTypeId)];
     let bid = null;
     try { const r = await b24('crm.item.add', { entityTypeId: TRIP_ETID, fields }); bid = (r && r.result && r.result.item && r.result.item.id) || null; }
     catch (e) { return res.status(502).json({ error: 'Bitrix: ' + e.message }); }

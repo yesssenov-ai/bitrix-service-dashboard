@@ -107,6 +107,10 @@ body.cup-has-topbar{padding-top:0!important}
 .lnk{display:inline-flex;align-items:center;gap:6px;color:var(--accent);text-decoration:none;font-weight:600;font-size:13px}.lnk:hover{text-decoration:underline}
 .ff{margin-bottom:13px}
 .ff2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+#ovNew .pan,#ovSet .pan{width:min(560px,100vw)}
+.fsec{font:700 10.5px/1 var(--font);letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);margin:20px 0 11px;padding-bottom:8px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:7px}
+.fsec:first-child{margin-top:4px}
+#newBody .ff input,#newBody .ff select,#newBody .ff textarea{border-radius:11px;padding:10px 12px}
 .ff input,.ff select,.ff textarea{width:100%;border:1px solid var(--line-2);border-radius:10px;background:var(--surface);color:var(--text);font:500 13.5px/1.3 var(--font);padding:10px 12px;outline:none;transition:.12s}
 .ff textarea{resize:vertical;min-height:40px}
 .ff input:focus,.ff select:focus,.ff textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 14%,transparent)}
@@ -306,34 +310,70 @@ async function newTrip(){
 }
 function closeNew(){ document.getElementById('ovNew').classList.remove('open'); }
 function opts(arr,val,ph){ return (ph?`<option value="">${esc(ph)}</option>`:'')+(arr||[]).map(o=>`<option value="${esc(o.id!=null?o.id:o.bid)}" ${String(o.id!=null?o.id:o.bid)===String(val)?'selected':''}>${esc(o.name||o.title)}</option>`).join(''); }
+const TRIP_LEADERS=['семён','семен','азамат','арман','виталий'];
+function dlId(inputId,listId){ const el=document.getElementById(inputId); if(!el||!el.value) return null; const o=[...document.querySelectorAll('#'+listId+' option')].find(x=>x.value===el.value); return o?o.getAttribute('data-id'):null; }
+function onStaffChange(){
+  const el=document.getElementById('f_res'); const sec=document.getElementById('checklistSec'); if(!el||!sec) return;
+  const s=(META.staff||[]).find(x=>x.name===el.value.trim());
+  let show=false;
+  if(s){ const isSvc=/сервис|техничес/i.test(s.dept||''); const nm=(s.name||'').toLowerCase(); const isLeader=TRIP_LEADERS.some(l=>nm.includes(l)); show=isSvc&&!isLeader; }
+  sec.style.display=show?'':'none';
+}
+let _coT=null;
+function companySearch(q){
+  clearTimeout(_coT); q=String(q||'').trim(); if(q.length<2) return;
+  _coT=setTimeout(async()=>{ try{ const d=await fetch('/api/planner/company-search?q='+encodeURIComponent(q)).then(r=>r.json()); const dl=document.getElementById('f_companies'); if(dl) dl.innerHTML=(d.items||[]).map(c=>`<option value="${esc(c.title)}" data-id="${esc(String(c.id))}">`).join(''); }catch(e){} },300);
+}
 function renderCreateForm(){
   const m=META||{}; const staff=m.staff||[];
-  const sopts=staff.map(s=>`<option value="${esc(s.name)}">`).join('');
   const today=new Date().toISOString().slice(0,10);
+  const sList=staff.map(s=>`<option value="${esc(s.name)}" data-id="${esc(String(s.bid))}">`).join('');
   const transport=(m.transport||[]).map(t=>`<label class="chk"><input type="checkbox" name="trsp" value="${esc(t.id)}">${esc(t.name)}</label>`).join('');
+  const deptField=(m.departments&&m.departments.length)
+    ? `<input id="f_dept" list="f_depts" placeholder="Поиск подразделения"><datalist id="f_depts">${m.departments.map(d=>`<option value="${esc(d.name)}" data-id="${esc(String(d.id))}">`).join('')}</datalist>`
+    : `<select id="f_deptenum">${opts(m.dept,'','— не выбрано —')}</select>`;
   document.getElementById('newBody').innerHTML=`
-    <div class="ff"><label class="fl">Сотрудник <b>*</b></label><input id="f_res" list="f_staff" placeholder="ФИО сотрудника"><datalist id="f_staff">${sopts}</datalist></div>
+    <div class="fsec">Сотрудник и сроки</div>
+    <div class="ff"><label class="fl">Сотрудник <b>*</b></label><input id="f_res" list="f_staff" placeholder="ФИО" oninput="onStaffChange()"><datalist id="f_staff">${sList}</datalist></div>
     <div class="ff2">
       <div class="ff"><label class="fl">Начало <b>*</b></label><input id="f_start" type="date" value="${today}"></div>
       <div class="ff"><label class="fl">Окончание <b>*</b></label><input id="f_end" type="date" value="${today}"></div>
     </div>
+    <div class="ff2">
+      <div class="ff"><label class="fl">Подразделение</label>${deptField}</div>
+      <div class="ff"><label class="fl">Согласующий руководитель</label><input id="f_sup" list="f_sups" placeholder="ФИО"><datalist id="f_sups">${sList}</datalist></div>
+    </div>
+
+    <div class="fsec">Заказчик и договор</div>
+    <div class="ff"><label class="fl">Заказчик (компания)</label><input id="f_company" list="f_companies" placeholder="Поиск компании…" oninput="companySearch(this.value)"><datalist id="f_companies"></datalist></div>
+    <div class="ff"><label class="fl">Контракт</label><input id="f_contract" list="f_contracts" placeholder="Поиск по названию/№"><datalist id="f_contracts">${(m.contracts||[]).map(c=>`<option value="${esc(c.title)}" data-id="${esc(String(c.id))}">`).join('')}</datalist></div>
+    <div class="ff"><label class="fl">Предмет договора</label><input id="f_subject" placeholder="Напр.: Поставка и ввод в эксплуатацию"></div>
+
+    <div class="fsec">Маршрут</div>
+    <div class="ff"><label class="fl">Город / Область / Страна</label><input id="f_city" list="f_cities" placeholder="Поиск города/региона"><datalist id="f_cities">${(m.cities||[]).map(c=>`<option value="${esc(c.name)}" data-id="${esc(String(c.id))}">`).join('')}</datalist></div>
     <div class="ff"><label class="fl">Пункт назначения <b>*</b></label><input id="f_dest" placeholder="Напр.: Алматы, ТОО «Клиент»"></div>
-    ${(m.cities&&m.cities.length)?`<div class="ff"><label class="fl">Город / Область / Страна</label><select id="f_city">${opts(m.cities,'','— не выбрано —')}</select></div>`:''}
-    <div class="ff"><label class="fl">Цель командировки <b>*</b></label><textarea id="f_purpose" rows="2" placeholder="Напр.: Монтаж и ПНР хроматографа"></textarea></div>
     <div class="ff"><label class="fl">Маршрут</label><input id="f_route" placeholder="Напр.: Астана → Алматы → Астана"></div>
-    <div class="ff"><label class="fl">Вид транспорта</label><div class="chks">${transport||'<span style="color:var(--text-3);font-size:12px">нет справочника</span>'}</div></div>
+    <div class="ff"><label class="fl">Вид транспорта</label><div class="chks">${transport||'<span style="color:var(--text-3);font-size:12px">—</span>'}</div></div>
+    <div class="ff"><label class="fl">Наличие билетов и брони</label><select id="f_tickets">${opts(m.tickets,'','— не выбрано —')}</select></div>
+
+    <div class="fsec">Цель и расходы</div>
+    <div class="ff"><label class="fl">Цель командировки <b>*</b></label><textarea id="f_purpose" rows="2" placeholder="Напр.: Монтаж и ПНР хроматографа"></textarea></div>
     <div class="ff2">
-      <div class="ff"><label class="fl">Наличие билетов и брони</label><select id="f_tickets">${opts(m.tickets,'','— не выбрано —')}</select></div>
-      <div class="ff"><label class="fl">Проживание, ₸</label><input id="f_lodging" type="number" min="0" step="1" placeholder="0"></div>
+      <div class="ff"><label class="fl">Суточные (КЗ), ₸</label><input id="f_pdkz" type="number" min="0" placeholder="0"></div>
+      <div class="ff"><label class="fl">Проживание, ₸</label><input id="f_lodging" type="number" min="0" placeholder="0"></div>
+      <div class="ff"><label class="fl">Проезд, ₸</label><input id="f_travel" type="number" min="0" placeholder="0"></div>
+      <div class="ff"><label class="fl">Итого, ₸</label><input id="f_total" placeholder="0"></div>
     </div>
-    <div class="ff2">
-      <div class="ff"><label class="fl">Подразделение</label><select id="f_dept">${opts(m.dept,'','— не выбрано —')}</select></div>
-      <div class="ff"><label class="fl">Согласующий руководитель</label><select id="f_sup">${opts(staff.map(s=>({id:s.bid,name:s.name})),'','— не выбрано —')}</select></div>
+
+    <div id="checklistSec" style="display:none">
+      <div class="fsec">Чек-лист для сервиса</div>
+      <div class="ff"><label class="fl">Тип оказываемых услуг</label><input id="f_svc" list="f_svcs" placeholder="Поиск типа услуг"><datalist id="f_svcs">${(m.serviceTypes||[]).map(s=>`<option value="${esc(s.name)}" data-id="${esc(String(s.id))}">`).join('')}</datalist></div>
+      <p style="color:var(--text-3);font-size:12px;margin:2px 2px 0">Виден для инженеров Технического департамента. Поля готовности заполняются на этапе согласования.</p>
     </div>
-    ${(m.deptSections&&m.deptSections.length)?`<div class="ff"><label class="fl">Подразделение (структура)</label><select id="f_deptsec">${opts(m.deptSections,'','— не выбрано —')}</select></div>`:''}
-    <div class="ff"><label class="fl">Контракт</label><input id="f_contract" list="f_contracts" placeholder="Поиск по названию/№"><datalist id="f_contracts">${(m.contracts||[]).map(c=>`<option value="${esc(c.title)}" data-id="${esc(c.id)}">`).join('')}</datalist></div>
-    <p style="color:var(--text-3);font-size:12px;margin:10px 2px 0">Командировка создаётся в Bitrix (стадия «Запрос») и сразу появляется в Планировщике. Остальные поля согласования заполняются по стадиям.</p>`;
+
+    <p style="color:var(--text-3);font-size:12px;margin:14px 2px 0">Командировка создаётся в Bitrix (стадия «Запрос») и сразу появляется в Планировщике.</p>`;
   document.getElementById('newFoot').innerHTML=`<button class="btn" onclick="closeNew()">Отмена</button><button class="btn pri" id="f_submit" onclick="submitCreate()">Создать</button>`;
+  onStaffChange();
 }
 async function submitCreate(){
   const v=id=>{const el=document.getElementById(id);return el?el.value.trim():'';};
@@ -345,10 +385,15 @@ async function submitCreate(){
   if(end && end<start){ toast('Окончание раньше начала'); return; }
   const transport=[...document.querySelectorAll('input[name="trsp"]:checked')].map(x=>x.value);
   const body={ resource, start, end, dest, purpose, route:v('f_route'), transport,
-    tickets:v('f_tickets')||null, lodging:v('f_lodging')||null, deptEnum:v('f_dept')||null,
-    supervisorBid:v('f_sup')||null, deptSectionId:v('f_deptsec')||null, cityId:v('f_city')||null };
-  const cel=document.getElementById('f_contract');
-  if(cel && cel.value){ const o=[...document.querySelectorAll('#f_contracts option')].find(x=>x.value===cel.value); if(o) body.contractId=o.getAttribute('data-id'); }
+    tickets:v('f_tickets')||null, lodging:v('f_lodging')||null, perdiemKz:v('f_pdkz')||null, travel:v('f_travel')||null, total:v('f_total')||null,
+    subject:v('f_subject')||null,
+    supervisorBid:dlId('f_sup','f_sups')||null,
+    cityId:dlId('f_city','f_cities')||null,
+    contractId:dlId('f_contract','f_contracts')||null,
+    companyId:dlId('f_company','f_companies')||null,
+    deptSectionId:dlId('f_dept','f_depts')||null,
+    deptEnum:v('f_deptenum')||null,
+    serviceTypeId:dlId('f_svc','f_svcs')||null };
   const btn=document.getElementById('f_submit'); if(btn){ btn.disabled=true; btn.textContent='Создаём…'; }
   try{
     const r=await fetch('/api/planner/trips',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
