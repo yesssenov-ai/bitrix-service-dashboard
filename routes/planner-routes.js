@@ -967,6 +967,24 @@ const TRIP_SIGN = {
 const TRIP_SIGN_ORDER = ['ruk', 'buh', 'glav'];
 const TRIP_ORDER = { num: 'ufCrm12_1732867927514', date: 'ufCrm12_1732867941708', file: 'ufCrm12_1732867952932' };
 const TRIP_FIN = { perdiemKz: 'ufCrm12_1732867370481', perdiemFr: 'ufCrm12_1776932442741', lodging: 'ufCrm12_1732867384914', visa: 'ufCrm12_1781502339', travel: 'ufCrm12_1781502500', total: 'ufCrm12_1763358920704', docsProzh: 'ufCrm12_1732868047443', docsProezd: 'ufCrm12_1732868055962', avr: 'ufCrm12_1763119612096' };
+const TRIP_SVC_FIELD = 'ufCrm12_1732867415'; // Тип оказываемых услуг (iblock 25)
+const TRIP_CHECK = [
+  { code: 'ufCrm12_1732867489825', label: 'Ознакомился с договором и спецификациями' },
+  { code: 'ufCrm12_1732867520626', label: 'Согласованы прединсталляционные требования' },
+  { code: 'ufCrm12_1732867560506', label: 'Прибор и допоборудование упаковано' },
+  { code: 'ufCrm12_1732867591490', label: 'Наличие спецодежды' },
+  { code: 'ufCrm12_1732867623473', label: 'Набор инструментов инженера' },
+  { code: 'ufCrm12_1732867655227', label: 'Наличие расходных материалов' },
+  { code: 'ufCrm12_1732867679634', label: 'Запасные части и расходники взяты' },
+  { code: 'ufCrm12_1732867717083', label: 'Наличие технической документации' },
+  { code: 'ufCrm12_1732867748345', label: 'Наличие необходимых удостоверений' },
+  { code: 'ufCrm12_1732867774898', label: 'WI-FI адаптер и драйверы' },
+  { code: 'ufCrm12_1732867801947', label: 'Пропуск согласован (e-mail)' },
+  { code: 'ufCrm12_1732867828242', label: 'Финансовые документы' },
+];
+const TRIP_CHECK_CODES = TRIP_CHECK.map(c => c.code);
+const TRIP_CLOSE = { acceptDate: 'ufCrm12_1732868111101', reworkReason: 'ufCrm12_1732868125114' };
+const TRIP_CHANGE = { reason: 'ufCrm12_1732867979962', parent: 'ufCrm12_1732867999' };
 const _empId = v => Array.isArray(v) ? (v[0] || null) : (v || null);
 const _nz = v => (v === null || v === undefined || v === '') ? '' : v;
 async function getTripApprovers() {
@@ -1023,13 +1041,20 @@ router.get('/trips/:id(\\d+)', requireAuth(), async (req, res) => {
     } catch (e) {}
     const cfg = await getTripApprovers();
     const sign = k => ({ date: _nz(it[TRIP_SIGN[k].date]) || null, comment: it[TRIP_SIGN[k].comment] || '', status: (tripSign[k] && tripSign[k].decision) || (_nz(it[TRIP_SIGN[k].date]) ? 'approve' : null), by: tripSign[k] && tripSign[k].by || null });
+    let assignedDept = '';
+    try { if (it.assignedById) { const dr = await pool.query('SELECT department FROM ticketsmodule_staff_ref WHERE bitrix_user_id=$1 LIMIT 1', [it.assignedById]); if (dr.rows.length) assignedDept = dr.rows[0].department || ''; } } catch (e) {}
+    const checklist = {}; TRIP_CHECK_CODES.forEach(c => { checklist[c] = _nz(it[c]) || null; });
     const detail = Object.assign(mapTripItem(it, plannerId), {
       supervisorBid: _empId(it[TRIP_SUP]),
       createdBy: it.createdBy || null,
+      assignedDept,
       ap: { ruk: sign('ruk'), buh: sign('buh'), glav: sign('glav') },
       extra,
       order: { num: it[TRIP_ORDER.num] || '', date: _bxDate(it[TRIP_ORDER.date]), files: _fileList(it[TRIP_ORDER.file]) },
       fin: { perdiemKz: _nz(it[TRIP_FIN.perdiemKz]), perdiemFr: _nz(it[TRIP_FIN.perdiemFr]), lodging: _nz(it[TRIP_FIN.lodging]), visa: _nz(it[TRIP_FIN.visa]), travel: _nz(it[TRIP_FIN.travel]), total: _nz(it[TRIP_FIN.total]) },
+      checklist, serviceTypeId: (Array.isArray(it[TRIP_SVC_FIELD]) ? it[TRIP_SVC_FIELD][0] : it[TRIP_SVC_FIELD]) || null,
+      closing: { acceptDate: _nz(it[TRIP_CLOSE.acceptDate]) || null, reworkReason: it[TRIP_CLOSE.reworkReason] || '' },
+      files: { orderFile: _fileList(it[TRIP_ORDER.file]), avr: _fileList(it[TRIP_FIN.avr]), docsProzh: _fileList(it[TRIP_FIN.docsProzh]), docsProezd: _fileList(it[TRIP_FIN.docsProezd]) },
     });
     res.json({ item: detail, stages: TRIP_STAGES, approvers: cfg, meBid: req.user.bitrix_user_id || null, meAdmin: ['admin', 'superadmin', 'coordinator'].includes(req.user.role) });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1141,6 +1166,56 @@ router.post('/trips/:id(\\d+)/finance', requireAuth(), express.json(), async (re
     res.json({ ok: true });
   } catch (e) { res.status(502).json({ error: 'Bitrix: ' + e.message }); }
 });
+// Чек-лист готовности (12 enum-полей Да/Нет/Не применимо) + тип услуг. Заполняет
+// исполнитель (ответственный инженер) или админ.
+router.post('/trips/:id(\\d+)/checklist', requireAuth(), express.json(), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10); const b = req.body || {};
+    const gr = await b24('crm.item.get', { entityTypeId: TRIP_ETID, id });
+    const it = gr && gr.result && gr.result.item; if (!it) return res.status(404).json({ error: 'Не найдено' });
+    const admin = ['admin', 'superadmin', 'coordinator'].includes(req.user.role);
+    if (!admin && String(req.user.bitrix_user_id) !== String(it.assignedById)) return res.status(403).json({ error: 'Чек-лист заполняет ответственный за командировку' });
+    const fields = {}; const vals = b.values || {};
+    for (const c of TRIP_CHECK_CODES) { if (vals[c] != null && vals[c] !== '') fields[c] = String(vals[c]); }
+    if (b.serviceTypeId != null && b.serviceTypeId !== '') fields[TRIP_SVC_FIELD] = [String(b.serviceTypeId)];
+    if (!Object.keys(fields).length) return res.status(400).json({ error: 'Нечего сохранять' });
+    await b24('crm.item.update', { entityTypeId: TRIP_ETID, id, fields });
+    res.json({ ok: true });
+  } catch (e) { res.status(502).json({ error: 'Bitrix: ' + e.message }); }
+});
+// Закрытие: дата принятия расходов + причина отправки финдокументов на доработку.
+router.post('/trips/:id(\\d+)/closing', requireAuth(), express.json(), async (req, res) => {
+  try {
+    const cfg = await getTripApprovers();
+    if (!_canFinance(req, cfg)) return res.status(403).json({ error: 'Недостаточно прав' });
+    const id = parseInt(req.params.id, 10); const b = req.body || {}; const fields = {};
+    if (b.acceptDate) fields[TRIP_CLOSE.acceptDate] = String(b.acceptDate);
+    if (b.reworkReason != null) fields[TRIP_CLOSE.reworkReason] = String(b.reworkReason).slice(0, 2000);
+    if (!Object.keys(fields).length) return res.status(400).json({ error: 'Нечего сохранять' });
+    await b24('crm.item.update', { entityTypeId: TRIP_ETID, id, fields });
+    res.json({ ok: true });
+  } catch (e) { res.status(502).json({ error: 'Bitrix: ' + e.message }); }
+});
+// Загрузка файла в поле командировки (приказ, финдокументы, документы проезда/проживания).
+// Добавляет к существующим файлам (multiple file-поле): текущие id + новый fileData(base64).
+const TRIP_FILE_FIELDS = { orderFile: TRIP_ORDER.file, avr: TRIP_FIN.avr, docsProzh: TRIP_FIN.docsProzh, docsProezd: TRIP_FIN.docsProezd };
+router.post('/trips/:id(\\d+)/file', requireAuth(), express.json({ limit: '25mb' }), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10); const b = req.body || {};
+    const code = TRIP_FILE_FIELDS[b.field]; if (!code) return res.status(400).json({ error: 'Неизвестное поле' });
+    const name = String(b.name || 'file').slice(0, 200); const data = String(b.dataBase64 || '');
+    if (!data) return res.status(400).json({ error: 'Пустой файл' });
+    const gr = await b24('crm.item.get', { entityTypeId: TRIP_ETID, id });
+    const it = gr && gr.result && gr.result.item; if (!it) return res.status(404).json({ error: 'Не найдено' });
+    const admin = ['admin', 'superadmin', 'coordinator'].includes(req.user.role);
+    const cfg = await getTripApprovers();
+    if (!admin && !_canFinance(req, cfg) && String(req.user.bitrix_user_id) !== String(it.assignedById)) return res.status(403).json({ error: 'Недостаточно прав' });
+    const cur = it[code]; const ids = Array.isArray(cur) ? cur.map(x => (x && (x.id || x.ID)) || x).filter(Boolean) : [];
+    const value = [...ids, { fileData: [name, data] }];
+    await b24('crm.item.update', { entityTypeId: TRIP_ETID, id, fields: { [code]: value } });
+    res.json({ ok: true });
+  } catch (e) { res.status(502).json({ error: 'Bitrix: ' + e.message }); }
+});
 
 // ── Probe полей командировки (1074) — для сборки формы создания (Фаза 2) ──
 // Отдаёт структуру всех полей (тип, обязательность, enum-значения, настройки
@@ -1202,6 +1277,7 @@ router.get('/trip-meta', requireAuth(), async (req, res) => {
       const f = (fieldsR.value && fieldsR.value.result && fieldsR.value.result.fields) || {};
       const en = code => (((f[code] && f[code].items) || []).map(i => ({ id: i.ID != null ? i.ID : i.id, name: i.VALUE != null ? i.VALUE : i.value })));
       out.transport = en(TRIP_TRANSPORT); out.tickets = en(TRIP_TICKETS); out.dept = en(TRIP_DEPT_ENUM);
+      out.checklist = TRIP_CHECK.map(c => ({ code: c.code, label: c.label, items: en(c.code) }));
     } else { out.fieldsErr = String(fieldsR.reason && fieldsR.reason.message || fieldsR.reason); }
     if (contractsR.status === 'fulfilled') {
       const r = contractsR.value;
@@ -1261,7 +1337,9 @@ router.post('/trips', requireAuth(), express.json(), async (req, res) => {
     if (b.perdiemKz != null && b.perdiemKz !== '') fields[TRIP_FIN.perdiemKz] = Number(b.perdiemKz) || 0;
     if (b.travel != null && b.travel !== '') fields[TRIP_FIN.travel] = Number(b.travel) || 0;
     if (b.total != null && b.total !== '') fields[TRIP_FIN.total] = String(b.total);
-    if (b.serviceTypeId) fields['ufCrm12_1732867415'] = [String(b.serviceTypeId)];
+    if (b.serviceTypeId) fields[TRIP_SVC_FIELD] = [String(b.serviceTypeId)];
+    if (b.changeParentId) fields[TRIP_CHANGE.parent] = `DYNAMIC_${TRIP_ETID}_${b.changeParentId}`;
+    if (b.changeReason) fields[TRIP_CHANGE.reason] = String(b.changeReason).slice(0, 2000);
     let bid = null;
     try { const r = await b24('crm.item.add', { entityTypeId: TRIP_ETID, fields }); bid = (r && r.result && r.result.item && r.result.item.id) || null; }
     catch (e) { return res.status(502).json({ error: 'Bitrix: ' + e.message }); }
