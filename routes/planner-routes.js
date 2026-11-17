@@ -956,6 +956,23 @@ const TRIP_ETID = 1074, TRIP_CAT = 15;
 const TRIP_START = 'ufCrm12_1732867277610', TRIP_END = 'ufCrm12_1732867286706';
 const TRIP_DEST = 'ufCrm12_1732867225794', TRIP_PURPOSE = 'ufCrm12_1732867109113';
 const TRIP_ROUTE = 'ufCrm12_1732867267601', TRIP_NUMBER = 'ufCrm12_1763384122385';
+// Поля цикла согласования (подписи), приказа и финансов — для согласования в ЦУП.
+// Роботы Bitrix двигают стадии по заполнению ДАТ подписи; ЦУП пишет дату+коммент.
+const TRIP_SUP = 'ufCrm12_1732866961'; // Согласующий руководитель (employee)
+const TRIP_SIGN = {
+  ruk:  { date: 'ufCrm12_1732867855067', comment: 'ufCrm12_1732867869290', label: 'Руководитель' },
+  buh:  { date: 'ufCrm12_1732867892083', comment: 'ufCrm12_1732867907794', label: 'Бухгалтер' },
+  glav: { date: 'ufCrm12_1763458463',    comment: 'ufCrm12_1763377618706', label: 'Главбух' },
+};
+const TRIP_SIGN_ORDER = ['ruk', 'buh', 'glav'];
+const TRIP_ORDER = { num: 'ufCrm12_1732867927514', date: 'ufCrm12_1732867941708', file: 'ufCrm12_1732867952932' };
+const TRIP_FIN = { perdiemKz: 'ufCrm12_1732867370481', perdiemFr: 'ufCrm12_1776932442741', lodging: 'ufCrm12_1732867384914', visa: 'ufCrm12_1781502339', travel: 'ufCrm12_1781502500', total: 'ufCrm12_1763358920704', docsProzh: 'ufCrm12_1732868047443', docsProezd: 'ufCrm12_1732868055962', avr: 'ufCrm12_1763119612096' };
+const _empId = v => Array.isArray(v) ? (v[0] || null) : (v || null);
+const _nz = v => (v === null || v === undefined || v === '') ? '' : v;
+async function getTripApprovers() {
+  try { const { rows } = await pool.query("SELECT value FROM ticketsmodule_planner_config WHERE key='trip_approvers'"); return rows[0]?.value || {}; }
+  catch (e) { return {}; }
+}
 const TRIP_STAGES = [
   { id: 'DT1074_15:NEW', name: 'Запрос' },
   { id: 'DT1074_15:PREPARATION', name: 'Согласование' },
@@ -987,14 +1004,34 @@ router.get('/trips', requireAuth(), async (req, res) => {
     res.json({ items: items.map(i => mapTripItem(i, links[i.id])), stages: TRIP_STAGES });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+function _fileList(v) {
+  if (!v) return [];
+  const arr = Array.isArray(v) ? v : [v];
+  return arr.filter(Boolean).map(f => (typeof f === 'object')
+    ? { id: f.id || f.ID || null, name: f.name || f.NAME || 'файл', url: f.urlMachine || f.url || f.downloadUrl || '' }
+    : { id: f, name: 'файл', url: '' });
+}
 router.get('/trips/:id(\\d+)', requireAuth(), async (req, res) => {
   try {
     const r = await b24('crm.item.get', { entityTypeId: TRIP_ETID, id: parseInt(req.params.id, 10) });
     const it = r && r.result && r.result.item;
     if (!it) return res.status(404).json({ error: 'Не найдено' });
-    let plannerId = null;
-    try { const lr = await pool.query('SELECT id FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1 LIMIT 1', [it.id]); if (lr.rows.length) plannerId = lr.rows[0].id; } catch (e) {}
-    res.json({ item: mapTripItem(it, plannerId), stages: TRIP_STAGES });
+    let plannerId = null, extra = [], tripSign = {};
+    try {
+      const lr = await pool.query('SELECT id, fields FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1 LIMIT 1', [it.id]);
+      if (lr.rows.length) { plannerId = lr.rows[0].id; const f = lr.rows[0].fields || {}; extra = Array.isArray(f.tripExtra) ? f.tripExtra : []; tripSign = f.tripSign || {}; }
+    } catch (e) {}
+    const cfg = await getTripApprovers();
+    const sign = k => ({ date: _nz(it[TRIP_SIGN[k].date]) || null, comment: it[TRIP_SIGN[k].comment] || '', status: (tripSign[k] && tripSign[k].decision) || (_nz(it[TRIP_SIGN[k].date]) ? 'approve' : null), by: tripSign[k] && tripSign[k].by || null });
+    const detail = Object.assign(mapTripItem(it, plannerId), {
+      supervisorBid: _empId(it[TRIP_SUP]),
+      createdBy: it.createdBy || null,
+      ap: { ruk: sign('ruk'), buh: sign('buh'), glav: sign('glav') },
+      extra,
+      order: { num: it[TRIP_ORDER.num] || '', date: _bxDate(it[TRIP_ORDER.date]), files: _fileList(it[TRIP_ORDER.file]) },
+      fin: { perdiemKz: _nz(it[TRIP_FIN.perdiemKz]), perdiemFr: _nz(it[TRIP_FIN.perdiemFr]), lodging: _nz(it[TRIP_FIN.lodging]), visa: _nz(it[TRIP_FIN.visa]), travel: _nz(it[TRIP_FIN.travel]), total: _nz(it[TRIP_FIN.total]) },
+    });
+    res.json({ item: detail, stages: TRIP_STAGES, approvers: cfg, meBid: req.user.bitrix_user_id || null, meAdmin: ['admin', 'superadmin', 'coordinator'].includes(req.user.role) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.post('/trips/:id(\\d+)/stage', requireAuth(), express.json(), async (req, res) => {
@@ -1005,6 +1042,104 @@ router.post('/trips/:id(\\d+)/stage', requireAuth(), express.json(), async (req,
     invalidateTripStageCache();
     res.json({ ok: true, stageId, stage: TRIP_STAGE_NAME[stageId] });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+function _canFinance(req, cfg) {
+  if (['admin', 'superadmin', 'coordinator'].includes(req.user.role)) return true;
+  const me = String(req.user.bitrix_user_id);
+  return me === String(cfg.buh) || me === String(cfg.glav);
+}
+// Согласование шага цепочки: руководитель → бухгалтер → главбух (+ доп. согласующие).
+// Пишет в Bitrix дату/комментарий (роботы двигают стадию), а точный статус шага
+// (approve/reject/rework + кто/когда) хранит в ЦУП (fields события).
+router.post('/trips/:id(\\d+)/approve', requireAuth(), express.json(), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const b = req.body || {};
+    const step = String(b.step || '');
+    const decision = ['approve', 'reject', 'rework'].includes(b.decision) ? b.decision : 'approve';
+    const comment = String(b.comment || '').slice(0, 2000);
+    const extraBid = b.bid != null ? String(b.bid) : null;
+    const meBid = req.user.bitrix_user_id;
+    const admin = ['admin', 'superadmin', 'coordinator'].includes(req.user.role);
+    const gr = await b24('crm.item.get', { entityTypeId: TRIP_ETID, id });
+    const it = gr && gr.result && gr.result.item;
+    if (!it) return res.status(404).json({ error: 'Не найдено' });
+    const cfg = await getTripApprovers();
+    let allowed = admin;
+    if (step === 'ruk') allowed = allowed || String(meBid) === String(_empId(it[TRIP_SUP]));
+    else if (step === 'buh') allowed = allowed || String(meBid) === String(cfg.buh);
+    else if (step === 'glav') allowed = allowed || String(meBid) === String(cfg.glav);
+    else if (step === 'extra') allowed = allowed || String(meBid) === String(extraBid);
+    else return res.status(400).json({ error: 'Неверный шаг' });
+    if (!allowed) return res.status(403).json({ error: 'Этот шаг согласует другой сотрудник' });
+    if (step !== 'extra') {
+      const F = TRIP_SIGN[step]; const fields = {};
+      if (decision === 'approve') { fields[F.date] = new Date().toISOString(); if (comment) fields[F.comment] = comment; }
+      else { fields[F.comment] = comment || (decision === 'reject' ? 'Отклонено' : 'Возвращено на доработку'); }
+      try { await b24('crm.item.update', { entityTypeId: TRIP_ETID, id, fields }); }
+      catch (e) { return res.status(502).json({ error: 'Bitrix: ' + e.message }); }
+      invalidateTripStageCache();
+    }
+    try {
+      const lr = await pool.query('SELECT id, fields FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1 LIMIT 1', [it.id]);
+      if (lr.rows.length) {
+        const f = lr.rows[0].fields || {};
+        if (step === 'extra') {
+          const ex = Array.isArray(f.tripExtra) ? f.tripExtra : [];
+          const i = ex.findIndex(x => String(x.bid) === extraBid);
+          if (i >= 0) ex[i] = Object.assign({}, ex[i], { decision, comment, at: new Date().toISOString() });
+          f.tripExtra = ex;
+        } else {
+          const ts = f.tripSign || {}; ts[step] = { decision, by: meBid, comment, at: new Date().toISOString() }; f.tripSign = ts;
+        }
+        await pool.query('UPDATE ticketsmodule_planner_events SET fields=$1 WHERE id=$2', [JSON.stringify(f), lr.rows[0].id]);
+      }
+    } catch (e) { console.error('trip approve → event fields:', e.message); }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Список доп. согласующих (ЦУП-сторона, в полях события). Инициатор добавляет/убирает.
+router.post('/trips/:id(\\d+)/approvers', requireAuth(), express.json(), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const list = Array.isArray(req.body.extra) ? req.body.extra : [];
+    const clean = list.map(x => ({ bid: String(x.bid), name: String(x.name || ''), decision: x.decision || null, comment: x.comment || '', at: x.at || null })).filter(x => x.bid && x.bid !== 'null');
+    const lr = await pool.query('SELECT id, fields FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1 LIMIT 1', [id]);
+    if (!lr.rows.length) return res.status(404).json({ error: 'Событие планировщика не найдено' });
+    const f = lr.rows[0].fields || {};
+    const prev = Array.isArray(f.tripExtra) ? f.tripExtra : [];
+    for (const c of clean) { const p = prev.find(x => String(x.bid) === c.bid); if (p) { c.decision = p.decision; c.comment = p.comment; c.at = p.at; } }
+    f.tripExtra = clean;
+    await pool.query('UPDATE ticketsmodule_planner_events SET fields=$1 WHERE id=$2', [JSON.stringify(f), lr.rows[0].id]);
+    res.json({ ok: true, extra: clean });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Приказ (номер/дата) и финансы (числа) — пишем в Bitrix. Файлы — в проходе B.
+router.post('/trips/:id(\\d+)/order', requireAuth(), express.json(), async (req, res) => {
+  try {
+    const cfg = await getTripApprovers();
+    if (!_canFinance(req, cfg)) return res.status(403).json({ error: 'Недостаточно прав' });
+    const id = parseInt(req.params.id, 10); const b = req.body || {}; const fields = {};
+    if (b.num != null) fields[TRIP_ORDER.num] = String(b.num).slice(0, 100);
+    if (b.date) fields[TRIP_ORDER.date] = String(b.date).slice(0, 10);
+    if (!Object.keys(fields).length) return res.status(400).json({ error: 'Нечего сохранять' });
+    await b24('crm.item.update', { entityTypeId: TRIP_ETID, id, fields });
+    res.json({ ok: true });
+  } catch (e) { res.status(502).json({ error: 'Bitrix: ' + e.message }); }
+});
+router.post('/trips/:id(\\d+)/finance', requireAuth(), express.json(), async (req, res) => {
+  try {
+    const cfg = await getTripApprovers();
+    if (!_canFinance(req, cfg)) return res.status(403).json({ error: 'Недостаточно прав' });
+    const id = parseInt(req.params.id, 10); const b = req.body || {}; const fields = {};
+    const setNum = (k, code) => { if (b[k] != null && b[k] !== '') fields[code] = Number(b[k]) || 0; };
+    setNum('perdiemKz', TRIP_FIN.perdiemKz); setNum('lodging', TRIP_FIN.lodging); setNum('visa', TRIP_FIN.visa); setNum('travel', TRIP_FIN.travel);
+    if (b.perdiemFr != null) fields[TRIP_FIN.perdiemFr] = String(b.perdiemFr);
+    if (b.total != null) fields[TRIP_FIN.total] = String(b.total);
+    if (!Object.keys(fields).length) return res.status(400).json({ error: 'Нечего сохранять' });
+    await b24('crm.item.update', { entityTypeId: TRIP_ETID, id, fields });
+    res.json({ ok: true });
+  } catch (e) { res.status(502).json({ error: 'Bitrix: ' + e.message }); }
 });
 
 // ── Probe полей командировки (1074) — для сборки формы создания (Фаза 2) ──

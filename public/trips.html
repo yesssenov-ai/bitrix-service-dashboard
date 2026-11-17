@@ -115,6 +115,34 @@ body.cup-has-topbar{padding-top:0!important}
 .chk{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-2);border-radius:9px;padding:8px 12px;font:600 12.5px/1 var(--font);color:var(--text-2);cursor:pointer;user-select:none}
 .chk input{width:auto;margin:0;accent-color:var(--accent)}
 .chk:has(input:checked){background:color-mix(in srgb,var(--accent) 10%,transparent);border-color:var(--accent);color:var(--text)}
+/* Согласование */
+.sec{margin:18px 0 6px;font:700 11px/1 var(--font);text-transform:uppercase;letter-spacing:.06em;color:var(--text-3)}
+.apstep{display:flex;gap:11px;padding:12px 0;border-bottom:1px solid var(--line)}
+.apstep:last-child{border-bottom:none}
+.apnum{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:700 11px/1 var(--font);background:var(--surface-2);color:var(--text-3);border:1.5px solid var(--line-2)}
+.apstep.done .apnum{background:#16a37a;border-color:#16a37a;color:#fff}
+.apstep.active .apnum{background:var(--text);border-color:var(--text);color:var(--surface)}
+.apstep.rej .apnum{background:#e5484d;border-color:#e5484d;color:#fff}
+.apmain{flex:1;min-width:0}
+.aprole{font:700 10px/1 var(--font);text-transform:uppercase;letter-spacing:.05em;color:var(--text-3)}
+.apname{font-weight:600;font-size:13.5px;margin-top:2px}
+.apbadge{display:inline-flex;align-items:center;gap:5px;font:600 11px/1 var(--font);padding:4px 9px;border-radius:999px;margin-top:5px}
+.apbadge.wait{background:var(--surface-2);color:var(--text-3)}
+.apbadge.ok{background:#e9f7f1;color:#0e7d5c}.apbadge.rej{background:#fdeced;color:#c0343a}.apbadge.rw{background:#fdf3e8;color:#b9600f}
+.apcmt{font-size:12px;color:var(--text-2);margin-top:5px;background:var(--surface-2);border-radius:8px;padding:7px 10px}
+.apact{margin-top:9px}
+.apact textarea{width:100%;border:1px solid var(--line-2);border-radius:9px;background:var(--surface);color:var(--text);font:500 12.5px/1.3 var(--font);padding:8px 10px;resize:vertical;min-height:34px;margin-bottom:7px}
+.apbtns{display:flex;gap:6px;flex-wrap:wrap}
+.apbtns .btn{font-size:12px;padding:7px 11px}
+.apbtns .ok{background:#16a37a;border-color:#16a37a;color:#fff}.apbtns .ok:hover{filter:brightness(.96)}
+.apbtns .rw{background:#fff;border-color:#e0a14a;color:#b9600f}.apbtns .rj{background:#fff;border-color:#e59aa0;color:#c0343a}
+.aprm{margin-left:auto;background:none;border:none;color:var(--text-3);cursor:pointer;font-size:16px;line-height:1}
+.addrow{display:flex;gap:7px;margin-top:10px}
+.addrow select{flex:1;border:1px solid var(--line-2);border-radius:9px;background:var(--surface);color:var(--text);font:500 12.5px/1 var(--font);padding:8px 10px}
+.frow2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fin input{width:100%;border:1px solid var(--line-2);border-radius:9px;background:var(--surface);color:var(--text);font:500 13px/1 var(--font);padding:9px 11px}
+.fin label{display:block;font:600 10.5px/1 var(--font);text-transform:uppercase;letter-spacing:.04em;color:var(--text-3);margin:0 0 5px 2px}
+.fin .ff{margin-bottom:10px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:var(--surface);padding:11px 18px;border-radius:10px;font:600 13px/1 var(--font);z-index:90;opacity:0;transition:.2s;pointer-events:none;box-shadow:0 6px 24px rgba(0,0,0,.2);max-width:90vw;text-align:center}
 .toast.show{opacity:1}
 @media(max-width:560px){.wrap{padding:16px 14px 50px}.grid{grid-template-columns:1fr}.hdr .sub{display:none}.pan{width:100vw}.btn.pri span{display:none}.btn.pri{padding:9px 11px}.tl .head .nmcol,.tl .nmcol{width:130px}}
@@ -126,6 +154,7 @@ body.cup-has-topbar{padding-top:0!important}
   <a class="brand" href="/"><img src="/assets/logo-icon.png" alt="">ProLabSupport</a>
   <span class="sub">Командировки</span>
   <span class="sp"></span>
+  <button class="back" onclick="openSettings()" title="Настройки согласования" style="margin-right:8px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
   <button class="btn pri" onclick="newTrip()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>Новая командировка</span></button>
 </header>
 <div class="wrap">
@@ -148,10 +177,14 @@ body.cup-has-topbar{padding-top:0!important}
   <div class="pan"><div class="ph"><span class="t">Новая командировка</span><button class="x" onclick="closeNew()">&times;</button></div>
   <div class="pb" id="newBody"></div><div class="pf" id="newFoot"></div></div>
 </div>
+<div class="ov" id="ovSet" onclick="if(event.target===this)closeSettings()">
+  <div class="pan"><div class="ph"><span class="t">Настройки согласования</span><button class="x" onclick="closeSettings()">&times;</button></div>
+  <div class="pb" id="setBody"></div><div class="pf" id="setFoot"></div></div>
+</div>
 <div class="toast" id="toast"></div>
 <script src="/assets/cup-theme.js" defer></script>
 <script>
-let ITEMS=[], STAGES=[], STAFF=[], FILTER='all', CUR=null, VIEW='timeline';
+let ITEMS=[], STAGES=[], STAFF=[], FILTER='all', CUR=null, VIEW='timeline', CFG={}, ME={bid:null,admin:false};
 try{ const v=localStorage.getItem('tripView'); if(v) VIEW=v; }catch(e){}
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const D=s=>new Date(String(s).slice(0,10)+'T00:00:00');
@@ -256,8 +289,8 @@ async function reloadTrips(){ try{ const l=await fetch('/api/planner/trips').the
 
 async function boot(){
   try{
-    const [l,m]=await Promise.all([ fetch('/api/planner/trips').then(r=>r.json()), fetch('/api/planner/leave-meta').then(r=>r.json()) ]);
-    ITEMS=l.items||[]; STAGES=l.stages||[]; STAFF=(m&&m.staff)||[];
+    const [l,m,c]=await Promise.all([ fetch('/api/planner/trips').then(r=>r.json()), fetch('/api/planner/leave-meta').then(r=>r.json()), fetch('/api/planner/config/trip_approvers').then(r=>r.json()).catch(()=>({})) ]);
+    ITEMS=l.items||[]; STAGES=l.stages||[]; STAFF=(m&&m.staff)||[]; CFG=(c&&c.value)||{};
   }catch(e){ document.getElementById('view').innerHTML='<div class="empty">Не удалось загрузить. Проверьте доступ к Bitrix.</div>'; return; }
   setView(VIEW,true); renderChips(); renderLegend(); render();
   const qid=new URLSearchParams(location.search).get('id'); if(qid) openDetail(parseInt(qid,10));
@@ -351,12 +384,79 @@ async function openDetail(id){
   CUR=ITEMS.find(i=>i.id===id)||{id}; document.getElementById('panTitle').textContent='Командировка';
   document.getElementById('panBody').innerHTML='<div class="empty">Загрузка…</div>'; document.getElementById('panFoot').innerHTML='';
   document.getElementById('ov').classList.add('open');
-  try{ const d=await fetch('/api/planner/trips/'+id).then(r=>r.json()); if(d.item){ CUR=d.item; STAGES=d.stages||STAGES; } }catch(e){}
+  try{ const d=await fetch('/api/planner/trips/'+id).then(r=>r.json()); if(d.item){ CUR=d.item; STAGES=d.stages||STAGES; CFG=d.approvers||CFG; ME={bid:d.meBid,admin:!!d.meAdmin}; } }catch(e){}
   renderDetail();
+}
+function fmtWhen(x){ if(!x) return ''; const d=new Date(x); if(isNaN(d)) return ''; return ('0'+d.getDate()).slice(-2)+'.'+('0'+(d.getMonth()+1)).slice(-2)+'.'+d.getFullYear(); }
+function canFin(){ return ME.admin || (ME.bid!=null && (String(ME.bid)===String(CFG.buh)||String(ME.bid)===String(CFG.glav))); }
+function buildSteps(){
+  const i=CUR;
+  const steps=[{key:'ruk',role:'Руководитель',bid:i.supervisorBid,st:i.ap&&i.ap.ruk||{}}];
+  (i.extra||[]).forEach(x=>steps.push({key:'extra',role:'Согласующий',bid:x.bid,name:x.name,st:{status:x.decision,comment:x.comment,date:x.at}}));
+  steps.push({key:'buh',role:'Бухгалтер',bid:CFG.buh,st:i.ap&&i.ap.buh||{}});
+  steps.push({key:'glav',role:'Главбух',bid:CFG.glav,st:i.ap&&i.ap.glav||{}});
+  return steps;
+}
+function badgeOf(st,isActive){
+  const s=st&&st.status;
+  if(s==='approve') return `<span class="apbadge ok">✓ Согласовал${st.date?' · '+fmtWhen(st.date):''}</span>`;
+  if(s==='reject') return `<span class="apbadge rej">✕ Отклонил</span>`;
+  if(s==='rework') return `<span class="apbadge rw">↩ На доработку</span>`;
+  return `<span class="apbadge wait">${isActive?'ожидает решения':'ожидает'}</span>`;
+}
+function renderApproval(){
+  const steps=buildSteps();
+  let activeIdx=steps.findIndex(s=>!(s.st&&s.st.status==='approve'));
+  if(activeIdx<0) activeIdx=steps.length; // всё согласовано
+  const rows=steps.map((s,ix)=>{
+    const nm=s.name||nameOf(s.bid)||(s.bid?('#'+s.bid):'не назначен');
+    const done=s.st&&s.st.status==='approve'; const rej=s.st&&(s.st.status==='reject'||s.st.status==='rework');
+    const active=ix===activeIdx;
+    const cls=done?'done':(rej?'rej':(active?'active':''));
+    const mine=active && s.bid && (ME.admin || String(ME.bid)===String(s.bid));
+    const noAssignee=(s.key==='buh'||s.key==='glav') && !s.bid;
+    let act='';
+    if(mine){
+      const bidArg=s.key==='extra'?`,'${esc(String(s.bid))}'`:'';
+      act=`<div class="apact"><textarea id="apComment" placeholder="Комментарий / причина (для отказа и доработки — обязательно)"></textarea>
+        <div class="apbtns"><button class="btn ok" onclick="approveStep('${s.key}','approve'${bidArg})">✓ Согласовать</button>
+        <button class="btn rw" onclick="approveStep('${s.key}','rework'${bidArg})">↩ На доработку</button>
+        <button class="btn rj" onclick="approveStep('${s.key}','reject'${bidArg})">✕ Отклонить</button></div></div>`;
+    } else if(active && noAssignee){
+      act=`<div class="apcmt">Исполнитель не назначен — задайте в <a class="lnk" href="#" onclick="closePanel();openSettings();return false">настройках согласования</a>.</div>`;
+    }
+    const rm=(s.key==='extra' && (ME.admin||String(ME.bid)===String(CUR.createdBy))) ? `<button class="aprm" title="Убрать" onclick="removeExtra('${esc(String(s.bid))}')">×</button>`:'';
+    return `<div class="apstep ${cls}"><div class="apnum">${done?'✓':(ix+1)}</div><div class="apmain">
+      <div style="display:flex;align-items:center"><div><div class="aprole">${esc(s.role)}</div><div class="apname">${esc(nm)}</div></div>${rm}</div>
+      ${badgeOf(s.st,active)}
+      ${s.st&&s.st.comment?`<div class="apcmt">${esc(s.st.comment)}</div>`:''}
+      ${act}</div></div>`;
+  }).join('');
+  // Добавление доп. согласующего — инициатор/админ, до полного согласования
+  const canAdd = ME.admin || String(ME.bid)===String(CUR.createdBy);
+  const addBox = canAdd ? `<div class="addrow"><select id="extraSel"><option value="">+ Добавить согласующего…</option>${STAFF.map(s=>`<option value="${esc(String(s.bid))}">${esc(s.name)}</option>`).join('')}</select><button class="btn" onclick="addExtraApprover()">Добавить</button></div>`:'';
+  return `<div class="sec">Согласование</div>${rows}${addBox}`;
 }
 function renderDetail(){
   const i=CUR; const nm=nameOf(i.assignedById); const idx=STAGES.findIndex(s=>s.id===i.stageId); const dd=days(i.start,i.end);
   const flow=STAGES.filter(s=>!s.id.endsWith(':FAIL')).map(s=>{const myIdx=STAGES.findIndex(x=>x.id===s.id);const cls=s.id===i.stageId?'cur':(myIdx<idx?'done':'');return `<span class="sp2 ${cls}">${esc(s.name)}</span>`;}).join('');
+  const fin=i.fin||{}; const ord=i.order||{}; const cf=canFin();
+  const finBlock = `<div class="sec">Финансы</div><div class="fin">
+    <div class="frow2">
+      <div class="ff"><label>Суточные (КЗ), ₸</label><input id="fi_pdkz" type="number" min="0" value="${esc(fin.perdiemKz)}" ${cf?'':'disabled'}></div>
+      <div class="ff"><label>Проживание, ₸</label><input id="fi_lodg" type="number" min="0" value="${esc(fin.lodging)}" ${cf?'':'disabled'}></div>
+      <div class="ff"><label>Визовые, ₸</label><input id="fi_visa" type="number" min="0" value="${esc(fin.visa)}" ${cf?'':'disabled'}></div>
+      <div class="ff"><label>Проезд, ₸</label><input id="fi_trav" type="number" min="0" value="${esc(fin.travel)}" ${cf?'':'disabled'}></div>
+      <div class="ff"><label>Суточные (зарубеж)</label><input id="fi_pdfr" value="${esc(fin.perdiemFr)}" ${cf?'':'disabled'}></div>
+      <div class="ff"><label>Итого</label><input id="fi_total" value="${esc(fin.total)}" ${cf?'':'disabled'}></div>
+    </div>${cf?`<button class="btn pri" style="width:100%;justify-content:center" onclick="saveFinance()">Сохранить финансы</button>`:''}</div>`;
+  const ordBlock = `<div class="sec">Приказ на командировку</div><div class="fin">
+    <div class="frow2">
+      <div class="ff"><label>Номер приказа</label><input id="or_num" value="${esc(ord.num)}" ${cf?'':'disabled'}></div>
+      <div class="ff"><label>Дата приказа</label><input id="or_date" type="date" value="${esc(ord.date||'')}" ${cf?'':'disabled'}></div>
+    </div>${cf?`<button class="btn pri" style="width:100%;justify-content:center" onclick="saveOrder()">Сохранить приказ</button>`:''}
+    ${(ord.files&&ord.files.length)?`<div style="margin-top:8px">${ord.files.map(f=>f.url?`<a class="lnk" href="${esc(f.url)}" target="_blank">📎 ${esc(f.name)}</a>`:`<span class="tag">📎 ${esc(f.name)}</span>`).join(' ')}</div>`:''}
+    <div class="apcmt" style="margin-top:8px">Загрузка файла приказа и финдокументов — в следующем обновлении.</div></div>`;
   document.getElementById('panBody').innerHTML=`
     <div style="display:flex;align-items:center;gap:11px;margin-bottom:14px">${av(nm,'card')}<div><div style="font-weight:800;font-size:16px">${esc(nm||'—')}</div><div style="color:var(--text-2);font-size:13px;margin-top:2px">${dmy(i.start,true)} – ${dmy(i.end,true)}${dd?(' · '+dd+' дн.'):''}</div></div></div>
     <div class="fl">Стадия</div><div class="stageflow">${flow}</div>
@@ -365,15 +465,58 @@ function renderDetail(){
       <div class="dl"><span class="k">Пункт назначения</span><span class="v">${esc(i.dest||'—')}</span></div>
       <div class="dl"><span class="k">Цель</span><span class="v">${esc(i.purpose||'—')}</span></div>
       ${i.route?`<div class="dl"><span class="k">Маршрут</span><span class="v">${esc(i.route)}</span></div>`:''}
-      <div class="dl"><span class="k">Текущая стадия</span><span class="v">${esc(i.stage)}</span></div>
     </div>
+    ${renderApproval()}
+    ${ordBlock}
+    ${finBlock}
     <div style="margin-top:16px">${i.plannerId?`<a class="lnk" href="/planner.html">В Планировщике ↗</a>`:''}</div>`;
-  const next=STAGES[idx+1]; const fail=STAGES.find(s=>s.id.endsWith(':FAIL')); let foot='';
-  if(next && !i.stageId.endsWith(':SUCCESS') && !i.stageId.endsWith(':FAIL')){ if(fail) foot+=`<button class="btn" onclick="boardMove(${i.id},'${esc(fail.id)}')">Не состоялась</button>`; foot+=`<button class="btn pri" onclick="boardMove(${i.id},'${esc(next.id)}')">→ ${esc(next.name)}</button>`; }
-  document.getElementById('panFoot').innerHTML=foot||`<button class="btn" onclick="closePanel()">Закрыть</button>`;
+  document.getElementById('panFoot').innerHTML=`<button class="btn" onclick="closePanel()">Закрыть</button>`;
+}
+async function approveStep(step,decision,bid){
+  const ta=document.getElementById('apComment'); const comment=ta?ta.value.trim():'';
+  if((decision==='reject'||decision==='rework') && !comment){ toast('Укажите причину'); return; }
+  try{
+    const body={step,decision,comment}; if(step==='extra') body.bid=bid;
+    const r=await fetch('/api/planner/trips/'+CUR.id+'/approve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json(); if(!r.ok||!d.ok){ toast(d.error||'Не удалось'); return; }
+    toast(decision==='approve'?'Согласовано':'Сохранено'); await openDetail(CUR.id); reloadTrips();
+  }catch(e){ toast('Ошибка сети'); }
+}
+async function saveExtra(list){
+  try{ const r=await fetch('/api/planner/trips/'+CUR.id+'/approvers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({extra:list})}); const d=await r.json(); if(!r.ok||!d.ok){toast(d.error||'Не удалось');return;} await openDetail(CUR.id); }catch(e){toast('Ошибка сети');}
+}
+function addExtraApprover(){ const sel=document.getElementById('extraSel'); if(!sel||!sel.value) return; const bid=sel.value; if((CUR.extra||[]).some(x=>String(x.bid)===bid)){toast('Уже в списке');return;} const name=(STAFF.find(s=>String(s.bid)===bid)||{}).name||''; saveExtra([...(CUR.extra||[]),{bid,name}]); }
+function removeExtra(bid){ saveExtra((CUR.extra||[]).filter(x=>String(x.bid)!==String(bid))); }
+async function saveOrder(){
+  const num=(document.getElementById('or_num')||{}).value||''; const date=(document.getElementById('or_date')||{}).value||'';
+  try{ const r=await fetch('/api/planner/trips/'+CUR.id+'/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({num,date})}); const d=await r.json(); if(!r.ok||!d.ok){toast(d.error||'Не удалось');return;} toast('Приказ сохранён'); openDetail(CUR.id); }catch(e){toast('Ошибка сети');}
+}
+async function saveFinance(){
+  const g=id=>(document.getElementById(id)||{}).value||'';
+  const body={ perdiemKz:g('fi_pdkz'), lodging:g('fi_lodg'), visa:g('fi_visa'), travel:g('fi_trav'), perdiemFr:g('fi_pdfr'), total:g('fi_total') };
+  try{ const r=await fetch('/api/planner/trips/'+CUR.id+'/finance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); const d=await r.json(); if(!r.ok||!d.ok){toast(d.error||'Не удалось');return;} toast('Финансы сохранены'); openDetail(CUR.id); }catch(e){toast('Ошибка сети');}
 }
 function closePanel(){ document.getElementById('ov').classList.remove('open'); }
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closePanel(); closeNew(); } });
+function openSettings(){
+  document.getElementById('ovSet').classList.add('open');
+  const sopt=v=>`<option value="">— не выбрано —</option>`+STAFF.map(s=>`<option value="${esc(String(s.bid))}" ${String(s.bid)===String(v)?'selected':''}>${esc(s.name)}</option>`).join('');
+  document.getElementById('setBody').innerHTML=`
+    <p style="color:var(--text-2);font-size:13px;margin:0 0 14px">Кто подписывает шаги согласования командировок. Поменялся сотрудник — выберите другого, и согласование уйдёт к нему. Руководитель берётся из поля «Согласующий руководитель» самой командировки.</p>
+    <div class="ff"><label class="fl">Согласующий бухгалтер</label><select id="set_buh">${sopt(CFG.buh)}</select></div>
+    <div class="ff"><label class="fl">Главбух</label><select id="set_glav">${sopt(CFG.glav)}</select></div>
+    <p style="color:var(--text-3);font-size:12px;margin-top:10px">Доступно администраторам/координаторам.</p>`;
+  document.getElementById('setFoot').innerHTML=`<button class="btn" onclick="closeSettings()">Отмена</button><button class="btn pri" onclick="saveSettings()">Сохранить</button>`;
+}
+function closeSettings(){ document.getElementById('ovSet').classList.remove('open'); }
+async function saveSettings(){
+  const buh=(document.getElementById('set_buh')||{}).value||null; const glav=(document.getElementById('set_glav')||{}).value||null;
+  try{
+    const r=await fetch('/api/planner/config/trip_approvers',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({value:{buh,glav}})});
+    const d=await r.json(); if(!r.ok||!d.ok){ toast(d.error||'Нет прав на изменение'); return; }
+    CFG={buh,glav}; toast('Настройки сохранены'); closeSettings(); if(document.getElementById('ov').classList.contains('open')&&CUR) renderDetail();
+  }catch(e){ toast('Ошибка сети'); }
+}
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closePanel(); closeNew(); closeSettings(); } });
 boot();
 </script>
 </body>
