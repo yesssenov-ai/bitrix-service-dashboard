@@ -426,7 +426,14 @@ async function boot(){
     ITEMS=l.items||[]; STAGES=l.stages||[]; STAFF=(m&&m.staff)||[]; CFG=(c&&c.value)||{}; if(tm&&tm.staff) META=tm;
   }catch(e){ document.getElementById('view').innerHTML='<div class="empty">Не удалось загрузить. Проверьте доступ к Bitrix.</div>'; return; }
   setView(VIEW,true); renderChips(); renderLegend(); render();
-  const qid=new URLSearchParams(location.search).get('id'); if(qid) openDetail(parseInt(qid,10));
+  const qp=new URLSearchParams(location.search);
+  if(qp.get('id')) openDetail(parseInt(qp.get('id'),10));
+  else if(qp.get('newtrip')){
+    await newTrip();
+    const set=(id,v)=>{const el=document.getElementById(id);if(el&&v)el.value=v;};
+    set('f_res',qp.get('res')); set('f_start',qp.get('start')); set('f_end',qp.get('end')); set('f_dest',qp.get('dest')); set('f_purpose',qp.get('purpose'));
+    onStaffChange();
+  }
 }
 function renderLegend(){
   const el=document.getElementById('legend'); if(!el) return;

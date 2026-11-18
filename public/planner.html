@@ -1513,23 +1513,32 @@ function openNew(pre={}){
 }
 function openEdit(id){
   editId=id; const ev=events.find(e=>e.id===id); if(!ev) return;
-  // Карточные модули раздела «Процессы»: отпуск, заведённый в Bitrix, открываем
-  // в его карточке (модуль «Отпуска»), а не в общей форме Планировщика.
+  // Карточные модули «Отпуска»/«Встречи»: отпуск/встреча, заведённые в Bitrix,
+  // открываем в их карточке. Выезды (type=trip) — это Заявки на сервис (1058),
+  // НЕ командировки: их редактируем здесь же, в панели Планировщика (синк с 1058).
   if(ev.type==='leave' && ev.bitrixItemId){ location.href='/leaves.html?id='+ev.bitrixItemId; return; }
   if(ev.type==='meeting' && ev.bitrixItemId){ location.href='/meetings.html?id='+ev.bitrixItemId; return; }
-  if(ev.type==='trip' && ev.bitrixItemId){ location.href='/trips.html?id='+ev.bitrixItemId; return; }
   curType=ev.type||'trip';
   document.getElementById('pTitle').textContent = canEditRole ? 'Редактировать событие' : 'Событие';
   // Delete only for admin/coordinator; Save only for roles that may edit
   // (backend still enforces engineer own-only). Viewer sees neither — read only.
   let acts='';
   if (canDeleteRole) acts += `<button class="pb pb-del" onclick="deleteEv()">Удалить</button>`;
+  if (canEditRole && (ev.type==='trip'||ev.type==='train')) acts += `<button class="pb" style="background:#16a37a;color:#fff;border-color:#16a37a" onclick="goCreateTrip()">Оформить командировку</button>`;
   if (canEditRole)   acts += `<button class="pb pb-save" onclick="saveEv()">Сохранить</button>`;
   document.getElementById('pActs').innerHTML=acts;
   renderForm(ev);
   document.getElementById('overlay').style.display='flex';
 }
 function closePanel(){ document.getElementById('overlay').style.display='none'; editId=null; }
+// Из панели работы Планировщика → открыть модуль Командировок с предзаполненной
+// формой создания (это отдельная сущность 1074; сам выезд остаётся Заявкой 1058).
+function goCreateTrip(){
+  const ev=events.find(e=>e.id===editId); if(!ev) return;
+  const f=ev.fields||{};
+  const p=new URLSearchParams({ newtrip:'1', res:ev.resource||'', start:(ev.start||'').slice(0,10), end:(ev.end||'').slice(0,10), dest:(f.df2||f.df1||'')||'', purpose:(ev.title||f.df3||'')||'' });
+  location.href='/trips.html?'+p.toString();
+}
 
 function isTechnicalRes(name){
   const dept = ALL_RES.find(r=>r.name===name)?.dept || '';
