@@ -812,7 +812,7 @@ router.get('/leaves', requireAuth(), async (req, res) => {
     const links = {};
     if (ids.length) {
       try {
-        const lr = await pool.query('SELECT bitrix_item_id, id FROM ticketsmodule_planner_events WHERE bitrix_item_id = ANY($1::int[])', [ids]);
+        const lr = await pool.query("SELECT bitrix_item_id, id FROM ticketsmodule_planner_events WHERE type='leave' AND bitrix_item_id = ANY($1::int[])", [ids]);
         lr.rows.forEach(x => { links[x.bitrix_item_id] = x.id; });
       } catch (e) {}
     }
@@ -898,7 +898,7 @@ router.get('/meetings', requireAuth(), async (req, res) => {
     try { const r = await b24('crm.item.list', { entityTypeId: MEET_ETID, filter: { categoryId: MEET_CAT }, order: { id: 'desc' }, select: ['*', 'uf_*'] }); items = (r && r.result && r.result.items) || []; }
     catch (e) { return res.status(502).json({ error: 'Bitrix недоступен: ' + e.message }); }
     const ids = items.map(i => i.id).filter(Boolean); const links = {};
-    if (ids.length) { try { const lr = await pool.query('SELECT bitrix_item_id, id FROM ticketsmodule_planner_events WHERE bitrix_item_id = ANY($1::int[])', [ids]); lr.rows.forEach(x => { links[x.bitrix_item_id] = x.id; }); } catch (e) {} }
+    if (ids.length) { try { const lr = await pool.query("SELECT bitrix_item_id, id FROM ticketsmodule_planner_events WHERE type='meeting' AND bitrix_item_id = ANY($1::int[])", [ids]); lr.rows.forEach(x => { links[x.bitrix_item_id] = x.id; }); } catch (e) {} }
     res.json({ items: items.map(i => mapMeetItem(i, links[i.id], sn[i.stageId])), stages });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1018,7 +1018,7 @@ router.get('/trips', requireAuth(), async (req, res) => {
     try { const r = await b24('crm.item.list', { entityTypeId: TRIP_ETID, filter: { categoryId: TRIP_CAT }, order: { id: 'desc' }, select: ['*', 'uf_*'] }); items = (r && r.result && r.result.items) || []; }
     catch (e) { return res.status(502).json({ error: 'Bitrix недоступен: ' + e.message }); }
     const ids = items.map(i => i.id).filter(Boolean); const links = {};
-    if (ids.length) { try { const lr = await pool.query('SELECT bitrix_item_id, id FROM ticketsmodule_planner_events WHERE bitrix_item_id = ANY($1::int[])', [ids]); lr.rows.forEach(x => { links[x.bitrix_item_id] = x.id; }); } catch (e) {} }
+    if (ids.length) { try { const lr = await pool.query("SELECT bitrix_item_id, id FROM ticketsmodule_planner_events WHERE type='trip' AND bitrix_item_id = ANY($1::int[])", [ids]); lr.rows.forEach(x => { links[x.bitrix_item_id] = x.id; }); } catch (e) {} }
     res.json({ items: items.map(i => mapTripItem(i, links[i.id])), stages: TRIP_STAGES });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

@@ -58,7 +58,7 @@ async function syncPlannerEvent(item, itemId, opts = {}) {
   if (!ready) {
     // Required data isn't (or is no longer) complete — remove any previously
     // synced event for this item so the planner doesn't show a stale job.
-    try { await pool.query('DELETE FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1', [itemId]); }
+    try { await pool.query("DELETE FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1 AND type='trip'", [itemId]); }
     catch (e) { console.error('Planner sync cleanup error:', e.message); }
     return;
   }
@@ -109,7 +109,7 @@ async function syncPlannerEvent(item, itemId, opts = {}) {
       `SELECT id, resource, bitrix_sync_hash,
         to_char(start_at AT TIME ZONE '${PLANNER_TZ}', 'YYYY-MM-DD') AS start_date_old,
         to_char(end_at AT TIME ZONE '${PLANNER_TZ}', 'YYYY-MM-DD') AS end_date_old
-       FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1`, [itemId]
+       FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1 AND type='trip'`, [itemId]
     );
 
     if (rows.length && rows[0].bitrix_sync_hash === newHash) {
@@ -213,6 +213,44 @@ async function syncPlannerEvent(item, itemId, opts = {}) {
   return { ok: true };
 }
 
+// ── Входящий синк Отпусков (1108) и Встреч (воронка 4) в Планировщик ───────
+// Событие в планировщике уникально по (bitrix_item_id, type): id в разных
+// сущностях Bitrix пересекаются, а тип (leave/meeting/trip/command) различает.
+const LV = { start: 'ufCrm19_1782732324', end: 'ufCrm19_1782732517', type: 'ufCrm19_1782733656', days: 'ufCrm19_1782732922' };
+const MT = { date: 'ufCrm_1736508416174', short: 'ufCrm_1736508064357', loc: 'ufCrm_1736508501960' };
+async function upsertBitrixEvent({ itemId, type, resourceId, resource, title, start, end, confirmed, fields }) {
+  if (!resource || !start || !end) { try { await pool.query('DELETE FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1 AND type=$2', [itemId, type]); } catch (e) {} return; }
+  const sD = new Date(start); sD.setHours(9, 0, 0, 0); const eD = new Date(end); eD.setHours(18, 0, 0, 0);
+  if (isNaN(sD) || isNaN(eD)) return;
+  const sL = fmtLocalNaive(sD), eL = fmtLocalNaive(eD);
+  const hash = computeSyncHash(resourceId || 0, sL.slice(0, 10), eL.slice(0, 10));
+  const fJson = JSON.stringify(fields || {});
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT id, bitrix_sync_hash FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1 AND type=$2', [itemId, type]);
+    if (rows.length && rows[0].bitrix_sync_hash === hash) {
+      await client.query(`UPDATE ticketsmodule_planner_events SET title=$1, fields=$2, updated_at=NOW() WHERE id=$3 AND (title IS DISTINCT FROM $1 OR fields IS DISTINCT FROM $2::jsonb)`, [title, fJson, rows[0].id]);
+    } else if (rows.length) {
+      await client.query(`UPDATE ticketsmodule_planner_events SET resource=$1,title=$2,start_at=$3::timestamp AT TIME ZONE '${PLANNER_TZ}',end_at=$4::timestamp AT TIME ZONE '${PLANNER_TZ}',confirmed=$5,fields=$6,bitrix_sync_hash=$7,updated_at=NOW() WHERE id=$8`, [resource, title, sL, eL, !!confirmed, fJson, hash, rows[0].id]);
+    } else {
+      const ins = await client.query(`INSERT INTO ticketsmodule_planner_events (group_id,resource,title,type,start_at,end_at,all_day,confirmed,note,fields,clients,bitrix_item_id,source,bitrix_sync_hash) VALUES (0,$1,$2,$3,$4::timestamp AT TIME ZONE '${PLANNER_TZ}',$5::timestamp AT TIME ZONE '${PLANNER_TZ}',false,$6,'',$7,'[]',$8,'bitrix',$9) RETURNING id`, [resource, title, type, sL, eL, !!confirmed, fJson, itemId, hash]);
+      await client.query('UPDATE ticketsmodule_planner_events SET group_id=$1 WHERE id=$1', [ins.rows[0].id]);
+    }
+    await client.query('COMMIT');
+  } catch (e) { await client.query('ROLLBACK'); console.error('upsertBitrixEvent(' + type + ') error:', e.message); }
+  finally { client.release(); }
+}
+async function syncLeaveEvent(item, itemId) {
+  const engId = parseInt(item.assignedById, 10); const name = engId ? USERS[engId] : null;
+  await upsertBitrixEvent({ itemId, type: 'leave', resourceId: engId, resource: name, title: name ? ('Отпуск — ' + name) : 'Отпуск', start: item[LV.start], end: item[LV.end], confirmed: true, fields: { leaveDays: item[LV.days] || null, leaveType: item[LV.type] || null } });
+}
+async function syncMeetingEvent(item, itemId) {
+  const engId = parseInt(item.assignedById, 10); const name = engId ? USERS[engId] : null;
+  const d = item[MT.date];
+  await upsertBitrixEvent({ itemId, type: 'meeting', resourceId: engId, resource: name, title: item[MT.short] || item.title || 'Встреча', start: d, end: d, confirmed: false, fields: { df2: item[MT.loc] || '' } });
+}
+
 // ── Periodic reconciliation sweep ───────────────────────────────────────────
 // Webhooks are inherently best-effort (Bitrix delivery hiccups, a restart at
 // the wrong moment, etc.) — this walks every Заявка на сервис and re-runs the
@@ -251,12 +289,33 @@ async function reconcileAllPlannerEvents() {
     if (next === undefined || items.length < 50) break;
     start = next;
   }
+  // Отпуска (1108) и Встречи (сделки воронки 4) — та же сверка, чтобы пропущенные
+  // вебхуки догонялись.
+  let lv = 0, mt = 0;
+  try {
+    let s2 = 0;
+    while (true) {
+      const resp = await b24('crm.item.list', { entityTypeId: 1108, select: ['*', 'uf_*'], order: { id: 'asc' }, start: s2 });
+      const list = resp.result?.items || [];
+      for (const it of list) { try { await syncLeaveEvent(it, it.id); lv++; } catch (e) {} }
+      if (resp.next === undefined || list.length < 50) break; s2 = resp.next;
+    }
+  } catch (e) { console.error('reconcile leaves:', e.message); }
+  try {
+    let s3 = 0;
+    while (true) {
+      const resp = await b24('crm.item.list', { entityTypeId: 2, filter: { categoryId: 4 }, select: ['*', 'uf_*'], order: { id: 'asc' }, start: s3 });
+      const list = resp.result?.items || [];
+      for (const it of list) { try { await syncMeetingEvent(it, it.id); mt++; } catch (e) {} }
+      if (resp.next === undefined || list.length < 50) break; s3 = resp.next;
+    }
+  } catch (e) { console.error('reconcile meetings:', e.message); }
   if (errors > 0) {
     try {
       await tgOps(`⚠️ Плановая сверка планировщика: ${errors} из ${checked} заявок не удалось синхронизировать (ID: ${failedIds.slice(0,20).join(', ')}${failedIds.length>20?'…':''})`);
     } catch (e) {}
   }
-  console.log(`Planner reconciliation: checked ${checked}, skipped ${skipped} (unchanged), ${errors} error(s)`);
+  console.log(`Planner reconciliation: checked ${checked}, skipped ${skipped} (unchanged), ${errors} error(s); отпусков ${lv}, встреч ${mt}`);
   return { checked, skipped, errors };
 }
 
@@ -404,6 +463,12 @@ async function handleBitrixWebhook(req, res) {
         } catch (e) {
           console.error('operational-sync webhook error:', e.message);
         }
+        // Встреча (сделка воронки 4) → планировщик (type=meeting)
+        try {
+          const dr = await b24('crm.item.get', { entityTypeId: 2, id: dealId });
+          const ditem = dr && dr.result && dr.result.item;
+          if (ditem && String(ditem.categoryId) === '4') await syncMeetingEvent(ditem, dealId);
+        } catch (e) { console.error('meeting planner sync:', e.message); }
         return;
       }
     }
@@ -443,6 +508,10 @@ async function handleBitrixWebhook(req, res) {
       // Авто-создание закупки из завершённого «подбора допов» (best-effort, с дедупом)
       try { const { autoCreateFromService } = require('../procurement-calc'); await autoCreateFromService(itemId); }
       catch (e) { console.error('procurement auto-create error:', e.message); }
+    }
+    // ── Отпуск (1108) → планировщик (type=leave) ───────────────────────────
+    if (entityTypeId === 1108) {
+      try { await syncLeaveEvent(item, itemId); } catch (e) { console.error('leave planner sync:', e.message); }
     }
 
     // ── Case 1: Engineer assigned (only for Заявка на сервис, 1058) ────────────
