@@ -426,7 +426,7 @@ async function _tcPeople() {
     let r; try { r = await b24('user.get', { FILTER: { UF_DEPARTMENT: dept, ACTIVE: true }, start }); } catch (e) { break; }
     const us = (r && r.result) || [];
     for (const u of us) out.push({ bitrix_id: +u.ID,
-      name: [u.LAST_NAME, u.NAME].filter(Boolean).join(' ') || u.NAME || ('#' + u.ID),
+      name: [u.NAME, u.LAST_NAME].filter(Boolean).join(' ') || u.NAME || ('#' + u.ID),
       role_title: u.WORK_POSITION || '', email: u.EMAIL || '', phone: u.PERSONAL_MOBILE || u.WORK_PHONE || '' });
     const next = r && r.next; if (next == null) break; start = next;
   }

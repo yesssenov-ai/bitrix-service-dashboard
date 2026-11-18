@@ -92,7 +92,7 @@ async function hydrateUsers() {
       const id = String(u.ID);
       if (!USER_EMAILS[id] && u.EMAIL && /@/.test(u.EMAIL)) USER_EMAILS[id] = String(u.EMAIL).trim();
       if (USERS[id]) continue; // курируемое имя не трогаем
-      USERS[id] = [u.LAST_NAME, u.NAME].filter(Boolean).join(' ').trim() || u.EMAIL || ('#' + id);
+      USERS[id] = [u.NAME, u.LAST_NAME].filter(Boolean).join(' ').trim() || u.EMAIL || ('#' + id);
       added++;
     }
   };

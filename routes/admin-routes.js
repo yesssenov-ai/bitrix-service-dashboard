@@ -40,7 +40,7 @@ router.post('/assign-role-by-department', requireAuth(['superadmin']), async (re
     for (let g = 0; g < 15; g++) {
       let r; try { r = await b24('user.get', { FILTER: { UF_DEPARTMENT: deptId, ACTIVE: true }, start }); } catch (e) { break; }
       const us = (r && r.result) || [];
-      for (const u of us) members.push({ bid: String(u.ID), name: [u.LAST_NAME, u.NAME].filter(Boolean).join(' ') || ('#' + u.ID) });
+      for (const u of us) members.push({ bid: String(u.ID), name: [u.NAME, u.LAST_NAME].filter(Boolean).join(' ') || ('#' + u.ID) });
       const next = r && r.next; if (next == null) break; start = next;
     }
     if (!members.length) return res.json({ ok: true, departmentId: deptId, membersCount: 0, matched: [], applied: 0, note: 'В отделе не найдено активных сотрудников Bitrix.' });
