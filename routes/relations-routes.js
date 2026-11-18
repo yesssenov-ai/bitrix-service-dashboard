@@ -18,6 +18,15 @@ const {
 
 setMgrNotifyPool(pool);
 
+// Колонки связи «заявка 1058 → командировка 1074» в событии планировщика
+// (для Варианта 1: командировка из заявки не плодит второй бар, а помечает бар заявки).
+(async () => {
+  try {
+    await pool.query('ALTER TABLE ticketsmodule_planner_events ADD COLUMN IF NOT EXISTS command_item_id BIGINT');
+    await pool.query('ALTER TABLE ticketsmodule_planner_events ADD COLUMN IF NOT EXISTS command_stage VARCHAR(64)');
+  } catch (e) { console.error('planner command cols:', e.message); }
+})();
+
 // ── Скоупинг «Связей» по роли: menedzher (sales) — только свои сделки;
 // руководитель отдела (sales_head) — все менеджеры своего отдела; admin/superadmin
 // и manager — все. Возвращает Set разрешённых Bitrix-ID менеджеров или null (все).
@@ -250,6 +259,25 @@ async function syncMeetingEvent(item, itemId) {
   const d = item[MT.date];
   await upsertBitrixEvent({ itemId, type: 'meeting', resourceId: engId, resource: name, title: item[MT.short] || item.title || 'Встреча', start: d, end: d, confirmed: false, fields: { df2: item[MT.loc] || '' } });
 }
+// Командировка (1074). Вариант 1 (дедуп): если у неё есть родительская Заявка на
+// сервис (parentId1058) — НЕ плодим второй бар, а помечаем бар заявки (command_item_id
+// + command_stage). Отдельная командировка (без заявки) — свой бар type='command'.
+const TR = { start: 'ufCrm12_1732867277610', end: 'ufCrm12_1732867286706', dest: 'ufCrm12_1732867225794' };
+async function syncTripCommand(item, itemId) {
+  const parent = parseInt(item.parentId1058, 10) || null;
+  const stageId = item.stageId || '';
+  if (parent) {
+    try {
+      const r = await pool.query("UPDATE ticketsmodule_planner_events SET command_item_id=$1, command_stage=$2, updated_at=NOW() WHERE bitrix_item_id=$3 AND type='trip' AND (command_item_id IS DISTINCT FROM $1 OR command_stage IS DISTINCT FROM $2)", [itemId, stageId, parent]);
+      // если ранее была как отдельный бар — убрать дубль
+      await pool.query("DELETE FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1 AND type='command'", [itemId]);
+    } catch (e) { console.error('trip command attach:', e.message); }
+    return;
+  }
+  const engId = parseInt(item.assignedById, 10); const name = engId ? USERS[engId] : null;
+  const dest = Array.isArray(item[TR.dest]) ? item[TR.dest][0] : item[TR.dest];
+  await upsertBitrixEvent({ itemId, type: 'command', resourceId: engId, resource: name, title: name ? ('Командировка — ' + (dest || name)) : 'Командировка', start: item[TR.start], end: item[TR.end], confirmed: true, fields: { df2: dest || '' } });
+}
 
 // ── Periodic reconciliation sweep ───────────────────────────────────────────
 // Webhooks are inherently best-effort (Bitrix delivery hiccups, a restart at
@@ -310,12 +338,22 @@ async function reconcileAllPlannerEvents() {
       if (resp.next === undefined || list.length < 50) break; s3 = resp.next;
     }
   } catch (e) { console.error('reconcile meetings:', e.message); }
+  let tc = 0;
+  try {
+    let s4 = 0;
+    while (true) {
+      const resp = await b24('crm.item.list', { entityTypeId: 1074, select: ['*', 'uf_*'], order: { id: 'asc' }, start: s4 });
+      const list = resp.result?.items || [];
+      for (const it of list) { try { await syncTripCommand(it, it.id); tc++; } catch (e) {} }
+      if (resp.next === undefined || list.length < 50) break; s4 = resp.next;
+    }
+  } catch (e) { console.error('reconcile commands:', e.message); }
   if (errors > 0) {
     try {
       await tgOps(`⚠️ Плановая сверка планировщика: ${errors} из ${checked} заявок не удалось синхронизировать (ID: ${failedIds.slice(0,20).join(', ')}${failedIds.length>20?'…':''})`);
     } catch (e) {}
   }
-  console.log(`Planner reconciliation: checked ${checked}, skipped ${skipped} (unchanged), ${errors} error(s); отпусков ${lv}, встреч ${mt}`);
+  console.log(`Planner reconciliation: checked ${checked}, skipped ${skipped} (unchanged), ${errors} error(s); отпусков ${lv}, встреч ${mt}, командировок ${tc}`);
   return { checked, skipped, errors };
 }
 
@@ -512,6 +550,10 @@ async function handleBitrixWebhook(req, res) {
     // ── Отпуск (1108) → планировщик (type=leave) ───────────────────────────
     if (entityTypeId === 1108) {
       try { await syncLeaveEvent(item, itemId); } catch (e) { console.error('leave planner sync:', e.message); }
+    }
+    // ── Командировка (1074) → планировщик (дедуп по parentId1058) ───────────
+    if (entityTypeId === 1074) {
+      try { await syncTripCommand(item, itemId); } catch (e) { console.error('trip command planner sync:', e.message); }
     }
 
     // ── Case 1: Engineer assigned (only for Заявка на сервис, 1058) ────────────

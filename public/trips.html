@@ -297,8 +297,8 @@ function stg(id){return STG[id]||STG_DEF;}
 function barColor(id){return stg(id).bar;}
 function pillHTML(id,txt){const s=stg(id);return `<span class="pill" style="background:${s.pb};color:${s.pf}"><span class="d" style="background:${s.bar}"></span>${esc(txt)}</span>`;}
 function toast(t){ const el=document.getElementById('toast'); el.textContent=t; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),3200); }
-let META=null, CHANGE_OF=null, PREFILL=null;
-async function newTrip(){ CHANGE_OF=null; PREFILL=null; return openCreatePanel(); }
+let META=null, CHANGE_OF=null, PREFILL=null, SOURCE_ID=null;
+async function newTrip(){ CHANGE_OF=null; PREFILL=null; SOURCE_ID=null; return openCreatePanel(); }
 async function openCreatePanel(){
   document.getElementById('ovNew').classList.add('open');
   const pb=document.getElementById('newBody');
@@ -408,13 +408,14 @@ async function submitCreate(){
     deptSectionId:dlId('f_dept','f_depts')||null,
     deptEnum:v('f_deptenum')||null,
     serviceTypeId:dlId('f_svc','f_svcs')||null,
-    changeParentId:CHANGE_OF||null, changeReason:CHANGE_OF?changeReason:null };
+    changeParentId:CHANGE_OF||null, changeReason:CHANGE_OF?changeReason:null,
+    sourceId:SOURCE_ID||null };
   const btn=document.getElementById('f_submit'); if(btn){ btn.disabled=true; btn.textContent='Создаём…'; }
   try{
     const r=await fetch('/api/planner/trips',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const d=await r.json();
     if(!r.ok||!d.ok){ toast(d.error||'Не удалось создать'); if(btn){btn.disabled=false;btn.textContent='Создать';} return; }
-    closeNew(); toast(CHANGE_OF?'Изменение оформлено':'Командировка создана'); CHANGE_OF=null; PREFILL=null; await reloadTrips();
+    closeNew(); toast(CHANGE_OF?'Изменение оформлено':'Командировка создана'); CHANGE_OF=null; PREFILL=null; SOURCE_ID=null; await reloadTrips();
     if(d.id) openDetail(d.id);
   }catch(e){ toast('Ошибка сети'); if(btn){btn.disabled=false;btn.textContent='Создать';} }
 }
@@ -430,6 +431,7 @@ async function boot(){
   if(qp.get('id')) openDetail(parseInt(qp.get('id'),10));
   else if(qp.get('newtrip')){
     await newTrip();
+    SOURCE_ID = qp.get('source') || null; // привязка к выезду (Заявка 1058) для дедупа
     const set=(id,v)=>{const el=document.getElementById(id);if(el&&v)el.value=v;};
     set('f_res',qp.get('res')); set('f_start',qp.get('start')); set('f_end',qp.get('end')); set('f_dest',qp.get('dest')); set('f_purpose',qp.get('purpose'));
     onStaffChange();

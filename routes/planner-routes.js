@@ -42,7 +42,7 @@ const SELECT_COLS = `
   id, group_id, resource, title, type,
   to_char(start_at AT TIME ZONE '${TZ}', 'YYYY-MM-DD"T"HH24:MI') AS start_str,
   to_char(end_at AT TIME ZONE '${TZ}', 'YYYY-MM-DD"T"HH24:MI') AS end_str,
-  all_day, confirmed, note, fields, clients, bitrix_item_id, source
+  all_day, confirmed, note, fields, clients, bitrix_item_id, source, command_item_id, command_stage
 `;
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -62,6 +62,8 @@ function rowToEvent(r) {
     clients: r.clients || [],
     bitrixItemId: r.bitrix_item_id,
     source: r.source,
+    commandItemId: r.command_item_id || null,
+    commandStage: r.command_stage || null,
   };
 }
 
@@ -120,13 +122,17 @@ async function fetchTripStages(ids) {
 // Проставляет командировкам tripApproved (полностью согласована) — Планировщик
 // красит светло-/насыщенно-зелёным и автоматически перекрашивает после подписи.
 async function enrichTripApproval(events) {
-  const ids = [...new Set(events.filter(e => e.type === 'trip' && e.bitrixItemId).map(e => e.bitrixItemId))];
-  if (!ids.length) return;
-  const map = await fetchTripStages(ids);
-  for (const e of events) {
-    if (e.type === 'trip' && e.bitrixItemId && map[e.bitrixItemId]) {
-      e.tripApproved = TRIP_APPROVED_STAGES.has(map[e.bitrixItemId]);
+  // Отдельные командировки (type=command): красим по их актуальной стадии 1074.
+  const ids = [...new Set(events.filter(e => e.type === 'command' && e.bitrixItemId).map(e => e.bitrixItemId))];
+  if (ids.length) {
+    const map = await fetchTripStages(ids);
+    for (const e of events) {
+      if (e.type === 'command' && e.bitrixItemId && map[e.bitrixItemId]) e.tripApproved = TRIP_APPROVED_STAGES.has(map[e.bitrixItemId]);
     }
+  }
+  // Заявки с привязанной командировкой: статус согласования из сохранённой command_stage.
+  for (const e of events) {
+    if (e.commandItemId && e.commandStage) e.commandApproved = TRIP_APPROVED_STAGES.has(e.commandStage);
   }
 }
 
@@ -1343,13 +1349,24 @@ router.post('/trips', requireAuth(), express.json(), async (req, res) => {
     let bid = null;
     try { const r = await b24('crm.item.add', { entityTypeId: TRIP_ETID, fields }); bid = (r && r.result && r.result.item && r.result.item.id) || null; }
     catch (e) { return res.status(502).json({ error: 'Bitrix: ' + e.message }); }
+    // Дедуп (Вариант 1): если командировка оформлена из заявки на сервис (1058),
+    // не создаём отдельную полосу — цепляем её к полосе заявки (command_item_id).
+    const sourceId = b.sourceId != null && b.sourceId !== '' ? Number(b.sourceId) : null;
     try {
-      const evFields = JSON.stringify({ dest, purpose, route: route || null, supervisorBid: b.supervisorBid || null });
-      const ev = await pool.query(
-        `INSERT INTO ticketsmodule_planner_events (group_id, resource, title, type, start_at, end_at, all_day, confirmed, fields, bitrix_item_id, source, created_by)
-         VALUES (0,$1,$2,'trip',$3::timestamp AT TIME ZONE '${TZ}',$4::timestamp AT TIME ZONE '${TZ}',true,true,$5,$6,'manual',$7) RETURNING id`,
-        [resource, title, start + 'T09:00', end + 'T18:00', evFields, bid, (req.user && req.user.username) || null]);
-      await pool.query('UPDATE ticketsmodule_planner_events SET group_id=$1 WHERE id=$1', [ev.rows[0].id]);
+      if (sourceId && bid) {
+        await pool.query(
+          `UPDATE ticketsmodule_planner_events SET command_item_id=$1, command_stage=$2, updated_at=NOW()
+             WHERE bitrix_item_id=$3 AND type='trip'
+               AND (command_item_id IS DISTINCT FROM $1 OR command_stage IS DISTINCT FROM $2)`,
+          [bid, 'DT1074_15:NEW', sourceId]);
+      } else {
+        const evFields = JSON.stringify({ dest, purpose, route: route || null, supervisorBid: b.supervisorBid || null });
+        const ev = await pool.query(
+          `INSERT INTO ticketsmodule_planner_events (group_id, resource, title, type, start_at, end_at, all_day, confirmed, fields, bitrix_item_id, source, created_by)
+           VALUES (0,$1,$2,'command',$3::timestamp AT TIME ZONE '${TZ}',$4::timestamp AT TIME ZONE '${TZ}',true,true,$5,$6,'manual',$7) RETURNING id`,
+          [resource, title, start + 'T09:00', end + 'T18:00', evFields, bid, (req.user && req.user.username) || null]);
+        await pool.query('UPDATE ticketsmodule_planner_events SET group_id=$1 WHERE id=$1', [ev.rows[0].id]);
+      }
     } catch (e) { console.error('trip card → planner block:', e.message); }
     invalidateTripStageCache();
     res.json({ ok: true, id: bid });
