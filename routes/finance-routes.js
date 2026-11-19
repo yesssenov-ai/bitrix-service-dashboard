@@ -111,7 +111,7 @@ router.get('/stock/min', requireAuth(VIEW), async (req, res) => {
 });
 router.post('/stock/min', requireAuth(VIEW), express.json(), async (req, res) => {
   try {
-    if (!isAdminLike(req.user)) return res.status(403).json({ error: 'Только для админа/координатора' });
+    if (!['admin', 'superadmin', 'coordinator'].includes(req.user.role)) return res.status(403).json({ error: 'Только для админа/координатора' });
     const b = req.body || {}; const calc = require('../finance-stock-calc');
     const uname = req.user && req.user.username;
     let out;
@@ -124,7 +124,7 @@ router.post('/stock/min', requireAuth(VIEW), express.json(), async (req, res) =>
 // Диагностика сырого ответа 1С по складу (увидеть ключ наименования) — только админ.
 router.get('/stock/raw', requireAuth(VIEW), async (req, res) => {
   try {
-    if (!isAdminLike(req.user)) return res.status(403).json({ error: 'Только для админа' });
+    if (!isAdminLike(req.user.role)) return res.status(403).json({ error: 'Только для админа' });
     res.json(await require('../finance-stock-calc').probeStockRaw(req.query.limit));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
