@@ -161,7 +161,7 @@
     {c:'CMP',n:'Компании',h:'/companies.html',g:'sales'},
     {c:'SALE',n:'План продаж',h:'/plansales.html',g:'sales'},
     {c:'NKT',n:'НКТ',h:'/nct.html',g:'supply'},
-    {c:'PROJ',n:'Проекты КАМ',h:'/projects.html',g:'sales'},
+    {c:'PROJ',n:'КАМ',h:'/kam.html',g:'sales'},
     {c:'LOG',n:'Логистика',h:'/logistics.html',g:'supply'},
     {c:'OPS',n:'Реализация',h:'/operational.html',g:'supply'},
     {c:'PROC',n:'Закупки',h:'/procurement.html',g:'supply'},

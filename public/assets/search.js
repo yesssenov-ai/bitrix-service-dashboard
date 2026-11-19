@@ -25,7 +25,7 @@
     { c: 'CMP', n: 'Компании', h: '/companies.html' },
     { c: 'SALE', n: 'План продаж', h: '/plansales.html' },
     { c: 'NKT', n: 'НКТ', h: '/nct.html' },
-    { c: 'PROJ', n: 'Проекты КАМ', h: '/projects.html' },
+    { c: 'PROJ', n: 'КАМ', h: '/kam.html' },
     { c: 'LOG', n: 'Логистика', h: '/logistics.html' },
     { c: 'OPS', n: 'Реализация', h: '/operational.html' },
     { c: 'PROC', n: 'Закупки', h: '/procurement.html' },
