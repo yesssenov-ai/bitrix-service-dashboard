@@ -48,8 +48,22 @@ router.get('/field-probe', requireAuth(ADMIN_ROLES), async (req, res) => {
 
 // ── READ: дерево / узел / портфель КАМ / подразделения ───────────────────────
 router.get('/tree', requireAuth(VIEW_ROLES), async (req, res) => {
-  try { res.set('Cache-Control', 'no-store'); res.json(await memo('kam:tree', 120 * 1000, () => kam.getTree())); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    res.set('Cache-Control', 'no-store');
+    const full = ADMIN_ROLES.includes(req.user.role);
+    const userBid = req.user.bitrix_user_id ? parseInt(req.user.bitrix_user_id, 10) : null;
+    const key = full ? 'kam:tree:full' : ('kam:tree:u' + userBid);
+    res.json(await memo(key, 120 * 1000, () => kam.getTree({ full, userBid })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.get('/project-tree', requireAuth(VIEW_ROLES), async (req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    const full = ADMIN_ROLES.includes(req.user.role);
+    const userBid = req.user.bitrix_user_id ? parseInt(req.user.bitrix_user_id, 10) : null;
+    const key = full ? 'kam:ptree:full' : ('kam:ptree:u' + userBid);
+    res.json(await memo(key, 120 * 1000, () => kam.getProjectTree({ full, userBid })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.get('/node/:type/:key', requireAuth(VIEW_ROLES), async (req, res) => {
   try { res.json(await kam.getNode(req.params.type, decodeURIComponent(req.params.key))); }

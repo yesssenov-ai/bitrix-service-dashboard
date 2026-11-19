@@ -111,7 +111,9 @@ function dealStats(ds) {
 }
 
 // ── Дерево: Группы → Компании → Подразделения (+ прямые проекты) ─────────────
-async function getTree() {
+// scope: { full:bool, userBid:number } — непривилегированный КАМ видит только узлы,
+// где он эффективный КАМ (компания/подразделение/группа). Не назначен → пусто.
+async function getTree(scope) {
   const { deals, units, assign, coGroup } = await loadModel();
   // company_id → {name, group, deals[]}
   const coMap = {};
@@ -155,13 +157,66 @@ async function getTree() {
     });
   });
   // КАМ группы + агрегаты
-  const out = Object.values(groups).map(g => {
+  let out = Object.values(groups).map(g => {
     const ekG = effKam(assign, { groupKey: g.key });
     const allDeals = g.companies.reduce((a, c) => a + c.count, 0);
     const sum = g.companies.reduce((a, c) => a + c.sum, 0);
     return { ...g, kam: ekG.bid, kamName: uname(ekG.bid), companiesCount: g.companies.length, dealsCount: allDeals, sumMln: mln(sum) };
   }).sort((a, b) => b.dealsCount - a.dealsCount);
-  return { groups: out };
+  // Скоуп по КАМ: показать только свои узлы (если не админ/координатор)
+  const scoped = !!(scope && !scope.full);
+  if (scoped && scope.userBid != null) {
+    const uid = Number(scope.userBid);
+    out = out.map(g => {
+      if (g.kam === uid) return g; // владеет всей группой
+      const comps = (g.companies || []).filter(c => c.kam === uid || (c.labs || []).some(l => l.kam === uid));
+      if (!comps.length) return null;
+      const dc = comps.reduce((a, c) => a + c.count, 0), sm = comps.reduce((a, c) => a + c.sum, 0);
+      return { ...g, companies: comps, companiesCount: comps.length, dealsCount: dc, sumMln: mln(sm) };
+    }).filter(Boolean);
+  }
+  return { groups: out, scoped };
+}
+
+// ── Дерево «От проектов»: Проект → Компании (с эфф. КАМ) → сделки ─────────────
+// Верхний уровень — проект (project_tag). Внутри — компании, у которых есть сделки
+// по этому проекту, с их эффективным КАМ. Клик по компании раскрывает сделки
+// (frontend зовёт /deals?type=company&key=<cid>&project=<proj>).
+// scope: непривилегированный КАМ видит только проекты со своими компаниями.
+async function getProjectTree(scope) {
+  const { deals, units, assign, coGroup } = await loadModel();
+  const unitsByCo = {}; units.forEach(u => { (unitsByCo[String(u.company_id)] = unitsByCo[String(u.company_id)] || []).push(u); });
+  const uid = scope && !scope.full && scope.userBid != null ? Number(scope.userBid) : null;
+
+  // Множество эфф. КАМ компании (сам уровень компании + её подразделения) — для скоупа.
+  const ownsCompany = (gk, cid, kuid) => {
+    if (effKam(assign, { groupKey: gk, companyId: cid }).bid === kuid) return true;
+    return (unitsByCo[cid] || []).some(u => effKam(assign, { groupKey: gk, companyId: cid, unitId: u.id }).bid === kuid);
+  };
+
+  // project_tag → company_id → {deals[]}
+  const projMap = {};
+  deals.forEach(d => {
+    const p = d.project_tag || '— вне проекта —';
+    const cid = String(d.company_id);
+    const pm = (projMap[p] = projMap[p] || {});
+    (pm[cid] = pm[cid] || { id: cid, name: d.company_name || ('Компания #' + cid), deals: [] }).deals.push(d);
+  });
+
+  let out = Object.entries(projMap).map(([pname, comps]) => {
+    let companies = Object.values(comps).map(co => {
+      const gk = (coGroup[co.id] || {}).name;
+      const ek = effKam(assign, { groupKey: gk, companyId: co.id });
+      const st = dealStats(co.deals);
+      return { id: co.id, name: co.name, group: gk, kam: ek.bid, kamName: uname(ek.bid), inherited: !!ek.inherited, ...st, sumMln: mln(st.sum) };
+    });
+    if (uid != null) companies = companies.filter(c => ownsCompany(c.group, c.id, uid));
+    companies.sort((a, b) => b.sum - a.sum);
+    const dc = companies.reduce((a, c) => a + c.count, 0), sm = companies.reduce((a, c) => a + c.sum, 0);
+    return { name: pname, companies, companiesCount: companies.length, dealsCount: dc, sumMln: mln(sm), sum: sm };
+  }).filter(p => p.companies.length).sort((a, b) => b.sum - a.sum);
+
+  return { projects: out, scoped: uid != null };
 }
 
 // Проекты узла (группа/компания/подразделение)
@@ -391,6 +446,6 @@ async function listGroups() {
 }
 
 module.exports = {
-  getTree, getNode, getKamPortfolio, listUnits, resolveGroupMap, uname,
+  getTree, getProjectTree, getNode, getKamPortfolio, listUnits, resolveGroupMap, uname,
   assignKam, createUnit, deleteUnit, moveCompanyGroup, setDealUnit, listUsers, listGroups, listDeals, nodeDeals,
 };
