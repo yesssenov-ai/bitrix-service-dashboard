@@ -44,6 +44,13 @@ th{position:sticky;top:0;background:var(--bg2);z-index:1;font-size:10.5px;text-t
 td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 tr:hover td{background:var(--bg2)}
 .nm{white-space:normal;min-width:250px;max-width:380px;color:var(--text)}
+th.nzcol,td.nzcol{width:34px;text-align:center;padding-left:6px;padding-right:6px}
+.nzstar{background:none;border:0;cursor:pointer;font-size:15px;line-height:1;color:var(--text-4);padding:2px 3px;min-width:0}
+.nzstar.on{color:#e0a940}
+.nzstar:hover{color:#e0a940}
+span.nzstar{cursor:default}
+tr.nzrow td{background:color-mix(in srgb,#e0a940 7%,var(--card))}
+tr.nzrow:hover td{background:color-mix(in srgb,#e0a940 13%,var(--card))}
 tfoot td{position:sticky;bottom:0;background:var(--card);font-weight:700;border-top:2px solid var(--border2)}
 .hint{color:var(--text-3);padding:20px;font-size:13px}
 /* ── Мультивыбор (как слайсеры Power BI) ─────────────────── */
@@ -110,6 +117,7 @@ svg.ovsvg{display:block;width:100%}
   <div class="hr">
     <span class="asof" id="asof"></span>
     <span class="mockbadge" id="mockBadge" style="display:none">демо-данные</span>
+    <button class="hbtn" id="bulkMinBtn" onclick="bulkMin()" style="display:none" title="Отметить позиции неснижаемого запаса по списку кодов (из 1С: Номенкл. номер)">★ Неснижаемые</button>
     <button class="hbtn" id="refreshBtn" onclick="refresh()">↻ Обновить</button>
     <button class="hbtn" onclick="logout()">Выйти</button>
   </div>
@@ -142,14 +150,21 @@ svg.ovsvg{display:block;width:100%}
   <div><label class="fl">Номенклатура</label><div id="fName"></div></div>
   <div><label class="fl">№ заказа</label><div id="fOrder"></div></div>
   <div><label class="fl">Производитель</label><div id="fMfr"></div></div>
+  <div><label class="fl">Неснижаемый запас</label>
+    <select id="fMin" onchange="render()">
+      <option value="all">Все</option>
+      <option value="only">Только неснижаемый</option>
+      <option value="excl">Кроме неснижаемого</option>
+    </select></div>
   <div style="flex:1;min-width:200px"><label class="fl">Быстрый поиск (номенклатура / код / партномер)</label><input type="text" id="fSearch" placeholder="начните вводить…" oninput="render()" style="width:100%"></div>
 </div>
 
 <div class="card">
-  <div class="tools"><span>Позиций: <b id="cntRows">0</b></span><span>Количество: <b id="cntQty">0</b></span><span>Сумма: <b id="cntSum">0</b></span><span style="margin-left:auto;color:var(--text-3)" id="stockNote"></span></div>
+  <div class="tools"><span>Позиций: <b id="cntRows">0</b></span><span>Количество: <b id="cntQty">0</b></span><span>Сумма: <b id="cntSum">0</b></span><span>Неснижаемый запас: <b id="cntMin">0</b></span><span style="margin-left:auto;color:var(--text-3)" id="stockNote"></span></div>
   <div class="scroll">
     <table>
       <thead><tr>
+        <th class="nzcol" title="Неснижаемый запас">НЗ</th>
         <th class="nm">Номенклатура</th><th>Партномер</th><th>№ заказа</th><th>Номенкл. номер</th>
         <th>Дата изгот.</th><th>Срок годн.</th><th class="num">Кол-во</th><th class="num">Цена</th><th class="num">Сумма</th>
         <th>№ полки</th><th>Штрихкод</th><th>Склад</th><th>Производитель</th><th>Номер ГТД</th>
@@ -203,10 +218,14 @@ function createMulti(sel){
 const mStore=createMulti('#fStore'),mName=createMulti('#fName'),mOrder=createMulti('#fOrder'),mMfr=createMulti('#fMfr');
 [mStore,mName,mOrder,mMfr].forEach(m=>m.onChange(()=>render()));
 async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.href='/login.html';return{ok:false,d:{}}}let d={};try{d=await r.json()}catch(e){}return{ok:r.ok,d}}
-async function boot(){const r=await fetch('/auth/me');if(!r.ok){location.href='/login.html';return;}await load();}
+let ROLE='',IS_ADMIN=false;
+async function boot(){const r=await fetch('/auth/me');if(!r.ok){location.href='/login.html';return;}
+  try{const me=await r.json();ROLE=(me&&me.user&&me.user.role)||'';IS_ADMIN=['admin','superadmin','coordinator'].includes(ROLE);}catch(e){}
+  if(IS_ADMIN){var mb=document.getElementById('bulkMinBtn');if(mb)mb.style.display='';}
+  await load();}
 async function load(){
   const {ok,d}=await api('/api/finance/stock');
-  if(!ok){document.getElementById('body').innerHTML='<tr><td colspan="14" class="hint">Ошибка загрузки</td></tr>';return;}
+  if(!ok){document.getElementById('body').innerHTML='<tr><td colspan="15" class="hint">Ошибка загрузки</td></tr>';return;}
   DATA=d;
   var _a=document.getElementById('asof');
   if(d.error){_a.innerHTML='Данные от '+(d.asOf?new Date(d.asOf).toLocaleString('ru-RU'):'—')+' · <span style="color:var(--bad)">⚠ обновить не удалось</span>';_a.title=String(d.error);}
@@ -225,25 +244,52 @@ async function load(){
 function filtered(){
   const s=mStore.getSelected(),nm=mName.getSelected(),o=mOrder.getSelected(),m=mMfr.getSelected();
   const q=(document.getElementById('fSearch').value||'').toLowerCase();
+  const minMode=(document.getElementById('fMin')||{}).value||'all';
   return (DATA.rows||[]).filter(r=>
     (!s.length||s.includes(r.store_id))&&
     (!nm.length||nm.includes(r.name))&&
     (!o.length||o.includes(r.order_no))&&
     (!m.length||m.includes(r.manufacturer))&&
+    (minMode==='all'||(minMode==='only'?r.min:!r.min))&&
     (!q||((r.name||'')+' '+(r.item_code||'')+' '+(r.part_no||'')).toLowerCase().includes(q)));
+}
+function starCell(r){
+  const on=!!r.min, code=esc(r.item_code||'');
+  if(IS_ADMIN) return `<td class="nzcol"><button class="nzstar${on?' on':''}" title="${on?'Неснижаемый запас — снять':'Отметить как неснижаемый запас'}" onclick="toggleMin('${code}',${on?0:1},this)">${on?'★':'☆'}</button></td>`;
+  return `<td class="nzcol">${on?'<span class="nzstar on" title="Неснижаемый запас">★</span>':''}</td>`;
 }
 function render(){
   const rows=filtered();
-  document.getElementById('body').innerHTML=rows.length?rows.map(r=>`<tr>
+  document.getElementById('body').innerHTML=rows.length?rows.map(r=>`<tr${r.min?' class="nzrow"':''}>
+    ${starCell(r)}
     <td class="nm">${esc(r.name)}</td><td>${esc(r.part_no||'')}</td><td>${esc(r.order_no||'')}</td><td>${esc(r.item_code||'')}</td>
     <td>${dt(r.made_date)}</td><td>${dt(r.expiry)}</td><td class="num">${fmt(r.qty)}</td><td class="num">${fmt(r.price)}</td><td class="num">${fmt(r.amount)}</td>
     <td>${esc(r.shelf||'')}</td><td>${esc(r.barcode||'')}</td><td>${esc(r.store||'')}</td><td>${esc(r.manufacturer||'')}</td><td>${esc(r.gtd||'')}</td>
-  </tr>`).join(''):'<tr><td colspan="14" class="hint">Нет данных по фильтру.</td></tr>';
+  </tr>`).join(''):'<tr><td colspan="15" class="hint">Нет данных по фильтру.</td></tr>';
   const q=rows.reduce((a,r)=>a+Number(r.qty||0),0),sum=rows.reduce((a,r)=>a+Number(r.amount||0),0);
+  const minN=rows.reduce((a,r)=>a+(r.min?1:0),0);
   document.getElementById('cntRows').textContent=fmt(rows.length);
   document.getElementById('cntQty').textContent=fmt(q);
   document.getElementById('cntSum').textContent=fmt(sum);
-  document.getElementById('foot').innerHTML=`<tr><td>Итого</td><td colspan="5"></td><td class="num">${fmt(q)}</td><td></td><td class="num">${fmt(sum)}</td><td colspan="5"></td></tr>`;
+  document.getElementById('cntMin').textContent=fmt(minN);
+  document.getElementById('foot').innerHTML=`<tr><td></td><td>Итого</td><td colspan="5"></td><td class="num">${fmt(q)}</td><td></td><td class="num">${fmt(sum)}</td><td colspan="5"></td></tr>`;
+}
+async function toggleMin(code,on,btn){
+  if(!code){alert('У позиции нет номенклатурного номера — отметить нельзя.');return;}
+  if(btn){btn.disabled=true;}
+  const {ok,d}=await api('/api/finance/stock/min',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({itemCode:code,on:!!on})});
+  if(!ok||(d&&d.error)){if(btn)btn.disabled=false;alert('Ошибка: '+((d&&d.error)||'не удалось'));return;}
+  // Обновляем локально все строки с этим кодом (одна номенклатура — много строк).
+  (DATA.rows||[]).forEach(r=>{if(String(r.item_code||'')===String(code))r.min=!!on;});
+  render();
+}
+async function bulkMin(){
+  const txt=prompt('Вставьте номенклатурные номера неснижаемого запаса (через запятую, пробел или с новой строки).\nОни будут помечены как неснижаемый запас:');
+  if(!txt||!txt.trim())return;
+  const {ok,d}=await api('/api/finance/stock/min',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({codes:txt})});
+  if(!ok||(d&&d.error)){alert('Ошибка: '+((d&&d.error)||'не удалось'));return;}
+  alert('Отмечено позиций: '+((d&&d.added)||0)+'. Обновляю таблицу.');
+  await load();
 }
 async function refresh(){
   const b=document.getElementById('refreshBtn');b.disabled=true;b.textContent='Обновляю…';b.style.color='';b.title='';

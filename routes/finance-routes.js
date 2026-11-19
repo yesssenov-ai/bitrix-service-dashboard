@@ -104,6 +104,30 @@ router.get('/stock', requireAuth(VIEW), async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.post('/stock/refresh', requireAuth(VIEW), (req, res) => doManualRefresh(req, res, 'Склад', () => require('../finance-stock-calc').syncStock()));
+// Реестр неснижаемого запаса: список (любой авторизованный), пометка — только админ.
+router.get('/stock/min', requireAuth(VIEW), async (req, res) => {
+  try { res.json({ items: await require('../finance-stock-calc').listMinStock() }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.post('/stock/min', requireAuth(VIEW), express.json(), async (req, res) => {
+  try {
+    if (!isAdminLike(req.user)) return res.status(403).json({ error: 'Только для админа/координатора' });
+    const b = req.body || {}; const calc = require('../finance-stock-calc');
+    const uname = req.user && req.user.username;
+    let out;
+    if (b.codes != null) out = await calc.bulkMinStock(b.codes, uname);
+    else out = await calc.setMinStock(b.itemCode, b.on !== false, { name: b.name, minQty: b.minQty, note: b.note }, uname);
+    bust('fin:stock');
+    res.json(out);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Диагностика сырого ответа 1С по складу (увидеть ключ наименования) — только админ.
+router.get('/stock/raw', requireAuth(VIEW), async (req, res) => {
+  try {
+    if (!isAdminLike(req.user)) return res.status(403).json({ error: 'Только для админа' });
+    res.json(await require('../finance-stock-calc').probeStockRaw(req.query.limit));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // ── Авансы (счёт 3510 + оплаты 1210/1010-1030) ──────────────────────────────
 // Авансы — данные НЕ скоупятся (getAdvancesBoard отдаёт всё). Поэтому гейтим

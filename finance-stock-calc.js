@@ -53,6 +53,16 @@ function ensureSchema() {
       CREATE TABLE IF NOT EXISTS ticketsmodule_onec_meta (
         source VARCHAR(40) PRIMARY KEY,
         last_sync TIMESTAMPTZ, last_ok_at TIMESTAMPTZ, last_error TEXT, is_mock BOOLEAN DEFAULT true);
+      -- Реестр «неснижаемого запаса». Ключ — НоменклатурныйНомер (item_code): он стабилен
+      -- и переживает пересинк, поэтому пометка «держим как неснижаемый» автоматически
+      -- подхватывается на будущих выгрузках той же номенклатуры.
+      CREATE TABLE IF NOT EXISTS ticketsmodule_stock_min (
+        item_code VARCHAR(80) PRIMARY KEY,
+        name VARCHAR(500),
+        min_qty NUMERIC,
+        note VARCHAR(300),
+        added_by VARCHAR(80),
+        added_at TIMESTAMPTZ DEFAULT NOW());
     `);
   })().catch(e => { _schema = null; throw e; });
   return _schema;
@@ -117,7 +127,10 @@ async function fetchStockRaw() {
     const price = Number(r.Цена ?? r.price ?? 0);
     return {
       id: String(r.reference_id ?? r.id ?? (r.НоменклатурныйНомер + '|' + (r.SP_НомерЗаказа || '') + '|' + idx)),
-      name: r.Номенклатура ?? r.name ?? r.НоменклатурныйНомер ?? '',
+      // Наименование: в fact/stock его может не быть (тогда — пусто, подставим код в getStockBoard).
+      // Пробуем все вероятные ключи, чтобы подхватить имя, как только 1С начнёт его отдавать.
+      name: r.Номенклатура ?? r.Наименование ?? r.НоменклатураНаименование ?? r.НаименованиеНоменклатуры
+            ?? r.НоменклатураНаим ?? r.Товар ?? r.name ?? r.nomenclature_name ?? r.reference_name ?? '',
       item_code: r.НоменклатурныйНомер ?? r.item_code ?? '',
       part_no: r.SP_Партномер ?? r.part_no ?? '',
       order_no: r.SP_НомерЗаказа ?? r.order_no ?? '',
@@ -228,6 +241,10 @@ async function getStockBoard() {
   let { rows } = await pool.query('SELECT * FROM ticketsmodule_onec_stock ORDER BY name, order_no');
   if (!rows.length) { await syncStock(); ({ rows } = await pool.query('SELECT * FROM ticketsmodule_onec_stock ORDER BY name, order_no')); }
   const meta = (await pool.query(`SELECT * FROM ticketsmodule_onec_meta WHERE source='stock'`)).rows[0] || {};
+  // Реестр неснижаемого запаса (по item_code) — отметим строки флагом min.
+  const minSet = new Set((await pool.query('SELECT item_code FROM ticketsmodule_stock_min')).rows
+    .map(r => String(r.item_code || '').trim()).filter(Boolean));
+  const isMin = r => minSet.has(String(r.item_code || '').trim());
 
   // Счёт 1330 — как в Power BI (бизнес-правило). Безопасный откат: если в кэше счёт
   // не заполнен (фильтр обнулил бы всё) — показываем без него, не прячем данные.
@@ -255,17 +272,64 @@ async function getStockBoard() {
   return {
     overview,
     rows: base.map(r => ({
-      id: r.id, name: r.name, item_code: r.item_code, part_no: r.part_no, order_no: r.order_no,
+      // Наименование: если 1С имя не отдала — показываем НоменклатурныйНомер, чтобы строка не была пустой.
+      id: r.id, name: r.name || r.item_code || '', item_code: r.item_code, part_no: r.part_no, order_no: r.order_no,
       manufacturer: r.manufacturer, made_date: r.made_date, expiry: r.expiry,
       qty: Number(r.qty || 0), price: Number(r.price || 0), amount: Number(r.amount || 0),
-      shelf: r.shelf, barcode: r.barcode, gtd: r.gtd,
+      shelf: r.shelf, barcode: r.barcode, gtd: r.gtd, min: isMin(r),
       account: r.account || '', store_id: String(r.store_id || ''), store: storeLabel(String(r.store_id || ''), r.store),
     })),
     totals: { qty: base.reduce((a, r) => a + Number(r.qty || 0), 0), amount: base.reduce((a, r) => a + Number(r.amount || 0), 0) },
+    minCount: base.filter(isMin).length, nameFromCode: base.every(r => !r.name),
     asOf: meta.last_ok_at || null, lastTry: meta.last_sync || null, mock: meta.is_mock !== false, error: meta.last_error || null,
     account: STOCK_ACCOUNTS.join(','), defaultStore,
     filters: { orders: uniq('order_no'), manufacturers: uniq('manufacturer'), stores },
   };
 }
 
-module.exports = { ensureSchema, syncStock, getStockBoard };
+// ── Реестр неснижаемого запаса (ведём в ЦУП, ключ — item_code) ───────────────
+async function listMinStock() {
+  await ensureSchema();
+  const { rows } = await pool.query('SELECT item_code, name, min_qty, note, added_by, added_at FROM ticketsmodule_stock_min ORDER BY name, item_code');
+  return rows;
+}
+// Отметить/снять позицию как неснижаемый запас. on=false — удалить из реестра.
+async function setMinStock(itemCode, on, meta, by) {
+  await ensureSchema();
+  itemCode = String(itemCode == null ? '' : itemCode).trim();
+  if (!itemCode) throw new Error('пустой номенклатурный номер');
+  meta = meta || {};
+  if (on === false) { await pool.query('DELETE FROM ticketsmodule_stock_min WHERE item_code=$1', [itemCode]); return { ok: true, item_code: itemCode, min: false }; }
+  await pool.query(
+    `INSERT INTO ticketsmodule_stock_min (item_code, name, min_qty, note, added_by, added_at)
+     VALUES ($1,$2,$3,$4,$5,NOW())
+     ON CONFLICT (item_code) DO UPDATE SET
+       name=COALESCE(EXCLUDED.name, ticketsmodule_stock_min.name),
+       min_qty=COALESCE(EXCLUDED.min_qty, ticketsmodule_stock_min.min_qty),
+       note=COALESCE(EXCLUDED.note, ticketsmodule_stock_min.note)`,
+    [itemCode, meta.name || null, (meta.minQty != null && meta.minQty !== '') ? Number(meta.minQty) : null, meta.note || null, by || null]);
+  return { ok: true, item_code: itemCode, min: true };
+}
+// Массовая отметка по списку кодов (разовый список от кладовщика).
+async function bulkMinStock(codes, by) {
+  await ensureSchema();
+  const list = (Array.isArray(codes) ? codes : String(codes || '').split(/[\s,;\n]+/))
+    .map(c => String(c || '').trim()).filter(Boolean);
+  let n = 0;
+  for (const code of [...new Set(list)]) { await setMinStock(code, true, {}, by); n++; }
+  return { ok: true, added: n };
+}
+
+// ── Диагностика: сырые ключи/значения из ответа 1С fact/stock (только админ) ──
+// Разовая проба — увидеть, под каким полем 1С отдаёт наименование (если отдаёт).
+async function probeStockRaw(limit) {
+  if (!onecMod.isConfigured()) return { configured: false, note: '1С не настроена (мок-режим)', sample: [] };
+  const date = new Date().toISOString().slice(0, 10);
+  const data = await onecMod.onec('fact/stock', { date });
+  const arr = Array.isArray(data) ? data : (data.items || data.rows || data.data || data.value || []);
+  const n = Math.max(1, Math.min(Number(limit) || 3, 10));
+  const keys = arr.length ? Object.keys(arr[0]) : [];
+  return { configured: true, count: arr.length, keys, sample: arr.slice(0, n) };
+}
+
+module.exports = { ensureSchema, syncStock, getStockBoard, listMinStock, setMinStock, bulkMinStock, probeStockRaw };

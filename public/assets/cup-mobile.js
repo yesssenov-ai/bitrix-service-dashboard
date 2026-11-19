@@ -36,7 +36,18 @@
   var ORDER = ['pls-tb-msg', 'pls-tb-kb', 'pls-tb-cal', 'pai-fab', 'pls-sr-btn', 'pls-help-btn', 'pls-fb-btn', 'themeToggle'];
   function bar() { var b = document.getElementById('pls-toolbar'); if (!b) { b = document.createElement('div'); b.id = 'pls-toolbar'; document.body.appendChild(b); } return b; }
   function mk(id, href, title, svg, cur) { if (document.getElementById(id)) return document.getElementById(id); var a = document.createElement('a'); a.id = id; a.href = href; a.title = title; a.className = 'pls-tb-ic' + (cur ? ' cur' : ''); a.innerHTML = svg; return a; }
-  function align(b) { var h = document.querySelector('.topbar') || document.querySelector('.top') || document.querySelector('header'); if (!h) return; var r = h.getBoundingClientRect(); var bh = b.offsetHeight || 30; b.style.top = Math.max(4, Math.round(r.top + (r.height - bh) / 2)) + 'px'; }
+  function align(b) {
+    var h = document.querySelector('.topbar') || document.querySelector('.top') || document.querySelector('header');
+    if (!h) { b.style.top = '11px'; return; }
+    var r = h.getBoundingClientRect();
+    // Защита от ложного якоря: ".top" — слишком общий селектор и на некоторых страницах
+    // попадает в элемент посреди контента (напр. строки ".hbar .top" на «Складе»), из-за
+    // чего панель уезжала в середину. Якорь должен быть ВЕРХНЕЙ шапкой: если он не у верха
+    // вьюпорта — пробуем настоящий <header>, иначе держим дефолтный верх (11px).
+    if (r.top > 120) { var hdr = document.querySelector('header'); if (hdr) r = hdr.getBoundingClientRect(); if (r.top > 120) { b.style.top = '11px'; return; } }
+    var bh = b.offsetHeight || 30;
+    b.style.top = Math.max(4, Math.round(r.top + (r.height - bh) / 2)) + 'px';
+  }
   function build() {
     var b = bar();
     var m = mk('pls-tb-msg', '/messenger.html', 'Мессенджер', SVG.msg, /messenger\.html/.test(here)); if (m.parentNode !== b) b.appendChild(m);
