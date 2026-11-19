@@ -64,4 +64,31 @@ router.get('/units', requireAuth(VIEW_ROLES), async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── АДМИНКА (запись) ─────────────────────────────────────────────────────────
+router.get('/users', requireAuth(ADMIN_ROLES), async (req, res) => {
+  try { res.json({ users: await kam.listUsers() }); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.get('/groups', requireAuth(ADMIN_ROLES), async (req, res) => {
+  try { res.json({ groups: await kam.listGroups() }); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.post('/assign-kam', requireAuth(ADMIN_ROLES), express.json(), async (req, res) => {
+  try { const { level, key, kamBid } = req.body || {}; res.json(await kam.assignKam(level, key, kamBid === '' ? null : kamBid, req.user && req.user.username)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.post('/unit', requireAuth(ADMIN_ROLES), express.json(), async (req, res) => {
+  try { const { companyId, name, kind } = req.body || {}; res.json(await kam.createUnit(companyId, name, kind, req.user && req.user.username)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.delete('/unit/:id', requireAuth(ADMIN_ROLES), async (req, res) => {
+  try { res.json(await kam.deleteUnit(req.params.id)); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.post('/move-company', requireAuth(ADMIN_ROLES), express.json(), async (req, res) => {
+  try { const { companyId, companyName, group } = req.body || {}; res.json(await kam.moveCompanyGroup(companyId, companyName, group, req.user && req.user.username)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.post('/deal-unit', requireAuth(ADMIN_ROLES), express.json(), async (req, res) => {
+  try { const { dealId, unit } = req.body || {}; res.json(await kam.setDealUnit(dealId, unit, req.user && req.user.username)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = { router };

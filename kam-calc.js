@@ -10,6 +10,8 @@
 const { pool } = require('./auth');
 const { b24 } = require('./bitrix');
 const { USERS } = require('./constants');
+const { bust } = require('./cache');
+const UNIT_FIELD = 'UF_CRM_1731862825010'; // текстовое поле подразделения на сделке
 
 const uname = bid => (bid != null ? (USERS[bid] || ('#' + bid)) : null);
 const mln = v => Math.round((Number(v) || 0) / 1e6);
@@ -236,4 +238,81 @@ async function listUnits(companyId) {
   return { units: [...reg, ...extra] };
 }
 
-module.exports = { getTree, getNode, getKamPortfolio, listUnits, resolveGroupMap, uname };
+// ── WRITE (админка) ──────────────────────────────────────────────────────────
+// Назначить/снять КАМ на узле. level: group|company|unit; key: имя группы /
+// company_id / unit id. КАМ хранится только в ЦУП (поля на сделке в Б24 нет).
+async function assignKam(level, key, bid, by) {
+  if (!['group', 'company', 'unit'].includes(level)) throw new Error('bad level');
+  if (bid === null || bid === '' || bid === undefined) {
+    await pool.query('DELETE FROM ticketsmodule_kam_assign WHERE level=$1 AND node_key=$2', [level, String(key)]);
+  } else {
+    await pool.query(
+      `INSERT INTO ticketsmodule_kam_assign (level, node_key, kam_bitrix_id, updated_at, updated_by)
+       VALUES ($1,$2,$3,NOW(),$4)
+       ON CONFLICT (level, node_key) DO UPDATE SET kam_bitrix_id=$3, updated_at=NOW(), updated_by=$4`,
+      [level, String(key), parseInt(bid, 10), by || null]);
+  }
+  bust('kam:');
+  return { ok: true };
+}
+
+// Реестр подразделений (отдел/лаборатория/факультет) per компания.
+async function createUnit(companyId, name, kind, by) {
+  name = String(name || '').trim();
+  if (!companyId) throw new Error('no company');
+  if (!name) throw new Error('empty name');
+  const { rows } = await pool.query(
+    `INSERT INTO ticketsmodule_kam_units (company_id, name, kind, bitrix_value, created_by)
+     VALUES ($1,$2,$3,$2,$4)
+     ON CONFLICT (company_id, name) DO UPDATE SET kind=$3 RETURNING id`,
+    [String(companyId), name, kind || 'lab', by || null]);
+  bust('kam:');
+  return { ok: true, id: rows[0] && rows[0].id };
+}
+async function deleteUnit(id) {
+  await pool.query('DELETE FROM ticketsmodule_kam_units WHERE id=$1', [parseInt(id, 10)]);
+  bust('kam:');
+  return { ok: true };
+}
+
+// Перенести компанию в группу (ЦУП-авторитетно: project_clients.group_name).
+// Дерево перегруппируется сразу. Зеркалирование group_ref в Б24 — отдельным шагом.
+async function moveCompanyGroup(companyId, companyName, group, by) {
+  companyId = String(companyId);
+  group = String(group || '').trim() || null;
+  await pool.query(
+    `INSERT INTO ticketsmodule_project_clients (company_id, company_name, group_name, updated_at, updated_by)
+     VALUES ($1,$2,$3,NOW(),$4)
+     ON CONFLICT (company_id) DO UPDATE SET group_name=$3,
+       company_name=COALESCE(EXCLUDED.company_name, ticketsmodule_project_clients.company_name),
+       updated_at=NOW(), updated_by=$4`,
+    [companyId, companyName || null, group, by || null]);
+  bust('kam:');
+  return { ok: true, group };
+}
+
+// Проставить подразделение конкретной сделке → пишем в Б24 (текстовое поле) + зеркало.
+async function setDealUnit(dealId, unit, by) {
+  dealId = parseInt(dealId, 10);
+  unit = String(unit == null ? '' : unit).trim();
+  await b24('crm.deal.update', { id: dealId, fields: { [UNIT_FIELD]: unit } });
+  await pool.query('UPDATE ticketsmodule_stat_deals SET unit_tag=$1 WHERE deal_id=$2', [unit || null, dealId]);
+  bust('kam:');
+  return { ok: true };
+}
+
+async function listUsers() {
+  return Object.entries(USERS).filter(([id]) => id !== '1')
+    .map(([id, name]) => ({ id: Number(id), name })).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+}
+async function listGroups() {
+  const { rows } = await pool.query("SELECT DISTINCT group_name FROM ticketsmodule_project_clients WHERE group_name IS NOT NULL AND group_name<>''");
+  const names = new Set(rows.map(r => r.group_name));
+  try { const map = await resolveGroupMap(); Object.values(map).forEach(n => names.add(n)); } catch (e) {}
+  return [...names].sort((a, b) => a.localeCompare(b, 'ru'));
+}
+
+module.exports = {
+  getTree, getNode, getKamPortfolio, listUnits, resolveGroupMap, uname,
+  assignKam, createUnit, deleteUnit, moveCompanyGroup, setDealUnit, listUsers, listGroups,
+};

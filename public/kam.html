@@ -31,6 +31,7 @@ a{color:var(--info);text-decoration:none}
 .ibtn{height:34px;border-radius:9px;border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);display:flex;align-items:center;justify-content:center;padding:0 12px;gap:6px;font-size:12.5px;font-weight:600}
 .ibtn:hover{color:var(--text);border-color:var(--text-3)}
 .ibtn.sq{width:34px;padding:0}
+.ibtn.acc{background:var(--accent);color:var(--accent-ink,#fff);border-color:var(--accent)}
 
 .wrap{max-width:1280px;margin:0 auto;padding:18px}
 .view{display:none}.view.on{display:block}
@@ -91,6 +92,19 @@ a{color:var(--info);text-decoration:none}
 .lab-chip{font-size:12px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:5px 10px;color:var(--text-2);display:inline-flex;align-items:center;gap:6px;cursor:pointer;margin:7px 7px 0 0}.lab-chip:hover{border-color:var(--text-3)}.lab-chip .d{font-size:10px;color:var(--text-faint)}
 .empty{color:var(--text-3);text-align:center;padding:40px 0;font-size:13px}
 .spin{color:var(--text-3);text-align:center;padding:30px 0;font-size:13px}
+.adm-grp{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);margin-bottom:14px;overflow:hidden}
+.adm-grp-h{display:flex;align-items:center;gap:10px;padding:13px 15px;background:var(--surface-2);border-bottom:1px solid var(--line)}
+.adm-grp-h .gn{font-size:15px;font-weight:800;flex:1}
+.arow{display:flex;align-items:center;gap:9px;padding:9px 15px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.arow:last-child{border-bottom:none}.arow.ind{padding-left:40px}
+.arow .an{flex:1;font-size:13.5px;font-weight:600;min-width:140px}
+.selbox{appearance:none;background:var(--surface-2);border:1px solid var(--line-2);border-radius:9px;padding:6px 26px 6px 10px;color:var(--text);font:inherit;font-size:12.5px;font-weight:600;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='%237f8a9c' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;max-width:210px}
+.mini-btn{border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:650}
+.mini-btn:hover{color:var(--text);border-color:var(--text-3)}.mini-btn.acc{background:var(--accent);color:var(--accent-ink,#fff);border-color:var(--accent)}
+.mini-btn.del{color:var(--bad)}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);font-size:13px;font-weight:600;padding:10px 16px;border-radius:10px;box-shadow:0 10px 30px -8px rgba(0,0,0,.5);z-index:100;opacity:0;transition:opacity .2s}
+.toast.on{opacity:1}
 @media(max-width:900px){.cols{grid-template-columns:1fr}.nav{order:2}.kpis{grid-template-columns:repeat(2,1fr)}.pgrid{grid-template-columns:1fr}.ttl small,.allmod{display:none}.seg button{padding:6px 10px}}
 </style>
 </head>
@@ -122,6 +136,16 @@ a{color:var(--info);text-decoration:none}
 <div class="view wrap" id="v-kam">
   <div class="kamgrid" id="kamgrid"></div>
   <div id="kamport"></div>
+</div>
+
+<div class="view wrap" id="v-adm">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+    <h2 style="font-size:20px;font-weight:800;letter-spacing:-.3px">Админка КАМ</h2>
+    <span class="inh">↗ КАМ/группа/подразделение сохраняются сразу</span>
+  </div>
+  <div style="font-size:12px;color:var(--text-3);background:var(--surface-2);border:1px dashed var(--line-2);border-radius:10px;padding:10px 13px;margin-bottom:14px">
+    🔐 Доступ: админ/координатор. Назначайте КАМ на любом уровне (наследуется вниз), заводите подразделения, переносите компании в группы. КАМ хранится в ЦУП; подразделение сделки пишется в Битрикс.</div>
+  <div id="admBody"><div class="spin">Загрузка…</div></div>
 </div>
 
 <script src="/assets/cup-theme.js" defer></script>
@@ -271,12 +295,63 @@ async function showKamPort(id,name){
 function goKam(id){ go('kam'); setTimeout(()=>{const el=document.querySelector('.kcard[data-k="'+id+'"]'); if(el)el.click();},300); }
 function openCompany(id){ go('co'); selNode('company',decodeURIComponent(id),null); }
 
+// ── Админка ──
+let ADM={users:null,groups:null};
+let _toastT;
+function toast(msg){ let t=document.getElementById('toast'); if(!t){t=document.createElement('div');t.id='toast';t.className='toast';document.body.appendChild(t);} t.textContent=msg;t.classList.add('on');clearTimeout(_toastT);_toastT=setTimeout(()=>t.classList.remove('on'),2200); }
+async function api(path,body,method){ const r=await fetch('/api/kam'+path,{method:method||'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:body?JSON.stringify(body):undefined}); const d=await r.json().catch(()=>({})); if(!r.ok||d.error){throw new Error(d.error||('HTTP '+r.status));} return d; }
+function userOpts(sel){ return ['<option value="">— наследовать —</option>',...(ADM.users||[]).map(u=>`<option value="${u.id}" ${String(sel)===String(u.id)?'selected':''}>${esc(u.name)}</option>`)].join(''); }
+function kamSel(level,key,cur){ return `<select class="selbox" title="КАМ" onchange="setKam('${level}','${encodeURIComponent(key)}',this.value,this)">${userOpts(cur)}</select>`; }
+async function setKam(level,key,val,el){ try{ await api('/assign-kam',{level,key:decodeURIComponent(key),kamBid:val===''?null:Number(val)}); toast('КАМ сохранён'); TREE=await fetch('/api/kam/tree',{credentials:'include',cache:'no-store'}).then(r=>r.json()); renderTree(); }catch(e){ toast('Ошибка: '+e.message); } }
+async function doMove(companyId,companyName,group){ try{ await api('/move-company',{companyId:decodeURIComponent(companyId),companyName,group}); toast('Компания перенесена в «'+(group||'Без группы')+'»'); TREE=await fetch('/api/kam/tree',{credentials:'include',cache:'no-store'}).then(r=>r.json()); renderTree(); renderAdm(); }catch(e){ toast('Ошибка: '+e.message); } }
+async function addUnit(companyId,companyName){ const name=prompt('Название отдела / лаборатории / факультета:'); if(!name)return; try{ await api('/unit',{companyId:decodeURIComponent(companyId),name,kind:'lab'}); toast('Подразделение заведено'); TREE=await fetch('/api/kam/tree',{credentials:'include',cache:'no-store'}).then(r=>r.json()); renderTree(); renderAdm(); }catch(e){ toast('Ошибка: '+e.message); } }
+async function delUnit(id){ if(!confirm('Удалить подразделение из реестра? (сделки не трогаются)'))return; try{ await api('/unit/'+id,null,'DELETE'); toast('Удалено'); TREE=await fetch('/api/kam/tree',{credentials:'include',cache:'no-store'}).then(r=>r.json()); renderTree(); renderAdm(); }catch(e){ toast('Ошибка: '+e.message); } }
+async function renderAdm(){
+  const body=document.getElementById('admBody');
+  if(!ADM.users){ try{ ADM.users=(await api('/users',null,'GET')).users; ADM.groups=(await api('/groups',null,'GET')).groups; }catch(e){ body.innerHTML='<div class="empty">Нет доступа к админке</div>'; return; } }
+  if(!TREE){ TREE=await fetch('/api/kam/tree',{credentials:'include',cache:'no-store'}).then(r=>r.json()); }
+  const groups=(TREE.groups||[]); const real=groups.filter(g=>g.name!=='Без группы'); const pool=groups.find(g=>g.name==='Без группы');
+  const grpOpts=(sel)=>['<option value="">Без группы</option>',...(ADM.groups||[]).map(g=>`<option ${g===sel?'selected':''}>${esc(g)}</option>`)].join('');
+  let h='';
+  real.forEach(g=>{
+    h+=`<div class="adm-grp"><div class="adm-grp-h"><span class="ttype g">Группа</span><span class="gn">${esc(g.name)}</span>
+      <span style="font-size:11px;color:var(--text-3)">КАМ группы:</span>${kamSel('group',g.name,g.kam||'')}</div>`;
+    (g.companies||[]).forEach(c=>{
+      h+=`<div class="arow"><span class="ttype c">Комп.</span><span class="an">${esc(c.name)}</span>
+        <select class="selbox" title="Группа" onchange="doMove('${encodeURIComponent(c.id)}',${JSON.stringify(esc(c.name))},this.value)">${grpOpts(g.name)}</select>
+        ${kamSel('company',c.id,c.kam||'')}
+        <button class="mini-btn" onclick="addUnit('${encodeURIComponent(c.id)}',${JSON.stringify(esc(c.name))})">+ Подразд.</button></div>`;
+      (c.labs||[]).forEach(l=>{
+        h+=`<div class="arow ind"><span class="ttype l">Подр.</span><span class="an">${esc(l.name)}${l.id?'':' <span style="font-size:10px;color:var(--text-faint)">(из сделок)</span>'}</span>
+          ${l.id?kamSel('unit',l.id,l.kam&&!l.inherited?l.kam:''):`<button class="mini-btn" onclick="addUnit('${encodeURIComponent(c.id)}',${JSON.stringify(esc(c.name))})">Завести в реестр</button>`}
+          ${l.id?`<button class="mini-btn del" onclick="delUnit(${l.id})">🗑</button>`:''}</div>`;
+      });
+    });
+    h+=`</div>`;
+  });
+  // Пул на разбор
+  h+=`<div class="adm-grp"><div class="adm-grp-h"><span class="ttype" style="background:var(--surface-3);color:var(--text-3)">Пул</span><span class="gn">Без группы — разобрать (${pool?pool.companiesCount:0})</span></div>
+    <div class="arow"><div class="search" style="flex:1;max-width:360px">🔍<input id="admPoolSearch" placeholder="Найти компанию…"></div></div>
+    <div id="admPoolRes"></div></div>`;
+  body.innerHTML=h;
+  const ps=document.getElementById('admPoolSearch');
+  if(ps)ps.addEventListener('input',()=>{ const q=ps.value.trim().toLowerCase(); const box=document.getElementById('admPoolRes');
+    if(q.length<2){box.innerHTML='<div class="arow"><span class="tmeta" style="padding:2px">Введите 2+ символа</span></div>';return;}
+    const m=(pool.companies||[]).filter(c=>(c.name||'').toLowerCase().includes(q)).slice(0,30);
+    box.innerHTML=m.map(c=>`<div class="arow"><span class="ttype c">Комп.</span><span class="an">${esc(c.name)}</span>
+      <span style="font-size:11px;color:var(--text-3)">в группу:</span>
+      <select class="selbox" onchange="doMove('${encodeURIComponent(c.id)}',${JSON.stringify(esc(c.name))},this.value)">${grpOpts('')}</select>
+      ${kamSel('company',c.id,'')}</div>`).join('')||'<div class="arow"><span class="tmeta">Ничего не найдено</span></div>';
+  });
+}
+
 function go(v){ document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  document.getElementById('admBtn').classList.toggle('acc',v==='adm');
   document.querySelectorAll('.view').forEach(x=>x.classList.remove('on')); document.getElementById('v-'+v).classList.add('on');
-  if(v==='kam')renderKamView(); }
+  if(v==='kam')renderKamView(); if(v==='adm')renderAdm(); }
 document.querySelectorAll('#seg button').forEach(b=>b.addEventListener('click',()=>go(b.dataset.v)));
 document.getElementById('themeBtn').addEventListener('click',()=>{const d=document.documentElement;const dark=d.getAttribute('data-theme')!=='dark';d.setAttribute('data-theme',dark?'dark':'light');try{localStorage.setItem('pls-theme',dark?'dark':'light')}catch(e){}});
-document.getElementById('admBtn').addEventListener('click',()=>alert('Админка КАМ — следующий шаг сборки (назначение КАМ, подразделения, перенос в группу).'));
+document.getElementById('admBtn').addEventListener('click',()=>go('adm'));
 boot();
 </script>
 </body>
