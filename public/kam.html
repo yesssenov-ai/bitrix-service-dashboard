@@ -120,8 +120,11 @@ a{color:var(--info);text-decoration:none}
 .toast.on{opacity:1}
 .mob-back{display:none;align-items:center;gap:6px;border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);border-radius:9px;padding:8px 13px;font-size:13px;font-weight:650;margin-bottom:12px}
 .pdeals{margin-top:11px;border-top:1px solid var(--line);padding-top:8px;cursor:default}
-.drow{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+.drow{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px;flex-wrap:wrap}
 .drow:last-child{border-bottom:none}
+.drow .selbox{flex:1 1 130px;min-width:0}.drow .selbox.prj{flex:1 1 150px}
+.dsearch{display:flex;align-items:center;gap:7px;background:var(--surface-2);border:1px solid var(--line-2);border-radius:9px;padding:6px 11px;margin-bottom:6px;font-size:13px}
+.dsearch input{border:0;background:transparent;outline:none;font:inherit;color:var(--text);width:100%}
 .drow .dn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-2);font-weight:500}
 /* ── премиум-полировка ── */
 .aklbl{font-size:11px;color:var(--text-3);font-weight:600;white-space:nowrap}
@@ -286,22 +289,34 @@ async function toggleProj(card,proj){
     const u=new URLSearchParams({type:card.dataset.type,key:card.dataset.key,project:proj});
     const d=await fetch('/api/kam/deals?'+u.toString(),{credentials:'include',cache:'no-store'}).then(r=>r.json());
     const cids=[...new Set((d.deals||[]).map(x=>x.companyId))];
-    await Promise.all(cids.map(ensureUnits));
-    box.innerHTML=(d.deals||[]).map(dealRow).join('')||'<div class="tmeta" style="padding:8px">Сделок нет</div>';
+    await Promise.all([ensureProjOpts(),...cids.map(ensureUnits)]);
+    const rows=(d.deals||[]).map(dealRow).join('');
+    box.innerHTML=rows
+      ? `<div class="dsearch">🔎<input placeholder="Поиск сделки…" oninput="filterDeals(this)"></div><div class="drows">${rows}</div>`
+      : '<div class="tmeta" style="padding:8px">Сделок нет</div>';
     box.dataset.loaded='1';
   }catch(e){ box.innerHTML='<div class="tmeta" style="padding:8px">Ошибка загрузки</div>'; }
 }
+function filterDeals(inp){ const box=inp.closest('.pdeals'); if(!box)return; const q=(inp.value||'').trim().toLowerCase();
+  box.querySelectorAll('.drow').forEach(r=>{ r.style.display=(!q||(r.dataset.t||'').includes(q))?'':'none'; }); }
 window._unitsByCo={};
 async function ensureUnits(cid){ if(window._unitsByCo[cid])return; try{ const u=await fetch('/api/kam/units?company='+encodeURIComponent(cid),{credentials:'include',cache:'no-store'}).then(r=>r.json()); window._unitsByCo[cid]=(u.units||[]).map(x=>x.name); }catch(e){ window._unitsByCo[cid]=[]; } }
 function unitOpts(cid,cur){ const base=['',...(window._unitsByCo[cid]||[])]; if(cur&&!base.includes(cur))base.push(cur);
   return base.map(n=>`<option value="${esc(n)}" ${cur===n?'selected':''}>${n===''?'— без подразделения —':esc(n)}</option>`).join(''); }
-function dealRow(dl){ return `<div class="drow">
+window._projOpts=null;
+async function ensureProjOpts(){ if(window._projOpts)return; try{ const r=await fetch('/api/kam/project-options',{credentials:'include',cache:'no-store'}).then(r=>r.json()); window._projOpts=r.options||[]; }catch(e){ window._projOpts=[]; } }
+function projOpts(cur){ let h='<option value="">— вне проекта —</option>'; let has=false;
+  (window._projOpts||[]).forEach(o=>{ const sel=o.value===cur; if(sel)has=true; h+=`<option value="${esc(o.id)}" ${sel?'selected':''}>${esc(o.value)}</option>`; });
+  if(cur&&!has)h+=`<option value="" selected>${esc(cur)} (не в списке)</option>`; return h; }
+function dealRow(dl){ return `<div class="drow" data-t="${esc(((dl.title||'')+' '+(dl.company||'')+' '+(dl.project||'')).toLowerCase())}">
   <span class="ttype ${dl.post?'l':'c'}" style="min-width:44px;text-align:center">${dl.post?'после':'до'}</span>
   <span class="dn" title="${esc(dl.title)}">${esc(dl.title)}</span>
   <span class="sum" style="font-size:12px;flex-shrink:0">${dl.sumMln}<small> млн</small></span>
+  <select class="selbox prj" title="Проект" onchange="setDealProject(${dl.dealId},this.value)">${projOpts(dl.project)}</select>
   <select class="selbox" title="Подразделение" onchange="setDeal(${dl.dealId},this.value)">${unitOpts(dl.companyId,dl.unit)}</select>
   <a href="${dl.url}" target="_blank" class="mini-btn">↗ Б24</a></div>`; }
 async function setDeal(id,unit){ try{ await apiKam('/deal-unit',{dealId:id,unit}); toast('Подразделение записано в Битрикс'); }catch(e){ toast('Ошибка: '+e.message); } }
+async function setDealProject(id,projectId){ try{ await apiKam('/deal-project',{dealId:id,projectId}); toast(projectId?'Проект записан в Битрикс':'Проект снят'); PTREE=null; }catch(e){ toast('Ошибка: '+e.message); } }
 async function apiKam(path,body){ const r=await fetch('/api/kam'+path,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)}); const d=await r.json().catch(()=>({})); if(!r.ok||d.error)throw new Error(d.error||('HTTP '+r.status)); return d; }
 function renderDetail(n){
   const d=document.getElementById('detail');

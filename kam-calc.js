@@ -12,6 +12,8 @@ const { b24 } = require('./bitrix');
 const { USERS } = require('./constants');
 const { bust } = require('./cache');
 const UNIT_FIELD = 'UF_CRM_1731862825010'; // текстовое поле подразделения на сделке
+const PROJECT_FIELD = 'UF_CRM_1791972186';  // enum «В рамках проекта» (множественное)
+const NO_PROJECT_RE = /^без\s*проект/i;      // «Без проекта» → не считаем проектом
 
 const uname = bid => (bid != null ? (USERS[bid] || ('#' + bid)) : null);
 const mln = v => Math.round((Number(v) || 0) / 1e6);
@@ -272,7 +274,7 @@ async function nodeDeals(type, key, project) {
     deals: subset.slice(0, 300).map(d => ({
       dealId: d.deal_id, title: d.deal_title || ('Сделка #' + d.deal_id), unit: d.unit_tag || '',
       companyId: String(d.company_id), company: d.company_name || '', sumMln: mln(d.opportunity),
-      post: !!d.contract_date, stage: d.stage_id,
+      post: !!d.contract_date, stage: d.stage_id, project: d.project_tag || '',
       url: 'https://crm.prolabsupport.kz/crm/deal/details/' + d.deal_id + '/',
     })),
   };
@@ -434,6 +436,33 @@ async function setDealUnit(dealId, unit, by) {
   return { ok: true };
 }
 
+// Опции проекта (enum «В рамках проекта») для назначения сделке. Кэш 6ч.
+let projOptCache = null, projOptAt = 0;
+async function listProjectOptions() {
+  if (projOptCache && Date.now() - projOptAt < 6 * 3600 * 1000) return projOptCache;
+  try {
+    const { result } = await b24('crm.deal.userfield.list', { filter: { FIELD_NAME: PROJECT_FIELD } });
+    const f = (result || [])[0];
+    const opts = ((f && f.LIST) || []).map(it => ({ id: String(it.ID), value: it.VALUE }))
+      .filter(o => o.value && !NO_PROJECT_RE.test(String(o.value).trim()))
+      .sort((a, b) => a.value.localeCompare(b.value, 'ru'));
+    projOptCache = opts; projOptAt = Date.now();
+    return opts;
+  } catch (e) { return projOptCache || []; }
+}
+
+// Присвоить сделке проект → пишем enum в Б24 (множественное поле) + зеркало project_tag.
+async function setDealProject(dealId, projectId, by) {
+  dealId = parseInt(dealId, 10);
+  projectId = String(projectId == null ? '' : projectId).trim();
+  let value = null;
+  if (projectId) { const opts = await listProjectOptions(); const o = opts.find(x => x.id === projectId); value = o ? o.value : null; }
+  await b24('crm.deal.update', { id: dealId, fields: { [PROJECT_FIELD]: projectId ? [projectId] : '' } });
+  await pool.query('UPDATE ticketsmodule_stat_deals SET project_tag=$1 WHERE deal_id=$2', [value, dealId]);
+  bust('kam:');
+  return { ok: true, project: value };
+}
+
 async function listUsers() {
   return Object.entries(USERS).filter(([id]) => id !== '1')
     .map(([id, name]) => ({ id: Number(id), name })).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
@@ -447,5 +476,5 @@ async function listGroups() {
 
 module.exports = {
   getTree, getProjectTree, getNode, getKamPortfolio, listUnits, resolveGroupMap, uname,
-  assignKam, createUnit, deleteUnit, moveCompanyGroup, setDealUnit, listUsers, listGroups, listDeals, nodeDeals,
+  assignKam, createUnit, deleteUnit, moveCompanyGroup, setDealUnit, setDealProject, listProjectOptions, listUsers, listGroups, listDeals, nodeDeals,
 };

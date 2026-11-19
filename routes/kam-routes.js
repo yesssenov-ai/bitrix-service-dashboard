@@ -77,6 +77,9 @@ router.get('/units', requireAuth(VIEW_ROLES), async (req, res) => {
   try { res.json(await kam.listUnits(req.query.company || '')); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
+router.get('/project-options', requireAuth(VIEW_ROLES), async (req, res) => {
+  try { res.json({ options: await kam.listProjectOptions() }); } catch (e) { res.status(500).json({ error: e.message }); }
+});
 router.get('/deals', requireAuth(VIEW_ROLES), async (req, res) => {
   try {
     if (req.query.type) return res.json(await kam.nodeDeals(req.query.type, decodeURIComponent(req.query.key || ''), req.query.project ? decodeURIComponent(req.query.project) : ''));
@@ -108,6 +111,10 @@ router.post('/move-company', requireAuth(ADMIN_ROLES), express.json(), async (re
 });
 router.post('/deal-unit', requireAuth(ADMIN_ROLES), express.json(), async (req, res) => {
   try { const { dealId, unit } = req.body || {}; res.json(await kam.setDealUnit(dealId, unit, req.user && req.user.username)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.post('/deal-project', requireAuth(ADMIN_ROLES), express.json(), async (req, res) => {
+  try { const { dealId, projectId } = req.body || {}; res.json(await kam.setDealProject(dealId, projectId, req.user && req.user.username)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
