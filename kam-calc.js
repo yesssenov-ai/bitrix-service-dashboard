@@ -132,16 +132,25 @@ async function getTree() {
     const unitNames = new Set();
     co.deals.forEach(d => { if (d.unit_tag) unitNames.add(d.unit_tag); });
     (unitsByCo[co.id] || []).forEach(u => unitNames.add(u.name));
+    const ekCoEff = effKam(assign, { groupKey: gk, companyId: co.id });   // эфф. КАМ компании (для наследования подразделению)
+    const grpKamName = uname(effKam(assign, { groupKey: gk }).bid);        // КАМ группы (наследование компании)
     const labs = [...unitNames].map(nm => {
       const reg = (unitsByCo[co.id] || []).find(u => u.name === nm);
       const ds = co.deals.filter(d => d.unit_tag === nm);
       const ek = effKam(assign, { groupKey: gk, companyId: co.id, unitId: reg ? reg.id : null });
-      return { id: reg ? reg.id : null, name: nm, kind: reg ? reg.kind : 'lab', kam: ek.bid, kamName: uname(ek.bid), inherited: !!ek.inherited || ek.level !== 'unit', ...dealStats(ds) };
+      return {
+        id: reg ? reg.id : null, name: nm, kind: reg ? reg.kind : 'lab',
+        kam: ek.bid, kamName: uname(ek.bid), inherited: !!ek.inherited || ek.level !== 'unit',
+        ownKam: reg ? (assign.unit[String(reg.id)] != null ? assign.unit[String(reg.id)] : null) : null,
+        inheritName: uname(ekCoEff.bid),
+        ...dealStats(ds),
+      };
     });
     const directDeals = co.deals.filter(d => !d.unit_tag);
-    const ekCo = effKam(assign, { groupKey: gk, companyId: co.id });
     groups[gk].companies.push({
-      id: co.id, name: co.name, kam: ekCo.bid, kamName: uname(ekCo.bid), inherited: !!ekCo.inherited,
+      id: co.id, name: co.name, kam: ekCoEff.bid, kamName: uname(ekCoEff.bid), inherited: !!ekCoEff.inherited,
+      ownKam: assign.company[String(co.id)] != null ? assign.company[String(co.id)] : null,
+      inheritName: grpKamName,
       labs, directDeals: dealStats(directDeals), ...dealStats(co.deals),
     });
   });
@@ -192,6 +201,25 @@ async function getNode(type, key) {
     companies: nc, units: nl, projects: projectsOf(subset).length,
     deals: st.count, pre: st.pre, post: st.post, sumMln: mln(st.sum),
     projectsList: projectsOf(subset),
+  };
+}
+
+// Сделки узла (для раскрытия карточки проекта). project — фильтр по проекту.
+async function nodeDeals(type, key, project) {
+  const { deals, coGroup } = await loadModel();
+  let subset = [];
+  if (type === 'group') subset = deals.filter(d => (coGroup[String(d.company_id)] || {}).name === key);
+  else if (type === 'company') subset = deals.filter(d => String(d.company_id) === String(key));
+  else if (type === 'unit') { const [cid, ...r] = String(key).split('|'); const un = r.join('|'); subset = deals.filter(d => String(d.company_id) === cid && d.unit_tag === un); }
+  if (project) subset = subset.filter(d => (d.project_tag || '— вне проекта —') === project);
+  subset.sort((a, b) => (Number(b.opportunity) || 0) - (Number(a.opportunity) || 0));
+  return {
+    deals: subset.slice(0, 300).map(d => ({
+      dealId: d.deal_id, title: d.deal_title || ('Сделка #' + d.deal_id), unit: d.unit_tag || '',
+      companyId: String(d.company_id), company: d.company_name || '', sumMln: mln(d.opportunity),
+      post: !!d.contract_date, stage: d.stage_id,
+      url: 'https://crm.prolabsupport.kz/crm/deal/details/' + d.deal_id + '/',
+    })),
   };
 }
 
@@ -275,8 +303,29 @@ async function deleteUnit(id) {
   return { ok: true };
 }
 
-// Перенести компанию в группу (ЦУП-авторитетно: project_clients.group_name).
-// Дерево перегруппируется сразу. Зеркалирование group_ref в Б24 — отдельным шагом.
+// name → id элемента справочника «Группа компаний» (обратная карта)
+async function reverseGroupMap() {
+  const map = await resolveGroupMap();
+  const rev = {};
+  Object.entries(map).forEach(([id, name]) => { if (name) rev[String(name).trim()] = id; });
+  return rev;
+}
+
+// Пакетная запись одного поля сделкам (Bitrix batch, до 50 за вызов).
+async function batchUpdateDeals(dealIds, fieldCode, value) {
+  let written = 0;
+  for (let i = 0; i < dealIds.length; i += 50) {
+    const chunk = dealIds.slice(i, i + 50);
+    const cmd = {};
+    chunk.forEach((id, k) => { cmd['u' + k] = `crm.deal.update?id=${id}&fields[${fieldCode}]=${encodeURIComponent(value)}`; });
+    try { await b24('batch', { halt: 0, cmd }); written += chunk.length; }
+    catch (e) { console.error('kam batchUpdateDeals:', e.message); }
+  }
+  return written;
+}
+
+// Перенести компанию в группу. ЦУП-авторитетно (project_clients.group_name → дерево
+// перегруппируется сразу) + зеркалим group_ref в Б24 на сделки компании.
 async function moveCompanyGroup(companyId, companyName, group, by) {
   companyId = String(companyId);
   group = String(group || '').trim() || null;
@@ -287,8 +336,37 @@ async function moveCompanyGroup(companyId, companyName, group, by) {
        company_name=COALESCE(EXCLUDED.company_name, ticketsmodule_project_clients.company_name),
        updated_at=NOW(), updated_by=$4`,
     [companyId, companyName || null, group, by || null]);
+  // Зеркалирование в Б24: id элемента справочника для группы (пусто → очистка поля)
+  let groupId = '';
+  if (group) { const rev = await reverseGroupMap(); groupId = rev[group] || ''; }
+  const { rows } = await pool.query('SELECT deal_id FROM ticketsmodule_stat_deals WHERE company_id=$1', [companyId]);
+  const dealIds = rows.map(r => r.deal_id);
+  let mirrored = 0, mirrorNote = null;
+  if (group && !groupId) { mirrorNote = 'группы «' + group + '» нет в справочнике Б24 — записана только в ЦУП'; }
+  else if (dealIds.length) {
+    mirrored = await batchUpdateDeals(dealIds, 'UF_CRM_1731862481', groupId);
+    await pool.query('UPDATE ticketsmodule_stat_deals SET group_ref=$1 WHERE company_id=$2', [groupId || null, companyId]);
+  }
   bust('kam:');
-  return { ok: true, group };
+  return { ok: true, group, mirrored, deals: dealIds.length, mirrorNote };
+}
+
+// Сделки узла (для назначения подразделения прямо на сделке).
+async function listDeals(companyId, unit) {
+  const params = [String(companyId)];
+  let where = 'company_id=$1';
+  if (unit === '__none__') where += " AND (unit_tag IS NULL OR unit_tag='')";
+  else if (unit) { where += ' AND unit_tag=$2'; params.push(unit); }
+  const { rows } = await pool.query(
+    `SELECT deal_id, deal_title, unit_tag, stage_id, category_id, opportunity, contract_date, project_tag
+       FROM ticketsmodule_stat_deals WHERE ${where} ORDER BY date_create DESC NULLS LAST LIMIT 300`, params);
+  return {
+    deals: rows.map(r => ({
+      dealId: r.deal_id, title: r.deal_title || ('Сделка #' + r.deal_id), unit: r.unit_tag || '',
+      project: r.project_tag || '', stage: r.stage_id, sumMln: mln(r.opportunity),
+      post: !!r.contract_date, url: 'https://crm.prolabsupport.kz/crm/deal/details/' + r.deal_id + '/',
+    })),
+  };
 }
 
 // Проставить подразделение конкретной сделке → пишем в Б24 (текстовое поле) + зеркало.
@@ -314,5 +392,5 @@ async function listGroups() {
 
 module.exports = {
   getTree, getNode, getKamPortfolio, listUnits, resolveGroupMap, uname,
-  assignKam, createUnit, deleteUnit, moveCompanyGroup, setDealUnit, listUsers, listGroups,
+  assignKam, createUnit, deleteUnit, moveCompanyGroup, setDealUnit, listUsers, listGroups, listDeals, nodeDeals,
 };

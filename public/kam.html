@@ -105,7 +105,30 @@ a{color:var(--info);text-decoration:none}
 .mini-btn.del{color:var(--bad)}
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);font-size:13px;font-weight:600;padding:10px 16px;border-radius:10px;box-shadow:0 10px 30px -8px rgba(0,0,0,.5);z-index:100;opacity:0;transition:opacity .2s}
 .toast.on{opacity:1}
-@media(max-width:900px){.cols{grid-template-columns:1fr}.nav{order:2}.kpis{grid-template-columns:repeat(2,1fr)}.pgrid{grid-template-columns:1fr}.ttl small,.allmod{display:none}.seg button{padding:6px 10px}}
+.mob-back{display:none;align-items:center;gap:6px;border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);border-radius:9px;padding:8px 13px;font-size:13px;font-weight:650;margin-bottom:12px}
+.pdeals{margin-top:11px;border-top:1px solid var(--line);padding-top:8px;cursor:default}
+.drow{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+.drow:last-child{border-bottom:none}
+.drow .dn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-2);font-weight:500}
+/* ── премиум-полировка ── */
+.aklbl{font-size:11px;color:var(--text-3);font-weight:600;white-space:nowrap}
+.kam-sel.set{border-color:color-mix(in srgb,var(--accent) 48%,var(--line-2));box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 10%,transparent)}
+body{background:radial-gradient(135% 72% at 100% -8%, color-mix(in srgb,var(--accent) 6%,transparent), transparent 46%), var(--bg)}
+.panel,.pcard,.kcard,.adm-grp,.poolbox{box-shadow:0 1px 2px rgba(0,0,0,.05),0 20px 44px -24px rgba(0,0,0,.42)}
+.head-card{background:linear-gradient(180deg, color-mix(in srgb,var(--surface-2) 42%,var(--surface)), var(--surface))}
+.head-card::before{width:4px;background:linear-gradient(180deg,var(--accent),color-mix(in srgb,var(--accent) 40%,transparent));box-shadow:0 0 20px -2px color-mix(in srgb,var(--accent) 55%,transparent)}
+.hc-title{font-weight:850;letter-spacing:-.6px}
+.kpi{background:linear-gradient(180deg,var(--surface),color-mix(in srgb,var(--surface-2) 48%,var(--surface)));box-shadow:0 1px 0 0 color-mix(in srgb,#fff 5%,transparent) inset}
+.kpi .n{letter-spacing:-.7px}
+.kam-card{background:linear-gradient(180deg,color-mix(in srgb,var(--surface-2) 70%,var(--surface)),var(--surface-2));box-shadow:0 2px 10px -4px rgba(0,0,0,.3)}
+.trow.sel{background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 16%,transparent),color-mix(in srgb,var(--accent) 7%,transparent))}
+.pcard{background:linear-gradient(180deg,var(--surface),color-mix(in srgb,var(--surface-2) 30%,var(--surface)))}
+.pcard:hover{box-shadow:0 2px 4px rgba(0,0,0,.06),0 26px 50px -24px color-mix(in srgb,var(--accent) 22%,rgba(0,0,0,.5))}
+.seg{box-shadow:0 1px 2px rgba(0,0,0,.05) inset}
+.adm-grp-h{background:linear-gradient(180deg,color-mix(in srgb,var(--surface-2) 70%,var(--surface)),var(--surface-2))}
+.ttype{box-shadow:0 1px 0 0 color-mix(in srgb,#fff 6%,transparent) inset}
+@media(max-width:900px){.cols{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}.pgrid{grid-template-columns:1fr}.ttl small,.allmod{display:none}.seg button{padding:6px 10px}
+  #v-co.drill .nav{display:none} #v-co.drill .mob-back{display:inline-flex} #v-co:not(.drill) #detail{display:none} .tree{max-height:none}}
 </style>
 </head>
 <body>
@@ -156,6 +179,7 @@ function hash(s){let h=0;for(let i=0;i<(s||'').length;i++)h=(h*31+s.charCodeAt(i
 function initials(n){return (n||'').split(/\s+/).slice(0,2).map(x=>x[0]||'').join('').toUpperCase()}
 function avat(name,cls=''){ if(!name)return `<span class="av none ${cls}">—</span>`; const c=AVC[hash(name)%AVC.length];return `<span class="av ${cls}" style="background:linear-gradient(135deg,${c},color-mix(in srgb,${c} 70%,#000))">${initials(name)}</span>`}
 function esc(s){return (s==null?'':String(s)).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
+function jarg(v){return JSON.stringify(v==null?'':v).replace(/"/g,'&quot;')} // безопасный строковый аргумент для onclick="..."
 function stageBar(pre,post){const t=pre+post||1;return `<div class="bar"><div class="pre" style="width:${pre/t*100}%"></div><div class="post" style="width:${post/t*100}%"></div></div>`}
 
 async function boot(){
@@ -226,11 +250,40 @@ function treeFilter(q){
 async function selNode(type,key,rowEl){
   document.querySelectorAll('#tree .trow').forEach(x=>x.classList.remove('sel')); if(rowEl)rowEl.classList.add('sel');
   const d=document.getElementById('detail'); d.innerHTML='<div class="spin">Загрузка…</div>';
+  if(window.innerWidth<=900)document.getElementById('v-co').classList.add('drill');
   try{
     const r=await fetch('/api/kam/node/'+type+'/'+encodeURIComponent(key),{credentials:'include',cache:'no-store'});
     renderDetail(await r.json());
   }catch(e){ d.innerHTML='<div class="empty">Ошибка загрузки узла</div>'; }
 }
+// Клик по карточке проекта → раскрыть его сделки (ленивая загрузка)
+async function toggleProj(card,proj){
+  const box=card.querySelector('.pdeals'); if(!box)return;
+  if(box.style.display!=='none'){ box.style.display='none'; return; }
+  box.style.display='block';
+  if(box.dataset.loaded)return;
+  box.innerHTML='<div class="spin" style="padding:10px 0">Загрузка сделок…</div>';
+  try{
+    const u=new URLSearchParams({type:card.dataset.type,key:card.dataset.key,project:proj});
+    const d=await fetch('/api/kam/deals?'+u.toString(),{credentials:'include',cache:'no-store'}).then(r=>r.json());
+    const cids=[...new Set((d.deals||[]).map(x=>x.companyId))];
+    await Promise.all(cids.map(ensureUnits));
+    box.innerHTML=(d.deals||[]).map(dealRow).join('')||'<div class="tmeta" style="padding:8px">Сделок нет</div>';
+    box.dataset.loaded='1';
+  }catch(e){ box.innerHTML='<div class="tmeta" style="padding:8px">Ошибка загрузки</div>'; }
+}
+window._unitsByCo={};
+async function ensureUnits(cid){ if(window._unitsByCo[cid])return; try{ const u=await fetch('/api/kam/units?company='+encodeURIComponent(cid),{credentials:'include',cache:'no-store'}).then(r=>r.json()); window._unitsByCo[cid]=(u.units||[]).map(x=>x.name); }catch(e){ window._unitsByCo[cid]=[]; } }
+function unitOpts(cid,cur){ const base=['',...(window._unitsByCo[cid]||[])]; if(cur&&!base.includes(cur))base.push(cur);
+  return base.map(n=>`<option value="${esc(n)}" ${cur===n?'selected':''}>${n===''?'— без подразделения —':esc(n)}</option>`).join(''); }
+function dealRow(dl){ return `<div class="drow">
+  <span class="ttype ${dl.post?'l':'c'}" style="min-width:44px;text-align:center">${dl.post?'после':'до'}</span>
+  <span class="dn" title="${esc(dl.title)}">${esc(dl.title)}</span>
+  <span class="sum" style="font-size:12px;flex-shrink:0">${dl.sumMln}<small> млн</small></span>
+  <select class="selbox" title="Подразделение" onchange="setDeal(${dl.dealId},this.value)">${unitOpts(dl.companyId,dl.unit)}</select>
+  <a href="${dl.url}" target="_blank" class="mini-btn">↗ Б24</a></div>`; }
+async function setDeal(id,unit){ try{ await apiKam('/deal-unit',{dealId:id,unit}); toast('Подразделение записано в Битрикс'); }catch(e){ toast('Ошибка: '+e.message); } }
+async function apiKam(path,body){ const r=await fetch('/api/kam'+path,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)}); const d=await r.json().catch(()=>({})); if(!r.ok||d.error)throw new Error(d.error||('HTTP '+r.status)); return d; }
 function renderDetail(n){
   const d=document.getElementById('detail');
   const typeLabel=n.type==='group'?'Группа компаний':n.type==='company'?'Компания':'Подразделение';
@@ -241,6 +294,7 @@ function renderDetail(n){
     ? `<div class="kam-card" onclick="goKam(${n.kam})">${avat(n.kamName)}<div><div class="nm">${esc(n.kamName)}</div><div class="rl">${n.kamLevel==='group'?'КАМ группы':n.kamLevel==='company'?'КАМ компании':'КАМ'} ${n.inherited?'<span class="inh">↳ наследован</span>':''}</div></div></div>`
     : `<div class="kam-card" style="cursor:default">${avat(null)}<div><div class="nm" style="color:var(--text-3)">КАМ не назначен</div><div class="rl">назначается в админке</div></div></div>`;
   d.innerHTML=`
+    <button class="mob-back" onclick="document.getElementById('v-co').classList.remove('drill')">← к списку</button>
     <div class="crumb">${crumb}</div>
     <div class="panel head-card">
       <div class="hc-top">
@@ -259,10 +313,12 @@ function renderDetail(n){
     <div class="sec-h"><h3>Проекты</h3><span class="cnt">до / после контракта</span></div>
     <div class="barleg"><span><i style="background:#e0a33a"></i>до контракта</span><span><i style="background:#3bd47f"></i>после контракта</span></div>
     <div class="pgrid">${(n.projectsList||[]).map(p=>`
-      <div class="pcard"><div class="pt">${esc(p.name)}</div>
+      <div class="pcard" data-type="${esc(n.type)}" data-key="${esc(n.key)}" onclick="toggleProj(this,${jarg(p.name)})">
+        <div class="pt">${esc(p.name)} <span style="color:var(--accent);font-weight:700;font-size:11.5px;margin-left:4px">сделки ▾</span></div>
         <div class="pm"><span>${p.count} сделок</span><span class="sum">${p.sumMln}<small> млн ₸</small></span></div>
         ${stageBar(p.pre,p.post)}
-        <div class="pm" style="font-size:11px">${p.pre} до · ${p.post} после</div></div>`).join('')||'<div class="empty">Проектов нет</div>'}</div>`;
+        <div class="pm" style="font-size:11px">${p.pre} до · ${p.post} после</div>
+        <div class="pdeals" style="display:none" onclick="event.stopPropagation()"></div></div>`).join('')||'<div class="empty">Проектов нет</div>'}</div>`;
 }
 
 // От КАМ
@@ -300,9 +356,13 @@ let ADM={users:null,groups:null};
 let _toastT;
 function toast(msg){ let t=document.getElementById('toast'); if(!t){t=document.createElement('div');t.id='toast';t.className='toast';document.body.appendChild(t);} t.textContent=msg;t.classList.add('on');clearTimeout(_toastT);_toastT=setTimeout(()=>t.classList.remove('on'),2200); }
 async function api(path,body,method){ const r=await fetch('/api/kam'+path,{method:method||'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:body?JSON.stringify(body):undefined}); const d=await r.json().catch(()=>({})); if(!r.ok||d.error){throw new Error(d.error||('HTTP '+r.status));} return d; }
-function userOpts(sel){ return ['<option value="">— наследовать —</option>',...(ADM.users||[]).map(u=>`<option value="${u.id}" ${String(sel)===String(u.id)?'selected':''}>${esc(u.name)}</option>`)].join(''); }
-function kamSel(level,key,cur){ return `<select class="selbox" title="КАМ" onchange="setKam('${level}','${encodeURIComponent(key)}',this.value,this)">${userOpts(cur)}</select>`; }
-async function setKam(level,key,val,el){ try{ await api('/assign-kam',{level,key:decodeURIComponent(key),kamBid:val===''?null:Number(val)}); toast('КАМ сохранён'); TREE=await fetch('/api/kam/tree',{credentials:'include',cache:'no-store'}).then(r=>r.json()); renderTree(); }catch(e){ toast('Ошибка: '+e.message); } }
+function kamSel(level,key,ownKam,inheritName){
+  const def = level==='group' ? '— КАМ не назначен —' : (inheritName?('↳ наследовать: '+inheritName):'— наследовать —');
+  const opts=[`<option value="" ${!ownKam?'selected':''}>${esc(def)}</option>`,
+    ...(ADM.users||[]).map(u=>`<option value="${u.id}" ${String(ownKam)===String(u.id)?'selected':''}>${esc(u.name)}</option>`)].join('');
+  return `<select class="selbox kam-sel${ownKam?' set':''}" title="КАМ" onchange="setKam('${level}','${encodeURIComponent(key)}',this.value,this)">${opts}</select>`;
+}
+async function setKam(level,key,val){ try{ await api('/assign-kam',{level,key:decodeURIComponent(key),kamBid:val===''?null:Number(val)}); toast('КАМ сохранён'); TREE=await fetch('/api/kam/tree',{credentials:'include',cache:'no-store'}).then(r=>r.json()); renderTree(); renderAdm(); }catch(e){ toast('Ошибка: '+e.message); } }
 async function doMove(companyId,companyName,group){ try{ await api('/move-company',{companyId:decodeURIComponent(companyId),companyName,group}); toast('Компания перенесена в «'+(group||'Без группы')+'»'); TREE=await fetch('/api/kam/tree',{credentials:'include',cache:'no-store'}).then(r=>r.json()); renderTree(); renderAdm(); }catch(e){ toast('Ошибка: '+e.message); } }
 async function addUnit(companyId,companyName){ const name=prompt('Название отдела / лаборатории / факультета:'); if(!name)return; try{ await api('/unit',{companyId:decodeURIComponent(companyId),name,kind:'lab'}); toast('Подразделение заведено'); TREE=await fetch('/api/kam/tree',{credentials:'include',cache:'no-store'}).then(r=>r.json()); renderTree(); renderAdm(); }catch(e){ toast('Ошибка: '+e.message); } }
 async function delUnit(id){ if(!confirm('Удалить подразделение из реестра? (сделки не трогаются)'))return; try{ await api('/unit/'+id,null,'DELETE'); toast('Удалено'); TREE=await fetch('/api/kam/tree',{credentials:'include',cache:'no-store'}).then(r=>r.json()); renderTree(); renderAdm(); }catch(e){ toast('Ошибка: '+e.message); } }
@@ -315,34 +375,43 @@ async function renderAdm(){
   let h='';
   real.forEach(g=>{
     h+=`<div class="adm-grp"><div class="adm-grp-h"><span class="ttype g">Группа</span><span class="gn">${esc(g.name)}</span>
-      <span style="font-size:11px;color:var(--text-3)">КАМ группы:</span>${kamSel('group',g.name,g.kam||'')}</div>`;
+      <span class="aklbl">КАМ группы</span>${kamSel('group',g.name,g.kam)}</div>`;
     (g.companies||[]).forEach(c=>{
       h+=`<div class="arow"><span class="ttype c">Комп.</span><span class="an">${esc(c.name)}</span>
-        <select class="selbox" title="Группа" onchange="doMove('${encodeURIComponent(c.id)}',${JSON.stringify(esc(c.name))},this.value)">${grpOpts(g.name)}</select>
-        ${kamSel('company',c.id,c.kam||'')}
-        <button class="mini-btn" onclick="addUnit('${encodeURIComponent(c.id)}',${JSON.stringify(esc(c.name))})">+ Подразд.</button></div>`;
+        <select class="selbox" title="Группа" onchange="doMove('${encodeURIComponent(c.id)}',${jarg(c.name)},this.value)">${grpOpts(g.name)}</select>
+        ${kamSel('company',c.id,c.ownKam,c.inheritName)}
+        <button class="mini-btn" onclick="addUnit('${encodeURIComponent(c.id)}',${jarg(c.name)})">+ Подразд.</button></div>`;
       (c.labs||[]).forEach(l=>{
         h+=`<div class="arow ind"><span class="ttype l">Подр.</span><span class="an">${esc(l.name)}${l.id?'':' <span style="font-size:10px;color:var(--text-faint)">(из сделок)</span>'}</span>
-          ${l.id?kamSel('unit',l.id,l.kam&&!l.inherited?l.kam:''):`<button class="mini-btn" onclick="addUnit('${encodeURIComponent(c.id)}',${JSON.stringify(esc(c.name))})">Завести в реестр</button>`}
+          ${l.id?kamSel('unit',l.id,l.ownKam,l.inheritName):`<button class="mini-btn" onclick="addUnit('${encodeURIComponent(c.id)}',${jarg(c.name)})">Завести в реестр</button>`}
           ${l.id?`<button class="mini-btn del" onclick="delUnit(${l.id})">🗑</button>`:''}</div>`;
       });
     });
     h+=`</div>`;
   });
-  // Пул на разбор
-  h+=`<div class="adm-grp"><div class="adm-grp-h"><span class="ttype" style="background:var(--surface-3);color:var(--text-3)">Пул</span><span class="gn">Без группы — разобрать (${pool?pool.companiesCount:0})</span></div>
-    <div class="arow"><div class="search" style="flex:1;max-width:360px">🔍<input id="admPoolSearch" placeholder="Найти компанию…"></div></div>
+  // Пул на разбор — показываем все (постранично) + фильтр, правка прямо в строке
+  window._poolAdm=pool||{companies:[]}; poolShown=40;
+  h+=`<div class="adm-grp"><div class="adm-grp-h"><span class="ttype" style="background:var(--surface-3);color:var(--text-3)">Пул</span><span class="gn">Без группы — разобрать (${pool?pool.companiesCount:0})</span>
+      <div class="search" style="margin-left:auto;max-width:300px">🔍<input id="admPoolSearch" placeholder="Фильтр по названию…"></div></div>
     <div id="admPoolRes"></div></div>`;
   body.innerHTML=h;
+  renderPool();
   const ps=document.getElementById('admPoolSearch');
-  if(ps)ps.addEventListener('input',()=>{ const q=ps.value.trim().toLowerCase(); const box=document.getElementById('admPoolRes');
-    if(q.length<2){box.innerHTML='<div class="arow"><span class="tmeta" style="padding:2px">Введите 2+ символа</span></div>';return;}
-    const m=(pool.companies||[]).filter(c=>(c.name||'').toLowerCase().includes(q)).slice(0,30);
-    box.innerHTML=m.map(c=>`<div class="arow"><span class="ttype c">Комп.</span><span class="an">${esc(c.name)}</span>
-      <span style="font-size:11px;color:var(--text-3)">в группу:</span>
-      <select class="selbox" onchange="doMove('${encodeURIComponent(c.id)}',${JSON.stringify(esc(c.name))},this.value)">${grpOpts('')}</select>
-      ${kamSel('company',c.id,'')}</div>`).join('')||'<div class="arow"><span class="tmeta">Ничего не найдено</span></div>';
-  });
+  if(ps)ps.addEventListener('input',()=>{ poolShown=40; renderPool(); });
+}
+let poolShown=40;
+function renderPool(){
+  const box=document.getElementById('admPoolRes'); if(!box)return; const pool=window._poolAdm||{companies:[]};
+  const q=((document.getElementById('admPoolSearch')||{}).value||'').trim().toLowerCase();
+  let list=pool.companies||[]; if(q)list=list.filter(c=>(c.name||'').toLowerCase().includes(q));
+  const grpOpts=['<option value="">Без группы</option>',...(ADM.groups||[]).map(g=>`<option>${esc(g)}</option>`)].join('');
+  const show=list.slice(0,poolShown);
+  box.innerHTML=show.map(c=>`<div class="arow"><span class="ttype c">Комп.</span><span class="an">${esc(c.name)}</span>
+    <span class="tmeta" style="min-width:48px">${c.count} сд.</span>
+    <select class="selbox" title="Группа" onchange="doMove('${encodeURIComponent(c.id)}',${jarg(c.name)},this.value)">${grpOpts}</select>
+    ${kamSel('company',c.id,null,null)}</div>`).join('')
+    + (list.length>poolShown?`<div class="arow" style="justify-content:center"><button class="mini-btn" onclick="poolShown+=60;renderPool()">Показать ещё (${list.length-poolShown})</button></div>`
+       : (list.length?'':'<div class="arow"><span class="tmeta">Ничего не найдено</span></div>'));
 }
 
 function go(v){ document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));

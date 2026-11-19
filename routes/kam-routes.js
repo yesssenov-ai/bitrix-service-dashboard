@@ -63,6 +63,12 @@ router.get('/units', requireAuth(VIEW_ROLES), async (req, res) => {
   try { res.json(await kam.listUnits(req.query.company || '')); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
+router.get('/deals', requireAuth(VIEW_ROLES), async (req, res) => {
+  try {
+    if (req.query.type) return res.json(await kam.nodeDeals(req.query.type, decodeURIComponent(req.query.key || ''), req.query.project ? decodeURIComponent(req.query.project) : ''));
+    res.json(await kam.listDeals(req.query.company || '', req.query.unit || ''));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // ── АДМИНКА (запись) ─────────────────────────────────────────────────────────
 router.get('/users', requireAuth(ADMIN_ROLES), async (req, res) => {
