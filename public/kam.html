@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ЦУП — КАМ</title>
+<meta name="theme-color" content="#f6f7f9">
+<script>(function(){try{var m=localStorage.getItem('pls-theme');document.documentElement.setAttribute('data-theme',m==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
+<link rel="stylesheet" href="/assets/cup-ui.css">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--p0:var(--accent);--p1:var(--info);--p2:var(--good);--radius:16px;
+  --shadow:0 1px 2px rgba(16,22,36,.05),0 14px 34px -18px rgba(16,22,36,.2);--tealc:var(--good)}
+:root[data-theme="dark"]{--shadow:0 1px 2px rgba(0,0,0,.3),0 14px 34px -18px rgba(0,0,0,.6)}
+html,body{height:100%;font-family:var(--f-ui);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+button{font-family:inherit;cursor:pointer}
+a{color:var(--info);text-decoration:none}
+
+.hdr{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:10px;padding:11px 16px;background:var(--surface);border-bottom:1px solid var(--line)}
+.hdr::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,var(--accent),transparent 60%)}
+.logo{display:flex;align-items:center;gap:7px;font-weight:800;font-size:14px;letter-spacing:-.3px;color:var(--text)}
+.logo .mk{width:22px;height:22px;border-radius:6px;background:var(--accent);color:var(--accent-ink,#fff);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900}
+.allmod{display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--text-3);border:1px solid var(--line-2);padding:6px 11px;border-radius:7px;white-space:nowrap}
+.allmod:hover{border-color:var(--accent);color:var(--accent)}
+.ttl{font-weight:800;font-size:15px;letter-spacing:-.2px;margin-left:4px}.ttl small{color:var(--text-3);font-weight:600;font-size:12px;margin-left:5px}
+.seg{display:inline-flex;gap:3px;background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:4px;margin-left:8px}
+.seg button{border:none;background:none;color:var(--text-3);font-size:13px;font-weight:650;padding:6px 14px;border-radius:8px}
+.seg button.on{background:var(--surface);color:var(--text);box-shadow:0 2px 6px -1px rgba(0,0,0,.2),0 0 0 1px var(--line)}
+.hdr .sp{flex:1}
+.ibtn{height:34px;border-radius:9px;border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);display:flex;align-items:center;justify-content:center;padding:0 12px;gap:6px;font-size:12.5px;font-weight:600}
+.ibtn:hover{color:var(--text);border-color:var(--text-3)}
+.ibtn.sq{width:34px;padding:0}
+
+.wrap{max-width:1280px;margin:0 auto;padding:18px}
+.view{display:none}.view.on{display:block}
+.cols{display:grid;grid-template-columns:330px 1fr;gap:16px;align-items:start}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+.nav{padding:13px}
+.search{display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:8px 11px;margin-bottom:11px;color:var(--text-3);font-size:13px}
+.search input{border:none;background:none;outline:none;color:var(--text);font:inherit;flex:1}
+.nav-h{font-size:10px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:var(--text-3);margin:4px 6px 7px}
+.tree{display:flex;flex-direction:column;gap:2px;max-height:calc(100vh - 180px);overflow:auto}
+.trow{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:10px;cursor:pointer}
+.trow:hover{background:var(--surface-2)}
+.trow.sel{background:color-mix(in srgb,var(--accent) 12%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 35%,transparent)}
+.caret{width:15px;flex-shrink:0;color:var(--text-3);font-size:10px;transition:transform .15s}.caret.open{transform:rotate(90deg)}.caret.leaf{opacity:0}
+.tname{flex:1;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tmeta{font-size:11px;color:var(--text-faint);font-weight:600}
+.ttype{font-size:9px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;padding:2px 6px;border-radius:5px;flex-shrink:0}
+.ttype.g{background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent)}
+.ttype.c{background:color-mix(in srgb,var(--info) 16%,transparent);color:var(--info)}
+.ttype.l{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good)}
+.kids{margin-left:13px;padding-left:9px;border-left:1px solid var(--line);display:flex;flex-direction:column;gap:2px;margin-top:2px}.kids.hide{display:none}
+.av{width:22px;height:22px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff}
+.av.none{background:var(--surface-3);color:var(--text-faint);font-size:12px}
+.poolbox{margin-top:4px;padding:8px;background:var(--surface-2);border:1px dashed var(--line-2);border-radius:10px}
+.poolbox .ph{font-size:11.5px;color:var(--text-3);font-weight:700;margin-bottom:6px}
+.pool-res{display:flex;flex-direction:column;gap:2px;max-height:280px;overflow:auto}
+
+.crumb{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12.5px;color:var(--text-3);margin-bottom:12px}
+.crumb b{color:var(--text-2);font-weight:600;cursor:pointer}.crumb b:hover{color:var(--accent)}.crumb .sx{color:var(--text-faint)}
+.head-card{padding:19px 21px;margin-bottom:14px;position:relative;overflow:hidden}
+.head-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--accent)}
+.hc-top{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.hc-title{font-size:22px;font-weight:800;letter-spacing:-.4px;display:flex;align-items:center;gap:10px}
+.hc-sub{color:var(--text-3);font-size:13px;margin-top:4px}
+.kam-card{display:flex;align-items:center;gap:10px;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:8px 13px 8px 9px;cursor:pointer}
+.kam-card:hover{border-color:var(--text-3)}.kam-card .av{width:34px;height:34px;font-size:12px}
+.kam-card .nm{font-weight:700;font-size:14px}.kam-card .rl{font-size:11px;color:var(--text-3);margin-top:1px;display:flex;gap:5px;align-items:center}
+.inh{font-size:10px;font-weight:700;color:var(--good);background:color-mix(in srgb,var(--good) 14%,transparent);padding:2px 7px;border-radius:6px}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:11px;margin:16px 0}
+.kpi{background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:13px 14px}
+.kpi .n{font-size:23px;font-weight:800;letter-spacing:-.5px}.kpi .l{font-size:11px;color:var(--text-3);font-weight:600;margin-top:3px}
+.kpi.hl .n{color:var(--accent)}
+.sec-h{display:flex;align-items:baseline;justify-content:space-between;margin:18px 0 10px}.sec-h h3{font-size:16px;font-weight:750}.sec-h .cnt{font-size:12px;color:var(--text-3)}
+.barleg{display:flex;gap:14px;font-size:11px;color:var(--text-3);margin-bottom:9px}.barleg i{width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:4px;vertical-align:-1px}
+.pgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.pcard{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:15px 16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px;transition:transform .12s}
+.pcard:hover{transform:translateY(-2px)}.pcard .pt{font-size:15px;font-weight:700;letter-spacing:-.2px}
+.pcard .pm{display:flex;align-items:center;gap:8px;color:var(--text-3);font-size:12px}
+.sum{margin-left:auto;font-weight:800;font-size:15px;color:var(--text);letter-spacing:-.3px}.sum small{font-weight:600;color:var(--text-3);font-size:11px}
+.bar{height:8px;border-radius:5px;background:var(--surface-3);display:flex;overflow:hidden}.bar .pre{background:linear-gradient(90deg,#e0a33a,#d4922a)}.bar .post{background:linear-gradient(90deg,#3bd47f,#2bbf6c)}
+.kamgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:13px;margin-bottom:18px}
+.kcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:15px;box-shadow:var(--shadow);cursor:pointer;transition:transform .12s}
+.kcard:hover{transform:translateY(-2px)}.kcard.sel{box-shadow:0 0 0 2px var(--accent),var(--shadow)}
+.kcard .av{width:42px;height:42px;font-size:14px;margin-bottom:10px}.kcard .kn{font-size:16px;font-weight:750}.kcard .kr{font-size:11.5px;color:var(--text-3);margin-top:2px}
+.kcard .kstats{display:flex;gap:16px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}.kcard .kstats div{font-size:11px;color:var(--text-3)}.kcard .kstats b{display:block;font-size:17px;color:var(--text);font-weight:800}
+.port-node{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;box-shadow:var(--shadow);margin-bottom:9px}
+.port-node .pn-h{display:flex;align-items:center;gap:8px}.port-node .pn-h b{cursor:pointer}.port-node .pn-h b:hover{color:var(--accent)}
+.lab-chip{font-size:12px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:5px 10px;color:var(--text-2);display:inline-flex;align-items:center;gap:6px;cursor:pointer;margin:7px 7px 0 0}.lab-chip:hover{border-color:var(--text-3)}.lab-chip .d{font-size:10px;color:var(--text-faint)}
+.empty{color:var(--text-3);text-align:center;padding:40px 0;font-size:13px}
+.spin{color:var(--text-3);text-align:center;padding:30px 0;font-size:13px}
+@media(max-width:900px){.cols{grid-template-columns:1fr}.nav{order:2}.kpis{grid-template-columns:repeat(2,1fr)}.pgrid{grid-template-columns:1fr}.ttl small,.allmod{display:none}.seg button{padding:6px 10px}}
+</style>
+</head>
+<body>
+<header class="hdr">
+  <a href="/" class="logo"><span class="mk">PLS</span>ProLabSupport</a>
+  <a href="/" class="allmod">← Все модули</a>
+  <span class="ttl">КАМ<small>Ключевые клиенты</small></span>
+  <div class="seg" id="seg">
+    <button class="on" data-v="co">От компаний</button>
+    <button data-v="kam">От КАМ</button>
+  </div>
+  <div class="sp"></div>
+  <button class="ibtn" id="admBtn" title="Админка (скоро)">⚙ Админка</button>
+  <button class="ibtn sq" id="themeBtn" title="Тема">◐</button>
+</header>
+
+<div class="view on wrap" id="v-co">
+  <div class="cols">
+    <aside class="panel nav">
+      <div class="search">🔍<input id="treeSearch" placeholder="Поиск: группа, компания…"></div>
+      <div class="nav-h">Иерархия клиентов</div>
+      <div class="tree" id="tree"><div class="spin">Загрузка…</div></div>
+    </aside>
+    <main id="detail"><div class="spin">Выберите узел слева</div></main>
+  </div>
+</div>
+
+<div class="view wrap" id="v-kam">
+  <div class="kamgrid" id="kamgrid"></div>
+  <div id="kamport"></div>
+</div>
+
+<script src="/assets/cup-theme.js" defer></script>
+<script>
+let TREE=null, selId=null, META={};
+const AVC=['#C53B2F','#2763d6','#0e9488','#7c3aed','#d97706','#0369a1','#be185d','#15803d'];
+function hash(s){let h=0;for(let i=0;i<(s||'').length;i++)h=(h*31+s.charCodeAt(i))|0;return Math.abs(h)}
+function initials(n){return (n||'').split(/\s+/).slice(0,2).map(x=>x[0]||'').join('').toUpperCase()}
+function avat(name,cls=''){ if(!name)return `<span class="av none ${cls}">—</span>`; const c=AVC[hash(name)%AVC.length];return `<span class="av ${cls}" style="background:linear-gradient(135deg,${c},color-mix(in srgb,${c} 70%,#000))">${initials(name)}</span>`}
+function esc(s){return (s==null?'':String(s)).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
+function stageBar(pre,post){const t=pre+post||1;return `<div class="bar"><div class="pre" style="width:${pre/t*100}%"></div><div class="post" style="width:${post/t*100}%"></div></div>`}
+
+async function boot(){
+  try{ const r=await fetch('/api/kam/tree',{credentials:'include',cache:'no-store'}); TREE=await r.json(); }
+  catch(e){ document.getElementById('tree').innerHTML='<div class="empty">Не удалось загрузить</div>'; return; }
+  renderTree();
+}
+function groupId(name){return 'g:'+name}
+function coRow(c,gkey){
+  const hasLabs=(c.labs||[]).length>0;
+  return `<div class="trow" data-sel="company:${encodeURIComponent(c.id)}" data-key="${encodeURIComponent(c.id)}">
+    <span class="caret ${hasLabs?'':'leaf'}" ${hasLabs?`data-tog="co:${encodeURIComponent(c.id)}"`:''}>▶</span>
+    <span class="ttype c">Комп.</span><span class="tname">${esc(c.name)}</span>
+    <span class="tmeta">${hasLabs?(c.labs.length+' подр.'):(c.count+' сд.')}</span>${c.kamName?avat(c.kamName):''}</div>
+    ${hasLabs?`<div class="kids hide" id="cok-${encodeURIComponent(c.id)}">${c.labs.map(l=>`
+      <div class="trow" data-sel="unit:${encodeURIComponent(c.id+'|'+l.name)}">
+        <span class="caret leaf"></span><span class="ttype l">Подр.</span>
+        <span class="tname">${esc(l.name)}</span><span class="tmeta">${l.count} сд.</span>${l.kamName&&!l.inherited?avat(l.kamName):''}</div>`).join('')}</div>`:''}`;
+}
+function renderTree(){
+  const root=document.getElementById('tree'); const groups=(TREE&&TREE.groups)||[];
+  const real=groups.filter(g=>g.name!=='Без группы'); const pool=groups.find(g=>g.name==='Без группы');
+  let h='';
+  real.forEach(g=>{
+    h+=`<div class="trow" data-sel="group:${encodeURIComponent(g.name)}">
+      <span class="caret open" data-tog="g:${encodeURIComponent(g.name)}">▶</span>
+      <span class="ttype g">Группа</span><span class="tname">${esc(g.name)}</span><span class="tmeta">${g.companiesCount} комп.</span>${g.kamName?avat(g.kamName):''}</div>
+      <div class="kids" id="gk-${encodeURIComponent(g.name)}">${(g.companies||[]).map(c=>coRow(c,g.name)).join('')}</div>`;
+  });
+  if(pool){
+    h+=`<div class="trow" style="margin-top:6px" data-sel="group:${encodeURIComponent('Без группы')}">
+      <span class="caret leaf"></span><span class="ttype" style="background:var(--surface-3);color:var(--text-3)">Пул</span>
+      <span class="tname">Без группы</span><span class="tmeta">${pool.companiesCount}</span></div>
+      <div class="poolbox"><div class="ph">🔎 Найти компанию в пуле для разбора</div>
+        <div class="search" style="margin-bottom:6px">🔍<input id="poolSearch" placeholder="Название компании…"></div>
+        <div class="pool-res" id="poolRes"><div class="tmeta" style="padding:6px">Начните вводить — покажу совпадения.</div></div></div>`;
+    window._pool=pool;
+  }
+  root.innerHTML=h;
+  root.querySelectorAll('[data-tog]').forEach(c=>c.addEventListener('click',e=>{e.stopPropagation();
+    const k=c.dataset.tog; const id=k.startsWith('g:')?'gk-'+k.slice(2):'cok-'+k.slice(3);
+    const el=document.getElementById(id); if(el){el.classList.toggle('hide');c.classList.toggle('open')}}));
+  root.querySelectorAll('[data-sel]').forEach(r=>r.addEventListener('click',()=>{
+    const [t,k]=r.dataset.sel.split(':'); selNode(t,decodeURIComponent(k),r)}));
+  const ps=document.getElementById('poolSearch');
+  if(ps)ps.addEventListener('input',()=>poolFilter(ps.value));
+  const ts=document.getElementById('treeSearch');
+  if(ts)ts.addEventListener('input',()=>treeFilter(ts.value));
+}
+function poolFilter(q){
+  const box=document.getElementById('poolRes'); const pool=window._pool; q=(q||'').trim().toLowerCase();
+  if(!pool)return;
+  if(q.length<2){box.innerHTML='<div class="tmeta" style="padding:6px">Начните вводить — покажу совпадения.</div>';return}
+  const m=(pool.companies||[]).filter(c=>(c.name||'').toLowerCase().includes(q)).slice(0,40);
+  box.innerHTML=m.length?m.map(c=>`<div class="trow" data-sel="company:${encodeURIComponent(c.id)}">
+    <span class="caret leaf"></span><span class="ttype c">Комп.</span><span class="tname">${esc(c.name)}</span><span class="tmeta">${c.count} сд.</span></div>`).join('')
+    :'<div class="tmeta" style="padding:6px">Ничего не найдено.</div>';
+  box.querySelectorAll('[data-sel]').forEach(r=>r.addEventListener('click',()=>{const [t,k]=r.dataset.sel.split(':');selNode(t,decodeURIComponent(k),r)}));
+}
+function treeFilter(q){
+  q=(q||'').trim().toLowerCase();
+  document.querySelectorAll('#tree .trow[data-sel]').forEach(r=>{
+    if(r.closest('.poolbox'))return;
+    const nm=(r.querySelector('.tname')||{}).textContent||'';
+    r.style.display=(!q||nm.toLowerCase().includes(q))?'':'none';
+  });
+}
+async function selNode(type,key,rowEl){
+  document.querySelectorAll('#tree .trow').forEach(x=>x.classList.remove('sel')); if(rowEl)rowEl.classList.add('sel');
+  const d=document.getElementById('detail'); d.innerHTML='<div class="spin">Загрузка…</div>';
+  try{
+    const r=await fetch('/api/kam/node/'+type+'/'+encodeURIComponent(key),{credentials:'include',cache:'no-store'});
+    renderDetail(await r.json());
+  }catch(e){ d.innerHTML='<div class="empty">Ошибка загрузки узла</div>'; }
+}
+function renderDetail(n){
+  const d=document.getElementById('detail');
+  const typeLabel=n.type==='group'?'Группа компаний':n.type==='company'?'Компания':'Подразделение';
+  const path=[]; if(n.group)path.push(n.group); if(n.type!=='group')path.push(n.title); if(n.type==='unit'){}
+  const crumb=(n.type==='group'?[n.title]:[n.group,n.title]).filter(Boolean)
+    .map((p,i,a)=>`${i?'<span class="sx">›</span>':''}<b>${esc(p)}</b>`).join(' ');
+  const kamHtml = n.kam
+    ? `<div class="kam-card" onclick="goKam(${n.kam})">${avat(n.kamName)}<div><div class="nm">${esc(n.kamName)}</div><div class="rl">${n.kamLevel==='group'?'КАМ группы':n.kamLevel==='company'?'КАМ компании':'КАМ'} ${n.inherited?'<span class="inh">↳ наследован</span>':''}</div></div></div>`
+    : `<div class="kam-card" style="cursor:default">${avat(null)}<div><div class="nm" style="color:var(--text-3)">КАМ не назначен</div><div class="rl">назначается в админке</div></div></div>`;
+  d.innerHTML=`
+    <div class="crumb">${crumb}</div>
+    <div class="panel head-card">
+      <div class="hc-top">
+        <div><div class="hc-title"><span class="ttype ${n.type==='group'?'g':n.type==='company'?'c':'l'}" style="font-size:11px;padding:4px 9px">${typeLabel}</span>${esc(n.title)}</div>
+          <div class="hc-sub">${n.type==='group'?n.companies+' компаний · ':''}${n.type!=='unit'?n.units+' подразд. · ':''}${n.projects} проектов</div></div>
+        ${kamHtml}
+      </div>
+      <div class="kpis">
+        <div class="kpi"><div class="n">${n.companies}</div><div class="l">Компаний</div></div>
+        <div class="kpi"><div class="n">${n.units}</div><div class="l">Подразделений</div></div>
+        <div class="kpi"><div class="n">${n.projects}</div><div class="l">Проектов</div></div>
+        <div class="kpi"><div class="n">${n.deals}</div><div class="l">Сделок (${n.pre}/${n.post})</div></div>
+        <div class="kpi hl"><div class="n">${n.sumMln}<small style="font-size:13px"> млн ₸</small></div><div class="l">Pipeline</div></div>
+      </div>
+    </div>
+    <div class="sec-h"><h3>Проекты</h3><span class="cnt">до / после контракта</span></div>
+    <div class="barleg"><span><i style="background:#e0a33a"></i>до контракта</span><span><i style="background:#3bd47f"></i>после контракта</span></div>
+    <div class="pgrid">${(n.projectsList||[]).map(p=>`
+      <div class="pcard"><div class="pt">${esc(p.name)}</div>
+        <div class="pm"><span>${p.count} сделок</span><span class="sum">${p.sumMln}<small> млн ₸</small></span></div>
+        ${stageBar(p.pre,p.post)}
+        <div class="pm" style="font-size:11px">${p.pre} до · ${p.post} после</div></div>`).join('')||'<div class="empty">Проектов нет</div>'}</div>`;
+}
+
+// От КАМ
+async function renderKamView(){
+  const grid=document.getElementById('kamgrid');
+  // собираем список КАМов из дерева
+  const kams={};
+  ((TREE&&TREE.groups)||[]).forEach(g=>{ if(g.kam)kams[g.kam]=g.kamName;
+    (g.companies||[]).forEach(c=>{ if(c.kam)kams[c.kam]=c.kamName; (c.labs||[]).forEach(l=>{if(l.kam)kams[l.kam]=l.kamName}) }); });
+  const ids=Object.keys(kams);
+  if(!ids.length){ grid.innerHTML='<div class="empty" style="grid-column:1/-1">КАМы ещё не назначены. Назначьте их в админке — здесь появится разрез по менеджерам.</div>'; document.getElementById('kamport').innerHTML=''; return; }
+  grid.innerHTML=ids.map(id=>`<div class="kcard" data-k="${id}"><div class="spin" style="padding:6px">…</div></div>`).join('');
+  for(const id of ids){
+    try{ const p=await fetch('/api/kam/kam/'+id,{credentials:'include',cache:'no-store'}).then(r=>r.json());
+      const el=grid.querySelector('[data-k="'+id+'"]');
+      el.innerHTML=`${avat(kams[id])}<div class="kn">${esc(kams[id])}</div><div class="kr">Key Account Manager</div>
+        <div class="kstats"><div><b>${p.companies}</b>компаний</div><div><b>${p.deals}</b>сделок</div><div><b>${p.sumMln}</b>млн ₸</div></div>`;
+      el.addEventListener('click',()=>showKamPort(id,kams[id]));
+    }catch(e){}
+  }
+}
+async function showKamPort(id,name){
+  document.querySelectorAll('.kcard').forEach(x=>x.classList.toggle('sel',x.dataset.k==id));
+  const port=document.getElementById('kamport'); port.innerHTML='<div class="spin">Загрузка…</div>';
+  const p=await fetch('/api/kam/kam/'+id,{credentials:'include',cache:'no-store'}).then(r=>r.json());
+  port.innerHTML=`<div class="sec-h"><h3>Портфель — ${esc(name)}</h3><span class="cnt">компании и подразделения</span></div>
+    ${(p.rows||[]).map(r=>`<div class="port-node"><div class="pn-h"><span class="ttype c">Комп.</span><b onclick="openCompany('${encodeURIComponent(r.companyId)}')">${esc(r.company)}</b><span class="tmeta" style="margin-left:auto">${esc(r.group)}</span></div>
+      <div>${r.direct?`<span class="lab-chip">🏢 без подразделений<span class="d">${r.projects} проект.</span></span>`:(r.labs||[]).map(l=>`<span class="lab-chip">🧪 ${esc(l.name)}<span class="d">${l.projects} проект.</span>${l.own?'<span class="inh">свой</span>':''}</span>`).join('')}</div></div>`).join('')||'<div class="empty">Нет закреплённых компаний</div>'}`;
+}
+function goKam(id){ go('kam'); setTimeout(()=>{const el=document.querySelector('.kcard[data-k="'+id+'"]'); if(el)el.click();},300); }
+function openCompany(id){ go('co'); selNode('company',decodeURIComponent(id),null); }
+
+function go(v){ document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('on')); document.getElementById('v-'+v).classList.add('on');
+  if(v==='kam')renderKamView(); }
+document.querySelectorAll('#seg button').forEach(b=>b.addEventListener('click',()=>go(b.dataset.v)));
+document.getElementById('themeBtn').addEventListener('click',()=>{const d=document.documentElement;const dark=d.getAttribute('data-theme')!=='dark';d.setAttribute('data-theme',dark?'dark':'light');try{localStorage.setItem('pls-theme',dark?'dark':'light')}catch(e){}});
+document.getElementById('admBtn').addEventListener('click',()=>alert('Админка КАМ — следующий шаг сборки (назначение КАМ, подразделения, перенос в группу).'));
+boot();
+</script>
+</body>
+</html>
