@@ -13,8 +13,11 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../auth');
 const { b24 } = require('../bitrix');
+const { memo } = require('../cache');
+const kam = require('../kam-calc');
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'coordinator'];
+const VIEW_ROLES = ['admin', 'superadmin', 'coordinator', 'manager', 'sales', 'sales_head'];
 
 // GET /api/kam/field-probe — найти коды полей сделки по названию (разовая разведка).
 // Нужно подтвердить: «Группа компаний (УС)», «Название отдела/лаборатории/факультета»,
@@ -41,6 +44,24 @@ router.get('/field-probe', requireAuth(ADMIN_ROLES), async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// ── READ: дерево / узел / портфель КАМ / подразделения ───────────────────────
+router.get('/tree', requireAuth(VIEW_ROLES), async (req, res) => {
+  try { res.set('Cache-Control', 'no-store'); res.json(await memo('kam:tree', 120 * 1000, () => kam.getTree())); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.get('/node/:type/:key', requireAuth(VIEW_ROLES), async (req, res) => {
+  try { res.json(await kam.getNode(req.params.type, decodeURIComponent(req.params.key))); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.get('/kam/:bid', requireAuth(VIEW_ROLES), async (req, res) => {
+  try { res.json(await kam.getKamPortfolio(req.params.bid)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.get('/units', requireAuth(VIEW_ROLES), async (req, res) => {
+  try { res.json(await kam.listUnits(req.query.company || '')); }
+  catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 module.exports = { router };

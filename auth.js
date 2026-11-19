@@ -702,6 +702,38 @@ async function initDB() {
       updated_by     VARCHAR(120)
     );
 
+    -- ── Модуль «КАМ» v2: иерархия Группа → Компания → [Подразделение]? → КАМ ─────
+    -- Подразделение (отдел/лаборатория/факультет) сделки — текстовое поле Б24
+    -- UF_CRM_1731862825010 → зеркало stat_deals.unit_tag.
+    ALTER TABLE ticketsmodule_stat_deals ADD COLUMN IF NOT EXISTS unit_tag VARCHAR(300);
+    CREATE INDEX IF NOT EXISTS idx_stat_deals_unit ON ticketsmodule_stat_deals(unit_tag);
+
+    -- Реестр подразделений per компания (зависимый дропдаун «компания → её подразделения»).
+    -- kind: dept|lab|faculty. bitrix_value — строка, которую пишем в поле сделки Б24.
+    CREATE TABLE IF NOT EXISTS ticketsmodule_kam_units (
+      id            SERIAL PRIMARY KEY,
+      company_id    VARCHAR(50) NOT NULL,
+      name          VARCHAR(300) NOT NULL,
+      kind          VARCHAR(16) DEFAULT 'lab',
+      bitrix_value  VARCHAR(300),
+      created_at    TIMESTAMPTZ DEFAULT NOW(),
+      created_by    VARCHAR(120)
+    );
+    CREATE INDEX IF NOT EXISTS idx_kam_units_company ON ticketsmodule_kam_units(company_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_kam_units_company_name ON ticketsmodule_kam_units(company_id, name);
+
+    -- Гибкое назначение КАМ на любом узле (наследуется вниз). КАМ пока только в ЦУП
+    -- (поля КАМ на сделке в Б24 нет). level: group|company|unit;
+    -- node_key: имя группы / company_id / unit id (как строка).
+    CREATE TABLE IF NOT EXISTS ticketsmodule_kam_assign (
+      level         VARCHAR(10) NOT NULL,
+      node_key      VARCHAR(300) NOT NULL,
+      kam_bitrix_id INTEGER,
+      updated_at    TIMESTAMPTZ DEFAULT NOW(),
+      updated_by    VARCHAR(120),
+      PRIMARY KEY (level, node_key)
+    );
+
     -- Обратная связь от сотрудников: «Предложить улучшение / Сообщить о проблеме».
     -- Кнопка есть на всех страницах; падает сюда + уведомление в Telegram/почту.
     CREATE TABLE IF NOT EXISTS ticketsmodule_feedback (
