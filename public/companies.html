@@ -46,7 +46,7 @@ select,input[type=text]{background:var(--bg);border:1px solid var(--border2);bor
 select:focus,input:focus{border-color:var(--brand)}
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
 .tbl{width:100%;border-collapse:collapse;font-size:12.5px}
-.tbl th{position:sticky;top:0;background:var(--card);text-align:left;font-size:10.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;padding:8px 10px;border-bottom:1px solid var(--border2)}
+.tbl th{position:sticky;top:56px;z-index:50;background:var(--card);text-align:left;font-size:10.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.4px;padding:8px 10px;border-bottom:1px solid var(--border2)}
 .tbl td{padding:6px 10px;border-bottom:1px solid var(--border);line-height:1.35;vertical-align:top}
 .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .sph{border-bottom:1px dashed var(--border2);cursor:pointer}
@@ -194,7 +194,7 @@ details>summary::-webkit-details-marker{display:none}
   </div>
   <div class="card">
     <div class="hint" style="padding:9px 14px;border-bottom:1px solid var(--border)">Показано: <b id="shown" style="color:var(--text-2)">0</b> <button class="rbtn ghost" style="padding:3px 9px;font-size:11px;margin:0 6px" onclick="selectAllFiltered(event)">☑ Выделить все отфильтрованные</button>. ☑ в шапке — тоже выделяет всё; отметить для слияния или массового удаления; клик по сфере — изменить; ✎ — переименовать; ↗ — открыть в Битрикс; число «Сделок» — список сделок; 🗑 — удалить. Изменения сразу пишутся в Битрикс.</div>
-    <div style="overflow:auto;max-height:calc(100vh - 330px)">
+    <div>
       <table class="tbl"><thead><tr>
         <th style="width:26px"><input type="checkbox" id="selAllChk" title="Выделить всё отфильтрованное" onclick="toggleSelAll(this.checked)"></th><th>Название</th><th>Сфера деятельности</th><th>БИН</th><th>Ответственный</th><th>Город</th><th class="num">Сделок</th><th>Проблемы</th><th></th>
       </tr></thead><tbody id="body"></tbody></table>

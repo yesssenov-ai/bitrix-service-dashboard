@@ -14,6 +14,25 @@ router.get('/', requireAuth([]), async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ВРЕМЕННО (диагностика): подтвердить коды/множественность полей «Сфера» и «Город/Область/Страна (УС)».
+router.get('/field-probe', requireAuth(EDIT), async (req, res) => {
+  try {
+    const { b24 } = require('../bitrix');
+    const { result } = await b24('crm.company.fields', {});
+    const want = /сфер|город|област|страна|industry/i;
+    const out = {};
+    for (const [k, f] of Object.entries(result || {})) {
+      const t = (f.formLabel || f.title || f.listLabel || '');
+      if (want.test(t) || /UF_CRM_1793361911|UF_CRM_1731861583/.test(k) || k === 'INDUSTRY') {
+        out[k] = { title: t, type: f.type, isMultiple: !!f.isMultiple,
+          itemsCount: (f.items || []).length, items: (f.items || []).slice(0, 10).map(i => ({ ID: i.ID, VALUE: i.VALUE })),
+          settings: f.settings || null };
+      }
+    }
+    res.json({ ok: true, fields: out });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 // Карта «название компании → страна» для флагов в других модулях (любой авторизованный).
 router.get('/country-map', requireAuth([]), async (req, res) => {
   try { res.set('Cache-Control', 'private, max-age=300'); res.json(await require('../companies-calc').countryMap()); }
