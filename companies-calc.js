@@ -32,6 +32,12 @@ function ensureSchema() {
       CREATE INDEX IF NOT EXISTS idx_cmp_assigned ON ticketsmodule_companies(assigned_bid);
       ALTER TABLE ticketsmodule_companies ADD COLUMN IF NOT EXISTS merged_into VARCHAR(40);
       ALTER TABLE ticketsmodule_companies ADD COLUMN IF NOT EXISTS country VARCHAR(4);
+      -- Сфера и Город — множественные iblock-поля: храним списком (id через запятую,
+      -- имена через запятую), поэтому колонки расширяем и добавляем city_id.
+      ALTER TABLE ticketsmodule_companies ALTER COLUMN industry_id TYPE VARCHAR(300);
+      ALTER TABLE ticketsmodule_companies ALTER COLUMN industry_name TYPE VARCHAR(800);
+      ALTER TABLE ticketsmodule_companies ALTER COLUMN city TYPE VARCHAR(400);
+      ALTER TABLE ticketsmodule_companies ADD COLUMN IF NOT EXISTS city_id VARCHAR(300);
       CREATE TABLE IF NOT EXISTS ticketsmodule_company_merges (
         id SERIAL PRIMARY KEY,
         canonical_id VARCHAR(40),
@@ -103,6 +109,19 @@ function industryNameOf(raw, inds) { const id = indRaw(raw); if (!id) return '';
 async function industryOptions() {
   const m = await industryMap();
   return Object.entries(m).map(([id, name]) => ({ id, name }));
+}
+// ── Множественные значения (Сфера/Город — iblock_element, isMultiple) ──────────
+// Массив id из сырого значения поля (массив/строка/false → очищенный список id).
+function idsOf(v) {
+  const a = Array.isArray(v) ? v : (v == null || v === '' ? [] : [v]);
+  return a.map(x => String(x).trim()).filter(x => x && x !== 'false' && x !== '0');
+}
+// Имена сфер (массив) по сырому значению множественного поля.
+function industryNamesArr(raw, inds) { return idsOf(raw).map(id => (_indEnum ? (inds[id] || '') : id)).filter(Boolean); }
+// Опции городов — из справочника «Город/Область/Страна (УС)» (geo iblock).
+async function cityOptions() {
+  const m = await geo.loadGeoDir();
+  return Object.entries(m).map(([id, name]) => ({ id, name: String(name) })).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
 }
 
 // ── Перенос сферы: старое стандартное поле INDUSTRY → новое поле-список ─────────
@@ -338,25 +357,29 @@ async function syncCompanies() {
       } catch (e2) { /* зеркала может не быть — не критично */ }
     }
 
-    const select = ['ID', 'TITLE', INDUSTRY_FIELD, 'ASSIGNED_BY_ID', 'DATE_CREATE', 'ADDRESS_CITY', 'EMAIL', 'PHONE', geo.GEO_FIELD_COMPANY];
+    // Сфера и Город — множественные iblock-поля; город берём из «Город/Область/Страна (УС)».
+    const select = ['ID', 'TITLE', INDUSTRY_FIELD, 'ASSIGNED_BY_ID', 'DATE_CREATE', 'EMAIL', 'PHONE', geo.GEO_FIELD_COMPANY];
     if (binCode) select.push(binCode);
-    await geo.loadGeoDir(); // кэш справочника стран — чтобы резолв страны шёл локально
+    const geoDirMap = await geo.loadGeoDir(); // id→имя (город/область/страна) — резолв локально
     const rows = [];
     let start = 0, guard = 0;
     while (guard++ < 5000) {
       const res = await b24('crm.company.list', { select, order: { ID: 'ASC' }, start });
       const arr = res.result || [];
       for (const c of arr) {
-        const industryId = indRaw(c[INDUSTRY_FIELD]);
+        const industryIds = idsOf(c[INDUSTRY_FIELD]);
+        const industryNames = industryNamesArr(c[INDUSTRY_FIELD], inds);
+        const cityIds = idsOf(c[geo.GEO_FIELD_COMPANY]);
+        const cityNames = cityIds.map(id => geoDirMap[id] || '').filter(Boolean);
         const binVal = binCode ? firstVal(c[binCode]) : '';
         const country = await geo.resolveCountry(c[geo.GEO_FIELD_COMPANY], binVal);
         rows.push({
           id: String(c.ID), title: c.TITLE || '',
-          industryId, industryName: industryNameOf(industryId, inds),
+          industryId: industryIds.join(','), industryName: industryNames.join(', '),
           bin: binVal,
           email: firstMf(c.EMAIL), phone: firstMf(c.PHONE),
           assignedBid: c.ASSIGNED_BY_ID ? Number(c.ASSIGNED_BY_ID) : null,
-          city: c.ADDRESS_CITY || '',
+          cityId: cityIds.join(','), city: cityNames.join(', '),
           createdAt: c.DATE_CREATE || null,
           dealCount: dc[String(c.ID)] || 0,
           country: country || '',
@@ -367,23 +390,23 @@ async function syncCompanies() {
     }
 
     await pool.query('DELETE FROM ticketsmodule_companies');
-    // пакетная вставка
+    // пакетная вставка (13 колонок, добавлен city_id)
     const CH = 500;
     for (let i = 0; i < rows.length; i += CH) {
       const batch = rows.slice(i, i + CH);
       const vals = [], ph = [];
       batch.forEach((r, j) => {
-        const b = j * 12;
-        ph.push(`($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11},$${b + 12})`);
+        const b = j * 13;
+        ph.push(`($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11},$${b + 12},$${b + 13})`);
         vals.push(r.id, r.title || '', r.industryId || '', r.industryName || '', r.bin || '', r.email || '', r.phone || '',
-          r.assignedBid || null, r.city || '', r.createdAt || null, r.dealCount || 0, r.country || '');
+          r.assignedBid || null, r.city || '', r.createdAt || null, r.dealCount || 0, r.country || '', r.cityId || '');
       });
       await pool.query(
-        `INSERT INTO ticketsmodule_companies (id,title,industry_id,industry_name,bin,email,phone,assigned_bid,city,created_at,deal_count,country)
+        `INSERT INTO ticketsmodule_companies (id,title,industry_id,industry_name,bin,email,phone,assigned_bid,city,created_at,deal_count,country,city_id)
          VALUES ${ph.join(',')} ON CONFLICT (id) DO UPDATE SET
            title=EXCLUDED.title,industry_id=EXCLUDED.industry_id,industry_name=EXCLUDED.industry_name,bin=EXCLUDED.bin,
            email=EXCLUDED.email,phone=EXCLUDED.phone,assigned_bid=EXCLUDED.assigned_bid,city=EXCLUDED.city,
-           created_at=EXCLUDED.created_at,deal_count=EXCLUDED.deal_count,country=EXCLUDED.country,synced_at=NOW()`, vals);
+           created_at=EXCLUDED.created_at,deal_count=EXCLUDED.deal_count,country=EXCLUDED.country,city_id=EXCLUDED.city_id,synced_at=NOW()`, vals);
     }
     // После полного пересоздания зеркала возвращаем пометку слитых дублей из журнала,
     // иначе слитые компании «всплывали» бы снова после «Обновить».
@@ -448,7 +471,7 @@ async function getCompaniesBoard() {
     return {
       id: r.id, title: r.title, industryId: r.industry_id || '', industryName: r.industry_name || (r.industry_id ? (inds[r.industry_id] || r.industry_id) : ''),
       bin: r.bin || '', email: r.email || '', phone: r.phone || '',
-      owner: uname(r.assigned_bid), city: r.city || '', createdAt: r.created_at,
+      owner: uname(r.assigned_bid), city: r.city || '', cityId: r.city_id || '', createdAt: r.created_at,
       dealCount: Number(r.deal_count || 0), problems,
       mergedInto: r.merged_into || '',
       country: r.country || '',
@@ -456,9 +479,12 @@ async function getCompaniesBoard() {
     };
   });
   const uniq = f => [...new Set(out.map(x => x[f]).filter(Boolean))].sort();
+  let cities = [];
+  try { cities = await cityOptions(); } catch (e) { /* справочник недоступен — редактор города просто пуст */ }
   return {
     rows: out,
     industries: Object.entries(inds).map(([id, name]) => ({ id, name })),
+    cities,
     filters: { industries: uniq('industryName'), owners: uniq('owner'), cities: uniq('city') },
     summary: {
       total: out.length,
@@ -528,21 +554,35 @@ async function renameDiag(id) {
   return out;
 }
 
-// ── Правка компании (сфера / название) с записью в Б24 ─────────────────────────
-async function updateCompany(id, { industryId, title }) {
+// ── Правка компании (сфера / город / название) с записью в Б24 ─────────────────
+// Сфера и Город — множественные iblock-поля: принимаем списки id (industryIds/cityIds).
+// Совместимость: industryId (одиночный) трактуем как список из одного значения.
+async function updateCompany(id, { industryId, industryIds, cityIds, title }) {
   await ensureSchema();
   id = String(id);
   const inds = await industryMap();
-  let appliedTitle, appliedIndustry;
+  let appliedTitle, appliedIndustryIds, appliedCityIds;
 
-  // Сфера — БП не трогает, пишем напрямую (в настроенное поле) + контрольное чтение.
-  if (industryId !== undefined) {
-    const resp = await b24('crm.company.update', { id, fields: { [INDUSTRY_FIELD]: industryId || '' } });
+  // Сфера — пишем список id напрямую + контрольное чтение (БП не трогает).
+  let indList;
+  if (industryIds !== undefined) indList = idsOf(industryIds);
+  else if (industryId !== undefined) indList = idsOf(industryId);
+  if (indList !== undefined) {
+    const resp = await b24('crm.company.update', { id, fields: { [INDUSTRY_FIELD]: indList.length ? indList : '' } });
     if (resp && resp.error) throw new Error('Bitrix: ' + (resp.error_description || resp.error));
     try { const { result: chk } = await b24('crm.company.get', { id });
-      if (chk && String(firstVal(chk[INDUSTRY_FIELD]) || '') !== String(industryId || '')) throw new Error('Битрикс не применил сферу деятельности.'); }
+      const got = idsOf(chk && chk[INDUSTRY_FIELD]).slice().sort().join(',');
+      if (got !== indList.slice().sort().join(',')) throw new Error('Битрикс не применил сферу деятельности.'); }
     catch (e) { if (/не применил сферу/.test(e.message)) throw e; }
-    appliedIndustry = industryId || '';
+    appliedIndustryIds = indList;
+  }
+
+  // Город — поле «Город/Область/Страна (УС)», множественное.
+  if (cityIds !== undefined) {
+    const cl = idsOf(cityIds);
+    const resp = await b24('crm.company.update', { id, fields: { [geo.GEO_FIELD_COMPANY]: cl.length ? cl : '' } });
+    if (resp && resp.error) throw new Error('Bitrix: ' + (resp.error_description || resp.error));
+    appliedCityIds = cl;
   }
 
   // Название — через реквизит (БП ведёт имя из реквизитов).
@@ -550,14 +590,26 @@ async function updateCompany(id, { industryId, title }) {
     appliedTitle = await renameViaRequisite(id, String(title).trim());
   }
 
-  if (appliedTitle === undefined && appliedIndustry === undefined) return { ok: false, error: 'Нет изменений' };
+  if (appliedTitle === undefined && appliedIndustryIds === undefined && appliedCityIds === undefined) return { ok: false, error: 'Нет изменений' };
+
+  const geoDirMap = appliedCityIds !== undefined ? await geo.loadGeoDir() : {};
+  const indNames = appliedIndustryIds !== undefined ? appliedIndustryIds.map(x => (_indEnum ? (inds[x] || '') : x)).filter(Boolean) : null;
+  const cityNames = appliedCityIds !== undefined ? appliedCityIds.map(x => (geoDirMap[x] || '')).filter(Boolean) : null;
 
   const set = [], vals = []; let i = 1;
-  if (appliedIndustry !== undefined) { set.push(`industry_id=$${i++}`, `industry_name=$${i++}`); vals.push(appliedIndustry || '', industryNameOf(appliedIndustry, inds)); }
+  if (appliedIndustryIds !== undefined) { set.push(`industry_id=$${i++}`, `industry_name=$${i++}`); vals.push(appliedIndustryIds.join(','), indNames.join(', ')); }
+  if (appliedCityIds !== undefined) { set.push(`city_id=$${i++}`, `city=$${i++}`); vals.push(appliedCityIds.join(','), cityNames.join(', ')); }
   if (appliedTitle !== undefined) { set.push(`title=$${i++}`); vals.push(appliedTitle); }
   set.push('synced_at=NOW()'); vals.push(id);
   await pool.query(`UPDATE ticketsmodule_companies SET ${set.join(',')} WHERE id=$${i}`, vals);
-  return { ok: true, id, industryId: appliedIndustry, industryName: appliedIndustry !== undefined ? industryNameOf(appliedIndustry, inds) : undefined, title: appliedTitle };
+  return {
+    ok: true, id,
+    industryId: appliedIndustryIds !== undefined ? appliedIndustryIds.join(',') : undefined,
+    industryName: indNames !== null ? indNames.join(', ') : undefined,
+    cityId: appliedCityIds !== undefined ? appliedCityIds.join(',') : undefined,
+    city: cityNames !== null ? cityNames.join(', ') : undefined,
+    title: appliedTitle,
+  };
 }
 
 // ── Фаза 2: детектор дублей ────────────────────────────────────────────────────
@@ -1541,7 +1593,7 @@ async function countryMap() {
 }
 
 module.exports = {
-  ensureSchema, syncCompanies, getCompaniesBoard, updateCompany, industryOptions, binDebug,
+  ensureSchema, syncCompanies, getCompaniesBoard, updateCompany, industryOptions, cityOptions, binDebug,
   industryMigratePreview, startIndustryMigration, industryMigrationStatus,
   countryMap,
   getDuplicateGroups, getCompanyDeals, previewMerge, applyMerge, undoMerge, undoAllMerges, listMerges, deleteCompany, bulkDeleteCompanies, writeSelfTest,

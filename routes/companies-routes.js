@@ -157,11 +157,11 @@ router.post('/:id/delete', requireAuth(EDIT), async (req, res) => {
   catch (e) { console.error('company delete:', e.message); res.status(500).json({ error: e.message }); }
 });
 
-// Правка компании (сфера / название) → запись в Б24 + зеркало
+// Правка компании (сфера / город / название, сфера и город — множественные) → Б24 + зеркало
 router.post('/:id', requireAuth(EDIT), express.json(), async (req, res) => {
   try {
-    const { industryId, title } = req.body || {};
-    const r = await require('../companies-calc').updateCompany(req.params.id, { industryId, title });
+    const { industryId, industryIds, cityIds, title } = req.body || {};
+    const r = await require('../companies-calc').updateCompany(req.params.id, { industryId, industryIds, cityIds, title });
     bust('cmp:board');
     res.json(r);
   } catch (e) {

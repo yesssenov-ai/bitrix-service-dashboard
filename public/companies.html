@@ -347,15 +347,17 @@ function render(){
   body.innerHTML=rows.length?rows.slice(0,3000).map(r=>{
     const merged=r.mergedInto?`<span class="badge warn" title="Слит в #${esc(r.mergedInto)}">слит → #${esc(r.mergedInto)}</span>`:'';
     const badges=(r.problems.map(p=>`<span class="badge ${p==='возможный дубль'?'':'warn'}">${esc(p)}</span>`).join('')+merged)||'<span class="muted">—</span>';
-    const sph=r.industryId?`<span class="sph" onclick="editSphere('${esc(r.id)}',this)">${esc(r.industryName||r.industryId)}</span>`
-                          :`<span class="sph empty" onclick="editSphere('${esc(r.id)}',this)">— без сферы —</span>`;
+    const sph=r.industryId?`<span class="sph" onclick="openPick('${esc(r.id)}','ind',this)">${esc(r.industryName||r.industryId)}</span>`
+                          :`<span class="sph empty" onclick="openPick('${esc(r.id)}','ind',this)">— без сферы —</span>`;
+    const cty=r.cityId?`<span class="sph" onclick="openPick('${esc(r.id)}','city',this)">${esc(r.city)}</span>`
+                      :`<span class="sph empty" onclick="openPick('${esc(r.id)}','city',this)">— без города —</span>`;
     return `<tr id="row-${esc(r.id)}">
       <td><input type="checkbox" class="regchk" value="${esc(r.id)}" ${SEL.has(r.id)?'checked':''} onchange="toggleSel('${esc(r.id)}',this.checked)"></td>
       <td>${flagHtml(r.country)}<span class="ttl">${esc(r.title)||'<span class=muted>без названия</span>'}</span>${b24link(r.url)}<span class="ed" title="Переименовать" onclick="editTitle('${esc(r.id)}',this)">✎</span><span class="savemsg" id="msg-${esc(r.id)}"></span></td>
       <td>${sph}</td>
       <td>${r.bin?esc(r.bin):`<span class="binadd" title="Заполнить БИН из ГБДЮЛ" onclick="openBin('${esc(r.id)}',${JSON.stringify(r.title||'').replace(/"/g,'&quot;')})">＋ ГБДЮЛ</span>`}</td>
       <td>${esc(r.owner)||'<span class="muted">—</span>'}</td>
-      <td>${esc(r.city)||'<span class="muted">—</span>'}</td>
+      <td>${cty}</td>
       <td class="num">${dealsCell(r.id,r.title,r.dealCount)}</td>
       <td>${badges}</td>
       <td class="num"><span class="act del" title="Удалить компанию" onclick="delCompany('${esc(r.id)}',${JSON.stringify(r.title||'').replace(/"/g,'&quot;')})">🗑</span></td>
@@ -380,6 +382,51 @@ async function saveSphere(id,industryId){
   const d=await r.json();
   if(!r.ok){ if(msg){msg.className='savemsg err';msg.textContent=(d.error||'Ошибка');} return; }
   const row=(DATA.rows||[]).find(x=>x.id===id); if(row){ row.industryId=d.industryId||''; row.industryName=d.industryName||''; if(row.problems){row.problems=row.problems.filter(p=>p!=='без сферы'); if(!row.industryId&&!row.problems.includes('без сферы'))row.problems.push('без сферы');} }
+  render();
+  const m2=document.getElementById('msg-'+id); if(m2){m2.className='savemsg ok';m2.textContent='✓ сохранено';setTimeout(()=>{m2.textContent='';},2000);}
+}
+// ── Множественный выбор сферы/города (чек-пикер) ──────────────────────────────
+let _pick=null;
+function closePick(){ if(_pick){ _pick.remove(); _pick=null; document.removeEventListener('mousedown',_pickOutside,true);} }
+function _pickOutside(e){ if(_pick && !_pick.contains(e.target)) closePick(); }
+function openPick(id,kind,el){
+  closePick();
+  const row=(DATA.rows||[]).find(r=>r.id===id); if(!row)return;
+  const opts=kind==='ind'?(DATA.industries||[]):(DATA.cities||[]);
+  const curCsv=kind==='ind'?(row.industryId||''):(row.cityId||'');
+  const cur=new Set(curCsv.split(',').map(s=>s.trim()).filter(Boolean));
+  const box=document.createElement('div'); _pick=box;
+  const rect=el.getBoundingClientRect();
+  box.style.cssText=`position:fixed;z-index:1000;top:${Math.min(window.innerHeight-370,rect.bottom+4)}px;left:${Math.min(window.innerWidth-316,Math.max(8,rect.left))}px;width:300px;background:var(--card);border:1px solid var(--border2);border-radius:10px;box-shadow:0 12px 32px rgba(20,25,35,.18);padding:8px;display:flex;flex-direction:column;gap:6px`;
+  box.innerHTML=`<div style="font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase;letter-spacing:.4px">${kind==='ind'?'Сфера деятельности':'Город / область / страна'} · можно несколько</div>
+    <input class="pick-srch" placeholder="Поиск…" style="padding:7px 9px;border:1px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text);font:inherit;font-size:13px">
+    <div class="pick-list" style="max-height:220px;overflow:auto;display:flex;flex-direction:column;gap:1px"></div>
+    <div style="display:flex;gap:6px;justify-content:flex-end"><button class="rbtn ghost pick-x">Отмена</button><button class="rbtn pick-ok">Сохранить</button></div>`;
+  document.body.appendChild(box);
+  const list=box.querySelector('.pick-list'), srch=box.querySelector('.pick-srch');
+  function draw(q){ q=(q||'').trim().toLowerCase();
+    list.innerHTML=opts.filter(o=>!q||String(o.name).toLowerCase().includes(q)).slice(0,600)
+      .map(o=>`<label style="display:flex;gap:7px;align-items:center;padding:4px 5px;border-radius:6px;font-size:13px;cursor:pointer"><input type="checkbox" value="${esc(o.id)}" ${cur.has(String(o.id))?'checked':''} style="accent-color:var(--brand)"><span>${esc(o.name)}</span></label>`).join('')
+      ||'<div class="hint" style="padding:6px">Ничего не найдено</div>';
+    list.querySelectorAll('input').forEach(cb=>cb.onchange=()=>{ if(cb.checked)cur.add(cb.value); else cur.delete(cb.value); });
+  }
+  draw(''); srch.oninput=()=>draw(srch.value); setTimeout(()=>srch.focus(),0);
+  box.querySelector('.pick-x').onclick=closePick;
+  box.querySelector('.pick-ok').onclick=async()=>{ const ids=[...cur]; closePick(); await savePick(id,kind,ids); };
+  setTimeout(()=>document.addEventListener('mousedown',_pickOutside,true),0);
+}
+async function savePick(id,kind,ids){
+  const msg=document.getElementById('msg-'+id);
+  const body=kind==='ind'?{industryIds:ids}:{cityIds:ids};
+  const r=await fetch('/api/companies/'+encodeURIComponent(id),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok){ if(msg){msg.className='savemsg err';msg.textContent=(d.error||'Ошибка');} return; }
+  const row=(DATA.rows||[]).find(x=>x.id===id);
+  if(row){
+    if(kind==='ind'){ row.industryId=d.industryId||''; row.industryName=d.industryName||'';
+      if(row.problems){ row.problems=row.problems.filter(p=>p!=='без сферы'); if(!row.industryId)row.problems.push('без сферы'); } }
+    else { row.cityId=d.cityId||''; row.city=d.city||''; }
+  }
   render();
   const m2=document.getElementById('msg-'+id); if(m2){m2.className='savemsg ok';m2.textContent='✓ сохранено';setTimeout(()=>{m2.textContent='';},2000);}
 }
