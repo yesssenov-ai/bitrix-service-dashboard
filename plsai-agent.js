@@ -460,14 +460,15 @@ const TOOLS = [
   },
   {
     name: 'create_room_booking',
-    description: 'ПРЕДЛОЖИТЬ бронирование ПЕРЕГОВОРНОЙ в Bitrix на дату и время. Ничего не бронируется до подтверждения инициатора. Укажи начало и конец со временем. Если переговорных несколько — укажи название (room_name).',
+    description: 'ПРЕДЛОЖИТЬ бронирование ПЕРЕГОВОРНОЙ в Bitrix на дату и время. Ничего не бронируется до подтверждения инициатора. Укажи начало и конец со временем. Если переговорных несколько — укажи название (room_name). Можно указать участников собрания (participants: имена сотрудников) — им придёт приглашение в Битрикс и уведомление в Telegram/почту.',
     input_schema: {
       type: 'object',
       properties: {
-        title: { type: 'string', description: 'Название встречи/брони (необязательно).' },
+        title: { type: 'string', description: 'Тема встречи/брони (необязательно).' },
         room_name: { type: 'string', description: 'Название переговорной (необязательно; если одна — не нужно).' },
         start: { type: 'string', description: 'Начало: YYYY-MM-DDTHH:mm.' },
         end: { type: 'string', description: 'Конец: YYYY-MM-DDTHH:mm.' },
+        participants: { type: 'array', items: { type: 'string' }, description: 'Участники собрания — имена сотрудников (необязательно). Им придёт приглашение Битрикс + уведомление.' },
       },
       required: ['start', 'end'],
     },
@@ -664,8 +665,8 @@ async function runAgent(qRaw, user, opts) {
           const inp = tu.input || {};
           let params = {}, summary = '';
           if (tu.name === 'create_room_booking') {
-            params = { title: inp.title || '', room_name: inp.room_name || '', start: inp.start || '', end: inp.end || '' };
-            summary = 'Забронировать переговорную' + (params.room_name ? (' «' + params.room_name + '»') : '') + ': ' + String(params.start).replace('T', ' ') + ' – ' + String(params.end).slice(11, 16) + (params.title ? (' (' + params.title + ')') : '');
+            params = { title: inp.title || '', room_name: inp.room_name || '', start: inp.start || '', end: inp.end || '', participants: Array.isArray(inp.participants) ? inp.participants : [] };
+            summary = 'Забронировать переговорную' + (params.room_name ? (' «' + params.room_name + '»') : '') + ': ' + String(params.start).replace('T', ' ') + ' – ' + String(params.end).slice(11, 16) + (params.title ? (' (' + params.title + ')') : '') + (params.participants.length ? (' · участники: ' + params.participants.join(', ')) : '');
           } else if (tu.name === 'create_event') {
             params = { title: inp.title || 'Событие', start: inp.start || '', end: inp.end || '', allDay: !!inp.all_day, category: inp.category || 'meet', location: inp.location || '', note: inp.note || '' };
             const whenTxt = params.allDay ? ('на ' + String(params.start).slice(0, 10)) : String(params.start).replace('T', ' ');

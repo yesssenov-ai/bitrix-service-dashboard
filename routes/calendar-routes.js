@@ -420,7 +420,7 @@ async function syncBitrixExpo() {
     const up = await pool.query(
       `INSERT INTO ticketsmodule_room_bookings (room_id,title,user_id,booker_name,start_at,end_at,source,bitrix_event_id)
        VALUES ($1,$2,$3,$4,to_timestamp($5),to_timestamp($6),'bitrix',$7)
-       ON CONFLICT (bitrix_event_id) DO UPDATE SET
+       ON CONFLICT (bitrix_event_id) WHERE bitrix_event_id IS NOT NULL DO UPDATE SET
          room_id=$1, title=$2, user_id=$3, booker_name=$4, start_at=to_timestamp($5), end_at=to_timestamp($6)
        RETURNING (xmax=0) AS inserted`,
       [rid, name, by, name, tsF, tsT, bxId]);
@@ -444,6 +444,89 @@ async function syncBitrixExpoThrottled(force) {
   finally { _expoSyncing = false; }
 }
 
+// ── Фаза 2: создание брони «Экспо» в Б24 (бронь создаёт Битрикс) + участники ──
+const escTxt = s => String(s == null ? '' : s).replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]));
+
+// Уведомить участника о собрании: Telegram + email (best-effort, не валит бронь).
+async function notifyParticipant(bid, info) {
+  bid = parseInt(bid, 10); if (!bid) return;
+  let USERS = {}, USER_EMAILS = {}, tgTo = null, sendEmailTo = null;
+  try { ({ USERS, USER_EMAILS } = require('../constants')); } catch (e) {}
+  try { ({ tgTo, sendEmailTo } = require('../notifications')); } catch (e) {}
+  const dt = String(info.startLocal).replace('T', ' ').slice(0, 16);
+  const et = String(info.endLocal).slice(11, 16);
+  const subj = `Собрание: ${info.title || 'без темы'} — ${dt}`;
+  const lines = [
+    'Вас добавили участником собрания в Битрикс24.',
+    'Тема: ' + (info.title || '—'),
+    'Когда: ' + dt + ' – ' + et,
+    'Переговорная: ' + (info.room || 'Экспо'),
+    info.organizerName ? ('Организатор: ' + info.organizerName) : '',
+  ].filter(Boolean);
+  try {
+    const r = await pool.query('SELECT telegram_chat_id FROM ticketsmodule_telegram_links WHERE bitrix_user_id=$1', [bid]);
+    const chat = r.rows[0] && r.rows[0].telegram_chat_id;
+    if (chat && tgTo) await tgTo(String(chat), '📅 <b>' + escTxt(subj) + '</b>\n' + lines.map(escTxt).join('\n'));
+  } catch (e) { /* best-effort */ }
+  try {
+    const email = USER_EMAILS[bid];
+    if (email && sendEmailTo) await sendEmailTo(email, subj, '<p>' + lines.map(escTxt).join('<br>') + '</p>');
+  } catch (e) { /* best-effort */ }
+}
+
+// Создать бронь «Экспо» в Б24: встреча организатора + резерв переговорной (section 5)
+// + участники (attendees → им приходит приглашение Б24). Возвращает id встречи.
+async function bookExpoBitrix({ title, startLocal, endLocal, organizerBid, participantBids, note }) {
+  const { b24 } = require('../bitrix');
+  organizerBid = parseInt(organizerBid, 10);
+  if (!organizerBid) throw new Error('не удалось определить организатора (нет привязки к Битрикс)');
+  const attendees = [...new Set([organizerBid, ...(participantBids || []).map(n => parseInt(n, 10)).filter(Boolean)])];
+  const from = String(startLocal).replace('T', ' ').slice(0, 16) + ':00';
+  const to = String(endLocal).replace('T', ' ').slice(0, 16) + ':00';
+  const r = await b24('calendar.event.add', {
+    type: 'user', ownerId: organizerBid, from, to, timezone: TZ,
+    name: String(title || 'Собрание').slice(0, 255), description: String(note || ''),
+    location: 'calendar_' + EXPO_SECTION + '_0', attendees, is_meeting: 'Y', host: organizerBid,
+  });
+  const meetingId = r && r.result;
+  if (!meetingId) throw new Error('Битрикс не создал событие');
+  return { meetingId, attendees };
+}
+
+// Единая точка брони переговорной (для HTTP и для ProLab AI).
+// Экспо → создаётся в Б24 (+участники+уведомления); Training/прочие → локально в ЦУП.
+async function createRoomBooking({ roomId, title, start, end, user, participants, note }) {
+  await ensureRooms();
+  const rid = parseInt(roomId, 10);
+  if (!rid) throw new Error('Не указана переговорная');
+  const expoId = await expoRoomId();
+  if (expoId && rid === expoId) {
+    const orgBid = user && user.bitrix_user_id ? parseInt(user.bitrix_user_id, 10) : null;
+    if (!orgBid) { const e = new Error('Для брони «Экспо» нужен ваш аккаунт Битрикс (нет привязки)'); e.code = 400; throw e; }
+    const sL = String(start).slice(0, 16), eL = String(end).slice(0, 16);
+    const clash = await pool.query(
+      `SELECT 1 FROM ticketsmodule_room_bookings WHERE room_id=$1
+         AND start_at < ($3)::timestamp AT TIME ZONE '${TZ}' AND end_at > ($2)::timestamp AT TIME ZONE '${TZ}' LIMIT 1`,
+      [expoId, sL, eL]);
+    if (clash.rows.length) { const e = new Error('На это время переговорная уже занята'); e.code = 409; throw e; }
+    const pbids = (Array.isArray(participants) ? participants : []).map(n => parseInt(n, 10)).filter(Boolean);
+    const { meetingId } = await bookExpoBitrix({ title, startLocal: sL, endLocal: eL, organizerBid: orgBid, participantBids: pbids, note });
+    await syncBitrixExpoThrottled(true); // форс-пул, чтобы бронь появилась сразу
+    const orgName = (user.display_name || user.username || '');
+    let notified = 0;
+    for (const pid of [...new Set(pbids.filter(x => x !== orgBid))]) {
+      notifyParticipant(pid, { title, room: 'Переговорная EXPO', startLocal: sL, endLocal: eL, organizerName: orgName }).catch(() => {});
+      notified++;
+    }
+    return { ok: true, bitrix: true, meetingId, notified, roomName: 'Переговорная EXPO' };
+  }
+  // Training и прочие — только ЦУП
+  const id = await bookRoom(rid, title, start, end, user);
+  const rooms = await listRooms();
+  const rm = rooms.find(r => r.rid === rid);
+  return { ok: true, bitrix: false, id, roomName: rm ? rm.name : '' };
+}
+
 router.get('/rooms', requireAuth(), async (req, res) => {
   await ensure();
   const from = okDate(req.query.from) ? req.query.from : new Date().toISOString().slice(0, 10);
@@ -461,10 +544,19 @@ router.post('/rooms/book', requireAuth(), express.json(), async (req, res) => {
     const b = req.body || {};
     if (!okDateTime(b.start) || !okDateTime(b.end)) return res.status(400).json({ ok: false, error: 'Нужны начало и конец (со временем)' });
     if (b.end.slice(0, 16) <= b.start.slice(0, 16)) return res.status(400).json({ ok: false, error: 'Конец должен быть позже начала' });
-    const id = await bookRoom(b.sectionId || b.roomId, b.title, b.start, b.end, req.user);
-    try { await auditLog(req.user.id, req.user.username, 'ROOM_BOOK', null, { roomId: b.sectionId || b.roomId, title: b.title, from: b.start, to: b.end }, req.ip, req.headers['user-agent']); } catch (e) {}
-    res.json({ ok: true, id });
-  } catch (e) { const occ = /занята/.test(e.message); res.status(occ ? 409 : 500).json({ ok: false, error: e.message }); }
+    const out = await createRoomBooking({ roomId: b.sectionId || b.roomId, title: b.title, start: b.start, end: b.end, user: req.user, participants: b.participants, note: b.note });
+    try { await auditLog(req.user.id, req.user.username, out.bitrix ? 'ROOM_BOOK_BX' : 'ROOM_BOOK', null, { roomId: b.sectionId || b.roomId, title: b.title, from: b.start, to: b.end, participants: b.participants || [], meetingId: out.meetingId }, req.ip, req.headers['user-agent']); } catch (e) {}
+    res.json(out);
+  } catch (e) { const code = e.code || (/занята/.test(e.message) ? 409 : 500); res.status(code).json({ ok: false, error: e.message }); }
+});
+// Список сотрудников для выбора участников собрания (bitrix id + имя).
+router.get('/rooms/people', requireAuth(), async (req, res) => {
+  try {
+    const { USERS } = require('../constants');
+    const people = Object.entries(USERS || {}).filter(([id]) => id !== '1')
+      .map(([id, name]) => ({ id: Number(id), name })).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    res.json({ ok: true, people });
+  } catch (e) { res.json({ ok: true, people: [] }); }
 });
 // Отменить бронь (свою; админ — любую).
 router.delete('/rooms/book/:id', requireAuth(), async (req, res) => {
@@ -547,4 +639,4 @@ router.post('/rooms/bx-test', requireAuth(), express.json(), async (req, res) =>
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
-module.exports = { router, bookRoom, listRooms, roomBookings, syncBitrixExpo };
+module.exports = { router, bookRoom, listRooms, roomBookings, syncBitrixExpo, createRoomBooking };

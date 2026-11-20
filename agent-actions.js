@@ -179,10 +179,27 @@ async function execute(kind, params, user) {
     if (!rid && params.room_name) { const m = rooms.find(r => r.name.toLowerCase().includes(String(params.room_name).toLowerCase())); if (m) rid = m.rid; }
     if (!rid && rooms.length) rid = rooms[0].rid;
     if (!rid) throw new Error('Не удалось определить переговорную');
-    // bookRoom сам проверяет пересечение и бросает «…занята»
-    const id = await cal.bookRoom(rid, params.title, params.start, params.end, user);
+    // участники: имена → bitrix id (из справочника USERS)
+    let pbids = [], pnames = [];
+    const raw = Array.isArray(params.participants) ? params.participants : [];
+    if (raw.length) {
+      const { USERS } = require('./constants');
+      const entries = Object.entries(USERS || {});
+      for (const p of raw) {
+        const s = String(p || '').trim(); if (!s) continue;
+        if (/^\d+$/.test(s)) { pbids.push(parseInt(s, 10)); pnames.push(USERS[s] || ('#' + s)); continue; }
+        const low = s.toLowerCase();
+        const hit = entries.find(([, nm]) => String(nm).toLowerCase() === low) || entries.find(([, nm]) => String(nm).toLowerCase().includes(low));
+        if (hit) { pbids.push(parseInt(hit[0], 10)); pnames.push(hit[1]); }
+      }
+    }
+    // createRoomBooking: Экспо → Битрикс (+участники+уведомления), Training → ЦУП.
+    const out = await cal.createRoomBooking({ roomId: rid, title: params.title, start: params.start, end: params.end, user, participants: pbids, note: params.note });
     const rm = rooms.find(r => r.rid === rid);
-    return 'Переговорная' + (rm ? (' «' + rm.name + '»') : '') + ' забронирована: ' + String(params.start).replace('T', ' ') + ' – ' + String(params.end).slice(11, 16);
+    let msg = 'Переговорная' + (rm ? (' «' + rm.name + '»') : '') + ' забронирована: ' + String(params.start).replace('T', ' ') + ' – ' + String(params.end).slice(11, 16);
+    if (out.bitrix) msg += ' (в Битрикс24)';
+    if (pnames.length) msg += '. Участники: ' + pnames.join(', ') + ' — уведомлены (Telegram/почта).';
+    return msg;
   }
   throw new Error('Неизвестный тип действия: ' + kind);
 }

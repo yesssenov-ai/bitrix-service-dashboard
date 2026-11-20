@@ -690,15 +690,26 @@ async function delEvent(){
 }
 
 /* ── бронь переговорной ── */
-function openBook(){
+async function ensurePeople(){ if(window._people)return; try{ const r=await api('GET','/rooms/people'); window._people=(r&&r.people)||[]; }catch(e){ window._people=[]; } }
+function filterPart(q){ q=(q||'').trim().toLowerCase(); const box=document.getElementById('bPartList'); if(!box)return;
+  box.querySelectorAll('label').forEach(l=>{ const nm=(l.textContent||'').toLowerCase(); l.style.display=(!q||nm.includes(q))?'flex':'none'; }); }
+function partCount(){ const box=document.getElementById('bPartList'); const n=box?box.querySelectorAll('input:checked').length:0;
+  const c=document.getElementById('bPartCount'); if(c)c.textContent=n?('Выбрано участников: '+n):''; }
+async function openBook(){
   if(!ROOMS.length){ toast('Переговорные не найдены'); return; }
+  await ensurePeople();
   const now=new Date(); const h=(iso(CUR)===todayIso()?Math.min(19,now.getHours()+1):10); const d=iso(CUR);
   const roomOpts=ROOMS.map(r=>`<option value="${r.sid||''}">${esc(r.name)}</option>`).join('');
+  const peopleRows=(window._people||[]).map(p=>`<label style="display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:7px;cursor:pointer;font-size:13px"><input type="checkbox" value="${p.id}" onchange="partCount()" style="accent-color:var(--accent)"><span>${esc(p.name)}</span></label>`).join('');
   document.getElementById('bookModal').innerHTML=
     `<div class="ph"><div class="cc" style="background:var(--accent)"></div><h3>Забронировать переговорную</h3><button class="x" onclick="closeBook()">×</button></div><div class="pb">
       <div class="fld"><label>Переговорная</label><select id="bRoom" style="background:var(--surface-2);border:1px solid var(--line);border-radius:9px;color:var(--text);font:inherit;font-size:13.5px;padding:9px 11px;width:100%">${roomOpts}</select></div>
-      <div class="fld"><label>Название (необязательно)</label><input id="bTitle" placeholder="Например, встреча с клиентом"></div>
+      <div class="fld"><label>Тема (необязательно)</label><input id="bTitle" placeholder="Например, встреча с клиентом"></div>
       <div class="two"><div class="fld"><label>Дата</label><input type="date" id="bDate" value="${d}"></div><div class="fld"><label>С</label><input type="time" id="bFrom" value="${pad(h)}:00"></div><div class="fld"><label>До</label><input type="time" id="bTo" value="${pad(Math.min(20,h+1))}:00"></div></div>
+      <div class="fld"><label>Участники — получат приглашение Битрикс + Telegram/почту</label>
+        <input id="bPartSearch" placeholder="Поиск сотрудника…" oninput="filterPart(this.value)">
+        <div id="bPartList" style="max-height:150px;overflow:auto;border:1px solid var(--line);border-radius:9px;padding:4px;margin-top:5px">${peopleRows||'<div style="padding:8px;color:var(--text-3);font-size:12.5px">Сотрудники не загрузились</div>'}</div>
+        <div id="bPartCount" style="font-size:12px;color:var(--text-3);margin-top:4px"></div></div>
       <div class="actions"><button onclick="closeBook()">Отмена</button><button class="pri" onclick="saveBook()">Забронировать</button></div></div>`;
   document.getElementById('bookOv').classList.add('on');
 }
@@ -707,8 +718,9 @@ async function saveBook(){
   const sid=document.getElementById('bRoom').value, d=document.getElementById('bDate').value, f=document.getElementById('bFrom').value, t=document.getElementById('bTo').value;
   if(!sid){toast('Выберите переговорную');return;}
   if(!d||!f||!t){toast('Укажите дату и время');return;}
-  const r=await api('POST','/rooms/book',{sectionId:sid,title:document.getElementById('bTitle').value,start:d+'T'+f,end:d+'T'+t});
-  if(r&&r.ok){closeBook();toast('Переговорная забронирована');loadRooms();}
+  const participants=[...document.querySelectorAll('#bPartList input:checked')].map(x=>Number(x.value)).filter(Boolean);
+  const r=await api('POST','/rooms/book',{sectionId:sid,title:document.getElementById('bTitle').value,start:d+'T'+f,end:d+'T'+t,participants});
+  if(r&&r.ok){closeBook();toast(r.bitrix?('Забронировано в Битрикс'+(r.notified?(' · уведомлено: '+r.notified):'')):'Переговорная забронирована');loadRooms();}
   else toast((r&&r.error)||'Не удалось забронировать');
 }
 
