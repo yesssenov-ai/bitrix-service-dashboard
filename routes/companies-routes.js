@@ -5,7 +5,9 @@ const router = express.Router();
 const { requireAuth } = require('../auth');
 const { memo, bust } = require('../cache');
 
-const EDIT = ['admin']; // правка «Компаний» — только админам (superadmin наследует)
+const EDIT = ['admin']; // удаление/слияние/миграции — только админам (superadmin наследует)
+// Правка полей компании (Название, Сфера, Город, БИН просмотр+запись) — админ + sales.
+const FIELD_EDIT = ['admin', 'sales'];
 
 // Доска компаний (список + справочник сфер + сводка проблем). Кэш 2 мин на всех —
 // большая выборка, читается всеми одинаково; сбрасывается после правки/синка.
@@ -52,7 +54,7 @@ router.get('/merges', requireAuth([]), async (req, res) => {
 });
 
 // Предпросмотр заполнения БИН (старое→новое). Ничего не пишет.
-router.get('/bin-preview', requireAuth(EDIT), async (req, res) => {
+router.get('/bin-preview', requireAuth(FIELD_EDIT), async (req, res) => {
   try { res.json(await require('../companies-calc').previewBin(req.query.id, req.query.bin)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -90,7 +92,7 @@ router.get('/industry-migrate-status', requireAuth(EDIT), async (req, res) => {
 });
 
 // Запись подтверждённого БИН в карточку Б24 (компания + реквизит). Перезаписывает поля.
-router.post('/bin-apply', requireAuth(EDIT), express.json(), async (req, res) => {
+router.post('/bin-apply', requireAuth(FIELD_EDIT), express.json(), async (req, res) => {
   try { const { id, bin } = req.body || {}; const r = await require('../companies-calc').applyBin(id, bin); bust('cmp:board'); res.json(r); }
   catch (e) { console.error('bin-apply:', e.message); res.status(500).json({ error: e.message }); }
 });
@@ -158,7 +160,7 @@ router.post('/:id/delete', requireAuth(EDIT), async (req, res) => {
 });
 
 // Правка компании (сфера / город / название, сфера и город — множественные) → Б24 + зеркало
-router.post('/:id', requireAuth(EDIT), express.json(), async (req, res) => {
+router.post('/:id', requireAuth(FIELD_EDIT), express.json(), async (req, res) => {
   try {
     const { industryId, industryIds, cityIds, title } = req.body || {};
     const r = await require('../companies-calc').updateCompany(req.params.id, { industryId, industryIds, cityIds, title });

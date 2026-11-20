@@ -218,12 +218,13 @@ details>summary::-webkit-details-marker{display:none}
 </div></div>
 
 <script>
-let DATA={rows:[],industries:[],filters:{},summary:{}}; let INDOPTS=''; const SEL=new Set();
+let DATA={rows:[],industries:[],filters:{},summary:{}}; let INDOPTS=''; const SEL=new Set(); let CAN_MANAGE=true;
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const fmt=n=>Math.round(Number(n)||0).toLocaleString('ru-RU').replace(/,/g,' ');
 async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.href='/login.html';return{ok:false,d:{}}}let d={};try{d=await r.json()}catch(e){}return{ok:r.ok,d}}
 
 async function boot(){const r=await fetch('/auth/me');if(!r.ok){location.href='/login.html';return;}
+  try{const me=await r.json();CAN_MANAGE=['admin','superadmin'].includes(me&&me.user&&me.user.role);}catch(e){CAN_MANAGE=false;}
   let _q=''; try{_q=new URLSearchParams(location.search).get('q')||'';}catch(e){}
   const _i=document.getElementById('fSearch');
   if(_q&&_i)_i.value=_q;
@@ -360,7 +361,7 @@ function render(){
       <td>${cty}</td>
       <td class="num">${dealsCell(r.id,r.title,r.dealCount)}</td>
       <td>${badges}</td>
-      <td class="num"><span class="act del" title="Удалить компанию" onclick="delCompany('${esc(r.id)}',${JSON.stringify(r.title||'').replace(/"/g,'&quot;')})">🗑</span></td>
+      <td class="num">${CAN_MANAGE?`<span class="act del" title="Удалить компанию" onclick="delCompany('${esc(r.id)}',${JSON.stringify(r.title||'').replace(/"/g,'&quot;')})">🗑</span>`:''}</td>
     </tr>`;
   }).join(''):'<tr><td class="hint" colspan="9">Нет компаний по фильтру.</td></tr>';
   updateMergeBar(); syncSelAllChk();
@@ -456,6 +457,7 @@ function selectAllFiltered(e){ if(e&&e.preventDefault)e.preventDefault(); toggle
 function syncSelAllChk(){ const chk=document.getElementById('selAllChk'); if(!chk)return; const rows=filtered(); const all=rows.length>0&&rows.every(r=>SEL.has(r.id)); const some=rows.some(r=>SEL.has(r.id)); chk.checked=all; chk.indeterminate=some&&!all; }
 function updateMergeBar(){
   const bar=document.getElementById('mergeBar'); if(!bar)return;
+  if(!CAN_MANAGE){ bar.style.display='none'; return; } // слияние/удаление — только админам
   bar.style.display=SEL.size?'flex':'none';
   const c=document.getElementById('mbCount'); if(c)c.textContent='Выбрано: '+SEL.size;
   const b=document.getElementById('mbMerge'); if(b)b.disabled=SEL.size<2;
