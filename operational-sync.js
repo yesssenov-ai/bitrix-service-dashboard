@@ -40,7 +40,27 @@ const SERVICE_ENGINEER_FIELD = 'ufCrm8_1732856367';
 // Pull the child-sourced fields for one deal (uses the already-fetched children).
 async function computeEnrichment(dealId, children) {
   const out = { factory_ship_date: null, pay_client: '', pay_factory: '', engineer_id: null };
-  const purchase = children.find(c => Number(c.entityTypeId) === 1066);
+  // «Основная закупка» (источник даты отгрузки от завода и условий оплаты) — это закупка,
+  // созданная РОБОТОМ Битрикса при переводе контракт→логистика (по основному прибору).
+  // Закупки, созданные ЦУПом (подбор допов / модуль «Закупки», помечены xmlId PLS-DOP и
+  // ведутся в ticketsmodule_procurement), теперь часто создаются РАНЬШЕ логистической и
+  // НЕ несут дату отгрузки — поэтому как «самые ранние» их НЕ учитываем. Берём самую
+  // раннюю закупку, НЕ созданную ЦУПом; если таких нет — откат на самую раннюю любую.
+  const purchases = children.filter(c => Number(c.entityTypeId) === 1066);
+  let purchase = null;
+  if (purchases.length) {
+    const ids = purchases.map(p => Number(p.id)).filter(Boolean);
+    let cupSet = new Set();
+    if (ids.length) {
+      try {
+        const { rows } = await pool.query('SELECT bitrix_item_id FROM ticketsmodule_procurement WHERE bitrix_item_id = ANY($1::int[])', [ids]);
+        cupSet = new Set(rows.map(r => Number(r.bitrix_item_id)));
+      } catch (e) { /* таблицы может не быть — тогда не фильтруем */ }
+    }
+    const byTime = arr => arr.slice().sort((a, b) => new Date(a.createdTime || 0) - new Date(b.createdTime || 0));
+    const bitrixMade = byTime(purchases.filter(p => !cupSet.has(Number(p.id))));
+    purchase = bitrixMade[0] || byTime(purchases)[0];
+  }
   if (purchase) {
     try {
       const { result } = await b24('crm.item.get', { entityTypeId: 1066, id: purchase.id });
