@@ -239,6 +239,40 @@ router.post('/events', requireAuth(), express.json(), async (req, res) => {
       startVal = b.start.slice(0, 16);
       endVal = okDateTime(b.end) ? b.end.slice(0, 16) : startVal;
     }
+    // Задача (category='task') — это не локальное событие календаря, а НАСТОЯЩАЯ
+    // задача: создаём её в Bitrix24 (tasks.task.add) И в «Мои задачи» ЦУП (доска).
+    // Локальное событие НЕ создаём — календарь и так показывает карточки доски,
+    // иначе была бы дубль-строка. Отображается она по дате дедлайна (due_date).
+    if (category === 'task') {
+      const { b24 } = require('../bitrix');
+      const bid = req.user.bitrix_user_id || null;
+      const dueISO = String(b.start).slice(0, 10);               // YYYY-MM-DD
+      const deadline = allDay ? dueISO : endVal;                 // Bitrix DEADLINE
+      const descr = String(b.note || '').slice(0, 2000);
+      let bitrixTaskId = null, refUrl = null;
+      if (bid) {
+        try {
+          const tr = await b24('tasks.task.add', { fields: {
+            TITLE: title, RESPONSIBLE_ID: bid, CREATED_BY: bid,
+            DEADLINE: deadline, DESCRIPTION: descr,
+          } });
+          const t = tr && tr.result && tr.result.task;
+          bitrixTaskId = t && (t.id || t.ID) || null;
+          if (bitrixTaskId) refUrl = `https://crm.prolabsupport.kz/company/personal/user/${bid}/tasks/task/view/${bitrixTaskId}/`;
+        } catch (e) { console.error('cal task→bitrix:', e.message); }
+      }
+      try {
+        const pr = await pool.query(
+          `SELECT COALESCE(MAX(position),0)+1 AS p FROM ticketsmodule_board_cards WHERE user_id=$1 AND column_key='todo' AND archived=FALSE`,
+          [req.user.id]);
+        await pool.query(
+          `INSERT INTO ticketsmodule_board_cards (user_id, column_key, title, notes, due_date, position, ref_type, ref_id, ref_url)
+           VALUES ($1,'todo',$2,$3,$4,$5,$6,$7,$8)`,
+          [req.user.id, title, descr || null, dueISO, pr.rows[0].p,
+           bitrixTaskId ? 'task' : null, bitrixTaskId ? String(bitrixTaskId) : null, refUrl]);
+      } catch (e) { console.error('cal task→board:', e.message); }
+      return res.json({ ok: true, task: true, bitrixTaskId });
+    }
     const r = await pool.query(
       `INSERT INTO ticketsmodule_calendar_events (owner_id, title, category, start_at, end_at, all_day, location, note, source, created_by)
        VALUES ($1,$2,$3, ($4)::timestamp AT TIME ZONE '${TZ}', ($5)::timestamp AT TIME ZONE '${TZ}', $6,$7,$8,'manual',$9) RETURNING id`,
@@ -349,11 +383,73 @@ async function bookRoom(roomId, title, startLocal, endLocal, user) {
   return r.rows[0].id;
 }
 
+// ── Синк переговорной «Экспо» с Б24 (location-календарь «Conference room») ────
+// Б24 — источник правды: бронь создаёт только Битрикс, ЦУП отражает. Комнату
+// «Экспо» ЦУП держим в синхроне со section=5 (единственная location-переговорная
+// Б24). Комната «Training» — только в ЦУП, не синкается.
+const EXPO_SECTION = '5';           // calendar section «Conference room» = Экспо
+let _expoSyncAt = 0, _expoSyncing = false;
+async function expoRoomId() {
+  await ensureRooms();
+  const r = await pool.query(
+    `SELECT id FROM ticketsmodule_calendar_rooms
+      WHERE active=true AND (name ILIKE '%EXPO%' OR name ILIKE '%Экспо%') ORDER BY position, id LIMIT 1`);
+  return r.rows[0] && r.rows[0].id;
+}
+// Подтянуть все брони «Conference room» из Б24 в комнату «Экспо» (upsert по
+// bitrix_event_id) и снять те, что отменены в Б24 (нет в окне −3мес…+12мес).
+async function syncBitrixExpo() {
+  await ensureRooms();
+  const rid = await expoRoomId();
+  if (!rid) return { ok: false, error: 'нет комнаты Экспо' };
+  const { b24 } = require('../bitrix');
+  const pd = n => new Date(Date.now() + n * 864e5).toISOString().slice(0, 19);
+  const from = pd(-92), to = pd(366);        // −3 мес … +12 мес
+  const r = await b24('calendar.event.get', { type: 'location', ownerId: 0, from, to });
+  const evs = Array.isArray(r && r.result) ? r.result : [];
+  const seen = [];
+  let added = 0, updated = 0;
+  for (const ev of evs) {
+    if (String(ev.SECTION_ID || ev.SECT_ID || '') !== EXPO_SECTION) continue;
+    if (String(ev.DELETED || '') === 'Y') continue;
+    const bxId = String(ev.ID || ''); const tsF = +ev.DATE_FROM_TS_UTC, tsT = +ev.DATE_TO_TS_UTC;
+    if (!bxId || !tsF || !tsT) continue;
+    seen.push(bxId);
+    const name = String(ev.NAME || 'Бронь').slice(0, 300);
+    const by = ev.CREATED_BY ? parseInt(ev.CREATED_BY, 10) : null;
+    const up = await pool.query(
+      `INSERT INTO ticketsmodule_room_bookings (room_id,title,user_id,booker_name,start_at,end_at,source,bitrix_event_id)
+       VALUES ($1,$2,$3,$4,to_timestamp($5),to_timestamp($6),'bitrix',$7)
+       ON CONFLICT (bitrix_event_id) DO UPDATE SET
+         room_id=$1, title=$2, user_id=$3, booker_name=$4, start_at=to_timestamp($5), end_at=to_timestamp($6)
+       RETURNING (xmax=0) AS inserted`,
+      [rid, name, by, name, tsF, tsT, bxId]);
+    if (up.rows[0] && up.rows[0].inserted) added++; else updated++;
+  }
+  const del = await pool.query(
+    `DELETE FROM ticketsmodule_room_bookings
+       WHERE room_id=$1 AND source='bitrix' AND bitrix_event_id IS NOT NULL
+         AND start_at >= NOW() - interval '100 days' AND start_at <= NOW() + interval '370 days'
+         AND NOT (bitrix_event_id = ANY($2::text[]))`,
+    [rid, seen.length ? seen : ['__none__']]);
+  _expoSyncAt = Date.now();
+  return { ok: true, total: evs.length, added, updated, removed: del.rowCount };
+}
+// Троттлед-обёртка: не чаще раза в 90 c, ошибки глотаем (синк не должен ронять UI).
+async function syncBitrixExpoThrottled(force) {
+  if (_expoSyncing) return;
+  if (!force && Date.now() - _expoSyncAt < 90 * 1000) return;
+  _expoSyncing = true;
+  try { await syncBitrixExpo(); } catch (e) { console.error('syncBitrixExpo:', e.message); }
+  finally { _expoSyncing = false; }
+}
+
 router.get('/rooms', requireAuth(), async (req, res) => {
   await ensure();
   const from = okDate(req.query.from) ? req.query.from : new Date().toISOString().slice(0, 10);
   const to = okDate(req.query.to) ? req.query.to : from;
   try {
+    await syncBitrixExpoThrottled();   // держим «Экспо» в синхроне с Б24
     const rooms = await listRooms();
     const bookings = await roomBookings(from, to);
     res.json({ ok: true, rooms, bookings, source: 'cup', canManage: isAdmin(req) });
@@ -431,4 +527,24 @@ router.get('/rooms/raw', requireAuth(), async (req, res) => {
   res.json({ ok: true, from, to, out });
 });
 
-module.exports = { router, bookRoom, listRooms, roomBookings };
+// Ручной форс-синк «Экспо» с Б24 (админ) — для кнопки «обновить» и диагностики.
+router.post('/rooms/sync-expo', requireAuth(), express.json(), async (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ ok: false, error: 'Только администратор' });
+  try { res.json(await syncBitrixExpo()); }
+  catch (e) { console.error('sync-expo:', e.message); res.status(500).json({ ok: false, error: e.message }); }
+});
+// ВРЕМЕННО (диагностика): подобрать payload создания брони+участников в Б24.
+// body: { fields:{...} } → calendar.event.add; { del:<id> } → calendar.event.delete.
+router.post('/rooms/bx-test', requireAuth(), express.json(), async (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ ok: false });
+  const { b24 } = require('../bitrix');
+  try {
+    const b = req.body || {};
+    if (b.del) { const r = await b24('calendar.event.delete', { id: b.del }); return res.json({ ok: true, deleted: b.del, result: r && r.result }); }
+    if (b.get) { const r = await b24('calendar.event.getbyid', { id: b.get }); return res.json({ ok: true, result: r && r.result }); }
+    const r = await b24('calendar.event.add', b.fields || {});
+    res.json({ ok: true, result: r && r.result });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+module.exports = { router, bookRoom, listRooms, roomBookings, syncBitrixExpo };
