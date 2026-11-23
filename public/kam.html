@@ -13,10 +13,17 @@
 :root{--p0:var(--accent);--p1:var(--info);--p2:var(--good);--radius:16px;
   --shadow:0 1px 2px rgba(16,22,36,.05),0 14px 34px -18px rgba(16,22,36,.2);--tealc:var(--good)}
 :root[data-theme="dark"]{--shadow:0 1px 2px rgba(0,0,0,.3),0 14px 34px -18px rgba(0,0,0,.6)}
-html{background:var(--bg)}
+/* Фирменный ою-фон: тёплая кремовая база + орнамент чуть заметнее (гармонично).
+   body прозрачный → просвечивает #cup-bg (вставляется сервером). Токены не трогаем. */
+html{background:#f4f1ea}
 html,body{height:100%;font-family:var(--f-ui);color:var(--text);-webkit-font-smoothing:antialiased}
-/* body прозрачный, чтобы просвечивал фирменный фон-орнамент (#cup-bg, ою) */
 body{background:transparent}
+#cup-bg{filter:brightness(.87) contrast(1.18) sepia(.1)}
+html[data-theme="dark"]{background:var(--bg)}
+html[data-theme="dark"] #cup-bg{filter:brightness(1.18) contrast(1.05)}
+@media(prefers-color-scheme:dark){
+  html:not([data-theme="light"]){background:var(--bg)}
+  html:not([data-theme="light"]) #cup-bg{filter:brightness(1.18) contrast(1.05)}}
 button{font-family:inherit;cursor:pointer}
 a{color:var(--info);text-decoration:none}
 
