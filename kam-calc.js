@@ -66,6 +66,15 @@ function dealPhase(d) {
   if (info.kind === 'contract') return 'post';
   return 'failed';
 }
+// Короткая метка стадии для строки сделки: доконтракт → P10/P30/P60/P80;
+// послеконтракт → человеческое имя стадии; провал → «Проиграна»/«Заморожена».
+function stageShort(d) {
+  const info = stageInfo(d.stage_id);
+  if (info.kind === 'pipeline') return info.step;
+  if (d.contract_date || info.kind === 'contract') return postStageLabel(d.stage_id);
+  if (info.kind === 'lost') return 'Проиграна';
+  return 'Заморожена';
+}
 
 // ── Резолв названия группы (UF_CRM_1731862481, iblock_element) ───────────────
 // Пробуем справочник project_clients.group_name (уже ведётся), иначе резолвим
@@ -323,7 +332,8 @@ async function nodeDeals(type, key, project) {
     deals: subset.slice(0, 300).map(d => ({
       dealId: d.deal_id, title: d.deal_title || ('Сделка #' + d.deal_id), unit: d.unit_tag || '',
       companyId: String(d.company_id), company: d.company_name || '', sumMln: mln(d.opportunity),
-      post: !!d.contract_date, phase: dealPhase(d), stage: d.stage_id, project: d.project_tag || '',
+      post: !!d.contract_date, phase: dealPhase(d), stage: d.stage_id, stageLabel: stageShort(d),
+      owner: uname(d.assigned_by_id) || '', project: d.project_tag || '',
       planned: ymd(d.planned_purchase_date),
       url: 'https://crm.prolabsupport.kz/crm/deal/details/' + d.deal_id + '/',
     })),
@@ -649,7 +659,7 @@ async function getCompanyStages(companyId) {
   const cid = String(companyId);
   const { rows } = await pool.query(
     `SELECT deal_id, deal_title, company_name, stage_id, category_id, opportunity, contract_date,
-            department_id, project_tag, unit_tag, planned_purchase_date
+            department_id, project_tag, unit_tag, planned_purchase_date, assigned_by_id
        FROM ticketsmodule_stat_deals WHERE company_id=$1 ORDER BY opportunity DESC NULLS LAST`, [cid]);
   const buckets = {};
   const ensure = (key, label, phase) => buckets[key] || (buckets[key] = { key, label, phase, count: 0, sum: 0 });
@@ -668,7 +678,8 @@ async function getCompanyStages(companyId) {
     const dn = productOf(d); (dept[dn] = dept[dn] || { count: 0, sum: 0 }); dept[dn].count++; dept[dn].sum += Number(d.opportunity) || 0;
     deals.push({
       dealId: d.deal_id, title: d.deal_title || ('Сделка #' + d.deal_id), unit: d.unit_tag || '',
-      companyId: cid, sumMln: mln(d.opportunity), post: !!d.contract_date, phase: dealPhase(d), project: d.project_tag || '',
+      companyId: cid, sumMln: mln(d.opportunity), post: !!d.contract_date, phase: dealPhase(d),
+      stageLabel: stageShort(d), owner: uname(d.assigned_by_id) || '', project: d.project_tag || '',
       planned: ymd(d.planned_purchase_date), stageKey: key, dept: dn,
       url: 'https://crm.prolabsupport.kz/crm/deal/details/' + d.deal_id + '/',
     });
