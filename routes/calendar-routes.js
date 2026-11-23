@@ -421,7 +421,7 @@ async function syncBitrixExpo() {
       `INSERT INTO ticketsmodule_room_bookings (room_id,title,user_id,booker_name,start_at,end_at,source,bitrix_event_id)
        VALUES ($1,$2,$3,$4,to_timestamp($5),to_timestamp($6),'bitrix',$7)
        ON CONFLICT (bitrix_event_id) WHERE bitrix_event_id IS NOT NULL DO UPDATE SET
-         room_id=$1, title=$2, user_id=$3, booker_name=$4, start_at=to_timestamp($5), end_at=to_timestamp($6)
+         room_id=$1, user_id=$3, booker_name=$4, start_at=to_timestamp($5), end_at=to_timestamp($6)
        RETURNING (xmax=0) AS inserted`,
       [rid, name, by, name, tsF, tsT, bxId]);
     if (up.rows[0] && up.rows[0].inserted) added++; else updated++;
@@ -490,7 +490,14 @@ async function bookExpoBitrix({ title, startLocal, endLocal, organizerBid, parti
   });
   const meetingId = r && r.result;
   if (!meetingId) throw new Error('Битрикс не создал событие');
-  return { meetingId, attendees };
+  // id резерва переговорной (location event) — чтобы сразу отразить бронь в ЦУП.
+  let locId = null;
+  try {
+    const g = await b24('calendar.event.getbyid', { id: meetingId });
+    const m = /_(\d+)$/.exec(String((g && g.result && g.result.LOCATION) || ''));
+    if (m) locId = m[1];
+  } catch (e) { /* не критично */ }
+  return { meetingId, locId, attendees };
 }
 
 // Единая точка брони переговорной (для HTTP и для ProLab AI).
@@ -510,9 +517,18 @@ async function createRoomBooking({ roomId, title, start, end, user, participants
       [expoId, sL, eL]);
     if (clash.rows.length) { const e = new Error('На это время переговорная уже занята'); e.code = 409; throw e; }
     const pbids = (Array.isArray(participants) ? participants : []).map(n => parseInt(n, 10)).filter(Boolean);
-    const { meetingId } = await bookExpoBitrix({ title, startLocal: sL, endLocal: eL, organizerBid: orgBid, participantBids: pbids, note });
-    await syncBitrixExpoThrottled(true); // форс-пул, чтобы бронь появилась сразу
+    const { meetingId, locId } = await bookExpoBitrix({ title, startLocal: sL, endLocal: eL, organizerBid: orgBid, participantBids: pbids, note });
     const orgName = (user.display_name || user.username || '');
+    // Отразить бронь в ЦУП сразу (тему держим в title; синк её не затирает).
+    try {
+      if (locId) await pool.query(
+        `INSERT INTO ticketsmodule_room_bookings (room_id,title,user_id,booker_name,start_at,end_at,source,bitrix_event_id)
+         VALUES ($1,$2,$3,$4,($5)::timestamp AT TIME ZONE '${TZ}',($6)::timestamp AT TIME ZONE '${TZ}','bitrix',$7)
+         ON CONFLICT (bitrix_event_id) WHERE bitrix_event_id IS NOT NULL
+         DO UPDATE SET title=EXCLUDED.title, room_id=$1, user_id=$3, booker_name=$4, start_at=EXCLUDED.start_at, end_at=EXCLUDED.end_at`,
+        [expoId, String(title || 'Собрание').slice(0, 300), orgBid, orgName, sL, eL, String(locId)]);
+    } catch (e) { console.error('expo local insert:', e.message); }
+    syncBitrixExpoThrottled(true).catch(() => {}); // фоновый дозин с Б24, ответ не блокируем
     let notified = 0;
     for (const pid of [...new Set(pbids.filter(x => x !== orgBid))]) {
       notifyParticipant(pid, { title, room: 'Переговорная EXPO', startLocal: sL, endLocal: eL, organizerName: orgName }).catch(() => {});
@@ -532,7 +548,7 @@ router.get('/rooms', requireAuth(), async (req, res) => {
   const from = okDate(req.query.from) ? req.query.from : new Date().toISOString().slice(0, 10);
   const to = okDate(req.query.to) ? req.query.to : from;
   try {
-    await syncBitrixExpoThrottled();   // держим «Экспо» в синхроне с Б24
+    syncBitrixExpoThrottled().catch(() => {});   // синк с Б24 в ФОНЕ — ответ не блокируем
     const rooms = await listRooms();
     const bookings = await roomBookings(from, to);
     res.json({ ok: true, rooms, bookings, source: 'cup', canManage: isAdmin(req) });
