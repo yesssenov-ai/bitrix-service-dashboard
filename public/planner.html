@@ -359,6 +359,77 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
   .vbig{padding:10px 16px;font-size:13px}
   .pfoot .pb,.ph-acts .pb{padding:9px 14px}
 }
+/* ═══ Премиум-статистика (эстетика модуля Командировок) ═══════════════════ */
+.st-ov{position:fixed;inset:0;z-index:600;display:none;background:color-mix(in srgb,var(--bg) 70%,transparent);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px)}
+.st-ov.open{display:flex;flex-direction:column}
+.st-top{position:relative;flex:none;display:flex;align-items:center;gap:14px;height:62px;padding:0 24px;background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.st-top::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 30%,transparent))}
+.st-top .ttl{font:800 17px/1 var(--f-ui);letter-spacing:-.35px}
+.st-top .sub{color:var(--text-3);font:600 10.5px/1 var(--f-ui);text-transform:uppercase;letter-spacing:.12em;border-left:1px solid var(--line-2);padding-left:14px}
+.st-top .sp{flex:1}
+.st-scroll{flex:1;overflow-y:auto;padding:22px 24px 72px}
+.st-canvas{max-width:1200px;margin:0 auto}
+.st-filters{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin-bottom:22px}
+.st-fg{display:inline-flex;align-items:center;gap:7px}
+.st-lbl{font:700 9.5px/1 var(--f-ui);text-transform:uppercase;letter-spacing:.1em;color:var(--text-3)}
+.st-seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:3px}
+.st-seg button{border:none;background:none;cursor:pointer;font:600 11.5px/1 var(--f-ui);color:var(--text-3);padding:7px 12px;border-radius:999px;transition:.14s;white-space:nowrap}
+.st-seg button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(16,24,40,.08)}
+.st-date{border:1px solid var(--line-2);border-radius:9px;background:var(--surface);color:var(--text);font:600 12px/1 var(--f-ui);padding:8px 10px;font-variant-numeric:tabular-nums;outline:none}
+.st-date:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 13%,transparent)}
+.st-prbtn{border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);border-radius:9px;font:600 11.5px/1 var(--f-ui);padding:8px 11px;cursor:pointer;transition:.14s}
+.st-prbtn:hover{background:var(--surface-2);color:var(--text)}
+.st-sel{border:1px solid var(--line-2);border-radius:9px;background:var(--surface);color:var(--text);font:600 12px/1 var(--f-ui);padding:8px 28px 8px 11px;cursor:pointer;outline:none;appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--text-3) 50%),linear-gradient(135deg,var(--text-3) 50%,transparent 50%);background-position:calc(100% - 15px) 52%,calc(100% - 10px) 52%;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+.st-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px}
+.st-kpi{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:15px 16px 14px;box-shadow:0 1px 2px rgba(16,24,40,.04);transition:.16s}
+.st-kpi:hover{border-color:var(--line-2);box-shadow:0 6px 20px rgba(16,24,40,.07)}
+.st-kpi .k{font:700 9.5px/1 var(--f-ui);text-transform:uppercase;letter-spacing:.1em;color:var(--text-3)}
+.st-kpi .v{font:800 27px/1 var(--f-ui);letter-spacing:-.7px;margin-top:11px;font-variant-numeric:tabular-nums}
+.st-kpi .u{font:600 10.5px/1 var(--f-ui);color:var(--text-3);margin-top:7px;letter-spacing:.02em}
+.st-kpi.accent .v{color:var(--accent)}
+.st-kpi.good .v{color:var(--good)}
+.st-row{display:grid;grid-template-columns:370px 1fr;gap:12px;margin-bottom:14px}
+.st-pan{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px 20px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+.st-pan .ph{font:700 10px/1 var(--f-ui);text-transform:uppercase;letter-spacing:.1em;color:var(--text-3);margin-bottom:16px}
+.st-donut-wrap{display:flex;align-items:center;gap:20px}
+.st-legend{display:flex;flex-direction:column;gap:10px;flex:1;min-width:0}
+.st-legend .lg{display:flex;align-items:center;gap:9px;font:600 12.5px/1 var(--f-ui);color:var(--text-2);min-width:0}
+.st-legend .lg i{width:10px;height:10px;border-radius:3px;flex:none}
+.st-legend .lg .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.st-legend .lg .n{margin-left:auto;padding-left:10px;font-variant-numeric:tabular-nums;color:var(--text);font-weight:800}
+.st-bars{display:flex;align-items:flex-end;gap:10px;height:170px;padding-top:6px}
+.st-bar{flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;min-width:0}
+.st-bar .bb{width:100%;max-width:46px;border-radius:7px 7px 3px 3px;background:linear-gradient(180deg,var(--accent),color-mix(in srgb,var(--accent) 78%,#000));transition:.3s;position:relative}
+.st-bar .bb:hover{filter:brightness(1.06)}
+.st-bar .bv{font:800 12px/1 var(--f-ui);color:var(--text);font-variant-numeric:tabular-nums}
+.st-bar .bl{font:600 9.5px/1 var(--f-ui);color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+.st-tblwrap{background:var(--surface);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+.st-tblhead{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.st-tblhead .tt{font:700 10px/1 var(--f-ui);text-transform:uppercase;letter-spacing:.1em;color:var(--text-3)}
+.st-tblhead .cnt{font:600 11px/1 var(--f-mono,monospace);color:var(--text-3)}
+.st-tbl{width:100%;border-collapse:collapse}
+.st-tbl thead th{text-align:left;font:700 9.5px/1 var(--f-ui);text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);padding:12px 14px;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;background:var(--surface)}
+.st-tbl thead th.r,.st-tbl tbody td.r{text-align:right}
+.st-tbl tbody td{padding:11px 14px;border-bottom:1px solid var(--line);font:500 12.5px/1.35 var(--f-ui);color:var(--text);vertical-align:middle}
+.st-tbl tbody tr:last-child td{border-bottom:none}
+.st-tbl tbody tr:hover td{background:var(--surface-2)}
+.st-tbl .mono{font-variant-numeric:tabular-nums;font-family:var(--f-mono,monospace);color:var(--text-2)}
+.st-tbl .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
+.st-tbl .sub2{color:var(--text-3);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
+.st-pill{display:inline-flex;align-items:center;gap:6px;font:600 10.5px/1 var(--f-ui);padding:5px 9px;border-radius:999px;white-space:nowrap}
+.st-pill .d{width:6px;height:6px;border-radius:50%;flex:none}
+.st-done{background:color-mix(in srgb,var(--good) 13%,var(--surface));color:var(--good)}
+.st-done .d{background:var(--good)}
+.st-open{background:color-mix(in srgb,var(--info) 12%,var(--surface));color:var(--info)}
+.st-open .d{background:var(--info)}
+.st-trip{display:inline-flex;align-items:center;gap:5px;font:600 11px/1 var(--f-ui);color:var(--text-2)}
+.st-trip.no{color:var(--text-faint)}
+.st-x{width:34px;height:34px;border-radius:9px;border:1px solid var(--line-2);background:var(--surface);cursor:pointer;color:var(--text-2);font-size:16px;display:flex;align-items:center;justify-content:center;transition:.14s}
+.st-x:hover{color:var(--text);background:var(--surface-2)}
+.st-empty{text-align:center;color:var(--text-3);padding:54px 0;font:500 13.5px/1.5 var(--f-ui)}
+.st-skel{height:120px;border-radius:16px;background:linear-gradient(90deg,var(--surface),var(--surface-2),var(--surface));background-size:200% 100%;animation:stsh 1.3s linear infinite;border:1px solid var(--line)}
+@keyframes stsh{to{background-position:-200% 0}}
+@media(max-width:900px){.st-kpis{grid-template-columns:repeat(2,1fr)}.st-row{grid-template-columns:1fr}.st-scroll{padding:16px 14px 60px}.st-top{padding:0 16px}}
 </style>
 </head>
 <body>
@@ -370,6 +441,7 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
   <span class="hnav-link active">Планировщик</span>
   <div class="hdiv"></div>
   <div class="hdr-r">
+    <button class="hbtn" onclick="statOpen()">Статистика</button>
     <button class="hbtn" onclick="openReports()">Отчёты</button>
     <button class="hbtn" onclick="openAdmin()">Управление</button>
     <button class="hbtn" onclick="openDF()">Data&nbsp;Fields</button>
@@ -2695,6 +2767,194 @@ window.addEventListener('resize', ()=>{ clearTimeout(window._resizeT); window._r
     </div>
   </div>
 </div>
+<!-- ═══ Премиум-статистика по заявкам (зеркало 1058) ═══════════════════════ -->
+<style>
+#statOverlay{--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s-other:#9aa3b3}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) #statOverlay{--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s-other:#5a6473}}
+:root[data-theme="dark"] #statOverlay{--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s-other:#5a6473}
+</style>
+<div class="st-ov" id="statOverlay">
+  <div class="st-top">
+    <span class="ttl">Статистика</span>
+    <span class="sub" id="statSub">Планировщик · заявки на сервис</span>
+    <span class="sp"></span>
+    <button class="st-prbtn" onclick="statExport()">📥 Excel</button>
+    <button class="st-x" onclick="statClose()" title="Закрыть">✕</button>
+  </div>
+  <div class="st-scroll">
+    <div class="st-canvas">
+      <div class="st-filters" id="statFilters"></div>
+      <div class="st-kpis" id="statKpis"></div>
+      <div class="st-row">
+        <div class="st-pan">
+          <div class="ph">Структура по типам работ</div>
+          <div class="st-donut-wrap"><div id="statDonut"></div><div class="st-legend" id="statLegend"></div></div>
+        </div>
+        <div class="st-pan">
+          <div class="ph">Динамика работ по месяцам</div>
+          <div class="st-bars" id="statBars"></div>
+        </div>
+      </div>
+      <div class="st-tblwrap">
+        <div class="st-tblhead"><span class="tt">Работы</span><span class="cnt" id="statCount">—</span></div>
+        <div style="overflow-x:auto"><table class="st-tbl" id="statTbl"></table></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  const S = { from:'', to:'', engineerId:'', typeId:'', trip:'any', completed:'any',
+              preset:'year', types:[], engineers:[], rows:[], summary:{}, loaded:false };
+  const PAL = ['var(--s1)','var(--s2)','var(--s3)','var(--s-other)'];
+  const esc = s => String(s==null?'':s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const nf = n => (n==null?'':Number(n).toLocaleString('ru-RU'));
+  const MON = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+
+  function presetRange(p){
+    const now=new Date(), y=now.getFullYear(), m=now.getMonth();
+    if(p==='month') return [iso(new Date(y,m,1)), iso(new Date(y,m+1,0))];
+    if(p==='quarter'){ const qs=Math.floor(m/3)*3; return [iso(new Date(y,qs,1)), iso(new Date(y,qs+3,0))]; }
+    if(p==='year') return [iso(new Date(y,0,1)), iso(new Date(y,11,31))];
+    return ['','']; // all
+  }
+
+  window.statOpen = async function(){
+    if(!S.from && !S.to){ const [f,t]=presetRange('year'); S.from=f; S.to=t; }
+    document.getElementById('statOverlay').classList.add('open');
+    document.body.style.overflow='hidden';
+    renderFilters();
+    if(!S.loaded){ await loadDicts(); S.loaded=true; renderFilters(); }
+    statLoad();
+  };
+  window.statClose = function(){ document.getElementById('statOverlay').classList.remove('open'); document.body.style.overflow=''; };
+
+  async function loadDicts(){
+    try{ const r=await fetch('/api/planner/stats/service-types',{credentials:'include'}).then(r=>r.json()); S.types=(r&&r.types)||[]; }catch(e){ S.types=[]; }
+    // Сотрудники — из первой (нескопированной) выборки по текущему периоду
+    try{
+      const r=await fetch('/api/planner/stats'+qs(true),{credentials:'include'}).then(r=>r.json());
+      const seen=new Map(); (r.rows||[]).forEach(x=>{ if(x.engineer_id&&!seen.has(x.engineer_id)) seen.set(x.engineer_id,x.engineer_name||('#'+x.engineer_id)); });
+      S.engineers=[...seen.entries()].map(([id,name])=>({id,name})).sort((a,b)=>a.name.localeCompare(b.name,'ru'));
+    }catch(e){ S.engineers=[]; }
+  }
+
+  function qs(onlyPeriod){
+    const p=[];
+    if(S.from) p.push('from='+S.from);
+    if(S.to) p.push('to='+S.to);
+    if(!onlyPeriod){
+      if(S.engineerId) p.push('engineers='+S.engineerId);
+      if(S.typeId) p.push('types='+S.typeId);
+      if(S.trip!=='any') p.push('trip='+S.trip);
+      if(S.completed!=='any') p.push('completed='+S.completed);
+    }
+    return p.length?('?'+p.join('&')):'';
+  }
+
+  function renderFilters(){
+    const engOpts = ['<option value="">Все сотрудники</option>'].concat(S.engineers.map(e=>`<option value="${e.id}" ${String(S.engineerId)===String(e.id)?'selected':''}>${esc(e.name)}</option>`)).join('');
+    const typeOpts = ['<option value="">Все типы работ</option>'].concat(S.types.map(t=>`<option value="${t.id}" ${String(S.typeId)===String(t.id)?'selected':''}>${esc(t.label)}</option>`)).join('');
+    const seg=(key,val,opts)=>`<div class="st-seg">${opts.map(o=>`<button class="${S[key]===o[0]?'on':''}" onclick="statSeg('${key}','${o[0]}')">${o[1]}</button>`).join('')}</div>`;
+    const pr=(p,l)=>`<button class="st-prbtn ${S.preset===p?'on':''}" onclick="statPreset('${p}')" style="${S.preset===p?'border-color:var(--accent);color:var(--accent)':''}">${l}</button>`;
+    document.getElementById('statFilters').innerHTML = `
+      <div class="st-fg">${pr('month','Месяц')}${pr('quarter','Квартал')}${pr('year','Год')}${pr('all','Всё время')}</div>
+      <div class="st-fg"><input type="date" class="st-date" value="${S.from}" onchange="statDate('from',this.value)"><span style="color:var(--text-3)">—</span><input type="date" class="st-date" value="${S.to}" onchange="statDate('to',this.value)"></div>
+      <div class="st-fg"><select class="st-sel" onchange="statPick('engineerId',this.value)">${engOpts}</select></div>
+      <div class="st-fg"><select class="st-sel" onchange="statPick('typeId',this.value)">${typeOpts}</select></div>
+      <div class="st-fg"><span class="st-lbl">Командировка</span>${seg('trip','',[['any','Все'],['yes','С'],['no','Без']])}</div>
+      <div class="st-fg"><span class="st-lbl">Статус</span>${seg('completed','',[['any','Все'],['yes','Завершён.'],['no','В работе']])}</div>`;
+  }
+  window.statSeg=(k,v)=>{ S[k]=v; renderFilters(); statLoad(); };
+  window.statPick=(k,v)=>{ S[k]=v; statLoad(); };
+  window.statDate=(k,v)=>{ S[k]=v; S.preset=''; renderFilters(); statLoad(); };
+  window.statPreset=(p)=>{ S.preset=p; const [f,t]=presetRange(p); S.from=f; S.to=t; renderFilters(); statLoad(); };
+
+  async function statLoad(){
+    const kp=document.getElementById('statKpis'); kp.innerHTML='<div class="st-skel" style="grid-column:1/-1"></div>';
+    try{
+      const r=await fetch('/api/planner/stats'+qs(false),{credentials:'include'}).then(r=>r.json());
+      S.rows=r.rows||[]; S.summary=r.summary||{};
+      renderKpis(); renderDonut(); renderBars(); renderTable();
+    }catch(e){ kp.innerHTML='<div class="st-empty" style="grid-column:1/-1">Не удалось загрузить статистику</div>'; }
+  }
+
+  function renderKpis(){
+    const s=S.summary;
+    const tiles=[
+      {k:'Всего работ', v:nf(s.total), u:'заявок за период'},
+      {k:'Завершено', v:nf(s.completed), u:'исполнено/закрыто', cls:'good'},
+      {k:'В работе', v:nf(s.open), u:'не завершены'},
+      {k:'С командировкой', v:nf(s.withTrip), u:`без командировки — ${nf(s.withoutTrip)}`, cls:'accent'},
+      {k:'Человеко-дней', v:nf(s.totalDays), u:'суммарно по работам'},
+    ];
+    document.getElementById('statKpis').innerHTML = tiles.map(t=>`<div class="st-kpi ${t.cls||''}"><div class="k">${t.k}</div><div class="v">${t.v}</div><div class="u">${esc(t.u)}</div></div>`).join('');
+  }
+
+  function renderDonut(){
+    const by=S.summary.byType||{};
+    let arr=Object.entries(by).sort((a,b)=>b[1]-a[1]);
+    const total=arr.reduce((s,x)=>s+x[1],0);
+    const top=arr.slice(0,3);
+    const otherN=arr.slice(3).reduce((s,x)=>s+x[1],0);
+    const segs=top.map((x,i)=>({label:x[0],n:x[1],c:PAL[i]}));
+    if(otherN>0) segs.push({label:'Прочие',n:otherN,c:PAL[3]});
+    const R=54,SW=20,C=2*Math.PI*R; let off=0;
+    const circles=segs.map(sg=>{
+      const len=total?C*sg.n/total:0; const el=`<circle cx="70" cy="70" r="${R}" fill="none" stroke="${sg.c}" stroke-width="${SW}" stroke-dasharray="${len.toFixed(2)} ${(C-len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 70 70)"/>`; off+=len; return el;
+    }).join('');
+    document.getElementById('statDonut').innerHTML = total? `<svg width="140" height="140" viewBox="0 0 140 140">${circles}<text x="70" y="64" text-anchor="middle" font-size="26" font-weight="800" fill="var(--text)" style="font-variant-numeric:tabular-nums">${nf(total)}</text><text x="70" y="84" text-anchor="middle" font-size="10" font-weight="700" fill="var(--text-3)" letter-spacing="1">РАБОТ</text></svg>` : '<div style="width:140px;height:140px"></div>';
+    document.getElementById('statLegend').innerHTML = segs.length? segs.map(sg=>`<div class="lg"><i style="background:${sg.c}"></i><span class="t">${esc(sg.label)}</span><span class="n">${nf(sg.n)}</span></div>`).join('') : '<div style="color:var(--text-3);font-size:12.5px">Нет данных</div>';
+  }
+
+  function renderBars(){
+    const byMon={};
+    S.rows.forEach(r=>{ if(!r.start_date) return; const d=new Date(r.start_date); if(isNaN(d))return; const k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; byMon[k]=(byMon[k]||0)+1; });
+    let keys=Object.keys(byMon).sort();
+    if(keys.length>12) keys=keys.slice(-12);
+    const max=Math.max(1,...keys.map(k=>byMon[k]));
+    const el=document.getElementById('statBars');
+    if(!keys.length){ el.innerHTML='<div class="st-empty" style="width:100%">Нет данных за период</div>'; return; }
+    el.innerHTML = keys.map(k=>{ const n=byMon[k]; const h=Math.max(4,Math.round(n/max*132)); const [y,m]=k.split('-'); return `<div class="st-bar" title="${MON[+m-1]} ${y}: ${n}"><div class="bv">${n}</div><div class="bb" style="height:${h}px"></div><div class="bl">${MON[+m-1]}${keys.length<=12&&m==='01'?' '+y.slice(2):''}</div></div>`; }).join('');
+  }
+
+  function renderTable(){
+    const tbl=document.getElementById('statTbl');
+    const rows=S.rows.slice(0,500);
+    document.getElementById('statCount').textContent = `${nf(S.rows.length)}${S.rows.length>500?' · показаны первые 500':''}`;
+    if(!S.rows.length){ tbl.innerHTML=''; document.querySelector('#statOverlay .st-tblwrap').insertAdjacentHTML('beforeend',''); tbl.innerHTML='<tbody><tr><td><div class="st-empty">За выбранный период работ нет</div></td></tr></tbody>'; return; }
+    const head='<thead><tr><th>Сотрудник</th><th>Тип работ</th><th>Компания</th><th>Период</th><th class="r">Дней</th><th>Командиров.</th><th>Статус</th></tr></thead>';
+    const fmtD=s=>{ if(!s)return'—'; const d=new Date(s); return isNaN(d)?'—':`${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getFullYear()).slice(2)}`; };
+    const body=rows.map(r=>{
+      let days=1; if(r.start_date&&r.end_date){ const a=new Date(r.start_date),b=new Date(r.end_date); if(!isNaN(a)&&!isNaN(b)) days=Math.max(1,Math.round((b-a)/86400000)+1); }
+      const trip = r.has_trip ? `<span class="st-trip">🧳 ${r.trip_approved?'согл.':'на согл.'}</span>` : `<span class="st-trip no">—</span>`;
+      const status = r.is_completed ? `<span class="st-pill st-done"><span class="d"></span>${r.completion==='F'?'Закрыта':'Завершена'}</span>` : `<span class="st-pill st-open"><span class="d"></span>В работе</span>`;
+      return `<tr><td><div class="nm">${esc(r.engineer_name||'—')}</div></td><td><div class="sub2" title="${esc(r.service_type_labels||'')}">${esc(r.service_type_labels||'—')}</div></td><td><div class="sub2" title="${esc(r.company_name||'')}">${esc(r.company_name||'—')}</div></td><td class="mono">${fmtD(r.start_date)} – ${fmtD(r.end_date)}</td><td class="r mono">${days}</td><td>${trip}</td><td>${status}</td></tr>`;
+    }).join('');
+    tbl.innerHTML=head+'<tbody>'+body+'</tbody>';
+  }
+
+  window.statExport = function(){
+    if(!S.rows.length){ return; }
+    const H=['Сотрудник','Тип работ','Компания','Начало','Окончание','Дней','Командировка','Согласована','Статус','Город'];
+    const line=a=>a.map(v=>{ v=String(v==null?'':v); return /[";\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }).join(';');
+    const body=S.rows.map(r=>{
+      let days=1; if(r.start_date&&r.end_date){ const a=new Date(r.start_date),b=new Date(r.end_date); if(!isNaN(a)&&!isNaN(b)) days=Math.max(1,Math.round((b-a)/86400000)+1); }
+      return line([r.engineer_name||'', r.service_type_labels||'', r.company_name||'',
+        (r.start_date||'').slice(0,10), (r.end_date||'').slice(0,10), days,
+        r.has_trip?'да':'нет', r.has_trip?(r.trip_approved?'да':'нет'):'',
+        r.is_completed?(r.completion==='F'?'закрыта':'завершена'):'в работе', r.city||'']);
+    }).join('\n');
+    const csv='﻿'+line(H)+'\n'+body;
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=`statistika_${S.from||'all'}_${S.to||''}.csv`; a.click(); URL.revokeObjectURL(a.href);
+  };
+
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&document.getElementById('statOverlay').classList.contains('open')) statClose(); });
+})();
+</script>
 <script src="/assets/cup-theme.js" defer></script>
 </body>
 </html>
