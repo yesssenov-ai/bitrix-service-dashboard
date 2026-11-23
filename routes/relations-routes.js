@@ -63,6 +63,21 @@ async function syncPlannerEvent(item, itemId, opts = {}) {
   const svcIds = Array.isArray(item.ufCrm8_1744300223) ? item.ufCrm8_1744300223 : (item.ufCrm8_1744300223 ? [item.ufCrm8_1744300223] : []);
   const companyId = parseInt(item.companyId, 10);
 
+  // «Подготовительные» заявки по типу услуг (Подбор допов 111 / Подготовка документов 402 /
+  // Чек-лист готовности 730): красим отдельным цветом (fields.prep) и при завершении
+  // (стадия исполнена/завершена/закрыта — семантика S/F) убираем из планировщика.
+  const PREP_TYPES = new Set(['111', '402', '730']);
+  const isPrep = svcIds.some(id => PREP_TYPES.has(String(id)));
+  if (isPrep) {
+    let completed = false;
+    try { completed = await isFinalStage(1058, item.categoryId, item.stageId); } catch (e) { /* не определили — не трогаем */ }
+    if (completed) {
+      try { await pool.query("DELETE FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1 AND type='trip'", [itemId]); }
+      catch (e) { console.error('Planner prep cleanup error:', e.message); }
+      return { removed: true };
+    }
+  }
+
   const ready = engineerId && startRaw && endRaw && svcIds.length && companyId;
   if (!ready) {
     // Required data isn't (or is no longer) complete — remove any previously
@@ -106,7 +121,7 @@ async function syncPlannerEvent(item, itemId, opts = {}) {
   let contractLabel = await getContractFromChain(1058, item);
   if (!contractLabel) contractLabel = await resolveCrmFieldLabel(item.ufCrm8_1732855521);
 
-  const fieldsObj = { df1: areaLabel, df2: location, df3: svcLabel, df4: instrLabel };
+  const fieldsObj = { df1: areaLabel, df2: location, df3: svcLabel, df4: instrLabel, prep: isPrep };
   const clientsArr = clientName ? [{ name: clientName, type: '' }] : [];
   const title = item.title || '';
 
@@ -284,14 +299,16 @@ async function syncTripCommand(item, itemId) {
 // the wrong moment, etc.) — this walks every Заявка на сервис and re-runs the
 // exact same sync logic, so any missed webhook is caught and fixed here
 // instead of silently staying wrong until someone notices.
-async function reconcileAllPlannerEvents() {
+async function reconcileAllPlannerEvents(force = false) {
   let start = 0, checked = 0, errors = 0, skipped = 0;
   const failedIds = [];
   // Один запрос вместо SELECT на каждую заявку: карта «bitrix_item_id → hash»
   // уже синхронизированных строк. Заявки, где инженер+даты не менялись,
   // пропускаются в syncPlannerEvent без обращения к Битриксу и БД.
+  // force=true (разовая актуализация) — пропуск по хэшу отключаем, чтобы
+  // перепроставить флаги (prep) и подчистить завершённые на ВСЕХ заявках.
   const knownHashes = new Map();
-  try {
+  if (!force) try {
     const { rows } = await pool.query(
       "SELECT bitrix_item_id, bitrix_sync_hash FROM ticketsmodule_planner_events WHERE source='bitrix' AND bitrix_item_id IS NOT NULL"
     );
@@ -642,5 +659,14 @@ async function handleBitrixWebhook(req, res) {
     console.error('Webhook handler error:', err.message);
   }
 }
+
+// Разовая актуализация планировщика по всем заявкам 1058 (админ): перекрасить
+// подготовительные (prep) и убрать завершённые. force → без пропуска по хэшу.
+// Долгая операция — запускаем в фоне, отвечаем сразу.
+router.post('/reconcile-planner', requireAuth(), async (req, res) => {
+  if (!isAdminLike(req.user.role)) return res.status(403).json({ ok: false, error: 'Только админ' });
+  reconcileAllPlannerEvents(true).catch(e => console.error('reconcile-planner (force):', e.message));
+  res.json({ ok: true, started: true });
+});
 
 module.exports = { router, handleBitrixWebhook, syncPlannerEvent, reconcileAllPlannerEvents };
