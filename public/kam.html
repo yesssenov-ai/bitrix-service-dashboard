@@ -260,6 +260,19 @@ body{background:radial-gradient(135% 72% at 100% -8%, color-mix(in srgb,var(--ac
 .anbar-fill.warn{background:linear-gradient(90deg,#d9534f,#e0726e)}
 .anbar-fill.fn-P10{background:#e8c06a}.anbar-fill.fn-P30{background:#e0a33a}.anbar-fill.fn-P60{background:#5b9f6f}.anbar-fill.fn-P80{background:#1baf7a}
 @media(max-width:900px){.an-kpis{grid-template-columns:repeat(2,1fr)}.an-grid2{grid-template-columns:1fr}}
+/* 3D-пончики */
+.an-donuts{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px}
+.dn-card{margin-bottom:0}
+.dn-wrap{display:flex;align-items:center;gap:14px}
+.donut3d{width:144px;height:96px;flex:none;filter:drop-shadow(0 7px 10px rgba(16,24,40,.2))}
+.dn-ct{text-anchor:middle;font-size:15px;font-weight:800;fill:var(--text);font-variant-numeric:tabular-nums}
+.dn-cb{text-anchor:middle;font-size:8px;font-weight:600;fill:var(--text-3);text-transform:uppercase;letter-spacing:.04em}
+.dn-legend{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.dn-lg{display:flex;align-items:center;gap:7px;font-size:11.5px}
+.dn-sw{width:10px;height:10px;border-radius:3px;flex:none}
+.dn-ln{color:var(--text-2);font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.dn-lv{color:var(--text-3);font-weight:600;flex:none;font-variant-numeric:tabular-nums}
+@media(max-width:1100px){.an-donuts{grid-template-columns:1fr}.dn-wrap{flex-direction:row}}
 </style>
 </head>
 <body>
@@ -881,6 +894,30 @@ function selectStage(card){
   box.innerHTML=ds.length?`<div class="pdeals" style="display:block">${dealsBlock(ds)}</div>`:'<div class="empty">Нет сделок на этой стадии</div>';
 }
 // ── Вкладка «Аналитика» (акцент на Key Account Management) ───────────────────
+function shade(hex,amt){ const h=hex.replace('#',''); const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);
+  const f=x=>Math.max(0,Math.min(255,Math.round(x+amt))); return '#'+[f(r),f(g),f(b)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+// Псевдо-3D пончик: наклон (scaleY) + «толщина» (тёмная копия со сдвигом вниз).
+function donut3d(segments,cTop,cBot){
+  const total=segments.reduce((a,s)=>a+s.value,0)||1;
+  const cx=70,cy=50,R=50,r=28,depth=15;
+  const arc=(aS,aE,col)=>{ const large=(aE-aS)>Math.PI?1:0;
+    const p=(ra,an)=>[(cx+ra*Math.cos(an)).toFixed(1),(cy+ra*Math.sin(an)).toFixed(1)];
+    const A=p(R,aS),B=p(R,aE),C=p(r,aE),D=p(r,aS);
+    return `<path d="M${A[0]} ${A[1]}A${R} ${R} 0 ${large} 1 ${B[0]} ${B[1]}L${C[0]} ${C[1]}A${r} ${r} 0 ${large} 0 ${D[0]} ${D[1]}Z" fill="${col}"/>`; };
+  const segs=segments.filter(s=>s.value>0); let tops='',walls='',ac=-Math.PI/2;
+  segs.forEach(s=>{ const a1=ac+s.value/total*2*Math.PI; tops+=arc(ac,a1,s.color); walls+=arc(ac,a1,shade(s.color,-42)); ac=a1; });
+  const tilt=`translate(${cx} ${cy}) scale(1 0.58) translate(${-cx} ${-cy})`;
+  return `<svg class="donut3d" viewBox="0 0 140 94" aria-hidden="true">
+    <g transform="translate(0 ${depth})"><g transform="${tilt}">${walls}</g></g>
+    <g transform="${tilt}">${tops}</g>
+    <text x="${cx}" y="${cy-1}" class="dn-ct">${cTop}</text><text x="${cx}" y="${cy+12}" class="dn-cb">${cBot}</text></svg>`;
+}
+function donutCard(title,sub,segments,cTop,cBot){
+  const total=segments.reduce((a,s)=>a+s.value,0)||1;
+  const leg=segments.map(s=>`<div class="dn-lg"><span class="dn-sw" style="background:${s.color}"></span><span class="dn-ln">${esc(s.label)}</span><span class="dn-lv">${s.valMln} млн · ${Math.round(s.value/total*100)}%</span></div>`).join('');
+  return `<div class="an-sec dn-card"><div class="an-h">${title}${sub?`<span class="an-sub">${sub}</span>`:''}</div>
+    <div class="dn-wrap">${donut3d(segments,cTop,cBot)}<div class="dn-legend">${leg}</div></div></div>`;
+}
 function anBar(name, mln, max, sub, cls){
   const pct=max>0?Math.max(2,Math.round(mln/max*100)):0;
   return `<div class="anbar"><div class="anbar-top"><span class="anbar-n" title="${esc(name)}">${esc(name)}</span><span class="anbar-v">${mln} млн${sub?' · '+sub:''}</span></div><div class="anbar-track"><div class="anbar-fill ${cls||''}" style="width:${pct}%"></div></div></div>`;
@@ -902,6 +939,20 @@ async function renderAnalytics(){
       ${kpi(k.winRate+'<small style="font-size:13px">%</small>','Win-rate')}
       ${kpi(k.avgMln+'<small style="font-size:12px"> млн</small>','Средний чек')}
     </div>
+    ${(()=>{ const b=a.book||{preMln:0,postMln:0,failMln:0}; const cov=a.coverage||{assignedMln:0,unassignedMln:0};
+      const CAT=['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4']; const top5=(a.byDept||[]).slice(0,5); const rest=(a.byDept||[]).slice(5);
+      const deptSegs=top5.map((d,i)=>({label:d.name,value:d.sumMln,valMln:d.sumMln,color:CAT[i]}));
+      if(rest.length){ const rs=rest.reduce((s,d)=>s+d.sumMln,0); if(rs>0)deptSegs.push({label:'Прочее',value:rs,valMln:rs,color:'#9aa3b3'}); }
+      return `<div class="an-donuts">
+        ${donutCard('Структура книги','до / после / провал',[
+          {label:'До контракта',value:b.preMln,valMln:b.preMln,color:'#2a78d6'},
+          {label:'После контракта',value:b.postMln,valMln:b.postMln,color:'#1baf7a'},
+          {label:'Провал',value:b.failMln,valMln:b.failMln,color:'#e34948'}], (b.preMln+b.postMln+b.failMln), 'млн ₸')}
+        ${donutCard('Покрытие КАМ','пайплайн: с КАМом / без',[
+          {label:'С КАМом',value:cov.assignedMln,valMln:cov.assignedMln,color:'#0ca30c'},
+          {label:'Без КАМа',value:cov.unassignedMln,valMln:cov.unassignedMln,color:'#d03b3b'}], k.coveragePct+'%','покрытие')}
+        ${deptSegs.length?donutCard('По отделам','доля пайплайна',deptSegs, deptSegs.reduce((s,x)=>s+x.value,0), 'млн ₸'):'<div class="an-sec dn-card"><div class="an-h">По отделам</div><div class="empty">—</div></div>'}
+      </div>`; })()}
     <div class="an-grid2">
       <div class="an-sec"><div class="an-h">Воронка по вероятности<span class="an-sub">взвешенный прогноз = сумма × вероятность стадии</span></div>
         ${a.funnel.map(f=>anBar(f.step+' · '+f.prob+'%', f.sumMln, mx(a.funnel), f.count+' сд.', 'fn-'+f.step)).join('')}

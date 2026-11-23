@@ -746,8 +746,10 @@ async function getAnalytics(scope) {
     .sort((a, b) => b.sum - a.sum);
 
   // Покрытие ключевых клиентов КАМами + «белые пятна» (без КАМа, но с пайплайном)
-  const assignedCos = comps.filter(c => c.kamBid != null).length;
-  const coverage = { companies: comps.length, assigned: assignedCos, unassigned: comps.length - assignedCos, pct: comps.length ? Math.round(assignedCos / comps.length * 100) : 0 };
+  const assignedCos = comps.filter(c => c.kamBid != null);
+  const assignedPre = assignedCos.reduce((a, c) => a + c.pre, 0);
+  const unassignedPre = comps.filter(c => c.kamBid == null).reduce((a, c) => a + c.pre, 0);
+  const coverage = { companies: comps.length, assigned: assignedCos.length, unassigned: comps.length - assignedCos.length, pct: comps.length ? Math.round(assignedCos.length / comps.length * 100) : 0, assignedMln: mln(assignedPre), unassignedMln: mln(unassignedPre) };
   const topUnassigned = comps.filter(c => c.kamBid == null && c.pre > 0).sort((a, b) => b.pre - a.pre).slice(0, 10)
     .map(c => ({ name: c.name, group: c.group === 'Без группы' ? '' : c.group, sumMln: mln(c.pre), count: c.preCnt }));
 
@@ -771,6 +773,7 @@ async function getAnalytics(scope) {
       pipelineMln: mln(preSum), weightedMln: mln(weighted), wonMln: mln(postSum),
       winRate: (postCnt + failCnt) > 0 ? Math.round(postCnt / (postCnt + failCnt) * 100) : 0, avgMln: mln(preCnt ? preSum / preCnt : 0),
     },
+    book: { preMln: mln(preSum), postMln: mln(postSum), failMln: mln(failSum) },
     funnel: ['P10', 'P30', 'P60', 'P80'].map(k => ({ step: k, count: funnel[k].c, sumMln: mln(funnel[k].s), prob: STAGE_PROB[k] * 100 })),
     byKam, coverage, topUnassigned, topAccounts, byGroup,
     byDept: toArr(byDept).slice(0, 12),
