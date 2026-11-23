@@ -16,6 +16,11 @@ const {
   getContractFromChain, getRootDealManager, fmtDateOnly, fmtLocalNaive, wasRecentlyDeleted,
 } = require('../bitrix-lookups');
 
+const serviceStats = require('../service-stats');
+// Стадии командировки (1074), которые считаем «согласована» — для зеркала
+// статистики (то же множество, что в planner-routes для цвета бара).
+const STATS_TRIP_APPROVED = new Set(['DT1074_15:CLIENT', 'DT1074_15:1', 'DT1074_15:2', 'DT1074_15:3', 'DT1074_15:SUCCESS']);
+
 setMgrNotifyPool(pool);
 
 // Колонки связи «заявка 1058 → командировка 1074» в событии планировщика
@@ -68,6 +73,10 @@ async function syncPlannerEvent(item, itemId, opts = {}) {
   // (стадия исполнена/завершена/закрыта — семантика S/F) убираем из планировщика.
   const PREP_TYPES = new Set(['111', '402', '730']);
   const isPrep = svcIds.some(id => PREP_TYPES.has(String(id)));
+  // «Заявка клиента» (УС 619): по умолчанию коричневый бар; но если по ней
+  // оформлена командировка — красится как обычный выезд (светло-/тёмно-зелёный
+  // по согласованию командировки). Логика цвета — на фронте по fields.clientReq.
+  const isClientReq = svcIds.some(id => String(id) === '619');
   if (isPrep) {
     let completed = false;
     // isFinalStage ходит в Битрикс за семантикой стадии; через туннель один
@@ -130,7 +139,7 @@ async function syncPlannerEvent(item, itemId, opts = {}) {
   let contractLabel = await getContractFromChain(1058, item);
   if (!contractLabel) contractLabel = await resolveCrmFieldLabel(item.ufCrm8_1732855521);
 
-  const fieldsObj = { df1: areaLabel, df2: location, df3: svcLabel, df4: instrLabel, prep: isPrep };
+  const fieldsObj = { df1: areaLabel, df2: location, df3: svcLabel, df4: instrLabel, prep: isPrep, clientReq: isClientReq };
   const clientsArr = clientName ? [{ name: clientName, type: '' }] : [];
   const title = item.title || '';
 
@@ -347,6 +356,8 @@ async function reconcileAllPlannerEvents(force = false) {
       const result = await syncPlannerEvent(item, item.id, { silent: true, knownHashes });
       if (result && result.ok === false) { errors++; failedIds.push(item.id); }
       else if (result && result.skipped) { skipped++; }
+      // Зеркало статистики: все заявки (любой тип, завершённые и нет), не только «готовые».
+      try { await serviceStats.upsertFromItem(item, item.id); } catch (e) {}
     }
     if (next === undefined || items.length < 50) break;
     start = next;
@@ -402,7 +413,11 @@ async function reconcileAllPlannerEvents(force = false) {
     while (true) {
       const resp = await b24('crm.item.list', { entityTypeId: 1074, select: ['*', 'uf_*'], order: { id: 'asc' }, start: s4 });
       const list = resp.result?.items || [];
-      for (const it of list) { try { await syncTripCommand(it, it.id); tc++; } catch (e) {} }
+      for (const it of list) {
+        try { await syncTripCommand(it, it.id); tc++; } catch (e) {}
+        // Зеркало статистики: отметить у заявки наличие/согласование командировки.
+        try { if (it.parentId1058) await serviceStats.markTrip(it.parentId1058, STATS_TRIP_APPROVED.has(it.stageId)); } catch (e) {}
+      }
       if (resp.next === undefined || list.length < 50) break; s4 = resp.next;
     }
   } catch (e) { console.error('reconcile commands:', e.message); }
@@ -601,6 +616,7 @@ async function handleBitrixWebhook(req, res) {
     // ── Case 0: Sync into the planner (Заявка на сервис only) ──────────────
     if (entityTypeId === 1058) {
       await syncPlannerEvent(item, itemId);
+      try { await serviceStats.upsertFromItem(item, itemId); } catch (e) {} // зеркало статистики
       // Авто-создание закупки из завершённого «подбора допов» (best-effort, с дедупом)
       try { const { autoCreateFromService } = require('../procurement-calc'); await autoCreateFromService(itemId); }
       catch (e) { console.error('procurement auto-create error:', e.message); }
@@ -612,6 +628,7 @@ async function handleBitrixWebhook(req, res) {
     // ── Командировка (1074) → планировщик (дедуп по parentId1058) ───────────
     if (entityTypeId === 1074) {
       try { await syncTripCommand(item, itemId); } catch (e) { console.error('trip command planner sync:', e.message); }
+      try { if (item.parentId1058) await serviceStats.markTrip(item.parentId1058, STATS_TRIP_APPROVED.has(item.stageId)); } catch (e) {} // зеркало статистики
     }
 
     // ── Case 1: Engineer assigned (only for Заявка на сервис, 1058) ────────────

@@ -463,6 +463,7 @@ document.documentElement.style.setProperty('--row-h', ROW_H + 'px');
 const ET = {
   trip:         {label:'Командировка',           icon:'✈️', bg:'#f5c842', fg:'#4a3500', bd:'#d4a800'},
   prep:         {label:'Подготовка (доки/допы/чек-лист)', icon:'📋', bg:'#fde047', fg:'#713f12', bd:'#ca8a04'},
+  client_req:   {label:'Заявка клиента',          icon:'📨', bg:'#8d5a2b', fg:'#fff',    bd:'#6e4420'},
   trip_pending: {label:'Командировка (на согл.)', icon:'✈️', bg:'#8ad3ab', fg:'#154028', bd:'#57bd89'},
   trip_confirm: {label:'Командировка (согл.)',   icon:'✈️', bg:'#16a37a', fg:'#ffffff', bd:'#0e7d5c'},
   command:      {label:'Командировка',           icon:'🧳', bg:'#8ad3ab', fg:'#154028', bd:'#57bd89'},
@@ -789,18 +790,34 @@ function initials(n){ return n.split(' ').slice(0,2).map(w=>w[0]).join(''); }
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // ── Init ───────────────────────────────────────────────────────
-let myRole = 'viewer';
-// Capability flags derived from the role (backend is the real gate; these just
-// avoid showing dead buttons). Edit: everyone except viewer (engineer is
-// own-only, enforced server-side). Delete: admin/coordinator only. Config
-// (Управление / Data Fields / staff sync): admin/coordinator only.
-let canEditRole = false, canDeleteRole = false, canConfigRole = false;
+let myRole = 'viewer', myName = '';
+// Права в планировщике. Бэкенд — главный гейт; тут только прячем мёртвые кнопки
+// и решаем видимость поэлементно. Создавать/править может ЛЮБАЯ роль, но «по
+// своим» (бэкенд ограничивает владельцем); руководитель отдела — по своему
+// отделу; управляющие роли — любое. Удаление: управляющие — любое; остальные —
+// только РУЧНЫЕ события ЦУП (синхронизированные с Битриксом вернутся при сверке).
+const PLANNER_MGMT_ROLES = ['admin','superadmin','manager','logist','coordinator'];
+let canEditRole = false, canDeleteRole = false, canConfigRole = false, isMgmt = false;
+function isHeadRole() { return /_head$/.test(myRole); }
+// Можно ли управлять (править) конкретным событием.
+function canManageEv(ev) {
+  if (isMgmt) return true;
+  if (myName && ev && ev.resource === myName) return true; // своё (по имени)
+  if (isHeadRole()) return true;                           // рук-ль отдела (отдел проверит бэкенд)
+  return false;
+}
+// Можно ли удалить конкретное событие (обычным ролям — только ручные).
+function canDeleteEv(ev) {
+  if (isMgmt) return true;
+  if (!ev || ev.bitrixItemId) return false; // синхронизированные — нельзя (вернутся при сверке)
+  return canManageEv(ev);
+}
 function applyRoleCaps() {
-  canEditRole   = ['admin','superadmin','manager','logist','coordinator','engineer','service'].includes(myRole);
-  canDeleteRole = ['admin','superadmin','coordinator'].includes(myRole);
+  isMgmt        = PLANNER_MGMT_ROLES.includes(myRole);
+  canEditRole   = true; // создавать/править — любая роль; бэкенд ограничивает «своим»
+  canDeleteRole = true; // видимость кнопки удаления — поэлементно (canDeleteEv)
   canConfigRole = ['admin','superadmin','coordinator'].includes(myRole);
   const hide = (sel) => { const el = document.querySelector(sel); if (el) el.style.display = 'none'; };
-  if (!canEditRole)   hide('button[onclick="openNew()"]');       // + Событие
   if (!canConfigRole) hide('button[onclick="openAdmin()"]');     // Управление
   if (!canConfigRole) hide('button[onclick="openDF()"]');        // Data Fields
 }
@@ -810,6 +827,7 @@ async function initAuth() {
     if (!r.ok) { window.location.href='/login.html'; return; }
     const d = await r.json();
     myRole = d.user.role;
+    myName = d.user.engineerName || '';
     applyRoleCaps();
     document.getElementById('uName').textContent = d.user.displayName + (myRole==='admin' ? ' · админ' : '');
   } catch(e) { window.location.href='/login.html'; }
@@ -1283,6 +1301,7 @@ function renderEvents() {
     let evType = ev.type;
     if (ev.type==='trip' && (ev.fields||{}).prep) evType = 'prep';   // Подготовка допов/документов/чек-листа → жёлтый
     else if (ev.type==='trip' && ev.commandItemId) evType = ev.commandApproved ? 'trip_confirm' : 'trip_pending';
+    else if (ev.type==='trip' && (ev.fields||{}).clientReq) evType = 'client_req';   // Заявка клиента без командировки → коричневый
     else if (ev.type==='trip' && ev.bitrixItemId) evType = ev.tripApproved ? 'trip_confirm' : 'trip_pending';
     else if (ev.type==='trip' && ev.confirmed) evType = 'trip_confirm';
     else if (ev.type==='command') evType = ev.tripApproved ? 'trip_confirm' : 'command';
@@ -1312,7 +1331,7 @@ function renderEvents() {
     block.addEventListener('mousemove', e2=>moveTip(e2));
     block.addEventListener('click', e2=>{e2.stopPropagation();hideTip();openEdit(ev.id);});
     block.addEventListener('mousedown', e2=>{
-      if(!canEditRole) return; // viewer: no move/resize (click still opens read-only detail)
+      if(!canManageEv(ev)) return; // двигать/растягивать можно только своё (клик для просмотра работает всегда)
       if(e2.target.classList.contains('ev-rsz')){e2.stopPropagation();startResize(e2,ev.id);}
       else{e2.stopPropagation();startDrag(e2,ev.id);}
     });
@@ -1554,17 +1573,18 @@ function openEdit(id){
   // Отдельная командировка (1074) — открываем её карточку в модуле Командировок.
   if(ev.type==='command' && ev.bitrixItemId){ location.href='/trips.html?id='+ev.bitrixItemId; return; }
   curType=ev.type||'trip';
-  document.getElementById('pTitle').textContent = canEditRole ? 'Редактировать событие' : 'Событие';
-  // Delete only for admin/coordinator; Save only for roles that may edit
-  // (backend still enforces engineer own-only). Viewer sees neither — read only.
+  const mayManage = canManageEv(ev);
+  document.getElementById('pTitle').textContent = mayManage ? 'Редактировать событие' : 'Событие';
+  // Кнопки — по правам на КОНКРЕТНОЕ событие: править своё/своего отдела/любое
+  // (управляющие); удалять — свои ручные (управляющие — любое). Иначе только просмотр.
   let acts='';
-  if (canDeleteRole) acts += `<button class="pb pb-del" onclick="deleteEv()">Удалить</button>`;
+  if (canDeleteEv(ev)) acts += `<button class="pb pb-del" onclick="deleteEv()">Удалить</button>`;
   // У выезда уже оформлена командировка → кнопка открыть её; иначе — оформить.
-  if (canEditRole && ev.type==='trip' && ev.commandItemId)
+  if (mayManage && ev.type==='trip' && ev.commandItemId)
     acts += `<button class="pb" style="background:linear-gradient(180deg,#19b185,#16a37a);color:#fff" onclick="location.href='/trips.html?id=${ev.commandItemId}'">Открыть командировку</button>`;
-  else if (canEditRole && (ev.type==='trip'||ev.type==='train'))
+  else if (mayManage && (ev.type==='trip'||ev.type==='train'))
     acts += `<button class="pb" style="background:linear-gradient(180deg,#19b185,#16a37a);color:#fff" onclick="goCreateTrip()">Оформить командировку</button>`;
-  if (canEditRole)   acts += `<button class="pb pb-save" onclick="saveEv()">Сохранить</button>`;
+  if (mayManage)   acts += `<button class="pb pb-save" onclick="saveEv()">Сохранить</button>`;
   document.getElementById('pActs').innerHTML=acts;
   renderForm(ev);
   document.getElementById('overlay').style.display='flex';
@@ -1849,9 +1869,9 @@ async function saveEv(){
   closePanel(); buildStickyRows(); renderEvents();
 }
 async function deleteEv(){
-  if(!canDeleteRole) return; // only admin/coordinator; backend also enforces
   if(!editId) return;
   const ev = events.find(e=>e.id===editId);
+  if(!canDeleteEv(ev)) return; // поэлементный гейт (бэкенд тоже проверяет)
   if (ev?.bitrixItemId) {
     const ok = confirm('Это событие связано с заявкой в Bitrix. Пока там стоит инженер и даты — оно появится здесь снова само (в течение 10 минут или раньше). Чтобы убрать насовсем, измените заявку в Bitrix. Всё равно удалить сейчас?');
     if (!ok) return;
@@ -1946,6 +1966,7 @@ let adminDepts = defaultAdminDepts();
 const EVENT_COLORS = {
   trip:         { label:'Командировка (не подтв.)', color:'#f5c842' },
   prep:         { label:'Подготовка (доки/допы/чек-лист)', color:'#fde047' },
+  client_req:   { label:'Заявка клиента',           color:'#8d5a2b' },
   trip_confirm: { label:'Командировка (подтв.)',    color:'#4caf7d' },
   leave:        { label:'Отпуск',                   color:'#64b5e8' },
   train:        { label:'Обучение',                 color:'#8B6547' },

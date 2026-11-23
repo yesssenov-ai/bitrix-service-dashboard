@@ -14,6 +14,65 @@ const { notifyJobAssigned } = require('../manager-notifications');
 const TZ = 'Asia/Almaty';
 const crypto = require('crypto');
 const { USERS } = require('../constants');
+const { EMPLOYEE_DEPT } = require('../dept-map');
+const serviceStats = require('../service-stats');
+
+// Разрешённые для отчёта инженеры по роли: управляющие — все (null);
+// руководитель отдела — свой отдел; остальные — только он сам.
+function allowedEngineersFor(user) {
+  if (isPlannerMgmt(user)) return null;
+  const myBid = userBitrixId(user);
+  if (!myBid) return new Set();
+  if (String(user.role || '').endsWith('_head')) {
+    const myDept = EMPLOYEE_DEPT[myBid];
+    const set = new Set([myBid]);
+    if (myDept) for (const [b, d] of Object.entries(EMPLOYEE_DEPT)) if (d === myDept) set.add(parseInt(b, 10));
+    return set;
+  }
+  return new Set([myBid]);
+}
+
+// Bitrix-id пользователя ЦУП: из поля bitrix_user_id, иначе по имени из USERS.
+function userBitrixId(user) {
+  if (!user) return null;
+  if (user.bitrix_user_id) return parseInt(user.bitrix_user_id, 10);
+  const nm = user.engineer_name || user.display_name;
+  if (nm) { const f = Object.entries(USERS).find(([, n]) => n === nm); if (f) return parseInt(f[0], 10); }
+  return null;
+}
+
+// Управляющие роли планировщика — видят и правят любое событие.
+const PLANNER_MGMT_ROLES = ['admin', 'superadmin', 'manager', 'logist', 'coordinator'];
+function isPlannerMgmt(user) { return !!user && PLANNER_MGMT_ROLES.includes(user.role); }
+
+// Право создавать / править / удалять событие планировщика.
+// • Управляющие роли — любое событие.
+// • Любая другая роль — только «своё» событие (владелец = сам пользователь,
+//   сверяем по имени инженера и по Bitrix-id ответственного).
+// • Руководитель отдела (роль оканчивается на «_head», напр. sales_head) —
+//   события сотрудников своего отдела (по карте EMPLOYEE_DEPT).
+// owner = { engineer:<имя-ресурса>, assignedById:<bitrix-id владельца> }.
+function canManagePlannerEvent(user, owner) {
+  if (!user) return false;
+  if (isPlannerMgmt(user)) return true;
+  const myBid = userBitrixId(user);
+  const ownerName = owner && owner.engineer;
+  const ownerBid = owner && owner.assignedById ? parseInt(owner.assignedById, 10) : null;
+  // своё событие
+  if (user.engineer_name && ownerName && ownerName === user.engineer_name) return true;
+  if (myBid && ownerBid && myBid === ownerBid) return true;
+  // руководитель отдела — события своего отдела
+  if (myBid && String(user.role || '').endsWith('_head')) {
+    const myDept = EMPLOYEE_DEPT[myBid];
+    let ownerDept = ownerBid ? EMPLOYEE_DEPT[ownerBid] : null;
+    if (!ownerDept && ownerName) {
+      const f = Object.entries(USERS).find(([, n]) => n === ownerName);
+      if (f) ownerDept = EMPLOYEE_DEPT[parseInt(f[0], 10)];
+    }
+    if (myDept && ownerDept && myDept === ownerDept) return true;
+  }
+  return false;
+}
 
 // Fingerprint of {engineerId, start, end} — used on both sides of the sync
 // to tell a genuine external Bitrix change apart from Bitrix simply echoing
@@ -154,10 +213,10 @@ router.post('/events', requireAuth(), async (req, res) => {
   const { resource, title, type, start, end, allDay, confirmed, note, fields, clients, coAssignees } = req.body;
   if (!resource || !start || !end) return res.status(400).json({ error: 'resource, start, end are required' });
 
-  // Role gate: viewer — none; engineer — only events assigned to themselves;
-  // admin/manager/logist/coordinator — any. The new event's owner is `resource`.
+  // Право: управляющие роли — любое событие; остальные — только «своё»
+  // (владелец = сам); руководитель отдела — события своего отдела.
   const ownerObj = { engineer: resource, assignedById: await resolveBitrixUserId(resource) };
-  if (!canEdit(req.user, ownerObj)) return res.status(403).json({ error: 'Недостаточно прав' });
+  if (!canManagePlannerEvent(req.user, ownerObj)) return res.status(403).json({ error: 'Недостаточно прав' });
 
   const client = await pool.connect();
   try {
@@ -362,10 +421,10 @@ router.put('/events/:id', requireAuth(), async (req, res) => {
     const bitrixItemId = existingRows[0].bitrix_item_id;
     const oldRow = existingRows[0];
 
-    // Role gate: enforce against the EXISTING event's owner (engineer may only
-    // edit their own; viewer none; management any).
+    // Право проверяем по ВЛАДЕЛЬЦУ существующего события: своё — любому;
+    // чужое своего отдела — руководителю; любое — управляющим ролям.
     const ownerObj = { engineer: oldRow.resource, assignedById: await resolveBitrixUserId(oldRow.resource) };
-    if (!canEdit(req.user, ownerObj)) { await client.query('ROLLBACK'); return res.status(403).json({ error: 'Недостаточно прав' }); }
+    if (!canManagePlannerEvent(req.user, ownerObj)) { await client.query('ROLLBACK'); return res.status(403).json({ error: 'Недостаточно прав' }); }
 
     await client.query(
       `UPDATE ticketsmodule_planner_events
@@ -436,11 +495,20 @@ router.put('/events/:id', requireAuth(), async (req, res) => {
 
 // ── DELETE /api/planner/events/:id — removes just this one instance ───────
 router.delete('/events/:id', requireAuth(), async (req, res) => {
-  // Deleting in Планировщик is limited to admin and coordinator (this is the
-  // coordinator's module). Every delete is written to the audit log.
-  if (!canDelete(req.user, 'PLN')) return res.status(403).json({ error: 'Недостаточно прав' });
+  // Удаление: своё событие — любой роли; событие своего отдела — руководителю
+  // отдела; любое — управляющим ролям. Каждое удаление пишется в аудит-лог.
   try {
-    const { rows } = await pool.query('SELECT bitrix_item_id FROM ticketsmodule_planner_events WHERE id=$1', [req.params.id]);
+    const { rows } = await pool.query('SELECT bitrix_item_id, resource FROM ticketsmodule_planner_events WHERE id=$1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    const ownerObj = { engineer: rows[0].resource, assignedById: await resolveBitrixUserId(rows[0].resource) };
+    if (!canManagePlannerEvent(req.user, ownerObj)) return res.status(403).json({ error: 'Недостаточно прав' });
+    // Обычные роли (не управляющие) удаляют только РУЧНЫЕ события ЦУП. Событие,
+    // синхронизированное из Битрикса (есть bitrix_item_id), всё равно вернётся
+    // при следующей сверке — поэтому таким ролям его удалять не даём (и кнопки
+    // на фронте нет). Чистить такой выезд нужно в самой заявке Битрикса.
+    if (!isPlannerMgmt(req.user) && rows[0].bitrix_item_id) {
+      return res.status(403).json({ error: 'Синхронизированные с Битриксом события так не удаляются — закройте/удалите заявку в Битриксе.' });
+    }
     await pool.query('DELETE FROM ticketsmodule_planner_events WHERE id=$1', [req.params.id]);
     if (rows[0]?.bitrix_item_id) markRecentlyDeleted(rows[0].bitrix_item_id);
     const ip = req.headers['x-forwarded-for'] || req.ip;
@@ -1396,6 +1464,35 @@ router.get('/iblock-probe', requireAuth(), requirePlannerAdmin, async (req, res)
     out[k] = v;
   });
   res.json(out);
+});
+
+// ── Статистика по сервисным заявкам (зеркало 1058) для модуля «Отчёты» ───────
+// Фильтры (query): from, to (YYYY-MM-DD), engineers=id,id, types=id,id,
+// completed=yes|no, trip=yes|no, tripApproved=yes|no. Скоуп по роли (свои/отдел/все).
+router.get('/stats', requireAuth(), async (req, res) => {
+  try {
+    const q = req.query || {};
+    const parseIds = v => String(v || '').split(',').map(s => parseInt(s, 10)).filter(Boolean);
+    const pick = v => (['yes', 'no'].includes(v) ? v : 'any');
+    const filters = {
+      from: q.from || null,
+      to: q.to || null,
+      engineerIds: parseIds(q.engineers),
+      serviceTypeIds: parseIds(q.types),
+      completed: pick(q.completed),
+      hasTrip: pick(q.trip),
+      tripApproved: pick(q.tripApproved),
+    };
+    const out = await serviceStats.query(filters, allowedEngineersFor(req.user));
+    res.set('Cache-Control', 'no-store');
+    res.json({ ok: true, ...out });
+  } catch (e) { console.error('GET /planner/stats:', e.message); res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// Справочник типов услуг (УС) для фильтра отчёта.
+router.get('/stats/service-types', requireAuth(), (req, res) => {
+  const { SERVICE_TYPE_MAP } = require('../bitrix-lookups');
+  res.json({ ok: true, types: Object.entries(SERVICE_TYPE_MAP).map(([id, label]) => ({ id: Number(id), label })) });
 });
 
 module.exports = { router, rowToEvent, SELECT_COLS, TZ, syncStaffFromBitrix, fetchAllActiveUsers, computeSyncHash, resolveBitrixUserId };
