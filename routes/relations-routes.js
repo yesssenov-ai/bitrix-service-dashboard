@@ -70,7 +70,16 @@ async function syncPlannerEvent(item, itemId, opts = {}) {
   const isPrep = svcIds.some(id => PREP_TYPES.has(String(id)));
   if (isPrep) {
     let completed = false;
-    try { completed = await isFinalStage(1058, item.categoryId, item.stageId); } catch (e) { /* не определили — не трогаем */ }
+    // isFinalStage ходит в Битрикс за семантикой стадии; через туннель один
+    // «холодный» вызов может зависнуть и застопорить всю последовательную сверку.
+    // Ограничиваем по времени: не определили за 8с → считаем «не завершена»
+    // (бар останется, перекрасится в prep), чтобы проход не вставал.
+    try {
+      completed = await Promise.race([
+        isFinalStage(1058, item.categoryId, item.stageId),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('isFinalStage timeout')), 8000)),
+      ]);
+    } catch (e) { /* таймаут/ошибка — не трогаем, считаем не завершённой */ }
     if (completed) {
       try { await pool.query("DELETE FROM ticketsmodule_planner_events WHERE bitrix_item_id=$1 AND type='trip'", [itemId]); }
       catch (e) { console.error('Planner prep cleanup error:', e.message); }
@@ -667,6 +676,27 @@ router.post('/reconcile-planner', requireAuth(), async (req, res) => {
   if (!isAdminLike(req.user.role)) return res.status(403).json({ ok: false, error: 'Только админ' });
   reconcileAllPlannerEvents(true).catch(e => console.error('reconcile-planner (force):', e.message));
   res.json({ ok: true, started: true });
+});
+
+// Точечная сверка планировщика по списку заявок 1058 (админ). Полный путь
+// (без пропуска по хэшу) → гарантированно перепроставляет prep/убирает
+// завершённые на указанных заявках, не дожидаясь полного прохода по всем.
+// Тело: { ids:[1858,1859,...] }. Возвращает результат по каждой заявке —
+// одновременно и бэкофилл, и диагностика (видно ok/removed/ошибку).
+router.post('/sync-items', requireAuth(), express.json(), async (req, res) => {
+  if (!isAdminLike(req.user.role)) return res.status(403).json({ ok: false, error: 'Только админ' });
+  const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids.map(Number).filter(Boolean) : [];
+  if (!ids.length) return res.status(400).json({ ok: false, error: 'Нужен ids:[...]' });
+  const out = [];
+  for (const id of ids) {
+    try {
+      const item = await getItem(1058, id);
+      if (!item) { out.push({ id, error: 'не найдена' }); continue; }
+      const r = await syncPlannerEvent(item, id); // полный путь, без knownHashes
+      out.push({ id, result: r || { ok: true } });
+    } catch (e) { out.push({ id, error: e.message }); }
+  }
+  res.json({ ok: true, out });
 });
 
 module.exports = { router, handleBitrixWebhook, syncPlannerEvent, reconcileAllPlannerEvents };
