@@ -77,6 +77,25 @@
   try { fetch('/auth/me').then(function (r) { return r.json(); }).then(function (d) { var role = (d && d.user && d.user.role) || ''; isAdmin = (role === 'admin' || role === 'superadmin'); build(); }).catch(function () {}); } catch (e) {}
   [150, 500, 1200, 2500, 4000].forEach(function (t) { setTimeout(build, t); });
   window.addEventListener('resize', function () { var b = document.getElementById('pls-toolbar'); if (b) align(b); });
+  // Когда открыт правый слайд-овер или полноэкранная модалка (фикс., поверх шапки) —
+  // прячем док, чтобы иконки не наезжали на кнопки панели (регрессия от прижатия вправо).
+  function rightOverlayOpen() {
+    try {
+      var dock = document.getElementById('pls-toolbar'); var vw = innerWidth, vh = innerHeight;
+      var els = document.body ? document.body.children : [];
+      for (var i = 0; i < els.length; i++) {
+        var e = els[i]; if (!e || e === dock || e.id === 'pls-toolbar') continue;
+        var cs = getComputedStyle(e);
+        if (cs.position !== 'fixed' || cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') continue;
+        if ((parseInt(cs.zIndex, 10) || 0) < 40) continue;
+        var r = e.getBoundingClientRect();
+        if (r.height < vh * 0.6 || r.width < 60) continue;        // не оверлей
+        if (r.top <= 72 && r.right >= vw - 4) return true;         // правая панель/модалка поверх шапки
+      }
+    } catch (x) {}
+    return false;
+  }
+  setInterval(function () { var b = document.getElementById('pls-toolbar'); if (b) b.style.visibility = rightOverlayOpen() ? 'hidden' : ''; }, 500);
 })();
 
 /* cup-mobile.js — мобильный app-shell ЦУП (модель Analytical Network Control Panel).
