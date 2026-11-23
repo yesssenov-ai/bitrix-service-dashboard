@@ -146,12 +146,12 @@ router.get('/stock/min', requireAuth(VIEW), async (req, res) => {
 });
 router.post('/stock/min', requireAuth(VIEW), express.json(), async (req, res) => {
   try {
-    if (!['admin', 'superadmin', 'coordinator'].includes(req.user.role)) return res.status(403).json({ error: 'Только для админа/координатора' });
+    if (!['admin', 'superadmin', 'coordinator', 'store'].includes(req.user.role)) return res.status(403).json({ error: 'Только для админа/координатора/менеджера склада' });
     const b = req.body || {}; const calc = require('../finance-stock-calc');
     const uname = req.user && req.user.username;
     let out;
     if (b.codes != null) out = await calc.bulkMinStock(b.codes, uname);
-    else out = await calc.setMinStock(b.itemCode, b.on !== false, { name: b.name, minQty: b.minQty, note: b.note }, uname);
+    else out = await calc.setMinStock(b.itemCode, b.on !== false, { name: b.name, minQty: b.minQty, note: b.note, thresholdPct: b.thresholdPct }, uname);
     bust('fin:stock');
     res.json(out);
   } catch (e) { res.status(500).json({ error: e.message }); }

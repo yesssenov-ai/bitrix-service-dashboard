@@ -51,6 +51,9 @@ th.nzcol,td.nzcol{width:34px;text-align:center;padding-left:6px;padding-right:6p
 span.nzstar{cursor:default}
 tr.nzrow td{background:color-mix(in srgb,#e0a940 7%,var(--card))}
 tr.nzrow:hover td{background:color-mix(in srgb,#e0a940 13%,var(--card))}
+.nznorm{border:1px solid var(--stroke-2,var(--line-2));background:var(--card,var(--surface));color:var(--text-2);border-radius:5px;font:600 11px/1 var(--font,inherit);padding:2px 6px;cursor:pointer;vertical-align:middle}
+.nznorm:hover{border-color:var(--text-3);color:var(--text)}
+.nznorm.crit{border-color:var(--bad,#e5484d);color:var(--bad,#e5484d);background:color-mix(in srgb,var(--bad,#e5484d) 10%,var(--card))}
 tfoot td{position:sticky;bottom:0;background:var(--card);font-weight:700;border-top:2px solid var(--border2)}
 .hint{color:var(--text-3);padding:20px;font-size:13px}
 /* ── Мультивыбор (как слайсеры Power BI) ─────────────────── */
@@ -220,7 +223,7 @@ const mStore=createMulti('#fStore'),mName=createMulti('#fName'),mOrder=createMul
 async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.href='/login.html';return{ok:false,d:{}}}let d={};try{d=await r.json()}catch(e){}return{ok:r.ok,d}}
 let ROLE='',IS_ADMIN=false;
 async function boot(){const r=await fetch('/auth/me');if(!r.ok){location.href='/login.html';return;}
-  try{const me=await r.json();ROLE=(me&&me.user&&me.user.role)||'';IS_ADMIN=['admin','superadmin','coordinator'].includes(ROLE);}catch(e){}
+  try{const me=await r.json();ROLE=(me&&me.user&&me.user.role)||'';IS_ADMIN=['admin','superadmin','coordinator','store'].includes(ROLE);}catch(e){}
   if(IS_ADMIN){var mb=document.getElementById('bulkMinBtn');if(mb)mb.style.display='';}
   await load();}
 async function load(){
@@ -255,8 +258,27 @@ function filtered(){
 }
 function starCell(r){
   const on=!!r.min, code=esc(r.item_code||'');
-  if(IS_ADMIN) return `<td class="nzcol"><button class="nzstar${on?' on':''}" title="${on?'Неснижаемый запас — снять':'Отметить как неснижаемый запас'}" onclick="toggleMin('${code}',${on?0:1},this)">${on?'★':'☆'}</button></td>`;
-  return `<td class="nzcol">${on?'<span class="nzstar on" title="Неснижаемый запас">★</span>':''}</td>`;
+  const norm=(r.minQty!=null&&r.minQty!=='')?r.minQty:'';
+  const crit=(on&&r.critical)?' <span title="Ниже критического уровня — заказать" style="color:var(--bad,#e5484d)">🔴</span>':'';
+  const pctT=(r.thresholdPct!=null?r.thresholdPct:30)+'%';
+  if(IS_ADMIN){
+    if(!on) return `<td class="nzcol"><button class="nzstar" title="Отметить как неснижаемый запас" onclick="toggleMin('${code}',1,this)">☆</button></td>`;
+    return `<td class="nzcol"><button class="nzstar on" title="Снять неснижаемый" onclick="toggleMin('${code}',0,this)">★</button> <button class="nznorm${r.critical?' crit':''}" onclick="editMin('${code}')" title="Норма ${norm||'—'}, порог ${pctT} — изменить">${norm||'норма'}${crit}</button></td>`;
+  }
+  return `<td class="nzcol">${on?`<span class="nzstar on" title="Неснижаемый запас${norm?(' (норма '+norm+')'):''}">★</span>${norm?' '+esc(String(norm)):''}${crit}`:''}</td>`;
+}
+async function editMin(code){
+  const row=(DATA.rows||[]).find(r=>String(r.item_code||'')===String(code))||{};
+  const n=prompt('Норма (неснижаемый запас) по позиции — сколько держать на складе:', row.minQty!=null?row.minQty:'');
+  if(n===null) return;
+  const p=prompt('Порог критического уровня, % от нормы (пусто = 30%). Аларм придёт, когда остаток ≤ этого уровня:', row.thresholdPct!=null?row.thresholdPct:'');
+  if(p===null) return;
+  const body={itemCode:code,on:true};
+  if(String(n).trim()!=='') body.minQty=Number(n);
+  if(String(p).trim()!=='') body.thresholdPct=Number(p);
+  const {ok,d}=await api('/api/finance/stock/min',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!ok||(d&&d.error)){alert('Ошибка: '+((d&&d.error)||'не удалось'));return;}
+  await load();
 }
 function render(){
   const rows=filtered();

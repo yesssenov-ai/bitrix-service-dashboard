@@ -63,6 +63,11 @@ function ensureSchema() {
         note VARCHAR(300),
         added_by VARCHAR(80),
         added_at TIMESTAMPTZ DEFAULT NOW());
+      -- Порог критического уровня в % от нормы (NULL → глобальные 30%) и состояние
+      -- аларма, чтобы не слать уведомление повторно, пока остаток не поднимется выше.
+      ALTER TABLE ticketsmodule_stock_min ADD COLUMN IF NOT EXISTS threshold_pct NUMERIC;
+      ALTER TABLE ticketsmodule_stock_min ADD COLUMN IF NOT EXISTS alarm_below BOOLEAN DEFAULT false;
+      ALTER TABLE ticketsmodule_stock_min ADD COLUMN IF NOT EXISTS last_alarm_at TIMESTAMPTZ;
     `);
   })().catch(e => { _schema = null; throw e; });
   return _schema;
@@ -169,6 +174,8 @@ async function syncStock() {
       `INSERT INTO ticketsmodule_onec_meta (source, last_sync, last_ok_at, is_mock, last_error)
        VALUES ('stock', NOW(), NOW(), $1, NULL)
        ON CONFLICT (source) DO UPDATE SET last_sync=NOW(), last_ok_at=NOW(), is_mock=$1, last_error=NULL`, [mock]);
+    // После обновления остатков — проверить неснижаемые на критический минимум (аларм).
+    try { await checkStockAlarms(); } catch (e) { console.error('checkStockAlarms:', e.message); }
     return { ok: true, count: rows.length, mock };
   } catch (e) {
     await pool.query(
@@ -241,10 +248,11 @@ async function getStockBoard() {
   let { rows } = await pool.query('SELECT * FROM ticketsmodule_onec_stock ORDER BY name, order_no');
   if (!rows.length) { await syncStock(); ({ rows } = await pool.query('SELECT * FROM ticketsmodule_onec_stock ORDER BY name, order_no')); }
   const meta = (await pool.query(`SELECT * FROM ticketsmodule_onec_meta WHERE source='stock'`)).rows[0] || {};
-  // Реестр неснижаемого запаса (по item_code) — отметим строки флагом min.
-  const minSet = new Set((await pool.query('SELECT item_code FROM ticketsmodule_stock_min')).rows
-    .map(r => String(r.item_code || '').trim()).filter(Boolean));
-  const isMin = r => minSet.has(String(r.item_code || '').trim());
+  // Реестр неснижаемого запаса (по item_code): флаг min + норма + порог %.
+  const minRows = (await pool.query('SELECT item_code, min_qty, threshold_pct FROM ticketsmodule_stock_min')).rows;
+  const minMap = new Map();
+  for (const mr of minRows) minMap.set(String(mr.item_code || '').trim(), { q: mr.min_qty != null ? Number(mr.min_qty) : null, t: mr.threshold_pct != null ? Number(mr.threshold_pct) : null });
+  const isMin = r => minMap.has(String(r.item_code || '').trim());
 
   // Счёт 1330 — как в Power BI (бизнес-правило). Безопасный откат: если в кэше счёт
   // не заполнен (фильтр обнулил бы всё) — показываем без него, не прячем данные.
@@ -253,6 +261,17 @@ async function getStockBoard() {
     const f = rows.filter(r => STOCK_ACCOUNTS.includes(String(r.account || '').trim()));
     if (f.length) base = f;
   }
+  // Суммарный остаток по номенклатуре (для признака «критический минимум»):
+  // норма/порог заданы на item_code, а в выборке позиция может быть по нескольким складам.
+  const codeTotal = new Map();
+  for (const r of base) { const c = String(r.item_code || '').trim(); codeTotal.set(c, (codeTotal.get(c) || 0) + Number(r.qty || 0)); }
+  const GLOBAL_PCT = 30;
+  const minMeta = r => {
+    const c = String(r.item_code || '').trim(); const mm = minMap.get(c);
+    if (!mm) return { minQty: null, thresholdPct: null, critical: false };
+    const critical = mm.q != null && mm.q > 0 && (codeTotal.get(c) || 0) <= Number(mm.q) * (mm.t != null ? mm.t : GLOBAL_PCT) / 100;
+    return { minQty: mm.q, thresholdPct: mm.t, critical };
+  };
   // Склады по store_id (из строк, отфильтрованных по счёту) — для фильтра «Склад».
   const storeMap = new Map();
   for (const r of base) {
@@ -276,7 +295,7 @@ async function getStockBoard() {
       id: r.id, name: r.name || r.item_code || '', item_code: r.item_code, part_no: r.part_no, order_no: r.order_no,
       manufacturer: r.manufacturer, made_date: r.made_date, expiry: r.expiry,
       qty: Number(r.qty || 0), price: Number(r.price || 0), amount: Number(r.amount || 0),
-      shelf: r.shelf, barcode: r.barcode, gtd: r.gtd, min: isMin(r),
+      shelf: r.shelf, barcode: r.barcode, gtd: r.gtd, min: isMin(r), ...minMeta(r),
       account: r.account || '', store_id: String(r.store_id || ''), store: storeLabel(String(r.store_id || ''), r.store),
     })),
     totals: { qty: base.reduce((a, r) => a + Number(r.qty || 0), 0), amount: base.reduce((a, r) => a + Number(r.amount || 0), 0) },
@@ -290,7 +309,7 @@ async function getStockBoard() {
 // ── Реестр неснижаемого запаса (ведём в ЦУП, ключ — item_code) ───────────────
 async function listMinStock() {
   await ensureSchema();
-  const { rows } = await pool.query('SELECT item_code, name, min_qty, note, added_by, added_at FROM ticketsmodule_stock_min ORDER BY name, item_code');
+  const { rows } = await pool.query('SELECT item_code, name, min_qty, note, threshold_pct, alarm_below, last_alarm_at, added_by, added_at FROM ticketsmodule_stock_min ORDER BY name, item_code');
   return rows;
 }
 // Отметить/снять позицию как неснижаемый запас. on=false — удалить из реестра.
@@ -301,13 +320,15 @@ async function setMinStock(itemCode, on, meta, by) {
   meta = meta || {};
   if (on === false) { await pool.query('DELETE FROM ticketsmodule_stock_min WHERE item_code=$1', [itemCode]); return { ok: true, item_code: itemCode, min: false }; }
   await pool.query(
-    `INSERT INTO ticketsmodule_stock_min (item_code, name, min_qty, note, added_by, added_at)
-     VALUES ($1,$2,$3,$4,$5,NOW())
+    `INSERT INTO ticketsmodule_stock_min (item_code, name, min_qty, note, threshold_pct, added_by, added_at)
+     VALUES ($1,$2,$3,$4,$5,$6,NOW())
      ON CONFLICT (item_code) DO UPDATE SET
        name=COALESCE(EXCLUDED.name, ticketsmodule_stock_min.name),
        min_qty=COALESCE(EXCLUDED.min_qty, ticketsmodule_stock_min.min_qty),
-       note=COALESCE(EXCLUDED.note, ticketsmodule_stock_min.note)`,
-    [itemCode, meta.name || null, (meta.minQty != null && meta.minQty !== '') ? Number(meta.minQty) : null, meta.note || null, by || null]);
+       note=COALESCE(EXCLUDED.note, ticketsmodule_stock_min.note),
+       threshold_pct=COALESCE(EXCLUDED.threshold_pct, ticketsmodule_stock_min.threshold_pct)`,
+    [itemCode, meta.name || null, (meta.minQty != null && meta.minQty !== '') ? Number(meta.minQty) : null, meta.note || null,
+     (meta.thresholdPct != null && meta.thresholdPct !== '') ? Number(meta.thresholdPct) : null, by || null]);
   return { ok: true, item_code: itemCode, min: true };
 }
 // Массовая отметка по списку кодов (разовый список от кладовщика).
@@ -332,4 +353,66 @@ async function probeStockRaw(limit) {
   return { configured: true, count: arr.length, keys, sample: arr.slice(0, n) };
 }
 
-module.exports = { ensureSchema, syncStock, getStockBoard, listMinStock, setMinStock, bulkMinStock, probeStockRaw };
+// ── Аларм по неснижаемому запасу ────────────────────────────────────────────
+// При падении остатка до критического уровня (по умолчанию 30% от нормы, можно
+// переопределить threshold_pct на позиции) — одно уведомление менеджеру склада
+// (почта + Telegram + ЦУП-пуш). Повторно не шлём, пока остаток не поднимется выше.
+const GLOBAL_THRESHOLD_PCT = 30;
+const STORE_MANAGER_EMAIL = process.env.STORE_MANAGER_EMAIL || 'techsupport@prolabsupport.kz';
+const _esc = s => String(s == null ? '' : s).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+
+async function currentQtyByCode() {
+  const { rows } = await pool.query(
+    "SELECT item_code, SUM(qty)::numeric AS qty, MAX(name) AS name FROM ticketsmodule_onec_stock WHERE item_code <> '' GROUP BY item_code");
+  const m = new Map();
+  for (const r of rows) m.set(String(r.item_code), { qty: Number(r.qty) || 0, name: r.name || '' });
+  return m;
+}
+
+async function notifyLowStock(it) {
+  const title = it.name || it.code;
+  const subj = `🚨 Склад: критический минимум — ${title}`;
+  const line = `Остаток ${it.qty} из нормы ${it.norm} (порог ${it.pct}% ≈ ${Math.round(it.threshold * 100) / 100}). Нужно заказать.`;
+  const html = `<p><b>${_esc(title)}</b> (ном. ${_esc(it.code)})</p><p>${_esc(line)}</p><p style="color:#6a7488;font-size:12px">ProLabSupport · ЦУП · Склад</p>`;
+  let notif = null; try { notif = require('./notifications'); } catch (e) {}
+  // Почта
+  try { if (notif && notif.sendEmailTo) await notif.sendEmailTo(STORE_MANAGER_EMAIL, subj, html); }
+  catch (e) { console.error('stock alarm email:', e.message); }
+  // Telegram + ЦУП-пуш менеджеру склада (ищем пользователя по email)
+  try {
+    const { rows } = await pool.query('SELECT id, bitrix_user_id FROM ticketsmodule_users WHERE lower(email)=lower($1) AND active=true LIMIT 1', [STORE_MANAGER_EMAIL]);
+    const u = rows[0];
+    if (u && u.bitrix_user_id) {
+      const tl = await pool.query('SELECT telegram_chat_id FROM ticketsmodule_telegram_links WHERE bitrix_user_id=$1', [u.bitrix_user_id]);
+      const chat = tl.rows[0] && tl.rows[0].telegram_chat_id;
+      if (chat && notif && notif.tgTo) await notif.tgTo(String(chat), `🚨 Склад — критический минимум\n${title}\n${line}`).catch(() => {});
+      try { const push = require('./push'); if (push.sendToUser) await push.sendToUser(u.bitrix_user_id, { type: 'alert', notify: { title: '🚨 Критический минимум на складе', body: `${title}: остаток ${it.qty} из ${it.norm}` }, url: '/finance-stock.html' }).catch(() => {}); } catch (e) {}
+    }
+  } catch (e) { console.error('stock alarm tg/push:', e.message); }
+}
+
+async function checkStockAlarms() {
+  await ensureSchema();
+  const { rows: mins } = await pool.query(
+    'SELECT item_code, name, min_qty, threshold_pct, alarm_below FROM ticketsmodule_stock_min WHERE min_qty IS NOT NULL AND min_qty > 0');
+  if (!mins.length) return { checked: 0, alarms: 0 };
+  const qmap = await currentQtyByCode();
+  let alarms = 0;
+  for (const m of mins) {
+    const cur = qmap.get(String(m.item_code)) || { qty: 0, name: m.name };
+    const pct = (m.threshold_pct != null && m.threshold_pct !== '') ? Number(m.threshold_pct) : GLOBAL_THRESHOLD_PCT;
+    const threshold = Number(m.min_qty) * pct / 100;
+    const below = cur.qty <= threshold;
+    if (below && !m.alarm_below) {
+      try { await notifyLowStock({ code: m.item_code, name: m.name || cur.name, qty: cur.qty, norm: Number(m.min_qty), pct, threshold }); } catch (e) { console.error('notifyLowStock:', e.message); }
+      await pool.query('UPDATE ticketsmodule_stock_min SET alarm_below=true, last_alarm_at=NOW() WHERE item_code=$1', [m.item_code]);
+      alarms++;
+    } else if (!below && m.alarm_below) {
+      await pool.query('UPDATE ticketsmodule_stock_min SET alarm_below=false WHERE item_code=$1', [m.item_code]);
+    }
+  }
+  if (alarms) console.log(`Stock alarms: ${alarms} позиций ниже критического уровня`);
+  return { checked: mins.length, alarms };
+}
+
+module.exports = { ensureSchema, syncStock, getStockBoard, listMinStock, setMinStock, bulkMinStock, probeStockRaw, checkStockAlarms };
