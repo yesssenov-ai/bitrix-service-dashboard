@@ -56,6 +56,16 @@ function productOf(d) {
   }
   return PIPE_FALLBACK[d.category_id] || 'Не указан';
 }
+// Фаза сделки: 'pre' — доконтракт (воронка P10–P80); 'post' — после контракта;
+// 'failed' — проваленные (замороженные / проигранные / вне воронки). Единый источник
+// для бейджа строки, фильтра-переключателя и карточек стадий.
+function dealPhase(d) {
+  if (d.contract_date) return 'post';
+  const info = stageInfo(d.stage_id);
+  if (info.kind === 'pipeline') return 'pre';
+  if (info.kind === 'contract') return 'post';
+  return 'failed';
+}
 
 // ── Резолв названия группы (UF_CRM_1731862481, iblock_element) ───────────────
 // Пробуем справочник project_clients.group_name (уже ведётся), иначе резолвим
@@ -313,7 +323,7 @@ async function nodeDeals(type, key, project) {
     deals: subset.slice(0, 300).map(d => ({
       dealId: d.deal_id, title: d.deal_title || ('Сделка #' + d.deal_id), unit: d.unit_tag || '',
       companyId: String(d.company_id), company: d.company_name || '', sumMln: mln(d.opportunity),
-      post: !!d.contract_date, stage: d.stage_id, project: d.project_tag || '',
+      post: !!d.contract_date, phase: dealPhase(d), stage: d.stage_id, project: d.project_tag || '',
       planned: ymd(d.planned_purchase_date),
       url: 'https://crm.prolabsupport.kz/crm/deal/details/' + d.deal_id + '/',
     })),
@@ -639,13 +649,13 @@ async function getCompanyStages(companyId) {
     let key, label, phase;
     if (!isPost && info.kind === 'pipeline') { key = info.step; label = PRE_LABELS[info.step]; phase = 'pre'; }
     else if (isPost) { key = 'POST:' + (String(d.stage_id || '').split(':').pop() || '—'); label = postStageLabel(d.stage_id); phase = 'post'; }
-    else if (info.kind === 'lost') { key = 'LOST'; label = 'Проиграна / отказ'; phase = 'lost'; }
-    else { key = 'OTHER:' + (d.stage_id || '—'); label = 'Прочее: ' + (String(d.stage_id || '').split(':').pop() || '—'); phase = 'other'; }
+    else if (info.kind === 'lost') { key = 'LOST'; label = 'Проиграна / отказ'; phase = 'failed'; }
+    else { key = 'FAILED:' + (d.stage_id || '—'); label = 'Заморожена / прочее: ' + (String(d.stage_id || '').split(':').pop() || '—'); phase = 'failed'; }
     const b = ensure(key, label, phase); b.count++; b.sum += Number(d.opportunity) || 0;
     const dn = productOf(d); (dept[dn] = dept[dn] || { count: 0, sum: 0 }); dept[dn].count++; dept[dn].sum += Number(d.opportunity) || 0;
     deals.push({
       dealId: d.deal_id, title: d.deal_title || ('Сделка #' + d.deal_id), unit: d.unit_tag || '',
-      companyId: cid, sumMln: mln(d.opportunity), post: !!d.contract_date, project: d.project_tag || '',
+      companyId: cid, sumMln: mln(d.opportunity), post: !!d.contract_date, phase: dealPhase(d), project: d.project_tag || '',
       planned: ymd(d.planned_purchase_date), stageKey: key, dept: dn,
       url: 'https://crm.prolabsupport.kz/crm/deal/details/' + d.deal_id + '/',
     });
@@ -653,7 +663,7 @@ async function getCompanyStages(companyId) {
   const order = [];
   ['P10', 'P30', 'P60', 'P80'].forEach(k => order.push(buckets[k]));
   Object.values(buckets).filter(b => b.phase === 'post').sort((a, b) => b.sum - a.sum).forEach(b => order.push(b));
-  Object.values(buckets).filter(b => b.phase === 'lost' || b.phase === 'other').sort((a, b) => b.sum - a.sum).forEach(b => order.push(b));
+  Object.values(buckets).filter(b => b.phase === 'failed').sort((a, b) => b.sum - a.sum).forEach(b => order.push(b));
   return {
     companyId: cid, company: (rows[0] && rows[0].company_name) || ('Компания ' + cid),
     totalDeals: rows.length, totalSumMln: mln(rows.reduce((a, d) => a + (Number(d.opportunity) || 0), 0)),

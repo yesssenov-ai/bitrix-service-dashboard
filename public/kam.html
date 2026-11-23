@@ -52,6 +52,10 @@ a{color:var(--info);text-decoration:none}
 .ttype.g{background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent)}
 .ttype.c{background:color-mix(in srgb,var(--info) 16%,transparent);color:var(--info)}
 .ttype.l{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good)}
+.ttype.pre{background:color-mix(in srgb,#e0a33a 20%,transparent);color:#a9702a}
+.ttype.post{background:color-mix(in srgb,#1baf7a 18%,transparent);color:#0e8a5f}
+.ttype.fail{background:color-mix(in srgb,#d9534f 18%,transparent);color:#c0392b}
+:root[data-theme="dark"] .ttype.pre{color:#e8b765}:root[data-theme="dark"] .ttype.post{color:#49d19e}:root[data-theme="dark"] .ttype.fail{color:#f08a86}
 .kids{margin-left:13px;padding-left:9px;border-left:1px solid var(--line);display:flex;flex-direction:column;gap:2px;margin-top:2px}.kids.hide{display:none}
 .av{width:22px;height:22px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff}
 .av.none{background:var(--surface-3);color:var(--text-faint);font-size:12px}
@@ -193,6 +197,14 @@ body{background:radial-gradient(135% 72% at 100% -8%, color-mix(in srgb,var(--ac
 .projdate{display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:color-mix(in srgb,var(--accent) 7%,var(--surface-2));border:1px solid var(--line-2);border-radius:10px;padding:9px 13px;margin-bottom:9px;font-size:12.5px;font-weight:600;color:var(--text-2)}
 .projdate .pdinp{border:1px solid var(--line-2);background:var(--surface);border-radius:8px;padding:6px 10px;font:inherit;font-size:12.5px;color:var(--text);color-scheme:light dark}
 .projdate .pdhint{font-size:11px;font-weight:500;color:var(--text-3)}
+/* Переключатель фаз над списком сделок */
+.dfilter{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:8px}
+.dfbtn{border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);border-radius:999px;padding:5px 13px;font-size:12px;font-weight:650;cursor:pointer;transition:all .12s}
+.dfbtn:hover{border-color:var(--text-3)}
+.dfbtn.on{background:var(--text);color:var(--surface);border-color:var(--text)}
+.dfbtn.pre.on{background:#c98a2e;border-color:#c98a2e;color:#fff}
+.dfbtn.post.on{background:#1baf7a;border-color:#1baf7a;color:#fff}
+.dfbtn.fail.on{background:#d9534f;border-color:#d9534f;color:#fff}
 /* Комментарии (п.5) */
 .cm-thread{flex:1;overflow:auto;display:flex;flex-direction:column;gap:9px;margin:2px -2px;padding:2px}
 .cm-item{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:9px 12px}
@@ -209,7 +221,7 @@ body{background:radial-gradient(135% 72% at 100% -8%, color-mix(in srgb,var(--ac
 .stcard{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:13px 14px;cursor:pointer;transition:all .12s;box-shadow:var(--shadow);border-top:3px solid var(--line-2)}
 .stcard:hover{transform:translateY(-2px)}
 .stcard.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
-.stcard.pre{border-top-color:#e0a33a}.stcard.post{border-top-color:#3bd47f}.stcard.lost{border-top-color:#d9534f}.stcard.other{border-top-color:#9aa3b3}
+.stcard.pre{border-top-color:#e0a33a}.stcard.post{border-top-color:#3bd47f}.stcard.fail{border-top-color:#d9534f}
 .stcard .st-l{font-size:11.5px;font-weight:700;color:var(--text-2);min-height:28px;line-height:1.25}
 .stcard .st-n{font-size:26px;font-weight:800;letter-spacing:-1px;margin-top:4px}
 .stcard .st-s{font-size:12px;color:var(--text-3);font-weight:600}
@@ -401,18 +413,35 @@ async function toggleProj(card,proj){
     const d=await fetch('/api/kam/deals?'+u.toString(),{credentials:'include',cache:'no-store'}).then(r=>r.json());
     const cids=[...new Set((d.deals||[]).map(x=>x.companyId))];
     await Promise.all([ensureProjOpts(),...cids.map(ensureUnits)]);
-    const rows=(d.deals||[]).map(dealRow).join('');
-    box.dataset.project=proj;
+    const deals=d.deals||[];
+    box.dataset.project=proj; box._q=''; box._ph='all';
     const isReal=proj && proj!=='— вне проекта —';
     const dateBar=isReal?`<div class="projdate">📅 Планируемый срок покупки всему проекту «${esc(proj)}»: <input type="date" class="pdinp" onchange="setProjectPlanned(this)"><span class="pdhint">проставится во все сделки проекта</span><button class="mini-btn" type="button" style="margin-left:auto" onclick="openProjectComment(${jarg(proj)})">💬 Коммент всему проекту</button></div>`:'';
-    box.innerHTML=rows
-      ? dateBar+`<div class="dsearch">🔎<input placeholder="Поиск сделки…" oninput="filterDeals(this)"></div><div class="drows">${rows}</div>`
+    box.innerHTML=deals.length
+      ? dateBar+dealsBlock(deals)
       : '<div class="tmeta" style="padding:8px">Сделок нет</div>';
     box.dataset.loaded='1';
   }catch(e){ box.innerHTML='<div class="tmeta" style="padding:8px">Ошибка загрузки</div>'; }
 }
-function filterDeals(inp){ const box=inp.closest('.pdeals'); if(!box)return; const q=(inp.value||'').trim().toLowerCase();
-  box.querySelectorAll('.drow').forEach(r=>{ r.style.display=(!q||(r.dataset.t||'').includes(q))?'':'none'; }); }
+// Блок списка сделок: переключатель фаз (Все/Доконтрактные/Постконтрактные/Проваленные)
+// + поиск + строки. Используется и в проектах/компаниях, и во вкладке «Стадии».
+function dealsBlock(deals){
+  const cnt={all:deals.length,pre:0,post:0,failed:0};
+  deals.forEach(x=>{ const p=x.phase||(x.post?'post':'pre'); if(cnt[p]!=null)cnt[p]++; });
+  const bar=`<div class="dfilter">
+    <button class="dfbtn on" type="button" data-ph="all" onclick="filterPhase(this)">Все · ${cnt.all}</button>
+    <button class="dfbtn pre" type="button" data-ph="pre" onclick="filterPhase(this)">Доконтрактные · ${cnt.pre}</button>
+    <button class="dfbtn post" type="button" data-ph="post" onclick="filterPhase(this)">Постконтрактные · ${cnt.post}</button>
+    <button class="dfbtn fail" type="button" data-ph="failed" onclick="filterPhase(this)">Проваленные · ${cnt.failed}</button>
+  </div>`;
+  return bar+`<div class="dsearch">🔎<input placeholder="Поиск сделки…" oninput="filterDeals(this)"></div><div class="drows">${deals.map(dealRow).join('')}</div>`;
+}
+function applyDealFilters(box){ const q=(box._q||'').toLowerCase(); const ph=box._ph||'all';
+  box.querySelectorAll('.drow').forEach(r=>{ const okT=!q||(r.dataset.t||'').includes(q); const okP=ph==='all'||r.dataset.ph===ph; r.style.display=(okT&&okP)?'':'none'; }); }
+function filterDeals(inp){ const box=inp.closest('.pdeals'); if(!box)return; box._q=(inp.value||'').trim(); applyDealFilters(box); }
+function filterPhase(btn){ const box=btn.closest('.pdeals'); if(!box)return;
+  box.querySelectorAll('.dfilter .dfbtn').forEach(b=>b.classList.toggle('on',b===btn));
+  box._ph=btn.dataset.ph; applyDealFilters(box); }
 window._unitsByCo={};
 async function ensureUnits(cid){ if(window._unitsByCo[cid])return; try{ const u=await fetch('/api/kam/units?company='+encodeURIComponent(cid),{credentials:'include',cache:'no-store'}).then(r=>r.json()); window._unitsByCo[cid]=(u.units||[]).map(x=>x.name); }catch(e){ window._unitsByCo[cid]=[]; } }
 function unitOpts(cid,cur){ const base=['',...(window._unitsByCo[cid]||[])]; if(cur&&!base.includes(cur))base.push(cur);
@@ -422,9 +451,9 @@ async function ensureProjOpts(){ if(window._projOpts)return; try{ const r=await 
 function projOpts(cur){ let h='<option value="">— вне проекта —</option>'; let has=false;
   (window._projOpts||[]).forEach(o=>{ const sel=o.value===cur; if(sel)has=true; h+=`<option value="${esc(o.id)}" ${sel?'selected':''}>${esc(o.value)}</option>`; });
   if(cur&&!has)h+=`<option value="" selected>${esc(cur)} (не в списке)</option>`; return h; }
-function dealRow(dl){ return `<div class="drow" data-t="${esc(((dl.title||'')+' '+(dl.company||'')+' '+(dl.project||'')).toLowerCase())}">
+function dealRow(dl){ const ph=dl.phase||(dl.post?'post':'pre'); const pm={pre:['до','pre'],post:['после','post'],failed:['провал','fail']}[ph]||['до','pre']; return `<div class="drow" data-ph="${ph}" data-t="${esc(((dl.title||'')+' '+(dl.company||'')+' '+(dl.project||'')).toLowerCase())}">
   <div class="dr-main">
-    <span class="ttype ${dl.post?'l':'c'}" style="min-width:44px;text-align:center;margin-top:1px">${dl.post?'после':'до'}</span>
+    <span class="ttype ${pm[1]}" style="min-width:52px;text-align:center;margin-top:1px">${pm[0]}</span>
     <a class="dn" href="${dl.url}" target="_blank" title="Открыть сделку в Битрикс">${esc(dl.title)}</a>
     <span class="sum">${dl.sumMln}<small> млн</small></span>
   </div>
@@ -787,7 +816,7 @@ async function openCompanyStages(id,name){
     renderStageDetail(data);
   }catch(e){ d.innerHTML='<div class="empty">Не удалось загрузить</div>'; }
 }
-function stagePhaseClass(p){ return p==='pre'?'pre':p==='post'?'post':p==='lost'?'lost':'other'; }
+function stagePhaseClass(p){ return p==='pre'?'pre':p==='post'?'post':'fail'; }
 function renderStageDetail(data){
   const d=document.getElementById('stageDetail');
   d.innerHTML=`
@@ -810,7 +839,7 @@ function selectStage(card){
   document.getElementById('stDealsH').style.display='';
   document.getElementById('stDealsTitle').textContent='Сделки · '+card.querySelector('.st-l').textContent+' ('+ds.length+')';
   const box=document.getElementById('stDeals');
-  box.innerHTML=ds.length?`<div class="pdeals" style="display:block"><div class="drows">${ds.map(dealRow).join('')}</div></div>`:'<div class="empty">Нет сделок на этой стадии</div>';
+  box.innerHTML=ds.length?`<div class="pdeals" style="display:block">${dealsBlock(ds)}</div>`:'<div class="empty">Нет сделок на этой стадии</div>';
 }
 function go(v){ document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
   document.getElementById('admBtn').classList.toggle('acc',v==='adm');
