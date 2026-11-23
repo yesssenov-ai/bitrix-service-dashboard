@@ -100,6 +100,32 @@ router.get('/file/:token', async (req, res) => {
   } catch (e) { res.status(500).send('Ошибка'); }
 });
 
+// Загрузка картинки для ТЕЛА письма (встраивается как <img src>). Независимо от
+// кампании (campaign_id=0) — работает ещё до сохранения черновика. Возвращает
+// абсолютный URL, чтобы картинка грузилась и в письме, и в предпросмотре.
+router.post('/image', requireAuth(EDIT), express.json({ limit: '12mb' }), async (req, res) => {
+  try {
+    const b = req.body || {};
+    if (!/^image\/(png|jpe?g|gif|webp)$/i.test(b.mime || '')) return res.status(400).json({ ok: false, error: 'Только изображения (PNG, JPG, GIF, WEBP)' });
+    const calc = require('../campaigns-calc');
+    const f = await calc.addFile(0, { filename: b.filename || 'image', mime: b.mime, dataBase64: b.dataBase64, kind: 'inline-image' });
+    const base = process.env.APP_BASE_URL || 'https://nms.prolabsupport.kz';
+    res.json({ ok: true, token: f.token, url: `${base}/api/campaigns/img/${f.token}` });
+  } catch (e) { console.error('campaigns image upload:', e.message); res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// Отдать картинку ВСТРОЕННО (inline) — чтобы рендерилась в письме и предпросмотре.
+router.get('/img/:token', async (req, res) => {
+  try {
+    const f = await require('../campaigns-calc').getFileByToken(req.params.token);
+    if (!f || !f.data) return res.status(404).send('not found');
+    res.set('Content-Type', f.mime || 'image/png');
+    res.set('Content-Disposition', 'inline');
+    res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    res.send(Buffer.from(f.data));
+  } catch (e) { res.status(500).send('err'); }
+});
+
 // Публичная отписка (без авторизации).
 router.get('/unsub', async (req, res) => {
   const email = require('../campaigns-calc').unsubVerify(req.query.t || '');

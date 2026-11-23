@@ -49,6 +49,9 @@ select:focus,input:focus{border-color:var(--brand)}
 .days{display:inline-block;min-width:34px;text-align:center;border-radius:5px;padding:1px 6px;font-size:11.5px;font-weight:700}
 .days.over{background:var(--bad-l);color:var(--bad)}
 .days.ok{color:var(--text-4)}
+.sbtn{border:1px solid var(--stroke-2,var(--line-2));background:var(--card,var(--surface));color:var(--text-2);border-radius:6px;font:600 11.5px/1 var(--font,var(--f-ui));padding:5px 10px;cursor:pointer;transition:.14s}
+.sbtn:hover{background:var(--bg,var(--surface-2))}
+.sbtn.on{background:var(--text);border-color:var(--text);color:var(--card,var(--surface))}
 .sumrow{display:flex;justify-content:space-between;padding:7px 14px;font-size:13px;border-bottom:1px solid var(--border)}
 .sumrow b{font-variant-numeric:tabular-nums}
 .deptrow{padding:8px 14px;border-bottom:1px solid var(--border);font-size:12.5px}
@@ -150,7 +153,11 @@ svg.ovsvg{display:block;width:100%}
 <div class="wrap">
   <div class="card">
     <div class="card-h">Дебиторская задолженность</div>
-    <div class="tools"><span>Договоров: <b id="cntRows" style="color:var(--text-2)">0</b></span><span style="margin-left:auto">Долг по фильтру: <b id="cntDebt" style="color:var(--text-2)">0</b></span></div>
+    <div class="tools"><span>Договоров: <b id="cntRows" style="color:var(--text-2)">0</b></span>
+      <span style="margin-left:16px;display:inline-flex;gap:5px;align-items:center"><span style="font-size:11px;color:var(--text-3)">Сортировка:</span>
+        <button class="sbtn on" data-sort="debt" onclick="setSort('debt')">по долгу</button>
+        <button class="sbtn" data-sort="overdue" onclick="setSort('overdue')">по просрочке</button></span>
+      <span style="margin-left:auto">Долг по фильтру: <b id="cntDebt" style="color:var(--text-2)">0</b></span></div>
     <div style="overflow:auto;max-height:calc(100vh - 230px)"><table class="tbl"><tbody id="debtBody"></tbody></table></div>
   </div>
   <div>
@@ -186,6 +193,8 @@ async function load(){
   render();
 }
 let ONLY_OVERDUE=false;
+let SORT='debt'; // 'debt' | 'overdue'
+function setSort(s){SORT=s;document.querySelectorAll('.sbtn[data-sort]').forEach(b=>b.classList.toggle('on',b.dataset.sort===s));render();}
 function filtered(){
   const dep=document.getElementById('fDept').value;
   const con=document.getElementById('fContractor').value;
@@ -201,11 +210,19 @@ function render(){
   // группировка по контрагенту
   const groups={};for(const r of rows){(groups[r.contractor]=groups[r.contractor]||[]).push(r);}
   const body=document.getElementById('debtBody');
-  const names=Object.keys(groups).sort((a,b)=>groups[b].reduce((s,r)=>s+r.debt,0)-groups[a].reduce((s,r)=>s+r.debt,0));
+  const sumDebt=g=>g.reduce((s,r)=>s+r.debt,0);
+  const maxOver=g=>g.reduce((m,r)=>Math.max(m,r.overdue_days||0),0);
+  // Сортировка групп: по долгу (по умолчанию) либо по максимальной просрочке.
+  const names=Object.keys(groups).sort((a,b)=> SORT==='overdue'
+    ? (maxOver(groups[b])-maxOver(groups[a])) || (sumDebt(groups[b])-sumDebt(groups[a]))
+    : sumDebt(groups[b])-sumDebt(groups[a]));
   body.innerHTML=names.length?names.map(nm=>{
-    const g=groups[nm];const tot=g.reduce((s,r)=>s+r.debt,0);
-    const head=`<tr class="grp"><td>${flagByCompany(nm)}${esc(nm)}</td><td class="num">${fmt(tot)}</td><td></td><td class="dept">${esc(g[0].department||'')}</td></tr>`;
-    const subs=g.map(r=>{
+    const g=groups[nm];const tot=sumDebt(g);
+    const head=`<tr class="grp"><td>${flagByCompany(nm)}${esc(nm)}</td><td class="num">${fmt(tot)}</td><td class="num">${SORT==='overdue'&&maxOver(g)>0?`<span class="days over">+${maxOver(g)}</span>`:''}</td><td class="dept">${esc(g[0].department||'')}</td></tr>`;
+    // Договоры внутри контрагента: по просрочке (убыв.) либо по долгу (убыв.).
+    const subs=g.slice().sort((a,b)=> SORT==='overdue'
+      ? ((b.overdue_days||0)-(a.overdue_days||0)) || ((b.debt||0)-(a.debt||0))
+      : ((b.debt||0)-(a.debt||0))).map(r=>{
       const deal=r.bitrix_deal_id?` <a href="https://crm.prolabsupport.kz/crm/deal/details/${esc(r.bitrix_deal_id)}/" target="_blank" style="color:var(--brand);text-decoration:none;font-size:11.5px" title="Сделка Битрикса">🔗 #${esc(r.bitrix_deal_id)}</a>`:' <span style="color:var(--warn);font-size:11px" title="Нет ID сделки Битрикса в 1С">⚠ нет связи</span>';
       return `<tr class="sub"><td>${esc(r.contract)}${deal}</td><td class="num">${fmt(r.debt)}</td><td class="num"><span class="days ${r.overdue_days>0?'over':'ok'}">${r.overdue_days>0?'+':''}${r.overdue_days}</span></td><td class="dept">${esc(r.department||'')}</td></tr>`;
     }).join('');
