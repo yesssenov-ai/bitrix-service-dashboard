@@ -13,7 +13,10 @@
 :root{--p0:var(--accent);--p1:var(--info);--p2:var(--good);--radius:16px;
   --shadow:0 1px 2px rgba(16,22,36,.05),0 14px 34px -18px rgba(16,22,36,.2);--tealc:var(--good)}
 :root[data-theme="dark"]{--shadow:0 1px 2px rgba(0,0,0,.3),0 14px 34px -18px rgba(0,0,0,.6)}
-html,body{height:100%;font-family:var(--f-ui);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+html{background:var(--bg)}
+html,body{height:100%;font-family:var(--f-ui);color:var(--text);-webkit-font-smoothing:antialiased}
+/* body прозрачный, чтобы просвечивал фирменный фон-орнамент (#cup-bg, ою) */
+body{background:transparent}
 button{font-family:inherit;cursor:pointer}
 a{color:var(--info);text-decoration:none}
 
@@ -155,7 +158,7 @@ a{color:var(--info);text-decoration:none}
 /* ── премиум-полировка ── */
 .aklbl{font-size:11px;color:var(--text-3);font-weight:600;white-space:nowrap}
 .kam-sel.set{border-color:color-mix(in srgb,var(--accent) 48%,var(--line-2));box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 10%,transparent)}
-body{background:radial-gradient(135% 72% at 100% -8%, color-mix(in srgb,var(--accent) 6%,transparent), transparent 46%), var(--bg)}
+/* orn-фон включён (body прозрачный выше) — градиент-акцент убран, чтобы не перекрывал ою */
 .panel,.adm-grp,.poolbox{box-shadow:0 1px 2px rgba(16,24,40,.05)}
 .head-card{background:linear-gradient(180deg, color-mix(in srgb,var(--surface-2) 42%,var(--surface)), var(--surface))}
 .head-card::before{width:4px;background:linear-gradient(180deg,var(--accent),color-mix(in srgb,var(--accent) 40%,transparent));box-shadow:0 0 20px -2px color-mix(in srgb,var(--accent) 55%,transparent)}
