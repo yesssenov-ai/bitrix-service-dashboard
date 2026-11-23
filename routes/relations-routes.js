@@ -323,18 +323,26 @@ async function reconcileAllPlannerEvents(force = false) {
     );
     for (const r of rows) knownHashes.set(Number(r.bitrix_item_id), r.bitrix_sync_hash);
   } catch (e) { console.error('reconcileAllPlannerEvents preload error:', e.message); }
+  // Набор id всех живых заявок 1058 (то, что реально вернул crm.item.list —
+  // авторитетный источник «существует»). Нужен для чистки орфанов ниже.
+  const seenIds = new Set();
+  let listComplete = true;   // проход дошёл до конца без ошибки списка
+  let listTotal = null;      // crm.item.list.total — полное число заявок
   while (true) {
     let items, next;
     try {
       const resp = await b24('crm.item.list', { entityTypeId: 1058, select: ['*', 'uf_*'], order: { id: 'asc' }, start });
       items = resp.result?.items || [];
       next = resp.next;
+      if (listTotal === null && typeof resp.total === 'number') listTotal = resp.total;
     } catch (e) {
       console.error('reconcileAllPlannerEvents: crm.item.list failed:', e.message);
+      listComplete = false;
       break;
     }
     if (!items.length) break;
     for (const item of items) {
+      seenIds.add(Number(item.id));
       checked++;
       const result = await syncPlannerEvent(item, item.id, { silent: true, knownHashes });
       if (result && result.ok === false) { errors++; failedIds.push(item.id); }
@@ -343,6 +351,30 @@ async function reconcileAllPlannerEvents(force = false) {
     if (next === undefined || items.length < 50) break;
     start = next;
   }
+  // ── Чистка орфанов: бары type='trip' (выезды/подготовка), чья заявка 1058
+  // удалена в Битриксе — её нет в crm.item.list, поэтому построчный синк её
+  // никогда не трогает и бар «висит» навсегда. Удаляем такие строки, НО только
+  // когда проход был заведомо полным (seenIds покрывает total) — иначе
+  // усечённая выборка могла бы снести валидные бары. Плюс предохранитель на
+  // массовое удаление.
+  let orphansRemoved = 0;
+  try {
+    const complete = listComplete && listTotal !== null && seenIds.size >= listTotal;
+    if (complete && seenIds.size > 0) {
+      const { rows } = await pool.query(
+        "SELECT id, bitrix_item_id FROM ticketsmodule_planner_events WHERE source='bitrix' AND type='trip' AND bitrix_item_id IS NOT NULL"
+      );
+      const orphanRowIds = rows.filter(r => !seenIds.has(Number(r.bitrix_item_id))).map(r => r.id);
+      const cap = Math.max(25, Math.ceil(rows.length * 0.2));
+      if (orphanRowIds.length && orphanRowIds.length <= cap) {
+        const del = await pool.query('DELETE FROM ticketsmodule_planner_events WHERE id = ANY($1::bigint[])', [orphanRowIds]);
+        orphansRemoved = del.rowCount || 0;
+      } else if (orphanRowIds.length) {
+        console.warn(`Planner orphan cleanup: ${orphanRowIds.length} кандидатов > лимита ${cap} — пропускаю (возможен неполный проход).`);
+        try { await tgOps(`⚠️ Планировщик: кандидатов в орфаны ${orphanRowIds.length} (> ${cap}) — чистка пропущена, проверьте вручную.`); } catch (e) {}
+      }
+    }
+  } catch (e) { console.error('Planner orphan cleanup error:', e.message); }
   // Отпуска (1108) и Встречи (сделки воронки 4) — та же сверка, чтобы пропущенные
   // вебхуки догонялись.
   let lv = 0, mt = 0;
@@ -379,8 +411,8 @@ async function reconcileAllPlannerEvents(force = false) {
       await tgOps(`⚠️ Плановая сверка планировщика: ${errors} из ${checked} заявок не удалось синхронизировать (ID: ${failedIds.slice(0,20).join(', ')}${failedIds.length>20?'…':''})`);
     } catch (e) {}
   }
-  console.log(`Planner reconciliation: checked ${checked}, skipped ${skipped} (unchanged), ${errors} error(s); отпусков ${lv}, встреч ${mt}, командировок ${tc}`);
-  return { checked, skipped, errors };
+  console.log(`Planner reconciliation: checked ${checked}, skipped ${skipped} (unchanged), ${errors} error(s), orphans removed ${orphansRemoved}; отпусков ${lv}, встреч ${mt}, командировок ${tc}`);
+  return { checked, skipped, errors, orphansRemoved };
 }
 
 // Entity types we track for completion notifications (per user request)
