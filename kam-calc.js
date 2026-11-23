@@ -122,7 +122,7 @@ async function loadAssignments() {
 async function loadModel() {
   const [{ rows: deals }, { rows: pcs }, { rows: units }, assign] = await Promise.all([
     pool.query(`SELECT deal_id, deal_title, company_id, company_name, group_ref, unit_tag, project_tag,
-                       assigned_by_id, opportunity, contract_date, stage_id, category_id, planned_purchase_date
+                       assigned_by_id, opportunity, contract_date, stage_id, category_id, planned_purchase_date, department_id
                 FROM ticketsmodule_stat_deals WHERE company_id IS NOT NULL`),
     pool.query('SELECT company_id, group_name, bdm_bitrix_id FROM ticketsmodule_project_clients'),
     pool.query('SELECT id, company_id, name, kind FROM ticketsmodule_kam_units'),
@@ -697,6 +697,87 @@ async function getCompanyStages(companyId) {
   };
 }
 
+// ── Аналитика КАМ (вкладка «Аналитика») — акцент на Key Account Management ────
+// Концентрация ключевых клиентов (Парето), портфели КАМов, покрытие (ключевые
+// клиенты без КАМа = «белые пятна»/риск), холдинги-группы, взвешенный прогноз
+// воронки (value × вероятность стадии P10–P80), win-rate. scope как у дерева.
+const STAGE_PROB = { P10: 0.1, P30: 0.3, P60: 0.6, P80: 0.8 };
+async function getAnalytics(scope) {
+  scope = scope || {};
+  const { deals, assign, coGroup, units } = await loadModel();
+  const unitsByCo = {}; units.forEach(u => (unitsByCo[String(u.company_id)] = unitsByCo[String(u.company_id)] || []).push(u));
+  const coKam = cid => { // эффективный КАМ компании (компания → группа → подразделение)
+    const g = (coGroup[cid] || {}).name;
+    let e = effKam(assign, { groupKey: g, companyId: cid });
+    if (e.bid != null) return e.bid;
+    for (const u of (unitsByCo[cid] || [])) { const eu = effKam(assign, { groupKey: g, companyId: cid, unitId: u.id }); if (eu.bid != null) return eu.bid; }
+    return null;
+  };
+  let ds = deals;
+  if (!scope.full && scope.userBid) ds = deals.filter(d => coKam(String(d.company_id)) === scope.userBid);
+
+  let preSum = 0, preCnt = 0, postSum = 0, postCnt = 0, failSum = 0, failCnt = 0, weighted = 0;
+  const funnel = { P10: { c: 0, s: 0 }, P30: { c: 0, s: 0 }, P60: { c: 0, s: 0 }, P80: { c: 0, s: 0 } };
+  const byDept = {}, byMonth = {}, comp = {};
+  const add = (o, k, s) => { (o[k] = o[k] || { c: 0, s: 0 }); o[k].c++; o[k].s += s; };
+  ds.forEach(d => {
+    const cid = String(d.company_id); const g = (coGroup[cid] || {}).name || 'Без группы';
+    const c = comp[cid] || (comp[cid] = { name: d.company_name || ('Компания #' + cid), group: g, kamBid: coKam(cid), pre: 0, preCnt: 0, weighted: 0, won: 0, wonCnt: 0, fail: 0, failCnt: 0 });
+    const opp = Number(d.opportunity) || 0; const ph = dealPhase(d);
+    if (ph === 'pre') {
+      preSum += opp; preCnt++; c.pre += opp; c.preCnt++;
+      const st = stageInfo(d.stage_id).step;
+      if (funnel[st]) { funnel[st].c++; funnel[st].s += opp; const w = opp * (STAGE_PROB[st] || 0); weighted += w; c.weighted += w; }
+      add(byDept, productOf(d), opp);
+      add(byMonth, d.planned_purchase_date ? ymd(d.planned_purchase_date).slice(0, 7) : '—', opp);
+    } else if (ph === 'post') { postSum += opp; postCnt++; c.won += opp; c.wonCnt++; }
+    else { failSum += opp; failCnt++; c.fail += opp; c.failCnt++; }
+  });
+  const comps = Object.values(comp);
+
+  // Портфели КАМов (по эффективному КАМу компании)
+  const kam = {};
+  comps.forEach(c => { const key = c.kamBid == null ? 'none' : String(c.kamBid);
+    const k = kam[key] || (kam[key] = { bid: c.kamBid, companies: 0, pre: 0, weighted: 0, wonCnt: 0, failCnt: 0 });
+    k.companies++; k.pre += c.pre; k.weighted += c.weighted; k.wonCnt += c.wonCnt; k.failCnt += c.failCnt;
+  });
+  const byKam = Object.values(kam).filter(k => k.bid != null)
+    .map(k => ({ name: uname(k.bid), companies: k.companies, sumMln: mln(k.pre), weightedMln: mln(k.weighted), winRate: (k.wonCnt + k.failCnt) > 0 ? Math.round(k.wonCnt / (k.wonCnt + k.failCnt) * 100) : 0, sum: k.pre }))
+    .sort((a, b) => b.sum - a.sum);
+
+  // Покрытие ключевых клиентов КАМами + «белые пятна» (без КАМа, но с пайплайном)
+  const assignedCos = comps.filter(c => c.kamBid != null).length;
+  const coverage = { companies: comps.length, assigned: assignedCos, unassigned: comps.length - assignedCos, pct: comps.length ? Math.round(assignedCos / comps.length * 100) : 0 };
+  const topUnassigned = comps.filter(c => c.kamBid == null && c.pre > 0).sort((a, b) => b.pre - a.pre).slice(0, 10)
+    .map(c => ({ name: c.name, group: c.group === 'Без группы' ? '' : c.group, sumMln: mln(c.pre), count: c.preCnt }));
+
+  // Топ ключевых клиентов по пайплайну (Парето с накопленной долей)
+  const sortedAcc = comps.filter(c => c.pre > 0).sort((a, b) => b.pre - a.pre);
+  const totalAcc = sortedAcc.reduce((a, c) => a + c.pre, 0) || 1;
+  let cum = 0;
+  const topAccounts = sortedAcc.slice(0, 15).map(c => { cum += c.pre; return { name: c.name, kam: c.kamBid != null ? uname(c.kamBid) : null, sumMln: mln(c.pre), count: c.preCnt, cumPct: Math.round(cum / totalAcc * 100) }; });
+
+  // По холдингам-группам
+  const grp = {};
+  comps.forEach(c => { const k = grp[c.group] || (grp[c.group] = { s: 0, c: 0, co: 0 }); k.s += c.pre; k.c += c.preCnt; k.co++; });
+  const byGroup = Object.entries(grp).filter(([g]) => g !== 'Без группы').map(([g, v]) => ({ name: g, sumMln: mln(v.s), count: v.c, companies: v.co, sum: v.s })).sort((a, b) => b.sum - a.sum).slice(0, 12);
+
+  const toArr = o => Object.entries(o).map(([k, v]) => ({ name: k, count: v.c, sumMln: mln(v.s), sum: v.s })).sort((a, b) => b.sum - a.sum);
+  const months = Object.entries(byMonth).filter(([m]) => m !== '—').map(([m, v]) => ({ month: m, count: v.c, sumMln: mln(v.s), sum: v.s })).sort((a, b) => a.month.localeCompare(b.month));
+  return {
+    scoped: !scope.full,
+    kpi: {
+      accounts: comps.length, groups: byGroup.length, coveragePct: coverage.pct, unassigned: coverage.unassigned,
+      pipelineMln: mln(preSum), weightedMln: mln(weighted), wonMln: mln(postSum),
+      winRate: (postCnt + failCnt) > 0 ? Math.round(postCnt / (postCnt + failCnt) * 100) : 0, avgMln: mln(preCnt ? preSum / preCnt : 0),
+    },
+    funnel: ['P10', 'P30', 'P60', 'P80'].map(k => ({ step: k, count: funnel[k].c, sumMln: mln(funnel[k].s), prob: STAGE_PROB[k] * 100 })),
+    byKam, coverage, topUnassigned, topAccounts, byGroup,
+    byDept: toArr(byDept).slice(0, 12),
+    months, noDate: byMonth['—'] ? { count: byMonth['—'].c, sumMln: mln(byMonth['—'].s) } : { count: 0, sumMln: 0 },
+  };
+}
+
 async function listUsers() {
   return Object.entries(USERS).filter(([id]) => id !== '1')
     .map(([id, name]) => ({ id: Number(id), name })).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
@@ -712,5 +793,5 @@ module.exports = {
   getTree, getProjectTree, getNode, getKamPortfolio, listUnits, resolveGroupMap, uname,
   assignKam, createUnit, deleteUnit, moveCompanyGroup, setDealUnit, setDealProject, listProjectOptions, listUsers, listGroups, listDeals, nodeDeals,
   canManageCompany, dealCompanyId, createProject, companyGroupName,
-  setDealPlanned, setProjectPlanned, addProjectComment, getCompanyStages,
+  setDealPlanned, setProjectPlanned, addProjectComment, getCompanyStages, getAnalytics,
 };

@@ -80,6 +80,16 @@ router.get('/units', requireAuth(VIEW_ROLES), async (req, res) => {
 router.get('/project-options', requireAuth(VIEW_ROLES), async (req, res) => {
   try { res.json({ options: await kam.listProjectOptions() }); } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// Аналитика КАМ (вкладка «Аналитика»): скоуп как у дерева (админ — всё, КАМ — свои).
+router.get('/analytics', requireAuth(VIEW_ROLES), async (req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    const full = ADMIN_ROLES.includes(req.user.role);
+    const userBid = req.user.bitrix_user_id ? parseInt(req.user.bitrix_user_id, 10) : null;
+    const key = full ? 'kam:analytics:full' : ('kam:analytics:u' + userBid);
+    res.json(await memo(key, 120 * 1000, () => kam.getAnalytics({ full, userBid })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 // Глубокая детализация компании по стадиям (п.8).
 router.get('/company-stages', requireAuth(VIEW_ROLES), async (req, res) => {
   try { res.set('Cache-Control', 'no-store'); res.json(await kam.getCompanyStages(req.query.company || '')); }

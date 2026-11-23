@@ -41,8 +41,9 @@ a{color:var(--info);text-decoration:none}
 .search{display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:8px 11px;margin-bottom:11px;color:var(--text-3);font-size:13px}
 .search input{border:none;background:none;outline:none;color:var(--text);font:inherit;flex:1}
 .nav-h{font-size:10px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:var(--text-3);margin:4px 6px 7px}
-.treecol{border:1px solid var(--line-2);background:var(--surface);color:var(--text-3);border-radius:7px;padding:3px 8px;font-size:10px;font-weight:700;letter-spacing:.02em;text-transform:none;cursor:pointer;white-space:nowrap}
-.treecol:hover{color:var(--text);border-color:var(--text-3)}
+.treecol{width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);border-radius:8px;font-size:17px;font-weight:400;line-height:1;cursor:pointer;flex:none;padding:0}
+.treecol:hover{color:var(--text);border-color:var(--text-3);background:var(--surface-2)}
+.sico{width:14px;height:14px;fill:none;stroke:var(--text-3);stroke-width:2;flex:none;opacity:.7}
 .tree{display:flex;flex-direction:column;gap:2px;max-height:calc(100vh - 180px);overflow:auto}
 .trow{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:10px;cursor:pointer}
 .trow:hover{background:var(--surface-2)}
@@ -141,7 +142,7 @@ a{color:var(--info);text-decoration:none}
 .dr-main .sum{flex-shrink:0;font-size:12.5px}
 .dstage{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--text-3);background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:4px 7px;flex-shrink:0;white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis}
 .downer{font-size:11px;color:var(--text-3);font-weight:600;flex-shrink:0;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis}
-.downer::before{content:"👤 ";opacity:.6}
+.downer{color:var(--text-3)}
 .dr-ctl{display:flex;align-items:flex-end;gap:9px;flex-wrap:wrap;padding-left:52px}
 .dctl{display:flex;flex-direction:column;gap:3px;flex:1 1 220px;min-width:170px}
 .dctl>span{font-size:9px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--text-3)}
@@ -201,7 +202,7 @@ body{background:radial-gradient(135% 72% at 100% -8%, color-mix(in srgb,var(--ac
 .focusback:hover{text-decoration:underline}
 /* Планируемый срок покупки (п.6) */
 .selbox.dt{padding:6px 10px;color-scheme:light dark}
-.projdate{display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:color-mix(in srgb,var(--accent) 7%,var(--surface-2));border:1px solid var(--line-2);border-radius:10px;padding:9px 13px;margin-bottom:9px;font-size:12.5px;font-weight:600;color:var(--text-2)}
+.projdate{display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:linear-gradient(180deg,var(--surface),color-mix(in srgb,var(--surface-2) 70%,var(--surface)));border:1px solid var(--line);border-radius:10px;padding:9px 13px;margin-bottom:9px;font-size:12.5px;font-weight:600;color:var(--text-2)}
 .projdate .pdinp{border:1px solid var(--line-2);background:var(--surface);border-radius:8px;padding:6px 10px;font:inherit;font-size:12.5px;color:var(--text);color-scheme:light dark}
 .projdate .pdhint{font-size:11px;font-weight:500;color:var(--text-3)}
 /* Переключатель фаз над списком сделок */
@@ -239,6 +240,26 @@ body{background:radial-gradient(135% 72% at 100% -8%, color-mix(in srgb,var(--ac
 .deptrow .dn{font-weight:650;flex:1}.deptrow .dc{color:var(--text-3);font-size:11.5px;font-variant-numeric:tabular-nums}.deptrow .ds{font-weight:700;letter-spacing:-.2px;font-variant-numeric:tabular-nums}
 .ks-ta{border:1px solid var(--line-2);background:var(--surface-2);border-radius:11px;padding:11px 13px;font:inherit;font-size:13.5px;color:var(--text);outline:none;resize:vertical;min-height:70px}
 .ks-ta:focus{border-color:var(--accent)}
+/* Аналитика (KAM) */
+.an-scope{background:color-mix(in srgb,var(--info) 10%,var(--surface));border:1px solid var(--line);border-radius:10px;padding:9px 13px;font-size:12.5px;color:var(--text-2);margin-bottom:14px}
+.an-kpis{grid-template-columns:repeat(6,1fr);margin:0 0 14px}
+.an-grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.an-sec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:0 1px 2px rgba(16,24,40,.04);margin-bottom:14px}
+.an-grid2 .an-sec{margin-bottom:0}
+.an-sec.warn{border-color:color-mix(in srgb,#d9534f 40%,var(--line))}
+.an-h{display:flex;align-items:baseline;gap:10px;font-size:14px;font-weight:700;letter-spacing:-.1px;margin-bottom:13px;flex-wrap:wrap}
+.an-h .an-sub{font-size:11px;font-weight:500;color:var(--text-3)}
+.anbar{margin-bottom:11px}.anbar:last-child{margin-bottom:0}
+.anbar-top{display:flex;justify-content:space-between;gap:10px;margin-bottom:4px;font-size:12px;align-items:baseline}
+.anbar-n{font-weight:600;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.anbar-v{color:var(--text-3);font-weight:600;flex-shrink:0;font-variant-numeric:tabular-nums}
+.anbar-kam{font-size:10.5px;color:var(--text-3);font-weight:500}
+.anbar-nokam{font-size:10px;font-weight:700;color:#c0392b;background:color-mix(in srgb,#d9534f 12%,transparent);padding:1px 6px;border-radius:5px}
+.anbar-track{height:8px;background:var(--surface-2);border-radius:6px;overflow:hidden}
+.anbar-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#2a78d6,#3a88e6);transition:width .3s}
+.anbar-fill.warn{background:linear-gradient(90deg,#d9534f,#e0726e)}
+.anbar-fill.fn-P10{background:#e8c06a}.anbar-fill.fn-P30{background:#e0a33a}.anbar-fill.fn-P60{background:#5b9f6f}.anbar-fill.fn-P80{background:#1baf7a}
+@media(max-width:900px){.an-kpis{grid-template-columns:repeat(2,1fr)}.an-grid2{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -251,18 +272,19 @@ body{background:radial-gradient(135% 72% at 100% -8%, color-mix(in srgb,var(--ac
     <button data-v="proj">От проектов</button>
     <button data-v="kam">От КАМ</button>
     <button data-v="stage">Стадии</button>
+    <button data-v="an">Аналитика</button>
   </div>
   <div class="sp"></div>
-  <button class="ibtn" id="syncBtn" title="Полный пересинк из Битрикса" style="display:none" onclick="kamResync()">🔄 Синк</button>
-  <button class="ibtn" id="admBtn" title="Админка (скоро)">⚙ Админка</button>
+  <button class="ibtn" id="syncBtn" title="Полный пересинк из Битрикса" style="display:none" onclick="kamResync()">Синк</button>
+  <button class="ibtn" id="admBtn" title="Админ">Админ</button>
   <button class="ibtn sq" id="themeBtn" title="Тема">◐</button>
 </header>
 
 <div class="view on wrap" id="v-co">
   <div class="cols">
     <aside class="panel nav">
-      <div class="search">🔍<input id="treeSearch" placeholder="Поиск: группа, компания…"></div>
-      <div class="nav-h" style="display:flex;align-items:center;justify-content:space-between;gap:8px">Иерархия клиентов<button class="treecol" type="button" onclick="toggleTreeCollapse()">⊟ Свернуть</button></div>
+      <div class="search"><svg class="sico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="treeSearch" placeholder="Поиск: группа, компания…"></div>
+      <div class="nav-h" style="display:flex;align-items:center;justify-content:space-between;gap:8px">Иерархия клиентов<button class="treecol" type="button" onclick="toggleTreeCollapse()">−</button></div>
       <div class="tree" id="tree"><div class="spin">Загрузка…</div></div>
     </aside>
     <main id="detail"><div class="spin">Выберите узел слева</div></main>
@@ -271,8 +293,8 @@ body{background:radial-gradient(135% 72% at 100% -8%, color-mix(in srgb,var(--ac
 
 <div class="view wrap" id="v-proj">
   <div style="display:flex;align-items:center;gap:12px;margin:0 0 14px;flex-wrap:wrap">
-    <div class="search" style="max-width:420px;flex:1 1 280px;margin:0">🔍<input id="projSearch" placeholder="Поиск проекта или компании…"></div>
-    <button class="mini-btn" id="projCollapseBtn" type="button" onclick="toggleCollapseAll()">⊟ Свернуть всё</button>
+    <div class="search" style="max-width:420px;flex:1 1 280px;margin:0"><svg class="sico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="projSearch" placeholder="Поиск проекта или компании…"></div>
+    <button class="treecol" id="projCollapseBtn" type="button" onclick="toggleCollapseAll()">−</button>
   </div>
   <div id="projbody"><div class="spin">Загрузка…</div></div>
 </div>
@@ -284,10 +306,14 @@ body{background:radial-gradient(135% 72% at 100% -8%, color-mix(in srgb,var(--ac
 
 <div class="view wrap" id="v-stage">
   <div id="stageHome">
-    <div class="search" style="max-width:460px;margin:0 0 14px">🔍<input id="stageSearch" placeholder="Компания — для детализации по стадиям…"></div>
+    <div class="search" style="max-width:460px;margin:0 0 14px"><svg class="sico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="stageSearch" placeholder="Компания — для детализации по стадиям…"></div>
     <div id="stageList"><div class="spin">Загрузка…</div></div>
   </div>
   <div id="stageDetail" style="display:none"></div>
+</div>
+
+<div class="view wrap" id="v-an">
+  <div id="anbody"><div class="spin">Загрузка…</div></div>
 </div>
 
 <div class="view wrap" id="v-adm">
@@ -367,8 +393,8 @@ function renderTree(){
     h+=`<div class="trow" style="margin-top:6px" data-sel="group:${encodeURIComponent('Без группы')}">
       <span class="caret leaf"></span><span class="ttype" style="background:var(--surface-3);color:var(--text-3)">Пул</span>
       <span class="tname">Без группы</span><span class="tmeta">${pool.companiesCount}</span></div>
-      <div class="poolbox"><div class="ph">🔎 Найти компанию в пуле для разбора</div>
-        <div class="search" style="margin-bottom:6px">🔍<input id="poolSearch" placeholder="Название компании…"></div>
+      <div class="poolbox"><div class="ph"><svg class="sico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg> Найти компанию в пуле для разбора</div>
+        <div class="search" style="margin-bottom:6px"><svg class="sico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="poolSearch" placeholder="Название компании…"></div>
         <div class="pool-res" id="poolRes"><div class="tmeta" style="padding:6px">Начните вводить — покажу совпадения.</div></div></div>`;
     window._pool=pool;
   }
@@ -425,7 +451,7 @@ async function toggleProj(card,proj){
     const deals=d.deals||[];
     box.dataset.project=proj; box._q=''; box._ph='all';
     const isReal=proj && proj!=='— вне проекта —';
-    const dateBar=isReal?`<div class="projdate">📅 Планируемый срок покупки всему проекту «${esc(proj)}»: <input type="date" class="pdinp" onchange="setProjectPlanned(this)"><span class="pdhint">проставится во все сделки проекта</span><button class="mini-btn" type="button" style="margin-left:auto" onclick="openProjectComment(${jarg(proj)})">💬 Коммент всему проекту</button></div>`:'';
+    const dateBar=isReal?`<div class="projdate">Планируемый срок покупки всему проекту «${esc(proj)}»: <input type="date" class="pdinp" onchange="setProjectPlanned(this)"><span class="pdhint">проставится во все сделки проекта</span><button class="mini-btn" type="button" style="margin-left:auto" onclick="openProjectComment(${jarg(proj)})">Коммент всему проекту</button></div>`:'';
     box.innerHTML=deals.length
       ? dateBar+dealsBlock(deals)
       : '<div class="tmeta" style="padding:8px">Сделок нет</div>';
@@ -443,7 +469,7 @@ function dealsBlock(deals){
     <button class="dfbtn post" type="button" data-ph="post" onclick="filterPhase(this)">Постконтрактные · ${cnt.post}</button>
     <button class="dfbtn fail" type="button" data-ph="failed" onclick="filterPhase(this)">Проваленные · ${cnt.failed}</button>
   </div>`;
-  return bar+`<div class="dsearch">🔎<input placeholder="Поиск сделки…" oninput="filterDeals(this)"></div><div class="drows">${deals.map(dealRow).join('')}</div>`;
+  return bar+`<div class="dsearch"><svg class="sico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input placeholder="Поиск сделки…" oninput="filterDeals(this)"></div><div class="drows">${deals.map(dealRow).join('')}</div>`;
 }
 function applyDealFilters(box){ const q=(box._q||'').toLowerCase(); const ph=box._ph||'all';
   box.querySelectorAll('.drow').forEach(r=>{ const okT=!q||(r.dataset.t||'').includes(q); const okP=ph==='all'||r.dataset.ph===ph; r.style.display=(okT&&okP)?'':'none'; }); }
@@ -472,7 +498,7 @@ function dealRow(dl){ const ph=dl.phase||(dl.post?'post':'pre'); const pm={pre:[
     <label class="dctl"><span>Проект</span><div class="selwrap"><select class="selbox prj" onchange="setDealProject(${dl.dealId},this.value)">${projOpts(dl.project)}</select><button class="addbtn" type="button" title="Создать проект" onclick="openCreateProject(${dl.companyId},${dl.dealId},this)">＋</button></div></label>
     <label class="dctl"><span>Подразделение</span><div class="selwrap"><select class="selbox" onchange="setDeal(${dl.dealId},this.value)">${unitOpts(dl.companyId,dl.unit)}</select><button class="addbtn" type="button" title="Создать подразделение" onclick="openCreateUnit(${dl.companyId},${dl.dealId},this)">＋</button></div></label>
     <label class="dctl" style="flex:0 1 170px"><span>Срок покупки</span><input type="date" class="selbox dt" value="${dl.planned||''}" onchange="setDealPlanned(${dl.dealId},this.value)"></label>
-    <button class="mini-btn" type="button" title="Комментарии (в Битрикс)" onclick="openDealComments(${dl.dealId},${jarg(dl.title)})">💬</button>
+    <button class="mini-btn" type="button" title="Комментарии (в Битрикс)" onclick="openDealComments(${dl.dealId},${jarg(dl.title)})">Коммент</button>
     <a href="${dl.url}" target="_blank" class="mini-btn">↗ Б24</a>
   </div></div>`; }
 async function setDeal(id,unit){ try{ await apiKam('/deal-unit',{dealId:id,unit}); toast('Подразделение записано в Битрикс'); }catch(e){ toast('Ошибка: '+e.message); } }
@@ -493,9 +519,9 @@ async function kamResync(){ const btn=document.getElementById('syncBtn');
   }catch(e){ toast('Ошибка: '+e.message); if(btn)btn.disabled=false; } }
 async function pollSync(){ clearTimeout(_syncPoll); const btn=document.getElementById('syncBtn');
   try{ const s=await fetch('/api/kam/resync-status',{credentials:'include'}).then(r=>r.json()); const p=s.progress||{};
-    if(s.busy){ if(btn)btn.textContent='🔄 '+(p.pct!=null?p.pct:0)+'%'; _syncPoll=setTimeout(pollSync,2500); }
-    else { if(btn){btn.textContent='🔄 Синк';btn.disabled=false;} toast('Синхронизация завершена'); PTREE=null; boot(); }
-  }catch(e){ if(btn){btn.textContent='🔄 Синк';btn.disabled=false;} } }
+    if(s.busy){ if(btn)btn.textContent='Синк · '+(p.pct!=null?p.pct:0)+'%'; _syncPoll=setTimeout(pollSync,2500); }
+    else { if(btn){btn.textContent='Синк';btn.disabled=false;} toast('Синхронизация завершена'); PTREE=null; boot(); }
+  }catch(e){ if(btn){btn.textContent='Синк';btn.disabled=false;} } }
 // Проваливание из детали: кликаем соответствующую строку дерева (чтобы дерево и
 // выделение остались в синхроне); если её нет в DOM — грузим узел напрямую.
 function drillTo(type,key){
@@ -542,7 +568,7 @@ function renderDetail(n){
       </div>
     </div>
     ${childNavHtml(n)}
-    <div class="sec-h"><h3>Проекты</h3><div style="display:flex;align-items:center;gap:10px"><span class="cnt">до / после контракта</span><button class="treecol" type="button" onclick="collapseDetailProjects()">⊟ Свернуть сделки</button></div></div>
+    <div class="sec-h"><h3>Проекты</h3><div style="display:flex;align-items:center;gap:10px"><span class="cnt">до / после контракта</span><button class="treecol" type="button" onclick="collapseDetailProjects()">−</button></div></div>
     <div class="barleg"><span><i style="background:#e0a33a"></i>до контракта</span><span><i style="background:#3bd47f"></i>после контракта</span></div>
     <div class="pgrid">${(n.projectsList||[]).map(p=>`
       <div class="pcard" data-type="${esc(n.type)}" data-key="${esc(n.key)}" onclick="toggleProj(this,${jarg(p.name)})">
@@ -603,7 +629,7 @@ function toggleCollapseAll(){
     if(box)box.classList.toggle('hide',_collapsedAll);
     if(cr)cr.classList.toggle('open',!_collapsedAll);
   });
-  const btn=document.getElementById('projCollapseBtn'); if(btn)btn.innerHTML=_collapsedAll?'⊞ Развернуть всё':'⊟ Свернуть всё';
+  const btn=document.getElementById('projCollapseBtn'); if(btn)btn.innerHTML=_collapsedAll?'+':'−';
 }
 // Фокус: показать только одну компанию проекта на всю ширину (п.9)
 function focusCompany(btn){
@@ -651,7 +677,7 @@ async function showKamPort(id,name){
   const p=await fetch('/api/kam/kam/'+id,{credentials:'include',cache:'no-store'}).then(r=>r.json());
   port.innerHTML=`<div class="sec-h"><h3>Портфель — ${esc(name)}</h3><span class="cnt">компании и подразделения</span></div>
     ${(p.rows||[]).map(r=>`<div class="port-node"><div class="pn-h"><span class="ttype c">Комп.</span><b onclick="openCompany('${encodeURIComponent(r.companyId)}')">${esc(r.company)}</b><span class="tmeta" style="margin-left:auto">${esc(r.group)}</span></div>
-      <div>${r.direct?`<span class="lab-chip" title="Открыть компанию" onclick="openCompany('${encodeURIComponent(r.companyId)}')">🏢 без подразделений<span class="d">${r.projects} проект.</span></span>`:(r.labs||[]).map(l=>`<span class="lab-chip" title="Открыть компанию" onclick="openCompany('${encodeURIComponent(r.companyId)}')">🧪 ${esc(l.name)}<span class="d">${l.projects} проект.</span>${l.own?'<span class="inh">свой</span>':''}</span>`).join('')}</div></div>`).join('')||'<div class="empty">Нет закреплённых компаний</div>'}`;
+      <div>${r.direct?`<span class="lab-chip" title="Открыть компанию" onclick="openCompany('${encodeURIComponent(r.companyId)}')">без подразделений<span class="d">${r.projects} проект.</span></span>`:(r.labs||[]).map(l=>`<span class="lab-chip" title="Открыть компанию" onclick="openCompany('${encodeURIComponent(r.companyId)}')">${esc(l.name)}<span class="d">${l.projects} проект.</span>${l.own?'<span class="inh">свой</span>':''}</span>`).join('')}</div></div>`).join('')||'<div class="empty">Нет закреплённых компаний</div>'}`;
 }
 function goKam(id){ go('kam'); setTimeout(()=>{const el=document.querySelector('.kcard[data-k="'+id+'"]'); if(el)el.click();},300); }
 function openCompany(id){ go('co'); selNode('company',decodeURIComponent(id),null); }
@@ -778,7 +804,7 @@ async function renderAdm(){
   // Пул на разбор — показываем все (постранично) + фильтр, правка прямо в строке
   window._poolAdm=pool||{companies:[]}; poolShown=40;
   h+=`<div class="adm-grp"><div class="adm-grp-h"><span class="ttype" style="background:var(--surface-3);color:var(--text-3)">Пул</span><span class="gn">Без группы — разобрать (${pool?pool.companiesCount:0})</span>
-      <div class="search" style="margin-left:auto;max-width:300px">🔍<input id="admPoolSearch" placeholder="Фильтр по названию…"></div></div>
+      <div class="search" style="margin-left:auto;max-width:300px"><svg class="sico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="admPoolSearch" placeholder="Фильтр по названию…"></div></div>
     <div id="admPoolRes"></div></div>`;
   body.innerHTML=h;
   renderPool();
@@ -854,6 +880,53 @@ function selectStage(card){
   const box=document.getElementById('stDeals');
   box.innerHTML=ds.length?`<div class="pdeals" style="display:block">${dealsBlock(ds)}</div>`:'<div class="empty">Нет сделок на этой стадии</div>';
 }
+// ── Вкладка «Аналитика» (акцент на Key Account Management) ───────────────────
+function anBar(name, mln, max, sub, cls){
+  const pct=max>0?Math.max(2,Math.round(mln/max*100)):0;
+  return `<div class="anbar"><div class="anbar-top"><span class="anbar-n" title="${esc(name)}">${esc(name)}</span><span class="anbar-v">${mln} млн${sub?' · '+sub:''}</span></div><div class="anbar-track"><div class="anbar-fill ${cls||''}" style="width:${pct}%"></div></div></div>`;
+}
+async function renderAnalytics(){
+  const root=document.getElementById('anbody'); root.innerHTML='<div class="spin">Загрузка аналитики…</div>';
+  let a; try{ a=await fetch('/api/kam/analytics',{credentials:'include',cache:'no-store'}).then(r=>r.json()); }catch(e){ root.innerHTML='<div class="empty">Не удалось загрузить</div>'; return; }
+  if(a.error){ root.innerHTML='<div class="empty">'+esc(a.error)+'</div>'; return; }
+  const k=a.kpi;
+  const kpi=(n,l,hl)=>`<div class="kpi${hl?' hl':''}"><div class="n">${n}</div><div class="l">${l}</div></div>`;
+  const mx=arr=>Math.max(1,...arr.map(x=>x.sumMln||0));
+  root.innerHTML=`
+    ${a.scoped?'<div class="an-scope">Показаны только ваши ключевые клиенты (где вы назначены КАМ).</div>':''}
+    <div class="kpis an-kpis">
+      ${kpi(k.accounts,'Ключевых клиентов')}
+      ${kpi(k.coveragePct+'<small style="font-size:13px">%</small>','Покрытие КАМ'+(k.unassigned?' · без КАМа '+k.unassigned:''))}
+      ${kpi(k.pipelineMln+'<small style="font-size:12px"> млн</small>','Пайплайн (до контракта)')}
+      ${kpi(k.weightedMln+'<small style="font-size:12px"> млн</small>','Взвешенный прогноз',1)}
+      ${kpi(k.winRate+'<small style="font-size:13px">%</small>','Win-rate')}
+      ${kpi(k.avgMln+'<small style="font-size:12px"> млн</small>','Средний чек')}
+    </div>
+    <div class="an-grid2">
+      <div class="an-sec"><div class="an-h">Воронка по вероятности<span class="an-sub">взвешенный прогноз = сумма × вероятность стадии</span></div>
+        ${a.funnel.map(f=>anBar(f.step+' · '+f.prob+'%', f.sumMln, mx(a.funnel), f.count+' сд.', 'fn-'+f.step)).join('')}
+      </div>
+      <div class="an-sec"><div class="an-h">Портфели КАМов<span class="an-sub">пайплайн по эффективному КАМу</span></div>
+        ${a.byKam.length?a.byKam.map(x=>anBar(x.name, x.sumMln, mx(a.byKam), x.companies+' комп. · win '+x.winRate+'%')).join(''):'<div class="empty">КАМы не назначены</div>'}
+      </div>
+    </div>
+    <div class="an-sec"><div class="an-h">Топ ключевых клиентов — концентрация пайплайна<span class="an-sub">накопленная доля (Парето)</span></div>
+      ${a.topAccounts.length?a.topAccounts.map(x=>`<div class="anbar"><div class="anbar-top"><span class="anbar-n">${esc(x.name)} ${x.kam?'<span class="anbar-kam">'+esc(x.kam)+'</span>':'<span class="anbar-nokam">нет КАМа</span>'}</span><span class="anbar-v">${x.sumMln} млн · ${x.count} сд. · ∑ ${x.cumPct}%</span></div><div class="anbar-track"><div class="anbar-fill" style="width:${Math.max(2,Math.round(x.sumMln/mx(a.topAccounts)*100))}%"></div></div></div>`).join(''):'<div class="empty">Нет данных</div>'}
+    </div>
+    ${a.topUnassigned.length?`<div class="an-sec warn"><div class="an-h">Ключевые клиенты без КАМа — «белые пятна»<span class="an-sub">крупный пайплайн без ответственного КАМа</span></div>
+      ${a.topUnassigned.map(x=>anBar(x.name+(x.group?' · '+x.group:''), x.sumMln, a.topUnassigned[0].sumMln, x.count+' сд.', 'warn')).join('')}</div>`:''}
+    <div class="an-grid2">
+      <div class="an-sec"><div class="an-h">По холдингам (группам)</div>
+        ${a.byGroup.length?a.byGroup.map(x=>anBar(x.name, x.sumMln, mx(a.byGroup), x.companies+' комп.')).join(''):'<div class="empty">Групп нет</div>'}
+      </div>
+      <div class="an-sec"><div class="an-h">По отделам<span class="an-sub">кросс-продажи по продуктовым линиям</span></div>
+        ${a.byDept.length?a.byDept.map(x=>anBar(x.name, x.sumMln, mx(a.byDept), x.count+' сд.')).join(''):'<div class="empty">—</div>'}
+      </div>
+    </div>
+    <div class="an-sec"><div class="an-h">Прогноз по месяцам<span class="an-sub">по планируемому сроку покупки${a.noDate.count?' · без срока: '+a.noDate.count+' сд. ('+a.noDate.sumMln+' млн)':''}</span></div>
+      ${a.months.length?a.months.map(m=>anBar(m.month, m.sumMln, mx(a.months), m.count+' сд.')).join(''):'<div class="empty">Срок покупки не заполнен — проставьте его в сделках, и здесь появится прогноз</div>'}
+    </div>`;
+}
 // Свернуть все раскрытые карточки проектов в детали «От компаний»
 function collapseDetailProjects(){
   document.querySelectorAll('#detail .pcard.expanded').forEach(c=>{ const box=c.querySelector('.pdeals'); if(box)box.style.display='none'; c.classList.remove('expanded'); });
@@ -872,12 +945,12 @@ function toggleTreeCollapse(){
     tree.querySelectorAll('[data-tog^="g:"]').forEach(c=>c.classList.add('open'));
     tree.querySelectorAll('[data-tog^="co:"]').forEach(c=>c.classList.remove('open'));
   }
-  const btn=document.querySelector('.treecol'); if(btn)btn.textContent=_treeCollapsed?'⊞ Развернуть':'⊟ Свернуть';
+  const btn=document.querySelector('.treecol'); if(btn)btn.textContent=_treeCollapsed?'+':'−';
 }
 function go(v){ document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
   document.getElementById('admBtn').classList.toggle('acc',v==='adm');
   document.querySelectorAll('.view').forEach(x=>x.classList.remove('on')); document.getElementById('v-'+v).classList.add('on');
-  if(v==='proj')renderProjView(); if(v==='kam')renderKamView(); if(v==='adm')renderAdm(); if(v==='stage')renderStageView(); }
+  if(v==='proj')renderProjView(); if(v==='kam')renderKamView(); if(v==='adm')renderAdm(); if(v==='stage')renderStageView(); if(v==='an')renderAnalytics(); }
 document.querySelectorAll('#seg button').forEach(b=>b.addEventListener('click',()=>go(b.dataset.v)));
 document.getElementById('themeBtn').addEventListener('click',()=>{const d=document.documentElement;const dark=d.getAttribute('data-theme')!=='dark';d.setAttribute('data-theme',dark?'dark':'light');try{localStorage.setItem('pls-theme',dark?'dark':'light')}catch(e){}});
 document.getElementById('admBtn').addEventListener('click',()=>go('adm'));
