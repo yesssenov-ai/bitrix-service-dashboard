@@ -477,7 +477,7 @@ const FB_KIND = { idea: '💡 Идея', problem: '🐞 Проблема' };
 const FB_STBADGE = {
   new: '<span class="status-off"><span class="dot"></span>Новое</span>',
   seen: '<span class="role-badge">Просмотрено</span>',
-  done: '<span class="status-on"><span class="dot"></span>Готово</span>',
+  done: '<span class="status-on"><span class="dot"></span>Отработано</span>',
 };
 async function loadFeedback(){
   const wrap = document.getElementById('fbTable');
@@ -500,7 +500,7 @@ async function loadFeedback(){
         <td>${FB_STBADGE[i.status||'new']||esc(i.status)}</td>
         <td><div class="row-actions">
           ${(i.status!=='seen')?`<button class="btn btn-sm" onclick="setFb(${i.id},'seen')">Просмотрено</button>`:''}
-          ${(i.status!=='done')?`<button class="btn btn-sm btn-icon" onclick="setFb(${i.id},'done')" title="Отметить готовым">✓</button>`:''}
+          ${(i.status!=='done')?`<button class="btn btn-sm" onclick="setFb(${i.id},'done')" title="Отметить отработанным — автор получит уведомление в Telegram и ЦУП">✓ Отработано</button>`:''}
         </div></td>
       </tr>`).join('')}</tbody></table>`;
   } catch(e){ wrap.innerHTML = `<div class="empty">Ошибка: ${esc(e.message)}</div>`; }

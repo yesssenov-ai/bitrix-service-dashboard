@@ -145,6 +145,9 @@ body{background:radial-gradient(135% 72% at 100% -8%, color-mix(in srgb,var(--ac
 .ttype{box-shadow:0 1px 0 0 color-mix(in srgb,#fff 6%,transparent) inset}
 @media(max-width:900px){.cols{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}.pgrid{grid-template-columns:1fr}.ttl small,.allmod{display:none}.seg button{padding:6px 10px}
   #v-co.drill .nav{display:none} #v-co.drill .mob-back{display:inline-flex} #v-co:not(.drill) #detail{display:none} .tree{max-height:none}}
+/* У КАМ есть свой переключатель темы (#themeBtn справа) — прячем дублирующий
+   инъектируемый из cup-theme.js, который наезжал на навигацию. */
+#themeToggle{display:none!important}
 </style>
 </head>
 <body>
@@ -426,7 +429,7 @@ async function showKamPort(id,name){
   const p=await fetch('/api/kam/kam/'+id,{credentials:'include',cache:'no-store'}).then(r=>r.json());
   port.innerHTML=`<div class="sec-h"><h3>Портфель — ${esc(name)}</h3><span class="cnt">компании и подразделения</span></div>
     ${(p.rows||[]).map(r=>`<div class="port-node"><div class="pn-h"><span class="ttype c">Комп.</span><b onclick="openCompany('${encodeURIComponent(r.companyId)}')">${esc(r.company)}</b><span class="tmeta" style="margin-left:auto">${esc(r.group)}</span></div>
-      <div>${r.direct?`<span class="lab-chip">🏢 без подразделений<span class="d">${r.projects} проект.</span></span>`:(r.labs||[]).map(l=>`<span class="lab-chip">🧪 ${esc(l.name)}<span class="d">${l.projects} проект.</span>${l.own?'<span class="inh">свой</span>':''}</span>`).join('')}</div></div>`).join('')||'<div class="empty">Нет закреплённых компаний</div>'}`;
+      <div>${r.direct?`<span class="lab-chip" title="Открыть компанию" onclick="openCompany('${encodeURIComponent(r.companyId)}')">🏢 без подразделений<span class="d">${r.projects} проект.</span></span>`:(r.labs||[]).map(l=>`<span class="lab-chip" title="Открыть компанию" onclick="openCompany('${encodeURIComponent(r.companyId)}')">🧪 ${esc(l.name)}<span class="d">${l.projects} проект.</span>${l.own?'<span class="inh">свой</span>':''}</span>`).join('')}</div></div>`).join('')||'<div class="empty">Нет закреплённых компаний</div>'}`;
 }
 function goKam(id){ go('kam'); setTimeout(()=>{const el=document.querySelector('.kcard[data-k="'+id+'"]'); if(el)el.click();},300); }
 function openCompany(id){ go('co'); selNode('company',decodeURIComponent(id),null); }
