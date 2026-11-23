@@ -21,13 +21,13 @@ html,body{height:100%;font-family:var(--f-ui);color:var(--text);-webkit-font-smo
 body{background:transparent}
 #cup-bg{display:none!important}
 body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
-  background-image:url('/assets/cup-pattern-light.png'),url('/assets/cup-pattern-light.png'),url('/assets/cup-pattern-light.png'),url('/assets/cup-pattern-light.png'),url('/assets/cup-pattern-light.png');
+  background-image:url('/assets/cup-pattern-light.png'),url('/assets/cup-pattern-light.png');
   background-repeat:no-repeat;background-position:center;background-size:cover}
 html[data-theme="dark"]{background:var(--bg)}
-html[data-theme="dark"] body::before{background-image:url('/assets/cup-pattern-dark.png'),url('/assets/cup-pattern-dark.png'),url('/assets/cup-pattern-dark.png')}
+html[data-theme="dark"] body::before{background-image:url('/assets/cup-pattern-dark.png'),url('/assets/cup-pattern-dark.png')}
 @media(prefers-color-scheme:dark){
   html:not([data-theme="light"]){background:var(--bg)}
-  html:not([data-theme="light"]) body::before{background-image:url('/assets/cup-pattern-dark.png'),url('/assets/cup-pattern-dark.png'),url('/assets/cup-pattern-dark.png')}}
+  html:not([data-theme="light"]) body::before{background-image:url('/assets/cup-pattern-dark.png'),url('/assets/cup-pattern-dark.png')}}
 button{font-family:inherit;cursor:pointer}
 a{color:var(--info);text-decoration:none}
 
