@@ -98,6 +98,41 @@ router.get('/debt', requireAuth(VIEW), async (req, res) => {
 });
 router.post('/debt/refresh', requireAuth(VIEW), (req, res) => doManualRefresh(req, res, 'Дебет', () => require('../finance-debt-calc').syncDebt()));
 
+// ── Комментарии с файлами по договорам Дебета ───────────────────────────────
+// Карта «договор → число комментариев» (для бейджей в таблице).
+router.get('/debt/comment-counts', requireAuth(VIEW), async (req, res) => {
+  try { res.set('Cache-Control', 'no-store'); res.json({ ok: true, counts: await require('../debt-comments').counts() }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// Лента комментариев по договору (хронологически).
+router.get('/debt/comments', requireAuth(VIEW), async (req, res) => {
+  try { res.set('Cache-Control', 'no-store'); res.json({ ok: true, items: await require('../debt-comments').listComments(req.query.key || '') }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// Добавить комментарий (+ файлы, множественно). Не заменяет — добавляет.
+router.post('/debt/comments', requireAuth(VIEW), express.json({ limit: '22mb' }), async (req, res) => {
+  try {
+    const b = req.body || {};
+    if (!b.key) return res.status(400).json({ ok: false, error: 'Не указан договор' });
+    const c = await require('../debt-comments').addComment({
+      debtKey: b.key, contractor: b.contractor, text: b.text, files: b.files,
+      authorId: req.user.id, authorName: req.user.display_name || req.user.username,
+    });
+    res.json({ ok: true, comment: c });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// Отдать вложение комментария (картинки — inline, остальное — скачиванием).
+router.get('/debt/comment-file/:token', requireAuth(VIEW), async (req, res) => {
+  try {
+    const f = await require('../debt-comments').getFile(req.params.token);
+    if (!f || !f.data) return res.status(404).send('нет файла');
+    res.set('Content-Type', f.mime || 'application/octet-stream');
+    res.set('Content-Disposition', (/^image\//.test(f.mime || '') ? 'inline' : 'attachment') + '; filename="' + encodeURIComponent(f.filename || 'file') + '"');
+    res.set('Cache-Control', 'private, max-age=600');
+    res.send(Buffer.from(f.data));
+  } catch (e) { res.status(500).send('err'); }
+});
+
 // ── Склад (остатки на складах, fact_stock) ──────────────────────────────────
 router.get('/stock', requireAuth(VIEW), async (req, res) => {
   try { res.json(await memo('fin:stock', FIN_TTL, () => require('../finance-stock-calc').getStockBoard())); }

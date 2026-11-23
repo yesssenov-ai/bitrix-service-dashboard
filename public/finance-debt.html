@@ -52,6 +52,46 @@ select:focus,input:focus{border-color:var(--brand)}
 .sbtn{border:1px solid var(--stroke-2,var(--line-2));background:var(--card,var(--surface));color:var(--text-2);border-radius:6px;font:600 11.5px/1 var(--font,var(--f-ui));padding:5px 10px;cursor:pointer;transition:.14s}
 .sbtn:hover{background:var(--bg,var(--surface-2))}
 .sbtn.on{background:var(--text);border-color:var(--text);color:var(--card,var(--surface))}
+/* Комментарии по договору */
+.cmt-btn{display:inline-flex;align-items:center;gap:3px;border:1px solid var(--stroke-2,var(--line-2));background:var(--card,var(--surface));color:var(--text-3);border-radius:6px;padding:2px 7px;font-size:12px;cursor:pointer;vertical-align:middle;transition:.14s;margin-left:4px}
+.cmt-btn:hover{color:var(--text);border-color:var(--text-3)}
+.cmt-btn.has{color:var(--brand,var(--accent));border-color:color-mix(in srgb,var(--accent) 40%,var(--stroke-2,var(--line-2)))}
+.cmt-btn .cc{font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums}
+.cmt-ov{position:fixed;inset:0;z-index:300;display:none;background:rgba(0,0,0,.28);backdrop-filter:blur(2px)}
+.cmt-ov.open{display:flex;justify-content:flex-end}
+.cmt-pan{width:min(460px,100vw);height:100%;background:var(--card,var(--surface));box-shadow:-6px 0 34px rgba(0,0,0,.16);display:flex;flex-direction:column;animation:cmtsl .18s ease}
+@keyframes cmtsl{from{transform:translateX(26px);opacity:.5}to{transform:none;opacity:1}}
+.cmt-h{display:flex;align-items:flex-start;gap:10px;padding:16px 18px;border-bottom:1px solid var(--stroke,var(--line))}
+.cmt-h .t{flex:1;min-width:0}
+.cmt-h .t .nm{font-weight:800;font-size:14px;letter-spacing:-.2px}
+.cmt-h .t .sub{color:var(--text-3);font-size:11.5px;margin-top:3px;word-break:break-word}
+.cmt-x{width:32px;height:32px;border-radius:8px;border:1px solid var(--stroke-2,var(--line-2));background:var(--card,var(--surface));cursor:pointer;color:var(--text-2);font-size:16px;flex:none}
+.cmt-x:hover{color:var(--text)}
+.cmt-body{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.cmt-item{border:1px solid var(--stroke,var(--line));border-radius:12px;padding:11px 13px;background:var(--bg,var(--surface-2))}
+.cmt-meta{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
+.cmt-meta .au{font-weight:700;font-size:12.5px}
+.cmt-meta .tm{color:var(--text-3);font-size:11px;font-variant-numeric:tabular-nums;margin-left:auto}
+.cmt-text{font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.cmt-files{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.cmt-file{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-2);background:var(--card,var(--surface));border:1px solid var(--stroke-2,var(--line-2));border-radius:7px;padding:5px 9px;text-decoration:none;max-width:100%}
+.cmt-file:hover{border-color:var(--text-3);color:var(--text)}
+.cmt-file .fn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:190px}
+.cmt-img{max-width:100%;border-radius:8px;margin-top:8px;display:block;border:1px solid var(--stroke,var(--line))}
+.cmt-empty{color:var(--text-3);font-size:13px;text-align:center;padding:30px 0}
+.cmt-foot{border-top:1px solid var(--stroke,var(--line));padding:12px 16px;background:var(--bg,var(--surface-2))}
+.cmt-foot textarea{width:100%;min-height:62px;resize:vertical;border:1px solid var(--stroke-2,var(--line-2));border-radius:9px;background:var(--card,var(--surface));color:var(--text);font:400 13px/1.45 var(--font,inherit);padding:9px 11px;outline:none}
+.cmt-foot textarea:focus{border-color:var(--brand,var(--accent))}
+.cmt-sel{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.cmt-sel .pill{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;background:var(--card,var(--surface));border:1px solid var(--stroke-2,var(--line-2));border-radius:7px;padding:4px 8px}
+.cmt-sel .pill b{font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cmt-sel .pill .rm{cursor:pointer;color:var(--text-3);font-weight:700}
+.cmt-sel .pill .rm:hover{color:var(--bad)}
+.cmt-acts{display:flex;align-items:center;gap:8px;margin-top:10px}
+.cmt-attach{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--stroke-2,var(--line-2));background:var(--card,var(--surface));color:var(--text-2);border-radius:8px;padding:8px 11px;font:600 12px/1 var(--font,inherit);cursor:pointer}
+.cmt-attach:hover{background:var(--bg,var(--surface-2));color:var(--text)}
+.cmt-send{margin-left:auto;border:none;background:var(--brand,var(--accent));color:#fff;border-radius:8px;padding:9px 16px;font:700 12.5px/1 var(--font,inherit);cursor:pointer}
+.cmt-send:disabled{opacity:.5;cursor:default}
 .sumrow{display:flex;justify-content:space-between;padding:7px 14px;font-size:13px;border-bottom:1px solid var(--border)}
 .sumrow b{font-variant-numeric:tabular-nums}
 .deptrow{padding:8px 14px;border-bottom:1px solid var(--border);font-size:12.5px}
@@ -170,6 +210,8 @@ svg.ovsvg{display:block;width:100%}
 
 <script>
 let DATA={rows:[],depts:[],totals:{},filters:{}};
+let CMT_COUNTS={},CMT_KEY='',CMT_FILES=[];
+function att(s){return esc(s).replace(/"/g,'&quot;');}
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const fmt=n=>Math.round(Number(n)||0).toLocaleString('ru-RU').replace(/,/g,' ');
 async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.href='/login.html';return{ok:false,d:{}}}let d={};try{d=await r.json()}catch(e){}return{ok:r.ok,d}}
@@ -190,6 +232,7 @@ async function load(){
   if(d.overview)renderOverview(d.overview);
   const fd=document.getElementById('fDept');fd.innerHTML='<option value="">Все</option>'+(d.filters.departments||[]).map(x=>`<option>${esc(x)}</option>`).join('');
   const fc=document.getElementById('fContractor');fc.innerHTML='<option value="">Все</option>'+(d.filters.contractors||[]).map(x=>`<option>${esc(x)}</option>`).join('');
+  try{await loadCommentCounts();}catch(e){}
   render();
 }
 let ONLY_OVERDUE=false;
@@ -224,7 +267,9 @@ function render(){
       ? ((b.overdue_days||0)-(a.overdue_days||0)) || ((b.debt||0)-(a.debt||0))
       : ((b.debt||0)-(a.debt||0))).map(r=>{
       const deal=r.bitrix_deal_id?` <a href="https://crm.prolabsupport.kz/crm/deal/details/${esc(r.bitrix_deal_id)}/" target="_blank" style="color:var(--brand);text-decoration:none;font-size:11.5px" title="Сделка Битрикса">🔗 #${esc(r.bitrix_deal_id)}</a>`:' <span style="color:var(--warn);font-size:11px" title="Нет ID сделки Битрикса в 1С">⚠ нет связи</span>';
-      return `<tr class="sub"><td>${esc(r.contract)}${deal}</td><td class="num">${fmt(r.debt)}</td><td class="num"><span class="days ${r.overdue_days>0?'over':'ok'}">${r.overdue_days>0?'+':''}${r.overdue_days}</span></td><td class="dept">${esc(r.department||'')}</td></tr>`;
+      const ck=r.contract||'', cn=(CMT_COUNTS[ck]||0);
+      const cbtn=`<button class="cmt-btn${cn?' has':''}" data-key="${att(ck)}" data-con="${att(r.contractor||nm)}" onclick="openComments(this)" title="Комментарии и файлы по договору">💬${cn?`<span class="cc">${cn}</span>`:''}</button>`;
+      return `<tr class="sub"><td>${esc(r.contract)}${deal} ${cbtn}</td><td class="num">${fmt(r.debt)}</td><td class="num"><span class="days ${r.overdue_days>0?'over':'ok'}">${r.overdue_days>0?'+':''}${r.overdue_days}</span></td><td class="dept">${esc(r.department||'')}</td></tr>`;
     }).join('');
     return head+subs;
   }).join(''):'<tr><td class="hint">Нет данных по фильтру.</td></tr>';
@@ -362,9 +407,84 @@ function renderDonut(depts){
   });
   leg.querySelectorAll('.it').forEach(function(it){it.addEventListener('click',function(){pick(it.getAttribute('data-nm'));});});
 }
+// ── Комментарии по договорам (хронология, автор/время, файлы) ───────────────
+async function loadCommentCounts(){
+  try{const r=await fetch('/api/finance/debt/comment-counts',{credentials:'include'}).then(r=>r.json());CMT_COUNTS=(r&&r.counts)||{};}catch(e){CMT_COUNTS={};}
+}
+function cmtTime(s){const d=new Date(s);if(isNaN(d))return'';return d.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});}
+function fileChip(f){const url='/api/finance/debt/comment-file/'+encodeURIComponent(f.token);return `<a class="cmt-file" href="${url}" target="_blank"><span>📎</span><span class="fn">${esc(f.filename||'файл')}</span></a>`;}
+function renderThread(items){
+  const box=document.getElementById('cmtBody');
+  if(!items||!items.length){box.innerHTML='<div class="cmt-empty">Пока нет комментариев. Напишите первый.</div>';return;}
+  box.innerHTML=items.map(c=>{
+    const imgs=(c.files||[]).filter(f=>/^image\//.test(f.mime||'')).map(f=>`<a href="/api/finance/debt/comment-file/${encodeURIComponent(f.token)}" target="_blank"><img class="cmt-img" src="/api/finance/debt/comment-file/${encodeURIComponent(f.token)}" alt=""></a>`).join('');
+    const other=(c.files||[]).filter(f=>!/^image\//.test(f.mime||''));
+    const files=other.length?`<div class="cmt-files">${other.map(fileChip).join('')}</div>`:'';
+    return `<div class="cmt-item"><div class="cmt-meta"><span class="au">${esc(c.author||'—')}</span><span class="tm">${cmtTime(c.at)}</span></div>${c.text?`<div class="cmt-text">${esc(c.text)}</div>`:''}${imgs}${files}</div>`;
+  }).join('');
+  box.scrollTop=box.scrollHeight;
+}
+async function openComments(btn){
+  const key=btn.getAttribute('data-key')||'';const con=btn.getAttribute('data-con')||'';
+  CMT_KEY=key;CMT_FILES=[];
+  document.getElementById('cmtNm').textContent=con||'Договор';
+  document.getElementById('cmtSub').textContent=key;
+  document.getElementById('cmtText').value='';renderSel();
+  document.getElementById('cmtBody').innerHTML='<div class="cmt-empty">Загрузка…</div>';
+  document.getElementById('cmtOv').classList.add('open');
+  try{const r=await fetch('/api/finance/debt/comments?key='+encodeURIComponent(key),{credentials:'include'}).then(r=>r.json());renderThread((r&&r.items)||[]);}
+  catch(e){document.getElementById('cmtBody').innerHTML='<div class="cmt-empty">Не удалось загрузить</div>';}
+}
+function closeComments(){document.getElementById('cmtOv').classList.remove('open');CMT_KEY='';CMT_FILES=[];}
+function pickFiles(){
+  const inp=document.createElement('input');inp.type='file';inp.multiple=true;
+  inp.onchange=async()=>{
+    for(const f of [...inp.files]){
+      if(f.size>15*1024*1024){alert('Файл «'+f.name+'» больше 15 МБ — пропущен');continue;}
+      const b64=await new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(String(fr.result).split(',')[1]||'');fr.onerror=rej;fr.readAsDataURL(f);});
+      CMT_FILES.push({filename:f.name,mime:f.type||'application/octet-stream',dataBase64:b64,size:f.size}); // добавляем, не заменяем
+    }
+    renderSel();
+  };
+  inp.click();
+}
+function renderSel(){document.getElementById('cmtSel').innerHTML=CMT_FILES.map((f,i)=>`<span class="pill"><b>${esc(f.filename)}</b><span class="rm" onclick="rmFile(${i})" title="Убрать">✕</span></span>`).join('');}
+function rmFile(i){CMT_FILES.splice(i,1);renderSel();}
+async function sendComment(){
+  const text=document.getElementById('cmtText').value.trim();
+  if(!text&&!CMT_FILES.length)return;
+  const btn=document.getElementById('cmtSendBtn');btn.disabled=true;btn.textContent='Отправляю…';
+  try{
+    const r=await fetch('/api/finance/debt/comments',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({key:CMT_KEY,contractor:document.getElementById('cmtNm').textContent,text,files:CMT_FILES})}).then(r=>r.json());
+    if(!r.ok)throw new Error(r.error||'ошибка');
+    document.getElementById('cmtText').value='';CMT_FILES=[];renderSel();
+    const lr=await fetch('/api/finance/debt/comments?key='+encodeURIComponent(CMT_KEY),{credentials:'include'}).then(r=>r.json());
+    renderThread((lr&&lr.items)||[]);
+    CMT_COUNTS[CMT_KEY]=(CMT_COUNTS[CMT_KEY]||0)+1;render();
+  }catch(e){alert('Не удалось отправить: '+(e.message||e));}
+  finally{btn.disabled=false;btn.textContent='Отправить';}
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){const o=document.getElementById('cmtOv');if(o&&o.classList.contains('open'))closeComments();}});
 boot();
 </script>
 <div id="ovwTip"></div>
+<div class="cmt-ov" id="cmtOv" onclick="if(event.target===this)closeComments()">
+  <div class="cmt-pan" onclick="event.stopPropagation()">
+    <div class="cmt-h">
+      <div class="t"><div class="nm" id="cmtNm">Договор</div><div class="sub" id="cmtSub"></div></div>
+      <button class="cmt-x" onclick="closeComments()" title="Закрыть">✕</button>
+    </div>
+    <div class="cmt-body" id="cmtBody"></div>
+    <div class="cmt-foot">
+      <textarea id="cmtText" placeholder="Комментарий по договору… (например: звонили, обещали оплату до 30.11)"></textarea>
+      <div class="cmt-sel" id="cmtSel"></div>
+      <div class="cmt-acts">
+        <button class="cmt-attach" onclick="pickFiles()" title="Прикрепить файлы (можно несколько)">📎 Прикрепить файлы</button>
+        <button class="cmt-send" id="cmtSendBtn" onclick="sendComment()">Отправить</button>
+      </div>
+    </div>
+  </div>
+</div>
 <script src="/assets/cup-theme.js" defer></script>
 </body>
 </html>
