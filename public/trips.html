@@ -234,9 +234,21 @@ body.cup-has-topbar{padding-top:0!important}
 </head>
 <body>
 <header class="hdr">
-  <a class="back" href="/" title="Главная">&#8592;</a>
-  <a class="brand" href="/"><img src="/assets/logo-icon.png" alt="">ProLabSupport</a>
+  <a class="back" href="/" onclick="goBackSmart(event)" title="Назад (в модуль, откуда пришли)">&#8592;</a>
+  <a class="brand" href="/" title="На главную"><img src="/assets/logo-icon.png" alt="">ProLabSupport</a>
   <span class="sub">Командировки</span>
+  <script>
+  // «Назад» помнит, откуда пришли: ?from=... → referrer (тот же origin, не login) → /.
+  // Логотип рядом всегда ведёт на главную.
+  function goBackSmart(e){ if(e)e.preventDefault();
+    try{ var f=new URLSearchParams(location.search).get('from');
+      if(f && /^\/[a-z0-9_.-]+\.html/i.test(f)){ location.href=f; return; }
+      var ref=document.referrer; if(ref){ var r=new URL(ref);
+        if(r.origin===location.origin && /\.html(\?|$)/.test(r.pathname+r.search) && !/\/login\.html/.test(r.pathname)){ location.href=ref; return; } }
+    }catch(_){}
+    location.href='/';
+  }
+  </script>
   <span class="sp"></span>
   <button class="back" onclick="openSettings()" title="Настройки согласования" style="margin-right:8px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
   <button class="btn pri" onclick="newTrip()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>Новая командировка</span></button>

@@ -25,6 +25,7 @@ const F = {
   department:     'UF_CRM_1758005356984', // "Отдел" (enumeration)
   contractNo:     'UF_CRM_1759391990160', // "Номер договора"
   deliveryByDate: 'UF_CRM_1731864823359', // "Срок поставки заказа по договору"
+  installDate:    'UF_CRM_GUARATN_START',  // "Дата установки / Начало гарантии" (факт поставки)
   // Отгрузка/оплаты/инженер больше НЕ берутся с полей сделки — они тянутся из
   // дочерних смартов Закупки(1066)/Заявка на сервис(1058) в operational-sync.
   factoryShip:    null,
@@ -506,17 +507,27 @@ function dbRowToBoard(r, stageMeta, userMap = {}) {
 
   const deliveryBy = toYMD(r.delivery_by_date);
   const factoryShip = toYMD(r.factory_ship_date);
+  const installDate = toYMD(r.install_date); // "Дата установки / Начало гарантии" = факт поставки
+  const delivered = !!installDate;            // товар фактически поставлен/установлен
   // Разница = (Поставка по договору − Отгрузка от завода) − 15 дней.
   const diffDays = (deliveryBy && factoryShip) ? (daysBetween(deliveryBy, factoryShip) - 15) : null;
   const onTime = diffDays === null ? null : diffDays >= 0;
   const stale = daysSince(r.date_modify);
-  const overdueDelivery = !!(deliveryBy && !isDone && !isLost && new Date(deliveryBy) < new Date());
+  // Просрочка поставки:
+  //  • есть дата установки (поставлено) → просрочено, только если установили ПОЗЖЕ срока
+  //    по договору; установка ≤ срока → поставлено вовремя, не просрочено.
+  //  • нет даты установки → как раньше: срок по договору уже прошёл (от сегодня).
+  const overdueDelivery = !!(deliveryBy && !isDone && !isLost && (
+    delivered ? (new Date(installDate) > new Date(deliveryBy))
+              : (new Date(deliveryBy) < new Date())));
 
   const flags = [];
   if (r.red_flag) flags.push('red');
+  if (delivered) flags.push('delivered');
   if (overdueDelivery) flags.push('overdue');
   if (!isDone && !isLost && stale !== null && stale >= STALE_DAYS) flags.push('stale');
-  if (onTime === false) flags.push('late-ship');
+  // «Не успеваем отгрузить» — только пока НЕ поставлено (после установки вопрос снят).
+  if (onTime === false && !delivered) flags.push('late-ship');
   if ((r.open_processes || 0) > 0) flags.push('open-proc');
   if ((r.overdue_tasks || 0) > 0) flags.push('overdue-task');
   if ((r.open_bp || 0) > 0) flags.push('open-bp');
@@ -528,7 +539,7 @@ function dbRowToBoard(r, stageMeta, userMap = {}) {
     stageId: r.stage_id, stageName: stage.name, stageColor: stage.color, isDone, isLost,
     company: r.company_name || '', companyId: r.company_id || null,
     title: r.deal_title || '', contractNo: r.contract_no || '',
-    deliveryBy, factoryShip, diffDays, onTime,
+    deliveryBy, factoryShip, diffDays, onTime, installDate, delivered,
     managerId, manager: resolveUser(managerId, userMap),
     engineerId, engineer: resolveUser(engineerId, userMap),
     payFactory: r.pay_factory || '', payClient: r.pay_client || '', redFlag: !!r.red_flag,

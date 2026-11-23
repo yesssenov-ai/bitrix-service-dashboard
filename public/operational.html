@@ -643,6 +643,7 @@ function populateOptions(d){
 
 function flagIcon(flags){
   if(flags.includes('red'))return '<span class="flag" title="Красный флаг">🚩</span>';
+  if(flags.includes('delivered')&&!flags.includes('overdue'))return '<span class="flag" title="Поставлено (заполнена дата установки)">✅</span>';
   if(flags.includes('overdue'))return '<span class="flag" title="Просрочена поставка">🔴</span>';
   if(flags.includes('overdue-task'))return '<span class="flag" title="Просроченные задачи">⏰</span>';
   if(flags.includes('open-bp'))return '<span class="flag" title="Незавершённые автоматизации (БП)">⚙️</span>';
@@ -658,8 +659,10 @@ function renderRows(rows){
   const tb=document.getElementById('tbody');
   if(!list.length){tb.innerHTML=`<tr><td colspan="12" class="loading">Нет сделок по текущим фильтрам.</td></tr>`;return;}
   tb.innerHTML=list.map(r=>{
-    const diff = r.diffDays==null?'' :
-      `<span class="${r.onTime?'diff-ok':'diff-bad'}">${r.onTime?'✓ ':''}${r.diffDays}</span>`;
+    const diff = r.delivered
+      ? `<span class="diff-ok" title="Установлено ${fmtDate(r.installDate)} — поставка учтена по дате установки">✓ поставлено</span>`
+      : (r.diffDays==null?'' :
+        `<span class="${r.onTime?'diff-ok':'diff-bad'}">${r.onTime?'✓ ':''}${r.diffDays}</span>`);
     return `<tr class="deal-row" data-id="${r.id}">
       <td class="flag">${flagIcon(r.flags)}</td>
       <td><span class="stage-pill" style="background:${esc(r.stageColor)}22;color:${esc(r.stageColor)};border:1px solid ${esc(r.stageColor)}55">${esc(r.stageName)}</span></td>

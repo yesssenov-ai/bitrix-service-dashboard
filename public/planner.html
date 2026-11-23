@@ -441,11 +441,6 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
   <span class="hnav-link active">Планировщик</span>
   <div class="hdiv"></div>
   <div class="hdr-r">
-    <button class="hbtn" onclick="statOpen()">Статистика</button>
-    <button class="hbtn" onclick="openReports()">Отчёты</button>
-    <button class="hbtn" onclick="openAdmin()">Управление</button>
-    <button class="hbtn" onclick="openDF()">Data&nbsp;Fields</button>
-    <button class="hbtn p" onclick="openNew()">+ Событие</button>
     <span id="uChip" style="font-size:12px;color:var(--text-2);background:var(--bg);border:1px solid var(--stroke-2);border-radius:20px;padding:4px 11px 4px 8px;display:flex;align-items:center;gap:5px;"><span style="width:6px;height:6px;border-radius:50%;background:#4caf7d;display:inline-block"></span><span id="uName">—</span></span>
   </div>
 </header>
@@ -477,6 +472,14 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
       <button class="tbtn" onclick="toggleDeptFilterMenu()" id="deptFilterBtn">Отделы ▾</button>
       <div id="deptFilterMenu" style="display:none;position:absolute;top:calc(100% + 6px);left:0;background:var(--panel,#141311);border:1px solid var(--border,#3d3a37);border-radius:8px;padding:8px 0;min-width:200px;z-index:500;box-shadow:0 8px 24px rgba(0,0,0,.35)"></div>
     </div>
+  </div>
+  <div style="flex:1;min-width:8px"></div>
+  <div class="vbar-acts" style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+    <button class="hbtn" onclick="statOpen()">Статистика</button>
+    <button class="hbtn" onclick="openReports()">Отчёты</button>
+    <button class="hbtn" onclick="openAdmin()">Управление</button>
+    <button class="hbtn" onclick="openDF()">Data&nbsp;Fields</button>
+    <button class="hbtn p" onclick="openNew()">+ Событие</button>
   </div>
 </div>
 
@@ -1643,7 +1646,7 @@ function openEdit(id){
   if(ev.type==='leave' && ev.bitrixItemId){ location.href='/leaves.html?id='+ev.bitrixItemId; return; }
   if(ev.type==='meeting' && ev.bitrixItemId){ location.href='/meetings.html?id='+ev.bitrixItemId; return; }
   // Отдельная командировка (1074) — открываем её карточку в модуле Командировок.
-  if(ev.type==='command' && ev.bitrixItemId){ location.href='/trips.html?id='+ev.bitrixItemId; return; }
+  if(ev.type==='command' && ev.bitrixItemId){ location.href='/trips.html?id='+ev.bitrixItemId+'&from=/planner.html'; return; }
   curType=ev.type||'trip';
   const mayManage = canManageEv(ev);
   document.getElementById('pTitle').textContent = mayManage ? 'Редактировать событие' : 'Событие';
@@ -1653,7 +1656,7 @@ function openEdit(id){
   if (canDeleteEv(ev)) acts += `<button class="pb pb-del" onclick="deleteEv()">Удалить</button>`;
   // У выезда уже оформлена командировка → кнопка открыть её; иначе — оформить.
   if (mayManage && ev.type==='trip' && ev.commandItemId)
-    acts += `<button class="pb" style="background:linear-gradient(180deg,#19b185,#16a37a);color:#fff" onclick="location.href='/trips.html?id=${ev.commandItemId}'">Открыть командировку</button>`;
+    acts += `<button class="pb" style="background:linear-gradient(180deg,#19b185,#16a37a);color:#fff" onclick="location.href='/trips.html?id=${ev.commandItemId}&from=/planner.html'">Открыть командировку</button>`;
   else if (mayManage && (ev.type==='trip'||ev.type==='train'))
     acts += `<button class="pb" style="background:linear-gradient(180deg,#19b185,#16a37a);color:#fff" onclick="goCreateTrip()">Оформить командировку</button>`;
   if (mayManage)   acts += `<button class="pb pb-save" onclick="saveEv()">Сохранить</button>`;
@@ -1670,6 +1673,7 @@ function goCreateTrip(){
   const p=new URLSearchParams({ newtrip:'1', res:ev.resource||'', start:(ev.start||'').slice(0,10), end:(ev.end||'').slice(0,10), dest:(f.df2||f.df1||'')||'', purpose:(ev.title||f.df3||'')||'' });
   // Привязка к выезду (Заявка 1058) для дедупа: командировка прицепится к этой же полосе.
   if(ev.bitrixItemId) p.set('source', ev.bitrixItemId);
+  p.set('from', '/planner.html');
   location.href='/trips.html?'+p.toString();
 }
 

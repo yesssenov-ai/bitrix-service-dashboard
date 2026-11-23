@@ -916,6 +916,9 @@ async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_op_deals_stage ON ticketsmodule_operational_deals(stage_id);
     -- Активные (незавершённые) бизнес-процессы автоматизации на сделке + её смартах.
     ALTER TABLE ticketsmodule_operational_deals ADD COLUMN IF NOT EXISTS open_bp INTEGER DEFAULT 0;
+    -- «Дата установки / Начало гарантии» (факт поставки): если заполнена — просрочку
+    -- поставки считаем по ней, а не по сегодня (см. operational.js).
+    ALTER TABLE ticketsmodule_operational_deals ADD COLUMN IF NOT EXISTS install_date DATE;
 
     -- Кэш раскрытия сделки (смарт-процессы/задачи/комментарии/БП). Строится
     -- лениво при первом открытии, отдаётся мгновенно из БД, обновляется по

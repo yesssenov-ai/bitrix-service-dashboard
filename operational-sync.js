@@ -102,6 +102,7 @@ async function buildDealRecord(d, ctx) {
     contract_no: firstOf(d[F.contractNo]) || '',
     contract_date: dateOnly(d[F.contractDate]),
     delivery_by_date: dateOnly(d[F.deliveryByDate]), // "Срок поставки заказа по договору"
+    install_date: dateOnly(d[F.installDate]),        // "Дата установки / Начало гарантии" (факт поставки)
     comment: firstOf(d[F.comment]) || '',
     red_flag: truthyBool(d[F.redFlag]),
     date_modify: d.DATE_MODIFY || null,
@@ -115,14 +116,14 @@ async function upsertDealLevel(r) {
   await pool.query(
     `INSERT INTO ticketsmodule_operational_deals
       (deal_id, category_id, stage_id, stage_semantic, opportunity, currency_id, assigned_by_id, department_id,
-       deal_title, company_id, company_name, contract_no, contract_date, delivery_by_date, comment, red_flag, date_modify, synced_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW())
+       deal_title, company_id, company_name, contract_no, contract_date, delivery_by_date, comment, red_flag, date_modify, install_date, synced_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW())
      ON CONFLICT (deal_id) DO UPDATE SET
        category_id=$2, stage_id=$3, stage_semantic=$4, opportunity=$5, currency_id=$6, assigned_by_id=$7, department_id=$8,
        deal_title=$9, company_id=$10, company_name=$11, contract_no=$12, contract_date=$13, delivery_by_date=$14,
-       comment=$15, red_flag=$16, date_modify=$17, synced_at=NOW()`,
+       comment=$15, red_flag=$16, date_modify=$17, install_date=$18, synced_at=NOW()`,
     [r.deal_id, r.category_id, r.stage_id, r.stage_semantic, r.opportunity, r.currency_id, r.assigned_by_id, r.department_id,
-     r.deal_title, r.company_id, r.company_name, r.contract_no, r.contract_date, r.delivery_by_date, r.comment, r.red_flag, r.date_modify]
+     r.deal_title, r.company_id, r.company_name, r.contract_no, r.contract_date, r.delivery_by_date, r.comment, r.red_flag, r.date_modify, r.install_date]
   );
 }
 

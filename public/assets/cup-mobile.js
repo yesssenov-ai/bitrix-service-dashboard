@@ -36,17 +36,34 @@
   var ORDER = ['pls-tb-msg', 'pls-tb-kb', 'pls-tb-cal', 'pai-fab', 'pls-sr-btn', 'pls-help-btn', 'pls-fb-btn', 'themeToggle'];
   function bar() { var b = document.getElementById('pls-toolbar'); if (!b) { b = document.createElement('div'); b.id = 'pls-toolbar'; document.body.appendChild(b); } return b; }
   function mk(id, href, title, svg, cur) { if (document.getElementById(id)) return document.getElementById(id); var a = document.createElement('a'); a.id = id; a.href = href; a.title = title; a.className = 'pls-tb-ic' + (cur ? ' cur' : ''); a.innerHTML = svg; return a; }
+  function toRight(b, px) { b.style.left = 'auto'; b.style.transform = 'none'; b.style.right = px + 'px'; }
   function align(b) {
     var h = document.querySelector('.topbar') || document.querySelector('.top') || document.querySelector('header');
-    if (!h) { b.style.top = '11px'; return; }
+    if (!h) { b.style.top = '11px'; toRight(b, 16); return; }
     var r = h.getBoundingClientRect();
     // Защита от ложного якоря: ".top" — слишком общий селектор и на некоторых страницах
     // попадает в элемент посреди контента (напр. строки ".hbar .top" на «Складе»), из-за
     // чего панель уезжала в середину. Якорь должен быть ВЕРХНЕЙ шапкой: если он не у верха
     // вьюпорта — пробуем настоящий <header>, иначе держим дефолтный верх (11px).
-    if (r.top > 120) { var hdr = document.querySelector('header'); if (hdr) r = hdr.getBoundingClientRect(); if (r.top > 120) { b.style.top = '11px'; return; } }
+    if (r.top > 120) { var hdr = document.querySelector('header'); if (hdr) { h = hdr; r = hdr.getBoundingClientRect(); } if (r.top > 120) { b.style.top = '11px'; toRight(b, 16); return; } }
     var bh = b.offsetHeight || 30;
     b.style.top = Math.max(4, Math.round(r.top + (r.height - bh) / 2)) + 'px';
+    // ГОРИЗОНТ: раньше док центрировался (left:50%) и наезжал на заголовок/кнопки в
+    // середине шапки. Теперь прижимаем его СЛЕВА от правого кластера шапки (имя
+    // пользователя / «Выйти»): ищем левый край самого левого элемента в правой части
+    // строки шапки и ставим док вплотную перед ним.
+    try {
+      var vw = window.innerWidth, minLeft = vw;
+      var kids = h.querySelectorAll('a,button,span,img');
+      for (var i = 0; i < kids.length; i++) {
+        var k = kids[i]; if (b.contains(k) || k === b) continue;
+        var kr = k.getBoundingClientRect();
+        if (kr.width <= 0 || kr.height <= 0) continue;
+        if (kr.bottom < r.top - 4 || kr.top > r.bottom + 4) continue; // только элементы строки шапки
+        if (kr.left >= vw * 0.55 && kr.left < minLeft) minLeft = kr.left;
+      }
+      toRight(b, minLeft < vw ? Math.max(12, Math.round(vw - minLeft + 12)) : 16);
+    } catch (e) { toRight(b, 16); }
   }
   function build() {
     var b = bar();
