@@ -418,6 +418,19 @@ async function reverseGroupMap() {
   return rev;
 }
 
+// Обновление поля сделки с понятной ошибкой. Битрикс при update прогоняет сделку
+// через валидацию: если в ней не заполнено ОБЯЗАТЕЛЬНОЕ поле — отбивает весь запрос.
+// Переводим «HTTP 400: Поле X обязательно» в человеческое указание, что поправить.
+async function dealUpdate(dealId, fields) {
+  try { return await b24('crm.deal.update', { id: parseInt(dealId, 10), fields }); }
+  catch (e) {
+    const m = String((e && e.message) || e);
+    const fm = m.match(/Поле\s+["«]?(.+?)["»]?\s+обязательн/i);
+    if (fm) throw new Error('Битрикс не даёт сохранить: в этой сделке не заполнено обязательное поле «' + fm[1].trim() + '». Заполните его в карточке сделки в Битриксе и повторите.');
+    throw e;
+  }
+}
+
 // Пакетная запись одного поля сделкам (Bitrix batch, до 50 за вызов).
 async function batchUpdateDeals(dealIds, fieldCode, value) {
   let written = 0;
@@ -480,7 +493,7 @@ async function listDeals(companyId, unit) {
 async function setDealUnit(dealId, unit, by) {
   dealId = parseInt(dealId, 10);
   unit = String(unit == null ? '' : unit).trim();
-  await b24('crm.deal.update', { id: dealId, fields: { [UNIT_FIELD]: unit } });
+  await dealUpdate(dealId, { [UNIT_FIELD]: unit });
   await pool.query('UPDATE ticketsmodule_stat_deals SET unit_tag=$1 WHERE deal_id=$2', [unit || null, dealId]);
   bust('kam:');
   return { ok: true };
@@ -507,7 +520,7 @@ async function setDealProject(dealId, projectId, by) {
   projectId = String(projectId == null ? '' : projectId).trim();
   let value = null;
   if (projectId) { const opts = await listProjectOptions(); const o = opts.find(x => x.id === projectId); value = o ? o.value : null; }
-  await b24('crm.deal.update', { id: dealId, fields: { [PROJECT_FIELD]: projectId ? [projectId] : '' } });
+  await dealUpdate(dealId, { [PROJECT_FIELD]: projectId ? [projectId] : '' });
   await pool.query('UPDATE ticketsmodule_stat_deals SET project_tag=$1 WHERE deal_id=$2', [value, dealId]);
   bust('kam:');
   return { ok: true, project: value };
@@ -576,7 +589,7 @@ async function createProject(name, by) {
 async function setDealPlanned(dealId, date, by) {
   dealId = parseInt(dealId, 10);
   const val = bxDate(date);
-  await b24('crm.deal.update', { id: dealId, fields: { [PLANNED_PURCHASE_FIELD]: val } });
+  await dealUpdate(dealId, { [PLANNED_PURCHASE_FIELD]: val });
   await pool.query('UPDATE ticketsmodule_stat_deals SET planned_purchase_date=$1 WHERE deal_id=$2', [date || null, dealId]);
   bust('kam:');
   return { ok: true };
