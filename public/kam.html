@@ -13,17 +13,21 @@
 :root{--p0:var(--accent);--p1:var(--info);--p2:var(--good);--radius:16px;
   --shadow:0 1px 2px rgba(16,22,36,.05),0 14px 34px -18px rgba(16,22,36,.2);--tealc:var(--good)}
 :root[data-theme="dark"]{--shadow:0 1px 2px rgba(0,0,0,.3),0 14px 34px -18px rgba(0,0,0,.6)}
-/* Фирменный ою-фон: тёплая кремовая база + орнамент чуть заметнее (гармонично).
-   body прозрачный → просвечивает #cup-bg (вставляется сервером). Токены не трогаем. */
-html{background:#f4f1ea}
+/* Фирменный ою-фон: БЕЛОСНЕЖНАЯ база + орнамент виден за счёт нескольких слоёв
+   паттерна (альфа складывается). Свой слой body::before, не зависим от серверной
+   инъекции #cup-bg (её прячем). Токены не трогаем. */
+html{background:#ffffff}
 html,body{height:100%;font-family:var(--f-ui);color:var(--text);-webkit-font-smoothing:antialiased}
 body{background:transparent}
-#cup-bg{filter:brightness(.87) contrast(1.18) sepia(.1)}
+#cup-bg{display:none!important}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background-image:url('/assets/cup-pattern-light.png'),url('/assets/cup-pattern-light.png'),url('/assets/cup-pattern-light.png'),url('/assets/cup-pattern-light.png'),url('/assets/cup-pattern-light.png');
+  background-repeat:no-repeat;background-position:center;background-size:cover}
 html[data-theme="dark"]{background:var(--bg)}
-html[data-theme="dark"] #cup-bg{filter:brightness(1.18) contrast(1.05)}
+html[data-theme="dark"] body::before{background-image:url('/assets/cup-pattern-dark.png'),url('/assets/cup-pattern-dark.png'),url('/assets/cup-pattern-dark.png')}
 @media(prefers-color-scheme:dark){
   html:not([data-theme="light"]){background:var(--bg)}
-  html:not([data-theme="light"]) #cup-bg{filter:brightness(1.18) contrast(1.05)}}
+  html:not([data-theme="light"]) body::before{background-image:url('/assets/cup-pattern-dark.png'),url('/assets/cup-pattern-dark.png'),url('/assets/cup-pattern-dark.png')}}
 button{font-family:inherit;cursor:pointer}
 a{color:var(--info);text-decoration:none}
 
@@ -273,10 +277,12 @@ a{color:var(--info);text-decoration:none}
 /* 3D-пончики */
 .an-donuts{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px}
 .dn-card{margin-bottom:0}
-.dn-wrap{display:flex;align-items:center;gap:14px}
+.dn-wrap{display:flex;align-items:center;gap:16px}
+.dn-col{display:flex;flex-direction:column;align-items:center;gap:7px;flex:none}
 .donut3d{width:144px;height:96px;flex:none;filter:drop-shadow(0 7px 10px rgba(16,24,40,.2))}
-.dn-ct{text-anchor:middle;font-size:15px;font-weight:800;fill:var(--text);font-variant-numeric:tabular-nums}
-.dn-cb{text-anchor:middle;font-size:8px;font-weight:600;fill:var(--text-3);text-transform:uppercase;letter-spacing:.04em}
+.dn-cap{text-align:center;line-height:1.1}
+.dn-cap b{display:block;font-size:17px;font-weight:800;color:var(--text);letter-spacing:-.3px;font-variant-numeric:tabular-nums}
+.dn-cap span{font-size:9px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em}
 .dn-legend{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
 .dn-lg{display:flex;align-items:center;gap:7px;font-size:11.5px}
 .dn-sw{width:10px;height:10px;border-radius:3px;flex:none}
@@ -919,14 +925,13 @@ function donut3d(segments,cTop,cBot){
   const tilt=`translate(${cx} ${cy}) scale(1 0.58) translate(${-cx} ${-cy})`;
   return `<svg class="donut3d" viewBox="0 0 140 94" aria-hidden="true">
     <g transform="translate(0 ${depth})"><g transform="${tilt}">${walls}</g></g>
-    <g transform="${tilt}">${tops}</g>
-    <text x="${cx}" y="${cy-1}" class="dn-ct">${cTop}</text><text x="${cx}" y="${cy+12}" class="dn-cb">${cBot}</text></svg>`;
+    <g transform="${tilt}">${tops}</g></svg>`;
 }
 function donutCard(title,sub,segments,cTop,cBot){
   const total=segments.reduce((a,s)=>a+s.value,0)||1;
   const leg=segments.map(s=>`<div class="dn-lg"><span class="dn-sw" style="background:${s.color}"></span><span class="dn-ln">${esc(s.label)}</span><span class="dn-lv">${s.valMln} млн · ${Math.round(s.value/total*100)}%</span></div>`).join('');
   return `<div class="an-sec dn-card"><div class="an-h">${title}${sub?`<span class="an-sub">${sub}</span>`:''}</div>
-    <div class="dn-wrap">${donut3d(segments,cTop,cBot)}<div class="dn-legend">${leg}</div></div></div>`;
+    <div class="dn-wrap"><div class="dn-col">${donut3d(segments)}<div class="dn-cap"><b>${cTop}</b><span>${cBot}</span></div></div><div class="dn-legend">${leg}</div></div></div>`;
 }
 function anBar(name, mln, max, sub, cls){
   const pct=max>0?Math.max(2,Math.round(mln/max*100)):0;
