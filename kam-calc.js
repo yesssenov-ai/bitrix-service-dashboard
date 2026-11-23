@@ -15,8 +15,47 @@ const UNIT_FIELD = 'UF_CRM_1731862825010'; // текстовое поле под
 const PROJECT_FIELD = 'UF_CRM_1791972186';  // enum «В рамках проекта» (множественное)
 const NO_PROJECT_RE = /^без\s*проект/i;      // «Без проекта» → не считаем проектом
 
+const PLANNED_PURCHASE_FIELD = 'UF_CRM_1731862888595'; // «План продаж»: планируемый срок покупки (date)
 const uname = bid => (bid != null ? (USERS[bid] || ('#' + bid)) : null);
 const mln = v => Math.round((Number(v) || 0) / 1e6);
+// PG DATE → 'YYYY-MM-DD' для <input type=date>; пусто → ''
+const ymd = v => { if (!v) return ''; if (typeof v === 'string') return v.slice(0, 10); try { return new Date(v).toISOString().slice(0, 10); } catch (_) { return ''; } };
+// 'YYYY-MM-DD' → 'DD.MM.YYYY' для записи в date-поле Битрикса (самый надёжный формат)
+const bxDate = d => { if (!d) return ''; const m = String(d).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}.${m[2]}.${m[1]}` : String(d); };
+
+// ── Стадии/отделы (п.8) — зеркало логики «Проектов»/«План продаж» ─────────────
+const STAGE_RAW = {
+  P10: ['NEW', 'C1:NEW', 'C2:NEW', 'C3:NEW'],
+  P30: ['PREPARATION', 'C1:PREPARATION', 'C2:PREPARATION', 'C3:PREPARATION'],
+  P60: ['PREPAYMENT_INVOICE', 'C1:PREPAYMENT_INVOICE', 'C2:PREPAYMENT_INVOICE', 'C3:PREPAYMENT_INVOICE'],
+  P80: ['EXECUTING', 'C1:EXECUTING', 'C2:EXECUTING', 'C3:EXECUTING'],
+};
+const STAGE_STEP = {}; for (const [st, ids] of Object.entries(STAGE_RAW)) ids.forEach(id => { STAGE_STEP[id] = st; });
+const CONTRACT_SET = new Set(['FINAL_INVOICE', '1', 'UC_Q9J6VV', 'UC_9MBFR2', '2', '3', 'WON',
+  'C1:FINAL_INVOICE', 'C1:1', 'C1:UC_3MVK90', 'C1:UC_3SCB5K', 'C1:2', 'C1:3', 'C1:WON',
+  'C2:FINAL_INVOICE', 'C2:1', 'C2:2', 'C2:WON', 'C3:FINAL_INVOICE', 'C3:UC_YYTFYG', 'C3:2', 'C3:WON']);
+function stageInfo(stageId) {
+  const step = STAGE_STEP[stageId] || null;
+  if (step) return { step, kind: 'pipeline' };
+  if (CONTRACT_SET.has(stageId)) return { step: 'CONTRACT', kind: 'contract' };
+  if (/LOSE|LOSER|APOLOGY|:FAIL/i.test(stageId || '')) return { step: 'LOST', kind: 'lost' };
+  return { step: stageId || '—', kind: 'other' };
+}
+const PRE_LABELS = { P10: 'P10 · Новая', P30: 'P30 · Подготовка', P60: 'P60 · Счёт / предоплата', P80: 'P80 · В работе' };
+const POST_LABELS = { FINAL_INVOICE: 'Финальный счёт', WON: 'Завершена' };
+const postStageLabel = sid => { const suf = String(sid || '').split(':').pop() || '—'; return POST_LABELS[suf] || ('Стадия ' + suf); };
+const DEPARTMENT_LABELS = {
+  '4857': 'Элементный', '4858': 'Хроматография', '4859': 'Электрохимия', '4860': 'Клеточный анализ',
+  '4862': 'ОРМ', '4863': 'Сервис', '4864': 'Тренинг-центр', '4865': 'General Lab', '4866': 'Комплекс', '8384': 'Материаловедение',
+};
+const PIPE_FALLBACK = { 0: 'Приборы', 1: 'ОРМ', 2: 'Тренинг-центр', 3: 'Сервис' };
+function productOf(d) {
+  if (d.department_id && DEPARTMENT_LABELS[d.department_id]) {
+    const l = DEPARTMENT_LABELS[d.department_id];
+    return (l === 'Хроматография' || l === 'Клеточный анализ') ? 'Хроматография и клеточный анализ' : l;
+  }
+  return PIPE_FALLBACK[d.category_id] || 'Не указан';
+}
 
 // ── Резолв названия группы (UF_CRM_1731862481, iblock_element) ───────────────
 // Пробуем справочник project_clients.group_name (уже ведётся), иначе резолвим
@@ -63,8 +102,8 @@ async function loadAssignments() {
 // Загружаем зеркало сделок + справочники, строим нормализованную модель.
 async function loadModel() {
   const [{ rows: deals }, { rows: pcs }, { rows: units }, assign] = await Promise.all([
-    pool.query(`SELECT deal_id, company_id, company_name, group_ref, unit_tag, project_tag,
-                       assigned_by_id, opportunity, contract_date
+    pool.query(`SELECT deal_id, deal_title, company_id, company_name, group_ref, unit_tag, project_tag,
+                       assigned_by_id, opportunity, contract_date, stage_id, category_id, planned_purchase_date
                 FROM ticketsmodule_stat_deals WHERE company_id IS NOT NULL`),
     pool.query('SELECT company_id, group_name, bdm_bitrix_id FROM ticketsmodule_project_clients'),
     pool.query('SELECT id, company_id, name, kind FROM ticketsmodule_kam_units'),
@@ -275,6 +314,7 @@ async function nodeDeals(type, key, project) {
       dealId: d.deal_id, title: d.deal_title || ('Сделка #' + d.deal_id), unit: d.unit_tag || '',
       companyId: String(d.company_id), company: d.company_name || '', sumMln: mln(d.opportunity),
       post: !!d.contract_date, stage: d.stage_id, project: d.project_tag || '',
+      planned: ymd(d.planned_purchase_date),
       url: 'https://crm.prolabsupport.kz/crm/deal/details/' + d.deal_id + '/',
     })),
   };
@@ -463,6 +503,166 @@ async function setDealProject(dealId, projectId, by) {
   return { ok: true, project: value };
 }
 
+// ── Права: может ли пользователь управлять компанией (назначать проект/подразделение,
+// создавать их). Админ/координатор — всегда. Иначе — только эффективный КАМ компании
+// (назначен на уровне компании, её группы или любого её подразделения). ───────────
+const MANAGE_ALL_ROLES = ['admin', 'superadmin', 'coordinator'];
+async function companyGroupName(companyId) {
+  const cid = String(companyId);
+  const { rows: pc } = await pool.query('SELECT group_name FROM ticketsmodule_project_clients WHERE company_id=$1', [cid]);
+  if (pc[0] && pc[0].group_name) return pc[0].group_name;
+  const { rows: gr } = await pool.query(
+    "SELECT group_ref, COUNT(*) c FROM ticketsmodule_stat_deals WHERE company_id=$1 AND group_ref IS NOT NULL GROUP BY group_ref ORDER BY c DESC LIMIT 1", [cid]);
+  if (gr[0] && gr[0].group_ref) { const map = await resolveGroupMap(); return map[String(gr[0].group_ref)] || null; }
+  return null;
+}
+async function canManageCompany(userBid, role, companyId) {
+  if (MANAGE_ALL_ROLES.includes(role)) return true;
+  userBid = userBid != null ? parseInt(userBid, 10) : null;
+  if (!userBid || !companyId) return false;
+  const assign = await loadAssignments();
+  if (parseInt(assign.company[String(companyId)], 10) === userBid) return true;
+  const gname = await companyGroupName(companyId);
+  if (gname && parseInt(assign.group[gname], 10) === userBid) return true;
+  const { rows } = await pool.query('SELECT id FROM ticketsmodule_kam_units WHERE company_id=$1', [String(companyId)]);
+  for (const u of rows) { if (parseInt(assign.unit[String(u.id)], 10) === userBid) return true; }
+  return false;
+}
+async function dealCompanyId(dealId) {
+  const { rows } = await pool.query('SELECT company_id FROM ticketsmodule_stat_deals WHERE deal_id=$1', [parseInt(dealId, 10)]);
+  return rows[0] ? String(rows[0].company_id) : null;
+}
+
+// Создать новый проект (элемент enum «В рамках проекта») прямо в Битриксе.
+// Пересобираем весь список значений (существующие по ID + новое) и шлём update —
+// опущенные значения Битрикс удаляет, поэтому передаём их все. Возвращаем {id,value}.
+async function createProject(name, by) {
+  name = String(name || '').trim();
+  if (!name) throw new Error('пустое название');
+  if (NO_PROJECT_RE.test(name)) throw new Error('недопустимое название');
+  const { result } = await b24('crm.deal.userfield.list', { filter: { FIELD_NAME: PROJECT_FIELD } });
+  const f = (result || [])[0];
+  if (!f) throw new Error('поле проекта не найдено');
+  const existing = (f.LIST || []);
+  const hit = existing.find(it => String(it.VALUE).trim().toLowerCase() === name.toLowerCase());
+  if (hit) { projOptCache = null; return { ok: true, id: String(hit.ID), value: hit.VALUE, existed: true }; }
+  const LIST = existing.map(it => ({ ID: it.ID, VALUE: it.VALUE }));
+  LIST.push({ VALUE: name });
+  await b24('crm.deal.userfield.update', { id: f.ID, ID: f.ID, fields: { LIST } });
+  projOptCache = null;
+  // Перечитываем, чтобы получить присвоенный Битриксом ID нового значения.
+  let addedId = null;
+  try {
+    const { result: r2 } = await b24('crm.deal.userfield.list', { filter: { FIELD_NAME: PROJECT_FIELD } });
+    const f2 = (r2 || [])[0];
+    const added = ((f2 && f2.LIST) || []).find(it => String(it.VALUE).trim() === name);
+    addedId = added ? String(added.ID) : null;
+  } catch (e) { /* id подтянется при следующем listProjectOptions */ }
+  bust('kam:');
+  return { ok: true, id: addedId, value: name };
+}
+
+// Планируемый срок покупки (п.6): по одной сделке → Битрикс (date-поле) + зеркало.
+async function setDealPlanned(dealId, date, by) {
+  dealId = parseInt(dealId, 10);
+  const val = bxDate(date);
+  await b24('crm.deal.update', { id: dealId, fields: { [PLANNED_PURCHASE_FIELD]: val } });
+  await pool.query('UPDATE ticketsmodule_stat_deals SET planned_purchase_date=$1 WHERE deal_id=$2', [date || null, dealId]);
+  bust('kam:');
+  return { ok: true };
+}
+// Планируемый срок покупки на весь проект → во все его сделки (из тех, что пользователь
+// вправе менять). Возвращает сколько проставлено / сколько пропущено по правам.
+async function setProjectPlanned(projectName, date, userBid, role, by) {
+  projectName = String(projectName || '').trim();
+  const { rows } = await pool.query('SELECT deal_id, company_id FROM ticketsmodule_stat_deals WHERE project_tag=$1', [projectName]);
+  if (!rows.length) return { ok: true, applied: 0, skipped: 0 };
+  let targets = rows;
+  if (!MANAGE_ALL_ROLES.includes(role)) {
+    const okCo = {};
+    for (const cid of [...new Set(rows.map(r => String(r.company_id)))]) okCo[cid] = await canManageCompany(userBid, role, cid);
+    targets = rows.filter(r => okCo[String(r.company_id)]);
+  }
+  const skipped = rows.length - targets.length;
+  if (!targets.length) return { ok: true, applied: 0, skipped };
+  const dealIds = targets.map(r => r.deal_id);
+  await batchUpdateDeals(dealIds, PLANNED_PURCHASE_FIELD, bxDate(date));
+  await pool.query('UPDATE ticketsmodule_stat_deals SET planned_purchase_date=$1 WHERE deal_id=ANY($2)', [date || null, dealIds]);
+  bust('kam:');
+  return { ok: true, applied: dealIds.length, skipped };
+}
+
+// Комментарий на весь проект (п.5): тот же текст в таймлайн ВСЕХ сделок проекта
+// (из тех, что пользователь вправе менять). Автор = пользователь (AUTHOR_ID) либо
+// имя в тексте, если учётка не связана с Битриксом (как в «План продаж»).
+async function addProjectComment(projectName, text, user) {
+  projectName = String(projectName || '').trim();
+  text = String(text || '').trim();
+  if (!text) throw new Error('пустой комментарий');
+  const bid = user && user.bitrix_user_id ? parseInt(user.bitrix_user_id, 10) : null;
+  const role = user && user.role;
+  const { rows } = await pool.query('SELECT deal_id, company_id FROM ticketsmodule_stat_deals WHERE project_tag=$1', [projectName]);
+  if (!rows.length) return { ok: true, applied: 0, skipped: 0 };
+  let targets = rows;
+  if (!MANAGE_ALL_ROLES.includes(role)) {
+    const okCo = {};
+    for (const cid of [...new Set(rows.map(r => String(r.company_id)))]) okCo[cid] = await canManageCompany(bid, role, cid);
+    targets = rows.filter(r => okCo[String(r.company_id)]);
+  }
+  const skipped = rows.length - targets.length;
+  const who = (user && (user.display_name || user.engineer_name)) || 'сотрудник ЦУП';
+  let applied = 0;
+  for (const r of targets) {
+    const fields = { ENTITY_ID: r.deal_id, ENTITY_TYPE: 'deal' };
+    if (bid) { fields.AUTHOR_ID = bid; fields.COMMENT = text; } else { fields.COMMENT = `[${who}]: ${text}`; }
+    try { await b24('crm.timeline.comment.add', { fields }); applied++; } catch (e) { /* продолжаем остальные */ }
+  }
+  return { ok: true, applied, skipped };
+}
+
+// Глубокая детализация компании по стадиям (п.8): воронка P10–P80 (всегда 4),
+// послеконтрактные стадии, разрез по отделам, и все сделки с ключом стадии/отдела.
+async function getCompanyStages(companyId) {
+  const cid = String(companyId);
+  const { rows } = await pool.query(
+    `SELECT deal_id, deal_title, company_name, stage_id, category_id, opportunity, contract_date,
+            department_id, project_tag, unit_tag, planned_purchase_date
+       FROM ticketsmodule_stat_deals WHERE company_id=$1 ORDER BY opportunity DESC NULLS LAST`, [cid]);
+  const buckets = {};
+  const ensure = (key, label, phase) => buckets[key] || (buckets[key] = { key, label, phase, count: 0, sum: 0 });
+  ['P10', 'P30', 'P60', 'P80'].forEach(k => ensure(k, PRE_LABELS[k], 'pre')); // воронка всегда полная
+  const dept = {};
+  const deals = [];
+  rows.forEach(d => {
+    const info = stageInfo(d.stage_id);
+    const isPost = !!d.contract_date || info.kind === 'contract';
+    let key, label, phase;
+    if (!isPost && info.kind === 'pipeline') { key = info.step; label = PRE_LABELS[info.step]; phase = 'pre'; }
+    else if (isPost) { key = 'POST:' + (String(d.stage_id || '').split(':').pop() || '—'); label = postStageLabel(d.stage_id); phase = 'post'; }
+    else if (info.kind === 'lost') { key = 'LOST'; label = 'Проиграна / отказ'; phase = 'lost'; }
+    else { key = 'OTHER:' + (d.stage_id || '—'); label = 'Прочее: ' + (String(d.stage_id || '').split(':').pop() || '—'); phase = 'other'; }
+    const b = ensure(key, label, phase); b.count++; b.sum += Number(d.opportunity) || 0;
+    const dn = productOf(d); (dept[dn] = dept[dn] || { count: 0, sum: 0 }); dept[dn].count++; dept[dn].sum += Number(d.opportunity) || 0;
+    deals.push({
+      dealId: d.deal_id, title: d.deal_title || ('Сделка #' + d.deal_id), unit: d.unit_tag || '',
+      companyId: cid, sumMln: mln(d.opportunity), post: !!d.contract_date, project: d.project_tag || '',
+      planned: ymd(d.planned_purchase_date), stageKey: key, dept: dn,
+      url: 'https://crm.prolabsupport.kz/crm/deal/details/' + d.deal_id + '/',
+    });
+  });
+  const order = [];
+  ['P10', 'P30', 'P60', 'P80'].forEach(k => order.push(buckets[k]));
+  Object.values(buckets).filter(b => b.phase === 'post').sort((a, b) => b.sum - a.sum).forEach(b => order.push(b));
+  Object.values(buckets).filter(b => b.phase === 'lost' || b.phase === 'other').sort((a, b) => b.sum - a.sum).forEach(b => order.push(b));
+  return {
+    companyId: cid, company: (rows[0] && rows[0].company_name) || ('Компания ' + cid),
+    totalDeals: rows.length, totalSumMln: mln(rows.reduce((a, d) => a + (Number(d.opportunity) || 0), 0)),
+    stages: order.map(b => ({ key: b.key, label: b.label, phase: b.phase, count: b.count, sumMln: mln(b.sum) })),
+    byDept: Object.entries(dept).map(([name, v]) => ({ dept: name, count: v.count, sumMln: mln(v.sum) })).sort((a, b) => b.sumMln - a.sumMln),
+    deals,
+  };
+}
+
 async function listUsers() {
   return Object.entries(USERS).filter(([id]) => id !== '1')
     .map(([id, name]) => ({ id: Number(id), name })).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
@@ -477,4 +677,6 @@ async function listGroups() {
 module.exports = {
   getTree, getProjectTree, getNode, getKamPortfolio, listUnits, resolveGroupMap, uname,
   assignKam, createUnit, deleteUnit, moveCompanyGroup, setDealUnit, setDealProject, listProjectOptions, listUsers, listGroups, listDeals, nodeDeals,
+  canManageCompany, dealCompanyId, createProject, companyGroupName,
+  setDealPlanned, setProjectPlanned, addProjectComment, getCompanyStages,
 };
