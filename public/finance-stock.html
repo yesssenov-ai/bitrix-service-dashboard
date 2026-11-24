@@ -223,7 +223,7 @@ const mStore=createMulti('#fStore'),mName=createMulti('#fName'),mOrder=createMul
 async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.href='/login.html';return{ok:false,d:{}}}let d={};try{d=await r.json()}catch(e){}return{ok:r.ok,d}}
 let ROLE='',IS_ADMIN=false;
 async function boot(){const r=await fetch('/auth/me');if(!r.ok){location.href='/login.html';return;}
-  try{const me=await r.json();ROLE=(me&&me.user&&me.user.role)||'';IS_ADMIN=['admin','superadmin','coordinator','store'].includes(ROLE);}catch(e){}
+  try{const me=await r.json();ROLE=(me&&me.user&&me.user.role)||'';IS_ADMIN=['admin','superadmin','store'].includes(ROLE);}catch(e){}
   if(IS_ADMIN){var mb=document.getElementById('bulkMinBtn');if(mb)mb.style.display='';}
   await load();}
 async function load(){

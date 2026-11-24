@@ -146,7 +146,7 @@ router.get('/stock/min', requireAuth(VIEW), async (req, res) => {
 });
 router.post('/stock/min', requireAuth(VIEW), express.json(), async (req, res) => {
   try {
-    if (!['admin', 'superadmin', 'coordinator', 'store'].includes(req.user.role)) return res.status(403).json({ error: 'Только для админа/координатора/менеджера склада' });
+    if (!['admin', 'superadmin', 'store'].includes(req.user.role)) return res.status(403).json({ error: 'Только для админа/менеджера склада' });
     const b = req.body || {}; const calc = require('../finance-stock-calc');
     const uname = req.user && req.user.username;
     let out;
