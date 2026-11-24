@@ -106,7 +106,19 @@ async function fetchAdvancesRaw() {
   });
 }
 
+// Синк модуля: 1С (левая панель) + файл бухгалтера с Диска Битрикса (правая).
+// Итог модуля определяется 1С; сбой Excel не роняет синк — пишется в мету Excel
+// и показывается на правой панели.
 async function syncAdvances() {
+  const r = await syncAdvances1C();
+  try {
+    const x = await require('./finance-advances-excel').syncExcel();
+    r.excel = x.ok ? `ok ${x.count}` : `сбой: ${x.error}`;
+  } catch (e) { r.excel = 'сбой: ' + e.message; }
+  return r;
+}
+
+async function syncAdvances1C() {
   await ensureSchema();
   const mock = !onecMod.isConfigured();
   try {
@@ -147,10 +159,9 @@ async function getAdvancesBoard() {
     })),
     asOf: meta.last_ok_at || null, lastTry: meta.last_sync || null, mock: meta.is_mock !== false, error: meta.last_error || null,
     filters: { years: uniq('year'), departments: uniq('department'), contractors: uniq('contractor') },
-    // Правая панель «Данные Excel» (файл бухгалтера из Битрикса). Источник подключим
-    // по ссылке; пока не настроен — UI показывает заглушку. Контракт на будущее:
-    // excel:{ configured:true, asOf, rows:[{year,department,company,contract_sum,payments,balance}] }.
-    excel: { configured: false },
+    // Правая панель «Данные Excel» — файл бухгалтера «Анализ по Контрактам» с Диска Битрикса
+    // (finance-advances-excel.js). Пока ни разу не загружен — { configured:false }.
+    excel: await require('./finance-advances-excel').getExcelBoard().catch(e => ({ configured: false, error: e.message })),
   };
 }
 

@@ -65,6 +65,15 @@ select:focus,input:focus{border-color:var(--brand)}
 .xplace b{color:var(--text-2)}
 .reconbar{margin:16px 16px 0;padding:9px 14px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);font-size:12.5px;color:var(--text-3);display:flex;align-items:center;gap:8px}
 .reconbar .dot{width:7px;height:7px;border-radius:50%;background:var(--warn);flex:0 0 7px}
+.reconbar .dot.ok{background:var(--good)}
+.reconbar b{color:var(--text);font-variant-numeric:tabular-nums}
+.reconbar .sep{color:var(--text-4)}
+.pane-h .xmeta{margin-left:auto;font-weight:400;font-size:11.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xup{font-size:11.5px;font-weight:600;color:var(--text-3);border:1px solid var(--border2);border-radius:7px;padding:3px 9px;cursor:pointer;white-space:nowrap}
+.xup:hover{border-color:var(--accent);color:var(--accent)}
+.xerr{padding:7px 14px;font-size:12px;color:var(--bad);border-bottom:1px solid var(--border);background:var(--bad-l)}
+.trow .sub{color:var(--text-4);font-size:11px;margin-left:6px}
+.dl{color:var(--brand);text-decoration:none;font-size:11px;margin-left:4px}
 </style>
 </head>
 <body>
@@ -89,7 +98,7 @@ select:focus,input:focus{border-color:var(--brand)}
   <div style="flex:1;min-width:200px"><label class="fl">Поиск по договору</label><input type="text" id="fSearch" placeholder="Поиск…" oninput="render()" style="width:100%"></div>
 </div>
 
-<div class="reconbar" id="reconbar"><span class="dot"></span>Сверка 1С ↔ Excel появится после подключения файла бухгалтера из Битрикса.</div>
+<div class="reconbar" id="reconbar"><span class="dot"></span>Сверка 1С ↔ Excel появится после загрузки файла бухгалтера.</div>
 
 <div class="panes">
   <div class="pane p4">
@@ -99,8 +108,9 @@ select:focus,input:focus{border-color:var(--brand)}
     <div class="foot" id="foot"></div>
   </div>
   <div class="pane p3">
-    <div class="pane-h"><span class="src cx">Excel</span>Данные Excel · файл бухгалтера из Битрикса</div>
-    <div class="thead"><span>Год · Отдел · Компания</span><span class="num">Сумма дог.</span><span class="num">Оплаты</span><span class="num">Остаток</span></div>
+    <div class="pane-h"><span class="src cx">Excel</span>Данные Excel · файл бухгалтера из Битрикса<span class="xmeta" id="xmeta"></span><label class="xup" id="xupBtn" style="display:none" title="Загрузить файл вручную (.xls/.xlsx), если автозабор с Диска не работает">Загрузить файл<input type="file" accept=".xls,.xlsx" style="display:none" onchange="uploadExcel(this)"></label></div>
+    <div class="xerr" id="xerr" style="display:none"></div>
+    <div class="thead"><span>Год · Отдел · Компания · Договор</span><span class="num">Сумма дог.</span><span class="num">Оплаты</span><span class="num">Остаток</span></div>
     <div class="scroll" id="treeX"></div>
     <div class="foot" id="footX"></div>
   </div>
@@ -111,7 +121,10 @@ let DATA={rows:[]}, EXP=new Set();
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const fmt=n=>{n=Math.round(Number(n)||0);const s=Math.abs(n).toLocaleString('ru-RU').replace(/,/g,' ');return n<0?'<span class="neg">-'+s+'</span>':s;};
 async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.href='/login.html';return{ok:false,d:{}}}let d={};try{d=await r.json()}catch(e){}return{ok:r.ok,d}}
-async function boot(){const r=await fetch('/auth/me');if(!r.ok){location.href='/login.html';return;}await load();}
+let ME_ROLE='';
+async function boot(){const r=await fetch('/auth/me');if(!r.ok){location.href='/login.html';return;}try{ME_ROLE=((await r.json()).user||{}).role||'';}catch(e){}
+  if(ME_ROLE==='admin'||ME_ROLE==='superadmin')document.getElementById('xupBtn').style.display='';
+  await load();}
 async function load(){
   try{await PLSFlags.loadCountryMap();}catch(e){}
   const {ok,d}=await api('/api/finance/advances');
@@ -122,20 +135,91 @@ async function load(){
   else{_a.textContent=d.asOf?('По состоянию на '+new Date(d.asOf).toLocaleString('ru-RU')):'';_a.title='';}
   document.getElementById('mockBadge').style.display=d.mock?'inline-block':'none';
   const opt=a=>'<option value="">Все</option>'+(a||[]).map(x=>`<option>${esc(x)}</option>`).join('');
-  document.getElementById('fYear').innerHTML=opt(d.filters.years);
-  document.getElementById('fDept').innerHTML=opt(d.filters.departments);
+  const xr=(d.excel&&d.excel.configured&&d.excel.rows)||[];
+  const un=(a,b)=>[...new Set([...(a||[]),...b].filter(v=>v!==null&&v!==''))];
+  const years=un(d.filters.years,xr.map(r=>r.year)).sort((a,b)=>b-a);
+  d.filters.years=years;
+  document.getElementById('fYear').innerHTML=opt(years);
+  document.getElementById('fDept').innerHTML=opt(un(d.filters.departments,xr.map(r=>r.department)).sort());
   document.getElementById('fContractor').innerHTML=opt(d.filters.contractors);
-  (d.filters.years||[]).forEach(y=>EXP.add('y:'+y)); // годы раскрыты по умолчанию
+  (d.filters.years||[]).forEach(y=>{EXP.add('y:'+y);EXP.add('x|y:'+y);}); // годы раскрыты по умолчанию
   render();
-  renderExcel(d.excel);
 }
-function renderExcel(ex){
-  const box=document.getElementById('treeX'),foot=document.getElementById('footX');
+// ── Правая панель: файл бухгалтера (год = лист файла, т.е. год исполнения) ──
+const normCo=x=>String(x||'').toLowerCase().replace(/[«»"'`“”„]/g,' ').replace(/\b(тоо|ао|пао|ооо|ип|гу|ргп|ркп|на пхв|кгп|филиал|llp|ltd|too|jsc|llc|inc|чк|limited)\b/gi,' ').replace(/[^a-zа-яё0-9әғқңөұүһі]+/gi,' ').replace(/\s+/g,' ').trim();
+function filteredX(){
+  const ex=DATA.excel; if(!ex||!ex.configured)return [];
+  const y=document.getElementById('fYear').value,dep=document.getElementById('fDept').value,con=document.getElementById('fContractor').value;
+  const q=(document.getElementById('fSearch').value||'').toLowerCase(), nc=con?normCo(con):'';
+  return (ex.rows||[]).filter(r=>(!y||String(r.year)===y)&&(!dep||r.department===dep)&&(!nc||normCo(r.company)===nc)&&(!q||(r.contract||'').toLowerCase().includes(q)||(r.company||'').toLowerCase().includes(q)));
+}
+function aggX(list){const a={contract_sum:0,payments:0,balance:0};list.forEach(r=>{a.contract_sum+=r.contract_sum;a.payments+=r.payments;a.balance+=r.balance;});return a;}
+function numsX(a){return `<span class="num">${fmt(a.contract_sum)}</span><span class="num">${fmt(a.payments)}</span><span class="num">${fmt(a.balance)}</span>`;}
+function renderExcel(){
+  const ex=DATA.excel, box=document.getElementById('treeX'), foot=document.getElementById('footX');
+  const meta=document.getElementById('xmeta'), err=document.getElementById('xerr');
   if(!ex||!ex.configured){
-    box.innerHTML='<div class="xplace">Файл бухгалтера из Битрикса ещё не подключён.<br>Данные появятся здесь после подключения источника — <b>ждём ссылку на файл</b>.<br>Структура: год → отдел → компания · Сумма договора / Оплаты / Остаток.</div>';
+    meta.textContent='';
+    err.style.display=ex&&ex.error?'':'none'; if(ex&&ex.error)err.textContent='Не удалось загрузить файл: '+ex.error;
+    box.innerHTML='<div class="xplace">Файл бухгалтера ещё не загружен.<br>Нажмите <b>«Обновить»</b> — ЦУП заберёт «Анализ по Контрактам» с Диска Битрикса.<br>Если у вебхука нет права «Диск», администратор может загрузить файл кнопкой «Загрузить файл».</div>';
     foot.innerHTML='';return;
   }
-  // (будущее) рендер дерева год→отдел→компания из ex.rows + сверка с 1С
+  const when=ex.fileUpdated||ex.asOf;
+  meta.textContent=(ex.fileName||'')+(when?' · изм. '+new Date(when).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}):'')+(ex.source==='upload'?' · загружен вручную':'');
+  meta.title=meta.textContent;
+  err.style.display=ex.error?'':'none'; if(ex.error)err.textContent='Последнее обновление не удалось ('+ex.error+') — показаны данные прошлой загрузки.';
+  const rows=filteredX();
+  if(!rows.length){box.innerHTML='<div class="hint">Нет данных по фильтру.</div>';foot.innerHTML='';return;}
+  const by=(list,f)=>{const m={};list.forEach(r=>{const k=f(r);(m[k]=m[k]||[]).push(r);});return m;};
+  const chev=k=>`<span class="chev" onclick="toggle('${k.replace(/'/g,"\\'")}')">${EXP.has(k)?'▾':'▸'}</span>`;
+  let html='';
+  const byYear=by(rows,r=>r.year);
+  Object.keys(byYear).sort((a,b)=>b-a).forEach(y=>{
+    const yk='x|y:'+y, yl=byYear[y];
+    html+=`<div class="trow lv0"><span class="lbl">${chev(yk)}${esc(y)}</span>${numsX(aggX(yl))}</div>`;
+    if(!EXP.has(yk))return;
+    const byDept=by(yl,r=>r.department||'—');
+    Object.keys(byDept).sort().forEach(dep=>{
+      const dk=yk+'|d:'+dep, dl=byDept[dep];
+      html+=`<div class="trow lv1"><span class="lbl" style="padding-left:16px">${chev(dk)}${esc(dep)}</span>${numsX(aggX(dl))}</div>`;
+      if(!EXP.has(dk))return;
+      const byCo=by(dl,r=>r.company||'—');
+      Object.keys(byCo).sort().forEach(co=>{
+        const ck=dk+'|c:'+co, cl=byCo[co];
+        html+=`<div class="trow lv2"><span class="lbl" style="padding-left:32px">${chev(ck)}${flagByCompany(co)}${esc(co)}${cl.length>1?`<span class="sub">${cl.length}</span>`:''}</span>${numsX(aggX(cl))}</div>`;
+        if(!EXP.has(ck))return;
+        cl.forEach(r=>{
+          const deal=r.bitrix_deal_id?`<a class="dl" href="https://crm.prolabsupport.kz/crm/deal/details/${esc(r.bitrix_deal_id)}/" target="_blank" title="Сделка в Битриксе">↗</a>`:'';
+          const tip=[r.contract,r.date?('от '+fmtD(r.date)):'',r.kind,r.execution?('исполнение: '+r.execution):'',r.endUser?('конечный пользователь: '+r.endUser):''].filter(Boolean).join(' · ');
+          html+=`<div class="trow lv3"><span class="lbl" style="padding-left:52px" title="${esc(tip)}">${esc(r.contract||'без номера')}${r.date?`<span class="sub">${fmtD(r.date)}</span>`:''}${deal}</span>${numsX(r)}</div>`;
+        });
+      });
+    });
+  });
+  box.innerHTML=html;
+  foot.innerHTML=`<span>Итого</span>${numsX(aggX(rows))}`;
+}
+const fmtD=iso=>{try{const d=new Date(iso);return isNaN(d)?'':d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'2-digit'});}catch(e){return'';}};
+// Сверка по текущему фильтру: суммы договоров, оплаты и остатки 1С ↔ Excel.
+function renderRecon(){
+  const bar=document.getElementById('reconbar'), ex=DATA.excel;
+  if(!ex||!ex.configured){bar.innerHTML='<span class="dot"></span>Сверка 1С ↔ Excel появится после загрузки файла бухгалтера.';return;}
+  const a=agg(filtered()), b=aggX(filteredX());
+  const d=(x,y)=>{const v=Math.round(x-y);return v===0?'<span style="color:var(--good)">совпадает</span>':`расхождение <b>${fmt(v)}</b>`;};
+  const same=Math.round(a.contract_sum-b.contract_sum)===0&&Math.round(a.balance-b.balance)===0;
+  bar.innerHTML=`<span class="dot${same?' ok':''}"></span>Сверка по фильтру · Сумма дог.: 1С <b>${fmt(a.contract_sum)}</b> / Excel <b>${fmt(b.contract_sum)}</b> — ${d(a.contract_sum,b.contract_sum)} <span class="sep">|</span> Остаток: 1С <b>${fmt(a.balance)}</b> / Excel <b>${fmt(b.balance)}</b> — ${d(a.balance,b.balance)}`;
+  bar.title='Год в 1С — по дате договора; год в файле бухгалтера — лист файла (год исполнения). Многолетние договоры в файле разнесены по годам.';
+}
+async function uploadExcel(inp){
+  const f=inp.files&&inp.files[0]; inp.value=''; if(!f)return;
+  const lab=document.getElementById('xupBtn'); const keep=lab.firstChild.textContent; lab.firstChild.textContent='Загружаю…';
+  try{
+    const base64=await new Promise((ok,no)=>{const fr=new FileReader();fr.onload=()=>ok(String(fr.result).split(',')[1]||'');fr.onerror=()=>no(fr.error);fr.readAsDataURL(f);});
+    const {ok,d}=await api('/api/finance/advances/excel-upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:f.name,base64})});
+    if(!ok||!d.ok){alert('Не удалось загрузить: '+(d.error||'ошибка'));}
+    else{await load();}
+  }catch(e){alert('Ошибка: '+e.message);}
+  finally{lab.firstChild.textContent=keep;}
 }
 function filtered(){
   const y=document.getElementById('fYear').value,dep=document.getElementById('fDept').value,con=document.getElementById('fContractor').value;
@@ -145,10 +229,11 @@ function filtered(){
 function agg(list){const a={contract_sum:0,advances:0,payments:0,balance:0};list.forEach(r=>{a.contract_sum+=r.contract_sum;a.advances+=r.advances;a.payments+=r.payments;a.balance+=r.balance;});return a;}
 function nums(a){return `<span class="num">${fmt(a.contract_sum)}</span><span class="num">${fmt(a.advances)}</span><span class="num">${fmt(a.payments)}</span><span class="num">${fmt(a.balance)}</span>`;}
 function toggle(k){if(EXP.has(k))EXP.delete(k);else EXP.add(k);render();}
-function expandAll(on){EXP=new Set();if(on){const rows=filtered();rows.forEach(r=>{EXP.add('y:'+r.year);EXP.add('y:'+r.year+'|d:'+r.department);EXP.add('y:'+r.year+'|d:'+r.department+'|c:'+r.contractor);});}else{(DATA.filters.years||[]).forEach(y=>EXP.add('y:'+y));}render();}
+function expandAll(on){EXP=new Set();if(on){const rows=filtered();rows.forEach(r=>{EXP.add('y:'+r.year);EXP.add('y:'+r.year+'|d:'+r.department);EXP.add('y:'+r.year+'|d:'+r.department+'|c:'+r.contractor);});filteredX().forEach(r=>{const y='x|y:'+r.year,d=y+'|d:'+(r.department||'—');EXP.add(y);EXP.add(d);EXP.add(d+'|c:'+(r.company||'—'));});}else{(DATA.filters.years||[]).forEach(y=>{EXP.add('y:'+y);EXP.add('x|y:'+y);});}render();}
 function render(){
   const rows=filtered();
   const box=document.getElementById('tree');
+  renderExcel(); renderRecon();
   if(!rows.length){box.innerHTML='<div class="hint">Нет данных по фильтру.</div>';document.getElementById('foot').innerHTML='';return;}
   // группировка
   const byYear={};rows.forEach(r=>{(byYear[r.year]=byYear[r.year]||[]).push(r);});

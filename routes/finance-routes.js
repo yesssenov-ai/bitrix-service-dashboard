@@ -205,6 +205,19 @@ router.get('/advances', requireModuleApi('ADV'), async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.post('/advances/refresh', requireModuleApi('ADV'), (req, res) => doManualRefresh(req, res, 'Авансы', () => require('../finance-advances-calc').syncAdvances()));
+// Ручная загрузка файла бухгалтера (запасной путь, если у вебхука нет права «Диск»
+// или нужно залить другую версию файла). Только админ/суперадмин.
+router.post('/advances/excel-upload', requireModuleApi('ADV'), express.json({ limit: '30mb' }), async (req, res) => {
+  try {
+    if (!isAdminLike(req.user && req.user.role)) return res.status(403).json({ ok: false, error: 'Загружать файл может только администратор' });
+    const { filename, base64 } = req.body || {};
+    if (!base64) return res.status(400).json({ ok: false, error: 'Нет файла' });
+    const r = await require('../finance-advances-excel').importUpload(Buffer.from(String(base64), 'base64'), filename);
+    bust('fin:');
+    logManualRefresh(req, 'Авансы · Excel (загрузка файла)', r);
+    res.json(r);
+  } catch (e) { res.status(e.userFacing ? 400 : 500).json({ ok: false, error: e.message }); }
+});
 
 // ── Cash Flow (13-недельный прогноз ликвидности; приток из Дебета 1210) ──────
 // Cash Flow — так же не скоупится; гейтим по модулю CASHFLOW (был requireAuth(VIEW=[])).
