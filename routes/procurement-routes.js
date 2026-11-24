@@ -3,7 +3,7 @@ const router = express.Router();
 const { requireAuth, requireModuleApi, userModuleCodes, isAdminLike } = require('../auth');
 
 // Доступ к модулю «Закупки»: admin, coordinator и store правят закупки.
-const ROLES = ['admin', 'coordinator', 'store'];
+const ROLES = ['admin', 'superadmin', 'coordinator', 'store'];
 // Просмотр + согласование: те же + engineer/sales (видит ТОЛЬКО свои закупки —
 // где он согласующий/ответственный/инициатор; правами на правку не наделяется,
 // но может согласовывать назначенные на него закупки).
