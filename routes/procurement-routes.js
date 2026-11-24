@@ -266,9 +266,7 @@ router.get('/:id/files/:fileId/download', ...viewGate(), async (req, res) => {
     const { getFileBytes } = require('../procurement-calc');
     const f = await getFileBytes(parseInt(req.params.id, 10), parseInt(req.params.fileId, 10));
     if (!f) return res.status(404).send('Файл не найден');
-    res.setHeader('Content-Type', f.mime);
-    res.setHeader('Content-Disposition', `attachment; filename="${String(f.filename || 'file').replace(/[^\x20-\x7e]+/g, '_').replace(/"/g, '')}"; filename*=UTF-8''${encodeURIComponent(f.filename || 'file')}`);
-    res.send(f.buffer);
+    sendProcFile(res, f, req.query.inline === '1');
   } catch (e) {
     console.error('GET /api/procurement/:id/files/:fileId/download error:', e.message);
     res.status(500).send('Ошибка');
@@ -322,11 +320,83 @@ router.get('/deal/:dealId/ship-file/:fileId/download', requireAuth(ROLES), async
     const { getShipFileBytes } = require('../procurement-calc');
     const f = await getShipFileBytes(parseInt(req.params.dealId, 10), parseInt(req.params.fileId, 10));
     if (!f) return res.status(404).send('Файл не найден');
-    res.setHeader('Content-Type', f.mime);
-    res.setHeader('Content-Disposition', `attachment; filename="${String(f.filename || 'file').replace(/[^\x20-\x7e]+/g, '_').replace(/"/g, '')}"; filename*=UTF-8''${encodeURIComponent(f.filename || 'file')}`);
-    res.send(f.buffer);
+    sendProcFile(res, f, req.query.inline === '1');
   } catch (e) { res.status(500).send('Ошибка'); }
 });
+
+// ── Просмотр файлов в ЦУП без скачивания ─────────────────────────────────────
+// PDF/картинки фронт открывает в iframe через ?inline=1. Word/Excel/PowerPoint
+// показывает просмотрщик Microsoft Office Online: ему нужна публичная ссылка,
+// поэтому выдаём одноразовую подписанную ссылку, живущую 10 минут.
+const PREVIEW_TTL_MS = 10 * 60 * 1000;
+function previewSecret() { return String(process.env.JWT_SECRET || 'proc-preview') + ':proc-preview'; }
+function signPreview(payload) {
+  const crypto = require('crypto');
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = crypto.createHmac('sha256', previewSecret()).update(body).digest('base64url');
+  return body + '.' + sig;
+}
+function verifyPreview(token) {
+  const crypto = require('crypto');
+  const [body, sig] = String(token || '').split('.');
+  if (!body || !sig) return null;
+  const exp = crypto.createHmac('sha256', previewSecret()).update(body).digest('base64url');
+  const a = Buffer.from(sig), b = Buffer.from(exp);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  let p; try { p = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')); } catch (e) { return null; }
+  if (!p || !p.e || Date.now() > p.e) return null;
+  return p;
+}
+function publicBase(req) {
+  if (process.env.PUBLIC_URL) return String(process.env.PUBLIC_URL).replace(/\/+$/, '');
+  const proto = String(req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0].trim();
+  return proto + '://' + req.get('host');
+}
+async function previewLink(req, res, kind, a, b) {
+  try {
+    const calc = require('../procurement-calc');
+    const f = kind === 's' ? await calc.getShipFileBytes(a, b) : await calc.getFileBytes(a, b);
+    if (!f) return res.status(404).json({ ok: false, error: 'Файл не найден' });
+    const token = signPreview({ k: kind, a, b, e: Date.now() + PREVIEW_TTL_MS });
+    // Имя файла в конце ссылки — по расширению просмотрщик понимает формат.
+    const url = `${publicBase(req)}/api/procurement/public-file/${token}/${encodeURIComponent(f.filename || 'file')}`;
+    res.json({ ok: true, url, filename: f.filename || 'file' });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+}
+router.get('/:id/files/:fileId/preview-link', ...viewGate(), (req, res) =>
+  previewLink(req, res, 'f', parseInt(req.params.id, 10), parseInt(req.params.fileId, 10)));
+router.get('/deal/:dealId/ship-file/:fileId/preview-link', requireAuth(ROLES), (req, res) =>
+  previewLink(req, res, 's', parseInt(req.params.dealId, 10), parseInt(req.params.fileId, 10)));
+// Публичная (без входа) выдача по подписанной ссылке — только для просмотрщика.
+router.get('/public-file/:token/:name', async (req, res) => {
+  try {
+    const p = verifyPreview(req.params.token);
+    if (!p) return res.status(403).send('Ссылка просмотра недействительна или устарела');
+    const calc = require('../procurement-calc');
+    const f = p.k === 's' ? await calc.getShipFileBytes(p.a, p.b) : await calc.getFileBytes(p.a, p.b);
+    if (!f) return res.status(404).send('Файл не найден');
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    sendProcFile(res, f, true);
+  } catch (e) { res.status(500).send('Ошибка'); }
+});
+const EXT_MIME = {
+  pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp',
+  doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+};
+function sendProcFile(res, f, inline) {
+  // Если тип не сохранён — определяем по расширению (иначе PDF не откроется в окне).
+  let mime = f.mime || '';
+  if (!mime || mime === 'application/octet-stream') {
+    const ext = String(f.filename || '').split('.').pop().toLowerCase();
+    mime = EXT_MIME[ext] || 'application/octet-stream';
+  }
+  res.setHeader('Content-Type', mime);
+  const ascii = String(f.filename || 'file').replace(/[^\x20-\x7e]+/g, '_').replace(/"/g, '');
+  res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(f.filename || 'file')}`);
+  res.send(f.buffer);
+}
 
 // DELETE /api/procurement/deal/:dealId/ship-file/:fileId — удалить ТТН
 router.delete('/deal/:dealId/ship-file/:fileId', requireAuth(ROLES), async (req, res) => {
