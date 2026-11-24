@@ -259,7 +259,29 @@ async function boot(){
   try{document.execCommand('styleWithCSS',false,false);}catch(e){}   // жирный как <b>, не span-стили
   const ed=document.getElementById('cBody');
   if(ed){
-    ed.addEventListener('paste',e=>{e.preventDefault();const t=(e.clipboardData||window.clipboardData).getData('text/plain');document.execCommand('insertText',false,t);});
+    ed.addEventListener('paste',async e=>{
+      const items=(e.clipboardData||window.clipboardData).items||[];
+      let imgFile=null;
+      for(const it of items){ if(it.kind==='file' && /^image\//.test(it.type)){ imgFile=it.getAsFile(); break; } }
+      if(imgFile){
+        // Ctrl+V картинки из буфера: грузим на сервер и вставляем <img> (как через кнопку).
+        e.preventDefault();
+        if(imgFile.size>8*1024*1024){msg('Картинка больше 8 МБ — уменьшите и попробуйте снова','err');return;}
+        msg('Загружаю картинку…','');
+        try{
+          const b64=await new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(String(fr.result).split(',')[1]||'');fr.onerror=rej;fr.readAsDataURL(imgFile);});
+          const r=await fetch('/api/campaigns/image',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({filename:imgFile.name||'pasted.png',mime:imgFile.type,dataBase64:b64})}).then(r=>r.json());
+          if(!r.ok||!r.url)throw new Error(r.error||'ошибка загрузки');
+          ed.focus();
+          document.execCommand('insertHTML',false,'<img src="'+r.url+'" alt="" style="max-width:100%;height:auto;border-radius:6px;margin:8px 0;display:block">');
+          preview();
+          msg('Картинка вставлена','ok');
+        }catch(err){msg('Не удалось вставить картинку: '+(err&&err.message||err),'err');}
+        return;
+      }
+      // Обычный текст — вставляем без форматирования.
+      e.preventDefault();const t=(e.clipboardData||window.clipboardData).getData('text/plain');document.execCommand('insertText',false,t);
+    });
     ed.addEventListener('keyup',saveSel); ed.addEventListener('mouseup',saveSel);
   }
 }
