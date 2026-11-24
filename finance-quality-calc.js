@@ -36,6 +36,7 @@ function ensureSchema() {
         dept_b24 VARCHAR(120),
         diff_fields VARCHAR(200),
         synced_at TIMESTAMPTZ DEFAULT NOW());
+      ALTER TABLE ticketsmodule_onec_quality ADD COLUMN IF NOT EXISTS company_b24 VARCHAR(500);
       CREATE INDEX IF NOT EXISTS idx_onec_quality_status ON ticketsmodule_onec_quality(status);
       CREATE TABLE IF NOT EXISTS ticketsmodule_onec_meta (
         source VARCHAR(40) PRIMARY KEY,
@@ -109,18 +110,20 @@ function buildPairs(list1c, listB24) {
   const rows = [];
   for (const c of list1c) {
     const id = String(c.deal_id || '').trim();
-    // Наименование сравниваем по КОМПАНИИ: в 1С это контрагент, в Битриксе — компания.
-    if (!id) { rows.push({ id: 'nolink-' + (c.name || c.contractor), deal_id: '', status: 'no_link', contractor: c.contractor, name_1c: c.contractor, name_b24: '', sum_1c: c.sum, sum_b24: null, dept_1c: c.dept, dept_b24: '', diff_fields: '' }); continue; }
+    // Сравниваем ДВА поля: компанию (1С контрагент ↔ Б24 компания) и название/номер
+    // договора (1С наименование договора ↔ Б24 название сделки).
+    if (!id) { rows.push({ id: 'nolink-' + (c.name || c.contractor), deal_id: '', status: 'no_link', contractor: c.contractor, company_b24: '', name_1c: c.name, name_b24: '', sum_1c: c.sum, sum_b24: null, dept_1c: c.dept, dept_b24: '', diff_fields: '' }); continue; }
     const d = b24[id];
-    if (!d) { rows.push({ id: '1c-' + id, deal_id: id, status: 'only_1c', contractor: c.contractor, name_1c: c.contractor, name_b24: '', sum_1c: c.sum, sum_b24: null, dept_1c: c.dept, dept_b24: '', diff_fields: '' }); continue; }
+    if (!d) { rows.push({ id: '1c-' + id, deal_id: id, status: 'only_1c', contractor: c.contractor, company_b24: '', name_1c: c.name, name_b24: '', sum_1c: c.sum, sum_b24: null, dept_1c: c.dept, dept_b24: '', diff_fields: '' }); continue; }
     seenB24.add(id);
     const diffs = [];
     if (Math.abs(Number(c.sum || 0) - Number(d.sum || 0)) > SUM_TOLERANCE) diffs.push('сумма');
     if (norm(c.contractor) && norm(d.company) && norm(c.contractor) !== norm(d.company)) diffs.push('компания');
+    if (norm(c.name) && norm(d.title) && norm(c.name) !== norm(d.title)) diffs.push('название');
     if (c.dept && d.dept && c.dept !== d.dept) diffs.push('отдел');
-    rows.push({ id: 'pair-' + id, deal_id: id, status: diffs.length ? 'diff' : 'ok', contractor: c.contractor, name_1c: c.contractor, name_b24: d.company, sum_1c: c.sum, sum_b24: d.sum, dept_1c: c.dept, dept_b24: d.dept, diff_fields: diffs.join(', ') });
+    rows.push({ id: 'pair-' + id, deal_id: id, status: diffs.length ? 'diff' : 'ok', contractor: c.contractor, company_b24: d.company, name_1c: c.name, name_b24: d.title, sum_1c: c.sum, sum_b24: d.sum, dept_1c: c.dept, dept_b24: d.dept, diff_fields: diffs.join(', ') });
   }
-  for (const d of listB24) { const id = String(d.deal_id || '').trim(); if (id && !seenB24.has(id) && !rows.some(r => r.deal_id === id && r.status !== 'only_1c')) rows.push({ id: 'b24-' + id, deal_id: id, status: 'only_b24', contractor: d.company || '', name_1c: '', name_b24: d.company, sum_1c: null, sum_b24: d.sum, dept_1c: '', dept_b24: d.dept, diff_fields: '' }); }
+  for (const d of listB24) { const id = String(d.deal_id || '').trim(); if (id && !seenB24.has(id) && !rows.some(r => r.deal_id === id && r.status !== 'only_1c')) rows.push({ id: 'b24-' + id, deal_id: id, status: 'only_b24', contractor: '', company_b24: d.company || '', name_1c: '', name_b24: d.title, sum_1c: null, sum_b24: d.sum, dept_1c: '', dept_b24: d.dept, diff_fields: '' }); }
   return rows;
 }
 function norm(s) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').replace(/[«»"']/g, '').trim(); }
@@ -134,10 +137,10 @@ async function syncQuality() {
     await pool.query('DELETE FROM ticketsmodule_onec_quality');
     for (const r of rows) {
       await pool.query(
-        `INSERT INTO ticketsmodule_onec_quality (id, deal_id, status, contractor, name_1c, name_b24, sum_1c, sum_b24, dept_1c, dept_b24, diff_fields)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-         ON CONFLICT (id) DO UPDATE SET deal_id=$2,status=$3,contractor=$4,name_1c=$5,name_b24=$6,sum_1c=$7,sum_b24=$8,dept_1c=$9,dept_b24=$10,diff_fields=$11,synced_at=NOW()`,
-        [r.id, r.deal_id || '', r.status, r.contractor || '', r.name_1c || '', r.name_b24 || '', r.sum_1c, r.sum_b24, r.dept_1c || '', r.dept_b24 || '', r.diff_fields || '']);
+        `INSERT INTO ticketsmodule_onec_quality (id, deal_id, status, contractor, company_b24, name_1c, name_b24, sum_1c, sum_b24, dept_1c, dept_b24, diff_fields)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+         ON CONFLICT (id) DO UPDATE SET deal_id=$2,status=$3,contractor=$4,company_b24=$5,name_1c=$6,name_b24=$7,sum_1c=$8,sum_b24=$9,dept_1c=$10,dept_b24=$11,diff_fields=$12,synced_at=NOW()`,
+        [r.id, r.deal_id || '', r.status, r.contractor || '', r.company_b24 || '', r.name_1c || '', r.name_b24 || '', r.sum_1c, r.sum_b24, r.dept_1c || '', r.dept_b24 || '', r.diff_fields || '']);
     }
     await pool.query(
       `INSERT INTO ticketsmodule_onec_meta (source, last_sync, last_ok_at, is_mock, last_error)

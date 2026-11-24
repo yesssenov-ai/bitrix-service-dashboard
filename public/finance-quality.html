@@ -67,7 +67,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:now
 <div class="card">
   <div class="searchbox"><input type="text" id="fSearch" placeholder="Поиск: контрагент, наименование, ID сделки…" oninput="render()"></div>
   <div class="scroll"><table>
-    <thead><tr><th>ID сделки</th><th>Контрагент (1С)</th><th>Компания (Б24)</th><th class="num">Сумма 1С</th><th class="num">Сумма Б24</th><th class="num">Δ</th><th>Отдел</th><th>Статус</th><th>Расхождения</th></tr></thead>
+    <thead><tr><th>ID сделки</th><th>Компания</th><th>Название</th><th class="num">Сумма 1С</th><th class="num">Сумма Б24</th><th class="num">Δ</th><th>Отдел</th><th>Статус</th><th>Расхождения</th></tr></thead>
     <tbody id="body"></tbody>
   </table></div>
 </div>
@@ -99,18 +99,20 @@ function render(){
   const q=(document.getElementById('fSearch').value||'').toLowerCase();
   let rows=DATA.rows||[];
   if(FILTER!=='all')rows=rows.filter(r=>r.status===FILTER);
-  if(q)rows=rows.filter(r=>((r.contractor||'')+' '+(r.name_1c||'')+' '+(r.name_b24||'')+' '+(r.deal_id||'')).toLowerCase().includes(q));
+  if(q)rows=rows.filter(r=>((r.contractor||'')+' '+(r.company_b24||'')+' '+(r.name_1c||'')+' '+(r.name_b24||'')+' '+(r.deal_id||'')).toLowerCase().includes(q));
   document.getElementById('body').innerHTML=rows.length?rows.map(r=>{
     const df=(r.diff_fields||'').split(', ').filter(Boolean);
     const has=f=>df.includes(f);
     const deal=r.deal_id?`<a class="dl" href="https://crm.prolabsupport.kz/crm/deal/details/${esc(r.deal_id)}/" target="_blank">#${esc(r.deal_id)}</a>`:'<span style="color:var(--warn)">—</span>';
-    // Сравнение по компании: слева контрагент 1С (отдельная колонка), тут — компания Б24.
-    const names=r.name_b24?`<span class="${has('компания')?'mm':''}">${esc(r.name_b24)}</span>`:'<span style="color:var(--text-3)">—</span>';
+    // Две колонки, в каждой сверху 1С, снизу Б24; подсветка «mm» при расхождении.
+    const stack=(v1c,vb24,flag)=>`<div>${esc(v1c||'—')}</div>${vb24?`<div style="color:var(--text-3);margin-top:2px" class="${has(flag)?'mm':''}">Б24: ${esc(vb24)}</div>`:''}`;
+    const compCol=stack(r.contractor, r.company_b24, 'компания');
+    const nameCol=stack(r.name_1c, r.name_b24, 'название');
     const delta=(r.sum_1c!=null&&r.sum_b24!=null)?(r.sum_1c-r.sum_b24):null;
     return `<tr>
       <td>${deal}</td>
-      <td>${esc(r.contractor||'')}</td>
-      <td style="white-space:normal;max-width:360px">${names}</td>
+      <td style="white-space:normal;max-width:240px">${compCol}</td>
+      <td style="white-space:normal;max-width:300px">${nameCol}</td>
       <td class="num">${fmt(r.sum_1c)}</td>
       <td class="num ${has('сумма')?'mm':''}">${fmt(r.sum_b24)}</td>
       <td class="num ${delta?'mm':''}">${delta==null?'—':(delta>0?'+':'')+fmt(delta)}</td>
