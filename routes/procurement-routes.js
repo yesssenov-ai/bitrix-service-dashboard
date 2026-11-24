@@ -267,7 +267,7 @@ router.get('/:id/files/:fileId/download', ...viewGate(), async (req, res) => {
     const f = await getFileBytes(parseInt(req.params.id, 10), parseInt(req.params.fileId, 10));
     if (!f) return res.status(404).send('Файл не найден');
     res.setHeader('Content-Type', f.mime);
-    res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(f.filename)}`);
+    res.setHeader('Content-Disposition', `attachment; filename="${String(f.filename || 'file').replace(/[^\x20-\x7e]+/g, '_').replace(/"/g, '')}"; filename*=UTF-8''${encodeURIComponent(f.filename || 'file')}`);
     res.send(f.buffer);
   } catch (e) {
     console.error('GET /api/procurement/:id/files/:fileId/download error:', e.message);
@@ -323,7 +323,7 @@ router.get('/deal/:dealId/ship-file/:fileId/download', requireAuth(ROLES), async
     const f = await getShipFileBytes(parseInt(req.params.dealId, 10), parseInt(req.params.fileId, 10));
     if (!f) return res.status(404).send('Файл не найден');
     res.setHeader('Content-Type', f.mime);
-    res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(f.filename)}`);
+    res.setHeader('Content-Disposition', `attachment; filename="${String(f.filename || 'file').replace(/[^\x20-\x7e]+/g, '_').replace(/"/g, '')}"; filename*=UTF-8''${encodeURIComponent(f.filename || 'file')}`);
     res.send(f.buffer);
   } catch (e) { res.status(500).send('Ошибка'); }
 });

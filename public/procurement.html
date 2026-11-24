@@ -1081,9 +1081,18 @@ function renderDetail(id,d){
         }
       }
     } else {
-      // engineer/sales: полный набор документов (просмотр + загрузка).
-      body+='<div class="deth">Документы (просмотр и загрузка)</div>';
-      ['invoice','pay','poa','contract','warranty'].forEach(sl=>{ body+=`<div class="fl" style="margin-top:10px">${DOC_LABELS[sl]}</div>`+filesSlotHtml(id,d,sl); });
+      // Автор/инженер/сейлс: на каждом этапе показываем загрузку ТОЛЬКО того
+      // документа, который собирается на этом этапе — не сваливаем все слоты сразу.
+      // Счёт → «Запрос счёта»; платёжка/доверенность → «Оплата»;
+      // накладная/гарантийный → «Ожидание товара»/«Товар принят».
+      const STAGE_SLOTS={new:[],invoice:['invoice'],contract:[],approve:[],payment:['pay','poa'],waiting:['contract','warranty'],received:['contract','warranty']};
+      const slots=STAGE_SLOTS[curKey]||[];
+      if(slots.length){
+        body+='<div class="deth">Документы (просмотр и загрузка)</div>';
+        slots.forEach(sl=>{ body+=`<div class="fl" style="margin-top:10px">${DOC_LABELS[sl]}</div>`+filesSlotHtml(id,d,sl); });
+      } else {
+        body+='<div class="hint" style="margin-top:6px">На этом этапе загрузка документов от вас не требуется. Приложенные документы показаны выше.</div>';
+      }
     }
     html=body;
   }
