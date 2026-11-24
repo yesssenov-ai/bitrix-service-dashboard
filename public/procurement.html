@@ -226,6 +226,23 @@ table.mini td{padding:4px 8px;border-bottom:1px solid var(--border)}
 @media(max-width:900px){#rightBody{max-height:none!important;overflow:visible!important}}
 /* Списки заявок — горизонтальная прокрутка на узких экранах, без обрезки */
 .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+/* ── Окно просмотра файлов (без скачивания) ── */
+.fv-ovl{position:fixed;inset:0;z-index:1000;background:rgba(8,12,20,.62);display:flex;align-items:center;justify-content:center;padding:24px}
+.fv-box{background:var(--surface);border:1px solid var(--line);border-radius:12px;width:min(1200px,100%);height:min(92vh,100%);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.35)}
+.fv-hd{display:flex;align-items:center;gap:10px;padding:10px 12px 10px 16px;border-bottom:1px solid var(--line)}
+.fv-ttl{flex:1;min-width:0;font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fv-ext{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);border:1px solid var(--line);border-radius:5px;padding:2px 6px;margin-right:8px;vertical-align:1px}
+.fv-act{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 11px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font:inherit;font-size:12.5px;font-weight:600;text-decoration:none;cursor:pointer;white-space:nowrap}
+.fv-act:hover{background:var(--surface-2);border-color:var(--line-2)}
+.fv-act svg{width:15px;height:15px;flex:none}
+.fv-x{width:32px;padding:0;justify-content:center}
+.fv-bd{position:relative;flex:1;min-height:0;background:var(--surface-2)}
+.fv-bd iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
+.fv-bd .fv-img{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:auto;padding:16px}
+.fv-bd .fv-img img{max-width:100%;max-height:100%;object-fit:contain;background:#fff}
+.fv-msg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--text-3);font-size:13px;text-align:center;padding:24px}
+.fv-foot{padding:7px 16px;border-top:1px solid var(--line);font-size:11.5px;color:var(--text-3)}
+@media(max-width:700px){.fv-ovl{padding:0}.fv-box{border-radius:0;height:100%}.fv-act .fv-lbl{display:none}.fv-act{padding:0 9px}}
 </style>
 </head>
 <body>
@@ -1427,6 +1444,110 @@ async function submitReq(){
 
 async function logout(){await fetch('/auth/logout',{method:'POST'});location.href='/login.html';}
 boot();
+</script>
+<script>
+/* ─────────────────────────────────────────────────────────────────────────
+   Просмотр файлов внутри ЦУП без скачивания.
+   Перехватываем клики по ссылкам /api/procurement/.../download (кроме
+   Ctrl/Cmd/Shift/средней кнопки — тогда браузер ведёт себя как раньше):
+     • PDF и картинки — прямо из ЦУП через ?inline=1;
+     • Word / Excel / PowerPoint — просмотрщик Microsoft Office Online по
+       одноразовой ссылке на 10 минут (/preview-link);
+     • прочие форматы — обычное скачивание.
+   ───────────────────────────────────────────────────────────────────────── */
+(function(){
+  const RX=/^\/api\/procurement\/(?:\d+\/files|deal\/\d+\/ship-file)\/\d+\/download$/;
+  const NATIVE=['pdf','png','jpg','jpeg','gif','webp'];
+  const IMG=['png','jpg','jpeg','gif','webp'];
+  const OFFICE=['doc','docx','xls','xlsx','ppt','pptx'];
+  const ICON={
+    ext:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
+    dl:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>',
+    x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+  };
+  let ovl=null, prevOverflow='';
+
+  function extOf(name){ const m=String(name||'').toLowerCase().match(/\.([a-z0-9]{1,5})$/); return m?m[1]:''; }
+  function close(){
+    if(!ovl) return;
+    ovl.remove(); ovl=null;
+    document.body.style.overflow=prevOverflow;
+  }
+  function setBody(html){ const b=ovl&&ovl.querySelector('.fv-bd'); if(b) b.innerHTML=html; }
+  function setOpen(url){ const a=ovl&&ovl.querySelector('[data-fv-open]'); if(!a) return; if(url){a.href=url;a.style.display='';} else a.style.display='none'; }
+  function setFoot(txt){ const f=ovl&&ovl.querySelector('.fv-foot'); if(!f) return; f.textContent=txt||''; f.style.display=txt?'':'none'; }
+  function fail(msg,href){
+    setBody(`<div class="fv-msg"><div>${esc(msg)}</div><a class="fv-act" href="${esc(href)}" download>${ICON.dl}<span class="fv-lbl">Скачать файл</span></a></div>`);
+  }
+  function frame(src,title){
+    setBody('<div class="fv-msg"><div class="spin" style="margin:0"></div></div>');
+    const f=document.createElement('iframe');
+    f.title=title; f.src=src; f.style.visibility='hidden';
+    f.addEventListener('load',()=>{ f.style.visibility=''; const m=ovl&&ovl.querySelector('.fv-bd .fv-msg'); if(m) m.remove(); });
+    ovl.querySelector('.fv-bd').appendChild(f);
+  }
+
+  async function openViewer(href,name){
+    const ext=extOf(name);
+    if(!NATIVE.includes(ext) && !OFFICE.includes(ext)){ location.href=href; return; } // прочее — скачиваем как раньше
+    close();
+    prevOverflow=document.body.style.overflow; document.body.style.overflow='hidden';
+    ovl=document.createElement('div');
+    ovl.className='fv-ovl';
+    ovl.innerHTML=`<div class="fv-box" role="dialog" aria-modal="true" aria-label="Просмотр файла">
+      <div class="fv-hd">
+        <div class="fv-ttl" title="${esc(name)}"><span class="fv-ext">${esc(ext)}</span>${esc(name)}</div>
+        <a class="fv-act" data-fv-open target="_blank" rel="noopener" style="display:none" title="Открыть в новой вкладке">${ICON.ext}<span class="fv-lbl">В новой вкладке</span></a>
+        <a class="fv-act" href="${esc(href)}" download title="Скачать">${ICON.dl}<span class="fv-lbl">Скачать</span></a>
+        <button type="button" class="fv-act fv-x" data-no-guard data-fv-close title="Закрыть (Esc)">${ICON.x}</button>
+      </div>
+      <div class="fv-bd"></div>
+      <div class="fv-foot" style="display:none"></div>
+    </div>`;
+    ovl.addEventListener('click',e=>{ if(e.target===ovl || e.target.closest('[data-fv-close]')) close(); });
+    document.body.appendChild(ovl);
+
+    if(NATIVE.includes(ext)){
+      const src=href+'?inline=1';
+      setOpen(src);
+      if(IMG.includes(ext)){
+        setBody(`<div class="fv-img"><img alt="${esc(name)}" src="${esc(src)}"></div>`);
+        const img=ovl.querySelector('.fv-img img');
+        img.addEventListener('error',()=>fail('Не удалось показать изображение.',href));
+      } else {
+        frame(src,name);
+      }
+      return;
+    }
+
+    // Word / Excel / PowerPoint → Office Online по одноразовой ссылке
+    setBody('<div class="fv-msg"><div class="spin" style="margin:0"></div><div>Готовим просмотр документа…</div></div>');
+    try{
+      const r=await fetch(href.replace(/\/download$/,'/preview-link'));
+      const d=await r.json().catch(()=>({}));
+      if(!ovl) return;                                  // окно успели закрыть
+      if(!r.ok || !d.ok || !d.url){ fail(d.error||'Не удалось подготовить просмотр.',href); return; }
+      const viewer='https://view.officeapps.live.com/op/embed.aspx?src='+encodeURIComponent(d.url);
+      setOpen('https://view.officeapps.live.com/op/view.aspx?src='+encodeURIComponent(d.url));
+      setFoot('Документ показывается через просмотрщик Microsoft Office Online. Если он не отобразился (очень большой файл или повреждённый формат) — нажмите «Скачать».');
+      frame(viewer,name);
+    }catch(e){ if(ovl) fail('Ошибка: '+e.message,href); }
+  }
+
+  document.addEventListener('click',function(ev){
+    if(ev.defaultPrevented || ev.button!==0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
+    const a=ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
+    if(!a || a.hasAttribute('download') || a.closest('.fv-ovl')) return;
+    let path;
+    try{ const u=new URL(a.getAttribute('href'),location.href); if(u.origin!==location.origin) return; path=u.pathname; }catch(e){ return; }
+    if(!RX.test(path)) return;
+    ev.preventDefault();
+    const name=(a.getAttribute('title')||a.textContent||'файл').trim();
+    openViewer(path,name);
+  });
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape' && ovl){ e.preventDefault(); close(); } });
+  window.openFileViewer=openViewer;
+})();
 </script>
 <script src="/assets/cup-theme.js" defer></script>
 </body>
