@@ -67,7 +67,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:now
 <div class="card">
   <div class="searchbox"><input type="text" id="fSearch" placeholder="Поиск: контрагент, наименование, ID сделки…" oninput="render()"></div>
   <div class="scroll"><table>
-    <thead><tr><th>ID сделки</th><th>Контрагент</th><th>Наименование (1С / Б24)</th><th class="num">Сумма 1С</th><th class="num">Сумма Б24</th><th class="num">Δ</th><th>Отдел</th><th>Статус</th><th>Расхождения</th></tr></thead>
+    <thead><tr><th>ID сделки</th><th>Контрагент (1С)</th><th>Компания (Б24)</th><th class="num">Сумма 1С</th><th class="num">Сумма Б24</th><th class="num">Δ</th><th>Отдел</th><th>Статус</th><th>Расхождения</th></tr></thead>
     <tbody id="body"></tbody>
   </table></div>
 </div>
@@ -104,7 +104,8 @@ function render(){
     const df=(r.diff_fields||'').split(', ').filter(Boolean);
     const has=f=>df.includes(f);
     const deal=r.deal_id?`<a class="dl" href="https://crm.prolabsupport.kz/crm/deal/details/${esc(r.deal_id)}/" target="_blank">#${esc(r.deal_id)}</a>`:'<span style="color:var(--warn)">—</span>';
-    const names=`${esc(r.name_1c||'')}${r.name_b24?`<div style="color:var(--text-3);margin-top:2px" class="${has('наименование')?'mm':''}">Б24: ${esc(r.name_b24)}</div>`:''}`;
+    // Сравнение по компании: слева контрагент 1С (отдельная колонка), тут — компания Б24.
+    const names=r.name_b24?`<span class="${has('компания')?'mm':''}">${esc(r.name_b24)}</span>`:'<span style="color:var(--text-3)">—</span>';
     const delta=(r.sum_1c!=null&&r.sum_b24!=null)?(r.sum_1c-r.sum_b24):null;
     return `<tr>
       <td>${deal}</td>

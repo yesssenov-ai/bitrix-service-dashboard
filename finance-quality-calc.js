@@ -97,6 +97,7 @@ async function fetchBitrixDeals() {
   return rows.map(r => ({
     deal_id: String(r.deal_id == null ? '' : r.deal_id).trim(),
     title: r.deal_title || r.company_name || '',
+    company: r.company_name || '',
     sum: Number(r.opportunity || 0),
     dept: DEPT_LABELS[String(r.department_id || '').trim()] || '',
   }));
@@ -108,17 +109,18 @@ function buildPairs(list1c, listB24) {
   const rows = [];
   for (const c of list1c) {
     const id = String(c.deal_id || '').trim();
-    if (!id) { rows.push({ id: 'nolink-' + c.name, deal_id: '', status: 'no_link', contractor: c.contractor, name_1c: c.name, name_b24: '', sum_1c: c.sum, sum_b24: null, dept_1c: c.dept, dept_b24: '', diff_fields: '' }); continue; }
+    // Наименование сравниваем по КОМПАНИИ: в 1С это контрагент, в Битриксе — компания.
+    if (!id) { rows.push({ id: 'nolink-' + (c.name || c.contractor), deal_id: '', status: 'no_link', contractor: c.contractor, name_1c: c.contractor, name_b24: '', sum_1c: c.sum, sum_b24: null, dept_1c: c.dept, dept_b24: '', diff_fields: '' }); continue; }
     const d = b24[id];
-    if (!d) { rows.push({ id: '1c-' + id, deal_id: id, status: 'only_1c', contractor: c.contractor, name_1c: c.name, name_b24: '', sum_1c: c.sum, sum_b24: null, dept_1c: c.dept, dept_b24: '', diff_fields: '' }); continue; }
+    if (!d) { rows.push({ id: '1c-' + id, deal_id: id, status: 'only_1c', contractor: c.contractor, name_1c: c.contractor, name_b24: '', sum_1c: c.sum, sum_b24: null, dept_1c: c.dept, dept_b24: '', diff_fields: '' }); continue; }
     seenB24.add(id);
     const diffs = [];
     if (Math.abs(Number(c.sum || 0) - Number(d.sum || 0)) > SUM_TOLERANCE) diffs.push('сумма');
-    if (norm(c.name) && norm(d.title) && norm(c.name) !== norm(d.title)) diffs.push('наименование');
+    if (norm(c.contractor) && norm(d.company) && norm(c.contractor) !== norm(d.company)) diffs.push('компания');
     if (c.dept && d.dept && c.dept !== d.dept) diffs.push('отдел');
-    rows.push({ id: 'pair-' + id, deal_id: id, status: diffs.length ? 'diff' : 'ok', contractor: c.contractor, name_1c: c.name, name_b24: d.title, sum_1c: c.sum, sum_b24: d.sum, dept_1c: c.dept, dept_b24: d.dept, diff_fields: diffs.join(', ') });
+    rows.push({ id: 'pair-' + id, deal_id: id, status: diffs.length ? 'diff' : 'ok', contractor: c.contractor, name_1c: c.contractor, name_b24: d.company, sum_1c: c.sum, sum_b24: d.sum, dept_1c: c.dept, dept_b24: d.dept, diff_fields: diffs.join(', ') });
   }
-  for (const d of listB24) { const id = String(d.deal_id || '').trim(); if (id && !seenB24.has(id) && !rows.some(r => r.deal_id === id && r.status !== 'only_1c')) rows.push({ id: 'b24-' + id, deal_id: id, status: 'only_b24', contractor: '', name_1c: '', name_b24: d.title, sum_1c: null, sum_b24: d.sum, dept_1c: '', dept_b24: d.dept, diff_fields: '' }); }
+  for (const d of listB24) { const id = String(d.deal_id || '').trim(); if (id && !seenB24.has(id) && !rows.some(r => r.deal_id === id && r.status !== 'only_1c')) rows.push({ id: 'b24-' + id, deal_id: id, status: 'only_b24', contractor: d.company || '', name_1c: '', name_b24: d.company, sum_1c: null, sum_b24: d.sum, dept_1c: '', dept_b24: d.dept, diff_fields: '' }); }
   return rows;
 }
 function norm(s) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').replace(/[«»"']/g, '').trim(); }
