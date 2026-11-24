@@ -1075,6 +1075,23 @@ initDB().then(() => {
       }
     }, 5 * 60 * 1000);
 
+    // Автосинхронизация Компаний из Bitrix — КАЖДЫЙ день в 03:00 UTC (08:00 Алматы).
+    // Раньше зеркало компаний обновлялось только вручную по кнопке, поэтому данные
+    // «замирали» между запусками. Прогон тяжёлый (полный скан сделок + 2594 компании),
+    // поэтому держим его в раннее утро, раз в сутки.
+    let lastCompaniesSync = null;
+    setInterval(async () => {
+      const now = new Date();
+      const dateKey = now.toISOString().slice(0, 10);
+      if (now.getUTCHours() === 3 && lastCompaniesSync !== dateKey) {
+        lastCompaniesSync = dateKey;
+        try {
+          const r = await require('./companies-calc').syncCompanies();
+          console.log('✅ Автосинк Компаний (08:00 Алматы):', JSON.stringify(r));
+        } catch (e) { console.error('companies auto-sync error:', e.message); }
+      }
+    }, 5 * 60 * 1000);
+
     // Умные триггеры — еженедельно в ПОНЕДЕЛЬНИК 04:00 UTC (09:00 Алматы):
     //   🛡 гарантии → чат Руководства + координаторы; 💸 дебиторка-отчёт → лично админам.
     let lastWeeklyTrig = null;
