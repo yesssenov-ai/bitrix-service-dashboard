@@ -321,7 +321,7 @@ async function addFile(campaignId, { filename, mime, dataBase64, kind }) {
   const { rows } = await pool.query(
     `INSERT INTO ticketsmodule_campaign_files (campaign_id, filename, mime, size_bytes, kind, token, data)
      VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, filename, mime, size_bytes, kind, token`,
-    [campaignId, String(filename || 'file').slice(0, 300), String(mime || 'application/octet-stream').slice(0, 120), buf.length, k, token, buf]);
+    [campaignId || null, String(filename || 'file').slice(0, 300), String(mime || 'application/octet-stream').slice(0, 120), buf.length, k, token, buf]);
   return rows[0];
 }
 async function listFiles(campaignId) {
