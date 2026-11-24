@@ -94,7 +94,10 @@ async function fetchBitrixDeals() {
   // Сделки Битрикса — из зеркала статистики (ticketsmodule_stat_deals): оно
   // наполняется вебхуками + ночной сверкой и содержит id, название, сумму, отдел.
   const { rows } = await pool.query(
-    'SELECT deal_id, deal_title, company_name, opportunity, department_id FROM ticketsmodule_stat_deals');
+    `SELECT sd.deal_id, sd.deal_title, sd.opportunity, sd.department_id,
+            COALESCE(NULLIF(sd.company_name, ''), c.title, '') AS company_name
+       FROM ticketsmodule_stat_deals sd
+       LEFT JOIN ticketsmodule_companies c ON c.id = sd.company_id::text`);
   return rows.map(r => ({
     deal_id: String(r.deal_id == null ? '' : r.deal_id).trim(),
     title: r.deal_title || r.company_name || '',
