@@ -217,6 +217,10 @@ th:last-child,td:last-child{text-align:right;}
           </button>
         </div>
       </div>
+      <div style="padding:0 2px 12px">
+        <input id="userSearch" type="search" placeholder="Поиск по сотруднику: имя, логин, роль, почта…" oninput="renderUsersTable()"
+          style="width:100%;box-sizing:border-box;padding:9px 13px;border:1px solid var(--line,#e2e5ea);border-radius:10px;background:var(--surface-2,#f6f7f9);font:inherit;color:inherit;outline:none">
+      </div>
       <div id="usersTable"><div class="empty">Загрузка…</div></div>
     </div>
   </div>
@@ -580,15 +584,24 @@ async function importBitrixUsers() {
 }
 
 // ── Users ─────────────────────────────────────────────────────────────────────
+let _usersCache = [];
 async function loadUsers() {
   const r = await fetch('/admin/users');
   const d = await r.json();
   if (!d.ok) return;
+  _usersCache = d.users || [];
+  renderUsersTable();
+}
+function renderUsersTable() {
   const wrap = document.getElementById('usersTable');
-  if (!d.users.length) { wrap.innerHTML = '<div class="empty">Нет пользователей</div>'; return; }
+  const q = (document.getElementById('userSearch')?.value || '').trim().toLowerCase();
+  if (!_usersCache.length) { wrap.innerHTML = '<div class="empty">Нет пользователей</div>'; return; }
+  const users = q ? _usersCache.filter(u => [u.display_name, u.username, u.role, u.engineer_name, u.mail_mailbox]
+    .some(v => String(v || '').toLowerCase().includes(q))) : _usersCache;
+  if (!users.length) { wrap.innerHTML = '<div class="empty">Никого не найдено по запросу «' + esc(q) + '»</div>'; return; }
   wrap.innerHTML = `<table>
     <thead><tr><th>Пользователь</th><th>Логин</th><th>Роль</th><th>2FA</th><th>Инженер в Б24</th><th>Почта</th><th>Статус</th><th>Создан</th><th>Последний вход</th><th></th></tr></thead>
-    <tbody>${d.users.map(u => `<tr>
+    <tbody>${users.map(u => `<tr>
       <td><strong>${esc(u.display_name)}</strong></td>
       <td style="color:var(--text-3);font-family:monospace">${esc(u.username)}</td>
       <td><span class="role-badge role-${u.role}">${u.role}</span></td>

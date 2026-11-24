@@ -289,6 +289,23 @@ a{color:var(--info);text-decoration:none}
 .dn-ln{color:var(--text-2);font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
 .dn-lv{color:var(--text-3);font-weight:600;flex:none;font-variant-numeric:tabular-nums}
 @media(max-width:1100px){.an-donuts{grid-template-columns:1fr}.dn-wrap{flex-direction:row}}
+/* ── Телефон: вкладки не влезают → горизонтальная прокрутка; строка сделки не
+   сыпется по буквам → название на отдельную строку во всю ширину ────────────── */
+@media(max-width:640px){
+  /* верхние вкладки (От компаний … Аналитика) — свайп по горизонтали, без обрезки */
+  #seg{display:flex;width:100%;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;
+    scrollbar-width:none;margin-left:0}
+  #seg::-webkit-scrollbar{display:none}
+  #seg button{flex:0 0 auto;white-space:nowrap}
+  /* строка сделки: бейджи → название во всю ширину → владелец+сумма */
+  .dr-main{flex-wrap:wrap}
+  .dr-main .ttype{order:1}
+  .dstage{order:1;max-width:none}
+  .drow .dn{order:2;flex:1 1 100%;font-size:13px;overflow-wrap:break-word}
+  .downer{order:3;max-width:none}
+  .dr-main .sum{order:3;margin-left:auto}
+  .dr-ctl{padding-left:0}
+}
 </style>
 </head>
 <body>

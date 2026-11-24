@@ -573,6 +573,9 @@ async function ownsRequest(localId, user) {
     if (paymentIdx >= 0 && stepIndex >= paymentIdx) {
       const acc = r.accountant_bid ? String(r.accountant_bid) : String(chiefAccountantId() || '');
       if (acc && acc === bid) return true;
+      // Платёжку («Подтверждение оплаты») на этапе оплаты вправе приложить ЛЮБОЙ
+      // бухгалтер, а не только назначенный/главбух (Наталья Зенченко).
+      if (user.role === 'accountant') return true;
     }
   }
   return false;
