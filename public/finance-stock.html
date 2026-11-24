@@ -121,6 +121,7 @@ svg.ovsvg{display:block;width:100%}
     <span class="asof" id="asof"></span>
     <span class="mockbadge" id="mockBadge" style="display:none">демо-данные</span>
     <button class="hbtn" id="bulkMinBtn" onclick="bulkMin()" style="display:none" title="Отметить позиции неснижаемого запаса по списку кодов (из 1С: Номенкл. номер)">★ Неснижаемые</button>
+    <button class="hbtn" id="codesBtn" onclick="openCodes()" style="display:none" title="Коды групп одинаковых позиций: наименование и норма на всю группу">⬡ Коды</button>
     <button class="hbtn" id="refreshBtn" onclick="refresh()">↻ Обновить</button>
     <button class="hbtn" onclick="logout()">Выйти</button>
   </div>
@@ -168,7 +169,7 @@ svg.ovsvg{display:block;width:100%}
     <table>
       <thead><tr>
         <th class="nzcol" title="Неснижаемый запас">НЗ</th>
-        <th class="nm">Номенклатура</th><th>Партномер</th><th>№ заказа</th><th>Номенкл. номер</th>
+        <th class="nm">Номенклатура</th><th>Партномер</th><th>№ заказа</th><th>Номенкл. номер</th><th title="Код группы одинаковых позиций">Код</th>
         <th>Дата изгот.</th><th>Срок годн.</th><th class="num">Кол-во</th><th class="num">Цена</th><th class="num">Сумма</th>
         <th>№ полки</th><th>Штрихкод</th><th>Склад</th><th>Производитель</th><th>Номер ГТД</th>
       </tr></thead>
@@ -224,11 +225,11 @@ async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.hre
 let ROLE='',IS_ADMIN=false;
 async function boot(){const r=await fetch('/auth/me');if(!r.ok){location.href='/login.html';return;}
   try{const me=await r.json();ROLE=(me&&me.user&&me.user.role)||'';IS_ADMIN=['admin','superadmin','store'].includes(ROLE);}catch(e){}
-  if(IS_ADMIN){var mb=document.getElementById('bulkMinBtn');if(mb)mb.style.display='';}
+  if(IS_ADMIN){var mb=document.getElementById('bulkMinBtn');if(mb)mb.style.display='';var cb2=document.getElementById('codesBtn');if(cb2)cb2.style.display='';loadCodes();}
   await load();}
 async function load(){
   const {ok,d}=await api('/api/finance/stock');
-  if(!ok){document.getElementById('body').innerHTML='<tr><td colspan="15" class="hint">Ошибка загрузки</td></tr>';return;}
+  if(!ok){document.getElementById('body').innerHTML='<tr><td colspan="16" class="hint">Ошибка загрузки</td></tr>';return;}
   DATA=d;
   var _a=document.getElementById('asof');
   if(d.error){_a.innerHTML='Данные от '+(d.asOf?new Date(d.asOf).toLocaleString('ru-RU'):'—')+' · <span style="color:var(--bad)">⚠ обновить не удалось</span>';_a.title=String(d.error);}
@@ -280,21 +281,83 @@ async function editMin(code){
   if(!ok||(d&&d.error)){alert('Ошибка: '+((d&&d.error)||'не удалось'));return;}
   await load();
 }
+// ── Код группы ────────────────────────────────────────────────────────────────
+let CODES=[];
+async function loadCodes(){ try{ const r=await fetch('/api/finance/stock/codes'); const d=await r.json(); CODES=(d&&d.items)||[]; }catch(e){ CODES=[]; } }
+function codeCell(r){
+  const code=esc(r.code||'');
+  if(IS_ADMIN) return `<td class="codecol"><button class="codechip${code?' set':''}" onclick="editCode('${esc(String(r.item_code||''))}')" title="Код группы — привязать позицию к группе">${code||'+ код'}</button></td>`;
+  return `<td class="codecol">${code?`<span class="codechip set">${code}</span>`:''}</td>`;
+}
+async function editCode(itemCode){
+  const cur=((DATA.rows||[]).find(r=>String(r.item_code||'')===String(itemCode))||{}).code||'';
+  const codes=(CODES||[]).map(c=>c.code);
+  const hint=codes.length?('\n\nУже есть коды: '+codes.join(', ')):'\n\n(коды пока не созданы — впишите новый, затем задайте норму в «Коды»)';
+  const v=prompt('Код группы для этой позиции (пусто — снять привязку).\nПозиции с одинаковым кодом считаются как одна — по сумме количества.'+hint, cur);
+  if(v===null) return;
+  const {ok,d}=await api('/api/finance/stock/assign-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({itemCode,code:String(v).trim()})});
+  if(!ok||(d&&d.error)){alert('Ошибка: '+((d&&d.error)||'не удалось'));return;}
+  await loadCodes(); await load();
+}
+// ── Модалка управления кодами ────────────────────────────────────────────────
+async function openCodes(){
+  await loadCodes();
+  document.getElementById('codesModal').style.display='flex';
+  renderCodes();
+}
+function closeCodes(){ document.getElementById('codesModal').style.display='none'; }
+function renderCodes(){
+  const box=document.getElementById('codesList');
+  const rows=(CODES||[]).map(c=>`<tr>
+    <td class="cc-code">${esc(c.code)}</td>
+    <td>${esc(c.name||'')}</td>
+    <td class="num">${c.min_qty!=null?esc(String(c.min_qty)):'—'}</td>
+    <td class="num">${c.threshold_pct!=null?esc(String(c.threshold_pct)):'30'}%</td>
+    <td class="num">${esc(String(c.items||0))}</td>
+    <td class="cc-act"><button class="cc-edit" onclick="fillCode('${esc(c.code)}')" title="Изменить">✎</button><button class="cc-del" onclick="delCode('${esc(c.code)}')" title="Удалить код">✕</button></td>
+  </tr>`).join('');
+  box.innerHTML=rows||'<tr><td colspan="6" class="hint" style="padding:14px">Кодов пока нет. Создайте первый ниже.</td></tr>';
+}
+function fillCode(code){
+  const c=(CODES||[]).find(x=>String(x.code)===String(code))||{};
+  document.getElementById('ccCode').value=c.code||'';
+  document.getElementById('ccName').value=c.name||'';
+  document.getElementById('ccMin').value=c.min_qty!=null?c.min_qty:'';
+  document.getElementById('ccPct').value=c.threshold_pct!=null?c.threshold_pct:'';
+  document.getElementById('ccCode').focus();
+}
+async function saveCode(){
+  const code=document.getElementById('ccCode').value.trim();
+  if(!code){alert('Укажите код');return;}
+  const body={code,name:document.getElementById('ccName').value.trim()};
+  const m=document.getElementById('ccMin').value.trim(); if(m!=='') body.minQty=Number(m);
+  const p=document.getElementById('ccPct').value.trim(); if(p!=='') body.thresholdPct=Number(p);
+  const {ok,d}=await api('/api/finance/stock/codes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!ok||(d&&d.error)){alert('Ошибка: '+((d&&d.error)||'не удалось'));return;}
+  document.getElementById('ccCode').value='';document.getElementById('ccName').value='';document.getElementById('ccMin').value='';document.getElementById('ccPct').value='';
+  await loadCodes(); renderCodes(); load();
+}
+async function delCode(code){
+  if(!confirm('Удалить код «'+code+'»? Привязки позиций к нему снимутся (нормы по позициям не затрагиваются).'))return;
+  const {ok,d}=await api('/api/finance/stock/codes/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
+  if(!ok||(d&&d.error)){alert('Ошибка: '+((d&&d.error)||'не удалось'));return;}
+  await loadCodes(); renderCodes(); load();
+}
 function render(){
   const rows=filtered();
   document.getElementById('body').innerHTML=rows.length?rows.map(r=>`<tr${r.min?' class="nzrow"':''}>
     ${starCell(r)}
-    <td class="nm">${esc(r.name)}</td><td>${esc(r.part_no||'')}</td><td>${esc(r.order_no||'')}</td><td>${esc(r.item_code||'')}</td>
+    <td class="nm">${esc(r.name)}</td><td>${esc(r.part_no||'')}</td><td>${esc(r.order_no||'')}</td><td>${esc(r.item_code||'')}</td>${codeCell(r)}
     <td>${dt(r.made_date)}</td><td>${dt(r.expiry)}</td><td class="num">${fmt(r.qty)}</td><td class="num">${fmt(r.price)}</td><td class="num">${fmt(r.amount)}</td>
     <td>${esc(r.shelf||'')}</td><td>${esc(r.barcode||'')}</td><td>${esc(r.store||'')}</td><td>${esc(r.manufacturer||'')}</td><td>${esc(r.gtd||'')}</td>
-  </tr>`).join(''):'<tr><td colspan="15" class="hint">Нет данных по фильтру.</td></tr>';
+  </tr>`).join(''):'<tr><td colspan="16" class="hint">Нет данных по фильтру.</td></tr>';
   const q=rows.reduce((a,r)=>a+Number(r.qty||0),0),sum=rows.reduce((a,r)=>a+Number(r.amount||0),0);
   const minN=rows.reduce((a,r)=>a+(r.min?1:0),0);
   document.getElementById('cntRows').textContent=fmt(rows.length);
   document.getElementById('cntQty').textContent=fmt(q);
   document.getElementById('cntSum').textContent=fmt(sum);
   document.getElementById('cntMin').textContent=fmt(minN);
-  document.getElementById('foot').innerHTML=`<tr><td></td><td>Итого</td><td colspan="5"></td><td class="num">${fmt(q)}</td><td></td><td class="num">${fmt(sum)}</td><td colspan="5"></td></tr>`;
+  document.getElementById('foot').innerHTML=`<tr><td></td><td>Итого</td><td colspan="6"></td><td class="num">${fmt(q)}</td><td></td><td class="num">${fmt(sum)}</td><td colspan="5"></td></tr>`;
 }
 async function toggleMin(code,on,btn){
   if(!code){alert('У позиции нет номенклатурного номера — отметить нельзя.');return;}
@@ -403,6 +466,65 @@ function renderExpiry(aging,soon,hasExpiry){
 boot();
 </script>
 <div id="ovwTip"></div>
+<!-- Модалка управления кодами групп -->
+<div id="codesModal" class="cm-wrap" style="display:none" onclick="if(event.target===this)closeCodes()">
+  <div class="cm-box">
+    <div class="cm-head">
+      <div><div class="cm-title">Коды групп</div><div class="cm-sub">Одинаковые физические позиции под разными номенклатурными номерами. Неснижаемый считается по сумме количества всех позиций одного кода.</div></div>
+      <button class="cm-x" onclick="closeCodes()" title="Закрыть">✕</button>
+    </div>
+    <div class="cm-tablewrap">
+      <table class="cm-table">
+        <thead><tr><th>Код</th><th>Наименование позиции</th><th class="num">Норма (на группу)</th><th class="num">Порог</th><th class="num">Позиций</th><th></th></tr></thead>
+        <tbody id="codesList"></tbody>
+      </table>
+    </div>
+    <div class="cm-form">
+      <div class="cm-fhdr">Создать / изменить код</div>
+      <div class="cm-fields">
+        <label>Код<input id="ccCode" placeholder="напр. FIT-14"></label>
+        <label class="cm-grow">Наименование позиции<input id="ccName" placeholder="Фитинг 1/4 нерж."></label>
+        <label>Норма<input id="ccMin" type="number" min="0" step="any" placeholder="20"></label>
+        <label>Порог %<input id="ccPct" type="number" min="0" max="100" step="any" placeholder="30"></label>
+      </div>
+      <div class="cm-actions"><button class="cm-save" onclick="saveCode()">Сохранить код</button><span class="cm-hint">Чтобы привязать позиции к коду — впишите этот код в столбце «Код» в таблице склада.</span></div>
+    </div>
+  </div>
+</div>
+<style>
+.cm-wrap{position:fixed;inset:0;z-index:9000;display:flex;align-items:center;justify-content:center;background:rgba(14,18,24,.5);backdrop-filter:blur(3px);padding:20px}
+.cm-box{background:var(--card,#fff);border:1px solid var(--border,#e4e7ec);border-radius:16px;box-shadow:0 30px 70px -24px rgba(0,0,0,.5);width:min(760px,96vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
+.cm-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:20px 24px 14px;border-bottom:1px solid var(--border,#eef0f3)}
+.cm-title{font-size:17px;font-weight:800;letter-spacing:-.2px}
+.cm-sub{font-size:12px;color:var(--text-3,#8a93a3);margin-top:4px;max-width:560px;line-height:1.45}
+.cm-x{flex:none;width:32px;height:32px;border:1px solid var(--border,#e4e7ec);border-radius:9px;background:transparent;color:var(--text-3,#8a93a3);cursor:pointer;font-size:14px}
+.cm-x:hover{color:var(--text,#1a2130);border-color:var(--text-3,#aab)}
+.cm-tablewrap{overflow:auto;padding:6px 24px}
+.cm-table{width:100%;border-collapse:collapse;font-size:13px}
+.cm-table th{text-align:left;font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3,#8a93a3);padding:10px 10px 8px;border-bottom:1px solid var(--border,#eef0f3);position:sticky;top:0;background:var(--card,#fff)}
+.cm-table td{padding:10px;border-bottom:1px solid var(--border,#f1f3f6);vertical-align:middle}
+.cm-table td.num,.cm-table th.num{text-align:right;font-variant-numeric:tabular-nums}
+.cm-table .cc-code{font-weight:700;font-family:ui-monospace,Menlo,monospace}
+.cm-table .cc-act{text-align:right;white-space:nowrap}
+.cc-edit,.cc-del{border:1px solid var(--border,#e4e7ec);background:transparent;border-radius:7px;width:28px;height:26px;cursor:pointer;margin-left:4px;color:var(--text-3,#8a93a3)}
+.cc-edit:hover{color:var(--accent,#C53B2F);border-color:var(--accent,#C53B2F)}
+.cc-del:hover{color:#e5484d;border-color:#e5484d}
+.cm-form{padding:16px 24px 20px;border-top:1px solid var(--border,#eef0f3);background:var(--card-2,color-mix(in srgb,var(--card,#fff) 94%,#000))}
+.cm-fhdr{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3,#8a93a3);margin-bottom:10px}
+.cm-fields{display:flex;gap:12px;flex-wrap:wrap}
+.cm-fields label{display:flex;flex-direction:column;gap:5px;font-size:11px;font-weight:600;color:var(--text-2,#5a6475);flex:0 0 120px}
+.cm-fields label.cm-grow{flex:1 1 220px;min-width:180px}
+.cm-fields input{border:1px solid var(--border,#e4e7ec);border-radius:9px;padding:9px 11px;font:inherit;font-size:13px;color:var(--text,#1a2130);background:var(--card,#fff);outline:none}
+.cm-fields input:focus{border-color:var(--accent,#C53B2F)}
+.cm-actions{display:flex;align-items:center;gap:14px;margin-top:14px;flex-wrap:wrap}
+.cm-save{background:var(--accent,#C53B2F);color:#fff;border:0;border-radius:10px;padding:10px 20px;font-weight:700;font-size:13px;cursor:pointer}
+.cm-save:hover{filter:brightness(1.06)}
+.cm-hint{font-size:11.5px;color:var(--text-3,#8a93a3)}
+.codecol .codechip{border:1px dashed var(--border,#cfd4dc);background:transparent;border-radius:7px;padding:3px 8px;font-size:11.5px;font-weight:600;color:var(--text-3,#9aa3b2);cursor:pointer;white-space:nowrap}
+.codecol .codechip.set{border-style:solid;border-color:color-mix(in srgb,var(--accent,#C53B2F) 40%,var(--border,#e4e7ec));background:color-mix(in srgb,var(--accent,#C53B2F) 9%,transparent);color:var(--accent,#C53B2F);font-family:ui-monospace,Menlo,monospace}
+.codecol .codechip:hover{border-color:var(--accent,#C53B2F)}
+@media(max-width:640px){.cm-fields label{flex:1 1 100%}}
+</style>
 <script src="/assets/cup-theme.js" defer></script>
 </body>
 </html>

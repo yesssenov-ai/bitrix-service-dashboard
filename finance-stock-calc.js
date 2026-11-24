@@ -68,6 +68,25 @@ function ensureSchema() {
       ALTER TABLE ticketsmodule_stock_min ADD COLUMN IF NOT EXISTS threshold_pct NUMERIC;
       ALTER TABLE ticketsmodule_stock_min ADD COLUMN IF NOT EXISTS alarm_below BOOLEAN DEFAULT false;
       ALTER TABLE ticketsmodule_stock_min ADD COLUMN IF NOT EXISTS last_alarm_at TIMESTAMPTZ;
+      -- «Код» для группировки одинаковых физических позиций, заведённых под разными
+      -- номенклатурными номерами. Реестр кодов (код → наименование + норма группы):
+      CREATE TABLE IF NOT EXISTS ticketsmodule_stock_code_def (
+        code VARCHAR(80) PRIMARY KEY,
+        name VARCHAR(500),
+        min_qty NUMERIC,
+        threshold_pct NUMERIC,
+        alarm_below BOOLEAN DEFAULT false,
+        last_alarm_at TIMESTAMPTZ,
+        added_by VARCHAR(80),
+        added_at TIMESTAMPTZ DEFAULT NOW());
+      -- Привязка позиции (item_code) к коду группы. Неснижаемый считается по сумме
+      -- количества всех позиций одного кода.
+      CREATE TABLE IF NOT EXISTS ticketsmodule_stock_code_map (
+        item_code VARCHAR(80) PRIMARY KEY,
+        code VARCHAR(80),
+        set_by VARCHAR(80),
+        set_at TIMESTAMPTZ DEFAULT NOW());
+      CREATE INDEX IF NOT EXISTS idx_stock_code_map_code ON ticketsmodule_stock_code_map(code);
     `);
   })().catch(e => { _schema = null; throw e; });
   return _schema;
@@ -252,7 +271,17 @@ async function getStockBoard() {
   const minRows = (await pool.query('SELECT item_code, min_qty, threshold_pct FROM ticketsmodule_stock_min')).rows;
   const minMap = new Map();
   for (const mr of minRows) minMap.set(String(mr.item_code || '').trim(), { q: mr.min_qty != null ? Number(mr.min_qty) : null, t: mr.threshold_pct != null ? Number(mr.threshold_pct) : null });
-  const isMin = r => minMap.has(String(r.item_code || '').trim());
+  // «Код» — группировка одинаковых позиций. Привязка item_code→code и реестр норм по коду.
+  const codeMap = new Map();
+  for (const cr of (await pool.query('SELECT item_code, code FROM ticketsmodule_stock_code_map')).rows) {
+    const c = String(cr.code || '').trim(); if (c) codeMap.set(String(cr.item_code || '').trim(), c);
+  }
+  const codeDef = new Map();
+  for (const dr of (await pool.query('SELECT code, name, min_qty, threshold_pct FROM ticketsmodule_stock_code_def')).rows) {
+    codeDef.set(String(dr.code || '').trim(), { name: dr.name || '', q: dr.min_qty != null ? Number(dr.min_qty) : null, t: dr.threshold_pct != null ? Number(dr.threshold_pct) : null });
+  }
+  const groupOf = r => { const c = codeMap.get(String(r.item_code || '').trim()); return (c && codeDef.has(c)) ? c : null; };
+  const isMin = r => groupOf(r) != null || minMap.has(String(r.item_code || '').trim());
 
   // Счёт 1330 — как в Power BI (бизнес-правило). Безопасный откат: если в кэше счёт
   // не заполнен (фильтр обнулил бы всё) — показываем без него, не прячем данные.
@@ -265,12 +294,23 @@ async function getStockBoard() {
   // норма/порог заданы на item_code, а в выборке позиция может быть по нескольким складам.
   const codeTotal = new Map();
   for (const r of base) { const c = String(r.item_code || '').trim(); codeTotal.set(c, (codeTotal.get(c) || 0) + Number(r.qty || 0)); }
+  // Суммарный остаток по ГРУППЕ (коду) — для неснижаемого по сумме одинаковых позиций.
+  const groupTotal = new Map();
+  for (const r of base) { const g = groupOf(r); if (g) groupTotal.set(g, (groupTotal.get(g) || 0) + Number(r.qty || 0)); }
   const GLOBAL_PCT = 30;
   const minMeta = r => {
+    const code = codeMap.get(String(r.item_code || '').trim()) || '';
+    const g = groupOf(r);
+    if (g) {
+      const def = codeDef.get(g);
+      const gq = groupTotal.get(g) || 0;
+      const critical = def.q != null && def.q > 0 && gq <= Number(def.q) * (def.t != null ? def.t : GLOBAL_PCT) / 100;
+      return { minQty: def.q, thresholdPct: def.t, critical, code, groupQty: gq };
+    }
     const c = String(r.item_code || '').trim(); const mm = minMap.get(c);
-    if (!mm) return { minQty: null, thresholdPct: null, critical: false };
+    if (!mm) return { minQty: null, thresholdPct: null, critical: false, code };
     const critical = mm.q != null && mm.q > 0 && (codeTotal.get(c) || 0) <= Number(mm.q) * (mm.t != null ? mm.t : GLOBAL_PCT) / 100;
-    return { minQty: mm.q, thresholdPct: mm.t, critical };
+    return { minQty: mm.q, thresholdPct: mm.t, critical, code };
   };
   // Склады по store_id (из строк, отфильтрованных по счёту) — для фильтра «Склад».
   const storeMap = new Map();
@@ -395,7 +435,6 @@ async function checkStockAlarms() {
   await ensureSchema();
   const { rows: mins } = await pool.query(
     'SELECT item_code, name, min_qty, threshold_pct, alarm_below FROM ticketsmodule_stock_min WHERE min_qty IS NOT NULL AND min_qty > 0');
-  if (!mins.length) return { checked: 0, alarms: 0 };
   const qmap = await currentQtyByCode();
   let alarms = 0;
   for (const m of mins) {
@@ -411,8 +450,79 @@ async function checkStockAlarms() {
       await pool.query('UPDATE ticketsmodule_stock_min SET alarm_below=false WHERE item_code=$1', [m.item_code]);
     }
   }
-  if (alarms) console.log(`Stock alarms: ${alarms} позиций ниже критического уровня`);
-  return { checked: mins.length, alarms };
+  // Группы по «Коду»: аларм по СУММЕ количества всех позиций кода.
+  const { rows: defs } = await pool.query(
+    'SELECT code, name, min_qty, threshold_pct, alarm_below FROM ticketsmodule_stock_code_def WHERE min_qty IS NOT NULL AND min_qty > 0');
+  if (defs.length) {
+    const { rows: maps } = await pool.query("SELECT item_code, code FROM ticketsmodule_stock_code_map WHERE code <> ''");
+    const byCode = new Map();
+    for (const mp of maps) { const c = String(mp.code).trim(); if (!byCode.has(c)) byCode.set(c, []); byCode.get(c).push(String(mp.item_code)); }
+    for (const d of defs) {
+      const members = byCode.get(String(d.code).trim()) || [];
+      let gq = 0; for (const ic of members) gq += (qmap.get(ic) || { qty: 0 }).qty;
+      const pct = (d.threshold_pct != null && d.threshold_pct !== '') ? Number(d.threshold_pct) : GLOBAL_THRESHOLD_PCT;
+      const threshold = Number(d.min_qty) * pct / 100;
+      const below = gq <= threshold;
+      if (below && !d.alarm_below) {
+        try { await notifyLowStock({ code: d.code, name: d.name || ('группа ' + d.code), qty: gq, norm: Number(d.min_qty), pct, threshold }); } catch (e) { console.error('notifyLowStock group:', e.message); }
+        await pool.query('UPDATE ticketsmodule_stock_code_def SET alarm_below=true, last_alarm_at=NOW() WHERE code=$1', [d.code]);
+        alarms++;
+      } else if (!below && d.alarm_below) {
+        await pool.query('UPDATE ticketsmodule_stock_code_def SET alarm_below=false WHERE code=$1', [d.code]);
+      }
+    }
+  }
+  if (alarms) console.log(`Stock alarms: ${alarms} позиций/групп ниже критического уровня`);
+  return { checked: mins.length + defs.length, alarms };
 }
 
-module.exports = { ensureSchema, syncStock, getStockBoard, listMinStock, setMinStock, bulkMinStock, probeStockRaw, checkStockAlarms };
+// ── Коды групп (одинаковые позиции под разными номерами) ─────────────────────
+async function listCodes() {
+  await ensureSchema();
+  const { rows } = await pool.query(
+    `SELECT d.code, d.name, d.min_qty, d.threshold_pct, d.added_by, d.added_at,
+            (SELECT COUNT(*) FROM ticketsmodule_stock_code_map m WHERE m.code=d.code) AS items
+       FROM ticketsmodule_stock_code_def d ORDER BY d.name NULLS LAST, d.code`);
+  return rows;
+}
+// Создать/изменить код группы (норма — на всю группу).
+async function upsertCode(code, meta, by) {
+  await ensureSchema();
+  code = String(code == null ? '' : code).trim();
+  if (!code) throw new Error('пустой код');
+  meta = meta || {};
+  await pool.query(
+    `INSERT INTO ticketsmodule_stock_code_def (code, name, min_qty, threshold_pct, added_by, added_at)
+     VALUES ($1,$2,$3,$4,$5,NOW())
+     ON CONFLICT (code) DO UPDATE SET
+       name=COALESCE(EXCLUDED.name, ticketsmodule_stock_code_def.name),
+       min_qty=COALESCE(EXCLUDED.min_qty, ticketsmodule_stock_code_def.min_qty),
+       threshold_pct=COALESCE(EXCLUDED.threshold_pct, ticketsmodule_stock_code_def.threshold_pct)`,
+    [code, meta.name || null,
+     (meta.minQty != null && meta.minQty !== '') ? Number(meta.minQty) : null,
+     (meta.thresholdPct != null && meta.thresholdPct !== '') ? Number(meta.thresholdPct) : null, by || null]);
+  return { ok: true, code };
+}
+// Удалить код группы (привязки позиций к нему тоже снимаем).
+async function deleteCode(code) {
+  await ensureSchema();
+  code = String(code == null ? '' : code).trim();
+  await pool.query('DELETE FROM ticketsmodule_stock_code_def WHERE code=$1', [code]);
+  await pool.query('DELETE FROM ticketsmodule_stock_code_map WHERE code=$1', [code]);
+  return { ok: true, code };
+}
+// Привязать позицию (item_code) к коду; пустой code — снять привязку.
+async function assignItemCode(itemCode, code, by) {
+  await ensureSchema();
+  itemCode = String(itemCode == null ? '' : itemCode).trim();
+  if (!itemCode) throw new Error('пустой номенклатурный номер');
+  code = String(code == null ? '' : code).trim();
+  if (!code) { await pool.query('DELETE FROM ticketsmodule_stock_code_map WHERE item_code=$1', [itemCode]); return { ok: true, item_code: itemCode, code: '' }; }
+  await pool.query(
+    `INSERT INTO ticketsmodule_stock_code_map (item_code, code, set_by, set_at) VALUES ($1,$2,$3,NOW())
+     ON CONFLICT (item_code) DO UPDATE SET code=EXCLUDED.code, set_by=EXCLUDED.set_by, set_at=NOW()`,
+    [itemCode, code, by || null]);
+  return { ok: true, item_code: itemCode, code };
+}
+
+module.exports = { ensureSchema, syncStock, getStockBoard, listMinStock, setMinStock, bulkMinStock, probeStockRaw, checkStockAlarms, listCodes, upsertCode, deleteCode, assignItemCode };

@@ -156,6 +156,38 @@ router.post('/stock/min', requireAuth(VIEW), express.json(), async (req, res) =>
     res.json(out);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// ── Коды групп (одинаковые позиции под разными номерами) ─────────────────────
+const STOCK_EDIT = ['admin', 'superadmin', 'store'];
+router.get('/stock/codes', requireAuth(VIEW), async (req, res) => {
+  try { res.json({ items: await require('../finance-stock-calc').listCodes() }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.post('/stock/codes', requireAuth(VIEW), express.json(), async (req, res) => {
+  try {
+    if (!STOCK_EDIT.includes(req.user.role)) return res.status(403).json({ error: 'Только для админа/менеджера склада' });
+    const b = req.body || {}; const calc = require('../finance-stock-calc');
+    const out = await calc.upsertCode(b.code, { name: b.name, minQty: b.minQty, thresholdPct: b.thresholdPct }, req.user && req.user.username);
+    bust('fin:stock');
+    res.json(out);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.post('/stock/codes/delete', requireAuth(VIEW), express.json(), async (req, res) => {
+  try {
+    if (!STOCK_EDIT.includes(req.user.role)) return res.status(403).json({ error: 'Только для админа/менеджера склада' });
+    const out = await require('../finance-stock-calc').deleteCode((req.body || {}).code);
+    bust('fin:stock');
+    res.json(out);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.post('/stock/assign-code', requireAuth(VIEW), express.json(), async (req, res) => {
+  try {
+    if (!STOCK_EDIT.includes(req.user.role)) return res.status(403).json({ error: 'Только для админа/менеджера склада' });
+    const b = req.body || {};
+    const out = await require('../finance-stock-calc').assignItemCode(b.itemCode, b.code, req.user && req.user.username);
+    bust('fin:stock');
+    res.json(out);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 // Диагностика сырого ответа 1С по складу (увидеть ключ наименования) — только админ.
 router.get('/stock/raw', requireAuth(VIEW), async (req, res) => {
   try {
