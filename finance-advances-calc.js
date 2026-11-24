@@ -107,14 +107,15 @@ async function fetchAdvancesRaw() {
 }
 
 // Синк модуля: 1С (левая панель) + файл бухгалтера с Диска Битрикса (правая).
+// Идут ПАРАЛЛЕЛЬНО: медленная/упавшая 1С (туннель) не должна задерживать файл.
 // Итог модуля определяется 1С; сбой Excel не роняет синк — пишется в мету Excel
 // и показывается на правой панели.
 async function syncAdvances() {
-  const r = await syncAdvances1C();
-  try {
-    const x = await require('./finance-advances-excel').syncExcel();
-    r.excel = x.ok ? `ok ${x.count}` : `сбой: ${x.error}`;
-  } catch (e) { r.excel = 'сбой: ' + e.message; }
+  const xP = require('./finance-advances-excel').syncExcel()
+    .then(x => (x.ok ? `ok ${x.count}` : `сбой: ${x.error}`))
+    .catch(e => 'сбой: ' + e.message);
+  const [r, excel] = await Promise.all([syncAdvances1C(), xP]);
+  r.excel = excel;
   return r;
 }
 
@@ -159,10 +160,8 @@ async function getAdvancesBoard() {
     })),
     asOf: meta.last_ok_at || null, lastTry: meta.last_sync || null, mock: meta.is_mock !== false, error: meta.last_error || null,
     filters: { years: uniq('year'), departments: uniq('department'), contractors: uniq('contractor') },
-    // Правая панель «Данные Excel» — файл бухгалтера «Анализ по Контрактам» с Диска Битрикса
-    // (finance-advances-excel.js). Пока ни разу не загружен — { configured:false }.
-    excel: await require('./finance-advances-excel').getExcelBoard().catch(e => ({ configured: false, error: e.message })),
+    // Правая панель «Данные Excel» грузится НЕЗАВИСИМО: GET /api/finance/advances/excel.
   };
 }
 
-module.exports = { ensureSchema, syncAdvances, getAdvancesBoard };
+module.exports = { ensureSchema, syncAdvances, syncAdvances1C, getAdvancesBoard };

@@ -127,23 +127,41 @@ async function boot(){const r=await fetch('/auth/me');if(!r.ok){location.href='/
   await load();}
 async function load(){
   try{await PLSFlags.loadCountryMap();}catch(e){}
+  loadExcel(); // правая панель грузится независимо от 1С
+  await load1C();
+}
+async function load1C(){
   const {ok,d}=await api('/api/finance/advances');
   if(!ok){document.getElementById('tree').innerHTML='<div class="hint">Ошибка загрузки</div>';return;}
-  DATA=d;
+  d.excel=DATA.excel; DATA=d; LOADED1C=true;
   var _a=document.getElementById('asof');
   if(d.error){_a.innerHTML='Данные от '+(d.asOf?new Date(d.asOf).toLocaleString('ru-RU'):'—')+' · <span style="color:var(--bad)">⚠ обновить не удалось</span>';_a.title=String(d.error);}
   else{_a.textContent=d.asOf?('По состоянию на '+new Date(d.asOf).toLocaleString('ru-RU')):'';_a.title='';}
   document.getElementById('mockBadge').style.display=d.mock?'inline-block':'none';
   const opt=a=>'<option value="">Все</option>'+(a||[]).map(x=>`<option>${esc(x)}</option>`).join('');
-  const xr=(d.excel&&d.excel.configured&&d.excel.rows)||[];
-  const un=(a,b)=>[...new Set([...(a||[]),...b].filter(v=>v!==null&&v!==''))];
-  const years=un(d.filters.years,xr.map(r=>r.year)).sort((a,b)=>b-a);
-  d.filters.years=years;
-  document.getElementById('fYear').innerHTML=opt(years);
-  document.getElementById('fDept').innerHTML=opt(un(d.filters.departments,xr.map(r=>r.department)).sort());
-  document.getElementById('fContractor').innerHTML=opt(d.filters.contractors);
-  (d.filters.years||[]).forEach(y=>{EXP.add('y:'+y);EXP.add('x|y:'+y);}); // годы раскрыты по умолчанию
+  BASE1C={years:d.filters.years||[],departments:d.filters.departments||[],contractors:d.filters.contractors||[]};
+  fillFilters();
   render();
+}
+let LOADED1C=false, BASE1C={years:[],departments:[],contractors:[]}, XLOADING=false;
+// Фильтры = объединение значений 1С и файла; выбранное значение сохраняем.
+function fillFilters(){
+  const xr=(DATA.excel&&DATA.excel.configured&&DATA.excel.rows)||[];
+  const un=(a,b)=>[...new Set([...(a||[]),...b].filter(v=>v!==null&&v!==''))];
+  const opt=a=>'<option value="">Все</option>'+(a||[]).map(x=>`<option>${esc(x)}</option>`).join('');
+  const set=(id,list)=>{const el=document.getElementById(id),v=el.value;el.innerHTML=opt(list);if(v&&list.map(String).includes(v))el.value=v;};
+  const years=un(BASE1C.years,xr.map(r=>r.year)).sort((a,b)=>b-a);
+  DATA.filters=DATA.filters||{}; DATA.filters.years=years;
+  set('fYear',years);
+  set('fDept',un(BASE1C.departments,xr.map(r=>r.department)).sort());
+  set('fContractor',BASE1C.contractors);
+  years.forEach(y=>{EXP.add('y:'+y);EXP.add('x|y:'+y);}); // годы раскрыты по умолчанию
+}
+async function loadExcel(){
+  const {ok,d}=await api('/api/finance/advances/excel');
+  DATA.excel=ok?d:{configured:false,error:(d&&d.error)||'не удалось загрузить'};
+  fillFilters();
+  if(LOADED1C)render(); else {renderExcel();renderRecon();}
 }
 // ── Правая панель: файл бухгалтера (год = лист файла, т.е. год исполнения) ──
 const normCo=x=>String(x||'').toLowerCase().replace(/[«»"'`“”„]/g,' ').replace(/\b(тоо|ао|пао|ооо|ип|гу|ргп|ркп|на пхв|кгп|филиал|llp|ltd|too|jsc|llc|inc|чк|limited)\b/gi,' ').replace(/[^a-zа-яё0-9әғқңөұүһі]+/gi,' ').replace(/\s+/g,' ').trim();
@@ -216,8 +234,8 @@ async function uploadExcel(inp){
   try{
     const base64=await new Promise((ok,no)=>{const fr=new FileReader();fr.onload=()=>ok(String(fr.result).split(',')[1]||'');fr.onerror=()=>no(fr.error);fr.readAsDataURL(f);});
     const {ok,d}=await api('/api/finance/advances/excel-upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:f.name,base64})});
-    if(!ok||!d.ok){alert('Не удалось загрузить: '+(d.error||'ошибка'));}
-    else{await load();}
+    if(!ok||!d.ok){alert('Не удалось загрузить: '+(d.error||'сервер не принял файл'));}
+    else{await loadExcel();}
   }catch(e){alert('Ошибка: '+e.message);}
   finally{lab.firstChild.textContent=keep;}
 }
@@ -264,10 +282,22 @@ function render(){
   box.innerHTML=html;
   document.getElementById('foot').innerHTML=`<span>Итого</span>${nums(agg(rows))}`;
 }
-async function refresh(){
+// «Обновить» запускает ДВА независимых обновления: файл бухгалтера (Диск Битрикса) и 1С.
+// Каждое обновляет свою панель, как только закончит; сбой одного не мешает другому.
+async function refresh(){ refreshExcel(); refresh1C(); }
+async function refreshExcel(){
+  if(XLOADING)return; XLOADING=true;
+  const meta=document.getElementById('xmeta'); const was=meta.textContent; meta.textContent='Обновляю файл…';
+  let r; try{r=await api('/api/finance/advances/excel-refresh',{method:'POST'});}catch(e){r={ok:false,d:{error:String(e&&e.message||e)}};}
+  XLOADING=false;
+  await loadExcel();
+  if(!r.ok||!r.d||r.d.ok===false){const err=document.getElementById('xerr');err.style.display='';err.textContent='Файл не обновился: '+((r.d&&r.d.error)||'ошибка')+(DATA.excel&&DATA.excel.configured?' — показаны данные прошлой загрузки.':'');}
+  else if(!meta.textContent)meta.textContent=was;
+}
+async function refresh1C(){
   const b=document.getElementById('refreshBtn');b.disabled=true;b.textContent='Обновляю…';b.style.color='';b.title='';
   let r;try{r=await api('/api/finance/advances/refresh',{method:'POST'});}catch(e){r={ok:false,d:{error:String(e&&e.message||e)}};}
-  await load();b.disabled=false;
+  await load1C();b.disabled=false;
   if(r&&r.d&&r.d.busy){b.textContent='⏳ Идёт обновление';b.style.color='';b.title=String(r.d.error||'Обновление уже идёт');setTimeout(()=>{if(b.textContent!=='Обновляю…'){b.textContent='↻ Обновить';b.style.color='';b.title='';}},5000);return;}
   let err=null;
   if(!r||r.ok===false)err=(r&&r.d&&r.d.error)||'сервер недоступен';

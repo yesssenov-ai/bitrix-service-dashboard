@@ -68,7 +68,7 @@ app.use('/auth/totp', authLimiter);
 // (45–90 МБ). Глобальный лимит 1 МБ иначе режет их 413-й до роутов — на iOS это
 // всплывает как «The string did not match the expected pattern». Пропускаем их.
 const _globalJson = express.json({ limit: '1mb' });
-const _bigUploadRe = /\/(files|files-batch|ship-close|ship-file)$/;
+const _bigUploadRe = /\/(files|files-batch|ship-close|ship-file|excel-upload)$/;
 app.use((req, res, next) => {
   if (req.method === 'POST' && _bigUploadRe.test(req.path)) return next();
   return _globalJson(req, res, next);

@@ -204,7 +204,27 @@ router.get('/advances', requireModuleApi('ADV'), async (req, res) => {
   try { res.json(await memo('fin:advances', FIN_TTL, () => require('../finance-advances-calc').getAdvancesBoard())); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
-router.post('/advances/refresh', requireModuleApi('ADV'), (req, res) => doManualRefresh(req, res, 'Авансы', () => require('../finance-advances-calc').syncAdvances()));
+router.post('/advances/refresh', requireModuleApi('ADV'), (req, res) => doManualRefresh(req, res, 'Авансы', () => require('../finance-advances-calc').syncAdvances1C())); // только 1С; файл — /advances/excel-refresh
+// Правая панель «Авансов» (файл бухгалтера) — независимо от 1С: своё чтение,
+// своё обновление и свой замок, чтобы зависшая/недоступная 1С не блокировала файл.
+router.get('/advances/excel', requireModuleApi('ADV'), async (req, res) => {
+  try { res.json(await memo('fin:advexcel', FIN_TTL, () => require('../finance-advances-excel').getExcelBoard())); }
+  catch (e) { res.status(500).json({ configured: false, error: e.message }); }
+});
+let xbusy = false, xbusySince = 0;
+router.post('/advances/excel-refresh', requireModuleApi('ADV'), async (req, res) => {
+  if (xbusy && Date.now() - xbusySince < 5 * 60 * 1000) return res.status(409).json({ ok: false, busy: true, error: 'Файл уже обновляется — подождите' });
+  xbusy = true; xbusySince = Date.now();
+  try {
+    const r = await fWithTimeout(require('../finance-advances-excel').syncExcel(), 3 * 60 * 1000, 'Авансы · Excel');
+    bust('fin:advexcel');
+    logManualRefresh(req, 'Авансы · Excel', r);
+    res.json(r);
+  } catch (e) {
+    logManualRefresh(req, 'Авансы · Excel', { ok: false, error: e.message });
+    res.status(500).json({ ok: false, error: e.message });
+  } finally { xbusy = false; }
+});
 // Ручная загрузка файла бухгалтера (запасной путь, если у вебхука нет права «Диск»
 // или нужно залить другую версию файла). Только админ/суперадмин.
 router.post('/advances/excel-upload', requireModuleApi('ADV'), express.json({ limit: '30mb' }), async (req, res) => {
@@ -213,7 +233,7 @@ router.post('/advances/excel-upload', requireModuleApi('ADV'), express.json({ li
     const { filename, base64 } = req.body || {};
     if (!base64) return res.status(400).json({ ok: false, error: 'Нет файла' });
     const r = await require('../finance-advances-excel').importUpload(Buffer.from(String(base64), 'base64'), filename);
-    bust('fin:');
+    bust('fin:advexcel');
     logManualRefresh(req, 'Авансы · Excel (загрузка файла)', r);
     res.json(r);
   } catch (e) { res.status(e.userFacing ? 400 : 500).json({ ok: false, error: e.message }); }
