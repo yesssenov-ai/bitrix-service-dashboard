@@ -1006,53 +1006,61 @@ initDB().then(() => {
     telegramLinkBot.setPool(pool);
     telegramLinkBot.startPolling(15000);
     console.log('✅ Telegram link bot started');
-    // Mail tracker: poll inbox, alert on unanswered client emails, daily digest/report
-    const { pollInbox } = require('./mail-poller');
-    const mailLib = require('./mail-lib');
-    const { notifyPendingEmails, sendDailyDigest } = require('./mail-telegram');
-    const { sendEmailReport } = require('./mail-mailer');
-    const MAIL_ALERT_AFTER = parseInt(process.env.MAIL_ALERT_AFTER_MINUTES || '60');
-    const MAIL_POLL_INTERVAL = parseInt(process.env.MAIL_POLL_INTERVAL_MINUTES || '3');
-    pollInbox().catch(e => console.error('mail pollInbox error:', e.message));
-    setInterval(() => pollInbox().catch(e => console.error('mail pollInbox error:', e.message)), MAIL_POLL_INTERVAL * 60 * 1000);
+    // Mail tracker (модуль «Почта»): poll inbox, alert on unanswered client emails, daily digest/report.
+    // ПРИОСТАНОВЛЕН по просьбе: ни поллинга, ни писем, пока MAIL_TRACKER_ENABLED !== 'true'.
+    // Ничего не удалено — чтобы снова включить, задай на Railway переменную MAIL_TRACKER_ENABLED=true.
+    if (process.env.MAIL_TRACKER_ENABLED === 'true') {
+      const { pollInbox } = require('./mail-poller');
+      const mailLib = require('./mail-lib');
+      const { notifyPendingEmails, sendDailyDigest } = require('./mail-telegram');
+      const { sendEmailReport } = require('./mail-mailer');
+      const MAIL_ALERT_AFTER = parseInt(process.env.MAIL_ALERT_AFTER_MINUTES || '60');
+      const MAIL_POLL_INTERVAL = parseInt(process.env.MAIL_POLL_INTERVAL_MINUTES || '3');
+      pollInbox().catch(e => console.error('mail pollInbox error:', e.message));
+      setInterval(() => pollInbox().catch(e => console.error('mail pollInbox error:', e.message)), MAIL_POLL_INTERVAL * 60 * 1000);
+      setInterval(async () => {
+        try {
+          const pending = await mailLib.getUnnotified(MAIL_ALERT_AFTER);
+          if (pending.length > 0) {
+            await notifyPendingEmails(pending);
+            for (const e of pending) await mailLib.markNotified(e.id);
+          }
+        } catch (e) { console.error('mail unanswered-check error:', e.message); }
+      }, 15 * 60 * 1000);
+      // Daily digest at 04:00 and 13:00 UTC (~09:00 and 18:00 Almaty)
+      let lastDigestHour = null;
+      setInterval(async () => {
+        const h = new Date().getUTCHours();
+        if ((h === 4 || h === 13) && lastDigestHour !== h) {
+          lastDigestHour = h;
+          try { await sendDailyDigest(await mailLib.getStats()); } catch (e) { console.error('mail daily digest error:', e.message); }
+        }
+      }, 5 * 60 * 1000);
+      // Daily email report at 13:00 UTC (18:00 Almaty)
+      let lastReportDate = null;
+      setInterval(async () => {
+        const now = new Date();
+        const dateKey = now.toISOString().slice(0, 10);
+        if (now.getUTCHours() === 13 && lastReportDate !== dateKey) {
+          lastReportDate = dateKey;
+          try {
+            const stats = await mailLib.getStats();
+            const pending = await mailLib.getPendingEmails();
+            await sendEmailReport(stats, pending);
+          } catch (e) { console.error('mail daily report error:', e.message); }
+        }
+      }, 5 * 60 * 1000);
+      console.log('✅ Mail tracker (модуль «Почта») активен');
+    } else {
+      console.log('⏸ Mail tracker (модуль «Почта») ПРИОСТАНОВЛЕН — поллинг и письма отключены (MAIL_TRACKER_ENABLED != true)');
+    }
     // Client reply catcher for "Написать клиенту" — polls the Yandex 360
     // lost-mail catch-all inbox for replies to svc-{ticketId}@ addresses.
+    // (Отдельная живая функция тикетов — НЕ часть паузы модуля «Почта».)
     const { pollTicketMailbox } = require('./ticket-mail-poller');
     const TICKET_MAIL_POLL_INTERVAL = parseInt(process.env.TICKET_MAIL_POLL_INTERVAL_MINUTES || '3');
     pollTicketMailbox().catch(e => console.error('ticket-mail pollTicketMailbox error:', e.message));
     setInterval(() => pollTicketMailbox().catch(e => console.error('ticket-mail pollTicketMailbox error:', e.message)), TICKET_MAIL_POLL_INTERVAL * 60 * 1000);
-    setInterval(async () => {
-      try {
-        const pending = await mailLib.getUnnotified(MAIL_ALERT_AFTER);
-        if (pending.length > 0) {
-          await notifyPendingEmails(pending);
-          for (const e of pending) await mailLib.markNotified(e.id);
-        }
-      } catch (e) { console.error('mail unanswered-check error:', e.message); }
-    }, 15 * 60 * 1000);
-    // Daily digest at 04:00 and 13:00 UTC (~09:00 and 18:00 Almaty)
-    let lastDigestHour = null;
-    setInterval(async () => {
-      const h = new Date().getUTCHours();
-      if ((h === 4 || h === 13) && lastDigestHour !== h) {
-        lastDigestHour = h;
-        try { await sendDailyDigest(await mailLib.getStats()); } catch (e) { console.error('mail daily digest error:', e.message); }
-      }
-    }, 5 * 60 * 1000);
-    // Daily email report at 13:00 UTC (18:00 Almaty)
-    let lastReportDate = null;
-    setInterval(async () => {
-      const now = new Date();
-      const dateKey = now.toISOString().slice(0, 10);
-      if (now.getUTCHours() === 13 && lastReportDate !== dateKey) {
-        lastReportDate = dateKey;
-        try {
-          const stats = await mailLib.getStats();
-          const pending = await mailLib.getPendingEmails();
-          await sendEmailReport(stats, pending);
-        } catch (e) { console.error('mail daily report error:', e.message); }
-      }
-    }, 5 * 60 * 1000);
 
     // Утренний персональный дайджест: будни в 03:00 UTC (08:00 Алматы), раз в день.
     let lastDigestDate = null;
