@@ -1056,7 +1056,9 @@ function renderDetail(id,d){
       // (на этапе «Оплата», если оплата на нём), и доверенность — если она
       // требуется и назначена именно ему.
       const up=[];
-      if(curKey==='payment' && mineAcc){ up.push('pay'); hdr='Оплата закупки'; }
+      // Платёжку («Подтверждение оплаты») на этапе оплаты вправе приложить ЛЮБОЙ
+      // бухгалтер, а не только назначенный/главбух (согласовано с бэкендом).
+      if(curKey==='payment'){ up.push('pay'); hdr='Оплата закупки'; }
       if(minePoa) up.push('poa');
       if(up.length){
         body+='<div class="deth">Загрузка документов</div>';
@@ -1066,9 +1068,9 @@ function renderDetail(id,d){
       } else {
         body+='<div class="hint" style="margin-top:6px">Документы закупки показаны выше. Загрузка от вас на этом этапе не требуется.</div>';
       }
-      // Комментарий бухгалтера + ручной переход на «Ожидание товара» — только по
-      // своим закупкам на этапе оплаты.
-      if(curKey==='payment' && mineAcc){
+      // Комментарий бухгалтера + ручной переход на «Ожидание товара» — на этапе
+      // оплаты доступны любому бухгалтеру (как и загрузка платёжки).
+      if(curKey==='payment'){
         body+=payCommentBlock(id);
         const hasPay=((d.files&&d.files.pay)||[]).length>0;
         const hasPoa=((d.files&&d.files.poa)||[]).length>0;
