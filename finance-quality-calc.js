@@ -11,6 +11,12 @@ const { pool } = require('./auth');
 const onecMod = require('./onec');
 
 const SUM_TOLERANCE = Number(process.env.QUALITY_SUM_TOLERANCE || 1); // ₸, порог различия сумм
+// Отдел в зеркале сделок хранится как ID (department_id). Приводим к названию,
+// чтобы сверять с текстовым отделом из 1С (иначе отдел всегда «расходится»).
+const DEPT_LABELS = {
+  '4857': 'Элементный', '4858': 'Хроматография', '4859': 'Электрохимия', '4860': 'Клеточный анализ',
+  '4862': 'ОРМ', '4863': 'Сервис', '4864': 'Тренинг-центр', '4865': 'General Lab', '4866': 'Комплекс', '8384': 'Материаловедение',
+};
 
 let _schema = null;
 function ensureSchema() {
@@ -84,8 +90,16 @@ async function fetch1CContracts() {
 // конкретную таблицу/поля при реальных данных (напр. ticketsmodule_stats_deals).
 async function fetchBitrixDeals() {
   if (!onecMod.isConfigured()) return mockB24();
-  // TODO(Б24): SELECT из зеркала сделок с полями { deal_id, title, sum, dept }.
-  return [];
+  // Сделки Битрикса — из зеркала статистики (ticketsmodule_stat_deals): оно
+  // наполняется вебхуками + ночной сверкой и содержит id, название, сумму, отдел.
+  const { rows } = await pool.query(
+    'SELECT deal_id, deal_title, company_name, opportunity, department_id FROM ticketsmodule_stat_deals');
+  return rows.map(r => ({
+    deal_id: String(r.deal_id == null ? '' : r.deal_id).trim(),
+    title: r.deal_title || r.company_name || '',
+    sum: Number(r.opportunity || 0),
+    dept: DEPT_LABELS[String(r.department_id || '').trim()] || '',
+  }));
 }
 
 function buildPairs(list1c, listB24) {
