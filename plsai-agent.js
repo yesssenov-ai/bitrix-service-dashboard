@@ -307,7 +307,17 @@ async function voteExample(id, delta) {
 }
 
 // ── Системный промпт (карта + правила + роль + похожие примеры) ──────────────
-function buildSystem(user, allowed, examples) {
+// Текущее время в Казахстане (UTC+5, единый пояс с 2024 г.). Модель сама даты не знает —
+// без часов в промпте она уверенно ошибается на дни.
+function nowKz() {
+  const d = new Date(Date.now() + 5 * 3600e3);
+  const iso = d.toISOString();
+  const wd = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'][d.getUTCDay()];
+  return { date: iso.slice(0, 10), time: iso.slice(11, 16), wd };
+}
+function buildSystem(user, allowed, examples, opts) {
+  const src = (opts && opts.source) || 'web';
+  const now = nowKz();
   const lines = [];      // таблицы с описанием
   const extra = [];      // прочие доступные таблицы (без описания)
   for (const t of [...allowed].sort()) {
@@ -316,7 +326,8 @@ function buildSystem(user, allowed, examples) {
   }
   const base = [
     'Ты — ProLab AI, аналитический помощник по системе ЦУП (ProLabSupport). Отвечай по-русски, кратко и по делу.',
-    `Пользователь: ${user.display_name || user.engineer_name || 'сотрудник'} · роль: ${user.role}.`,
+    `Спрашивает: ${user.display_name || user.engineer_name || 'сотрудник'}${user.job_title ? ' · ' + user.job_title : ''} · роль в ЦУП: ${user.role}${user.bitrix_user_id ? ' · id в Bitrix: ' + user.bitrix_user_id : ''}.`,
+    'Видеть — не значит владеть: если в данных назван ответственный/менеджер/инженер, называй его прямо («задача у Каната», «сделка Жарова»), а не «ваша задача» и не «возможно, это не про вас». «Мои/мой» в вопросе — это записи, где ответственный — сам спрашивающий (его id в Bitrix выше).',
     '',
     'У тебя есть инструмент run_sql — выполнить ОДИН SELECT (только чтение) к базе-зеркалу ЦУПа (Postgres).',
     'Ты также МОЖЕШЬ готовить ПИШУЩИЕ действия через инструменты create_task (задача в Bitrix), add_deal_comment (комментарий к сделке), create_reminder (напоминание в ЦУП), create_event (событие/встреча в КАЛЕНДАРЬ ЦУП), create_room_booking (бронь ПЕРЕГОВОРНОЙ в Bitrix). ВАЖНО: эти действия НЕ выполняются сразу — ты лишь готовишь ПРЕДЛОЖЕНИЕ, которое инициатор подтверждает кнопкой. Вызывай их ТОЛЬКО когда пользователь явно просит создать/поставить/добавить. После вызова не говори «я создал/добавил» — говори «предлагаю … , подтвердите». Если данных для действия не хватает (например, кому задача или по какой сделке) — сначала спроси.',
@@ -325,7 +336,7 @@ function buildSystem(user, allowed, examples) {
     ...lines,
     ...(extra.length ? ['', 'Также доступны прочие таблицы ЦУПа (без описания — если нужной темы нет выше, найди подходящую по имени и узнавай колонки через SELECT * FROM <таблица> LIMIT 3): ' + extra.join(', ')] : []),
     '',
-    `Сегодня: ${new Date().toISOString().slice(0, 10)} (в БД это CURRENT_DATE). Относительные даты считай от сегодня: «за 11 число» = 11-е число ТЕКУЩЕГО месяца, «за последнюю неделю» = последние 7 дней, «вчера», «за этот месяц» и т.п. Для фильтра по дате создания используй поле date_create (приводи к дате: date_create::date).`,
+    `Сейчас: ${now.date}, ${now.wd}, ${now.time} по Казахстану (UTC+5). В БД сегодня — CURRENT_DATE. Относительные даты считай от сегодня: «за 11 число» = 11-е число ТЕКУЩЕГО месяца, «за последнюю неделю» = последние 7 дней, «вчера», «за этот месяц» и т.п. Для фильтра по дате создания используй поле date_create (приводи к дате: date_create::date).`,
     '',
     'ДИАЛОГ: это рабочий чат, тебе видны предыдущие реплики как ходы беседы. ВСЕГДА отвечай на ПОСЛЕДНЮЮ реплику пользователя — именно она текущий вопрос. Прошлые ходы — лишь контекст: используй их, только если текущая реплика без них непонятна (ссылки вроде «этот отдел», «а в декабре», «по ним»). Если последняя реплика самодостаточна (например «дай контракты отдела Хроматографии за 2025») — выполни её напрямую и НЕ привязывайся к прежней теме. Если новый вопрос меняет период/отдел/менеджера/фильтр — сделай НОВЫЙ run_sql с новым фильтром и покажи НОВЫЕ числа, не копируй прошлый ответ. Никогда не говори «нового вопроса нет» или «я не получал вопрос» — последняя реплика пользователя и есть вопрос.',
     '',
@@ -348,6 +359,11 @@ function buildSystem(user, allowed, examples) {
     '• КП/МЛК (ticketsmodule_kp_requests): статус заявки — колонка status (draft/in_review/needs_revision/approved), клиент = client_name, создана = created_at.',
     '• КОНТРАКТЫ и ВЫПОЛНЕНИЕ ПЛАНА (точно как модуль «Контракты»): ФАКТ = сделки из ticketsmodule_stat_deals, где contract_date BETWEEN \'<год>-01-01\' AND \'<год>-12-31\' И stage_id = ANY(ARRAY[\'FINAL_INVOICE\',\'1\',\'UC_Q9J6VV\',\'UC_9MBFR2\',\'2\',\'3\',\'WON\',\'C1:FINAL_INVOICE\',\'C1:1\',\'C1:UC_3MVK90\',\'C1:UC_3SCB5K\',\'C1:2\',\'C1:3\',\'C1:WON\',\'C2:FINAL_INVOICE\',\'C2:1\',\'C2:2\',\'C2:WON\',\'C3:FINAL_INVOICE\',\'C3:UC_YYTFYG\',\'C3:2\',\'C3:WON\']). Сумма контракта = opportunity (в тенге; если currency_id != \'KZT\' — переведи по ticketsmodule_exchange_rates). Отдел — по правилу saleType выше (department_id с объединением 4858+4860, иначе по воронке), НЕ по менеджеру. ПЛАН — из ticketsmodule_contract_plan (year, department — название ровно как в saleType, напр. «Хроматография и клеточный анализ», plan_amount ₸). «% выполнения» = факт/plan_amount*100. Итоговый план компании = сумма plan_amount за год. САМОПРОВЕРКА: суммарный факт по всем отделам за год должен сойтись с «Суммой контрактов» на дашборде ЦУП (напр. 2025 ≈ 5,5 млрд ₸); если не сходится — ты, скорее всего, считаешь отдел по менеджеру, вернись к department_id.',
   ];
+  if (src === 'tg') {
+    base.push('',
+      'КАНАЛ: ответ уходит в Telegram. Пиши ОБЫЧНЫМ ТЕКСТОМ: без Markdown (никаких **, #, таблиц с |, обратных кавычек), без относительных ссылок вида [текст](/путь) — они там мертвы. Если нужна ссылка — полный адрес https://nms.prolabsupport.kz/… отдельной строкой. Списки — короткими строками с «• ». Будь краток: это чат в телефоне.',
+      'Таблицы в Telegram не читаются: для списков всё так же вызывай present_table — система сама покажет первые строки текстом и даст ссылку на Excel; в тексте дай итог (сколько, на какую сумму, главное).');
+  }
   if (examples && examples.length) {
     lines2Push(base, examples);
   }
@@ -604,7 +620,7 @@ async function runAgent(qRaw, user, opts) {
   const pendingActions = []; // подготовленные ПИШУЩИЕ действия, ждущие подтверждения
 
   const examples = await retrieveExamples(q, allowed);   // самообучение: похожие удачные решения
-  let system = buildSystem(user, allowed, examples);
+  let system = buildSystem(user, allowed, examples, opts);
   // База знаний: подмешиваем релевантные регламенты/инструкции компании (RAG).
   try { const kbCtx = await require('./knowledge-calc').kbContext(q); if (kbCtx) system += '\n\n' + kbCtx; } catch (e) {}
   // Текущий вопрос — последним ходом user; история идёт перед ним как контекст.
@@ -770,4 +786,4 @@ async function listAvailableModels() {
   } catch (e) { return { ok: false, error: e.message }; }
 }
 
-module.exports = { runAgent, allowedTablesFor, ownerScopeBids, guardedSelect, buildCtx, exportAgentTable, voteExample, TABLE_META, agentModelInfo, listAvailableModels };
+module.exports = { buildSystem, nowKz, runAgent, allowedTablesFor, ownerScopeBids, guardedSelect, buildCtx, exportAgentTable, voteExample, TABLE_META, agentModelInfo, listAvailableModels };

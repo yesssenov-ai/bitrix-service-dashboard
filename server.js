@@ -14,7 +14,6 @@ const { initDB, requireAuth, requirePageAuth, requireModule, requireAnyModule, r
 // Коды плиток Тренинг-центра (6 отдельных модулей, одна страница /tc.html).
 const TC_CODES = ['TC', 'TC_WK', 'TC_EQ', 'TC_ST', 'TC_QM', 'TC_AN'];
 const { tgMgt, tgOps, tgBoth, notifyNewTicket, notifyOverdueNew } = require('./notifications');
-const telegramLinkBot = require('./telegram-link-bot');
 const equipmentRoutes = require('./routes/equipment-routes');
 const { USERS, SERVICE_TYPES, COORDINATORS } = require('./constants');
 const app = express();
@@ -238,6 +237,7 @@ app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 app.use('/auth', require('./routes/auth-routes'));
 app.use('/admin', require('./routes/admin-routes'));
 app.use('/api/account', require('./routes/account-routes'));
+app.use('/tg', require('./routes/tg-routes'));   // вебхук Telegram (проверка секрета внутри)
 equipmentRoutes.setB24(b24);
 app.use('/equipment', equipmentRoutes.router);
 app.use('/licenses', require('./routes/licenses-routes'));
@@ -1002,10 +1002,10 @@ initDB().then(() => {
         console.log('✅ Web Push (бейджи на иконке) активны');
       }
     } catch (e) { console.error('push init error:', e.message); }
-    // Telegram linking bot
-    telegramLinkBot.setPool(pool);
-    telegramLinkBot.startPolling(15000);
-    console.log('✅ Telegram link bot started');
+    // Telegram-бот ЦУП (tg-bot.js): привязка по одноразовому коду + ответы ProLab AI.
+    // С TG_WEBHOOK_SECRET — вебхук /tg/hook (ставится сам), без него — безопасный long polling.
+    // Старый опрос telegram-link-bot (/start <bitrix_id>) выключен: чужой id не секрет.
+    require('./tg-bot').start().catch(e => console.error('tg-bot start error:', e.message));
     // Mail tracker (модуль «Почта»): poll inbox, alert on unanswered client emails, daily digest/report.
     // ПРИОСТАНОВЛЕН по просьбе: ни поллинга, ни писем, пока MAIL_TRACKER_ENABLED !== 'true'.
     // Ничего не удалено — чтобы снова включить, задай на Railway переменную MAIL_TRACKER_ENABLED=true.

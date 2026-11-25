@@ -109,32 +109,40 @@ router.get('/notifications', requireAuth(), async (req, res) => {
   } catch (e) { console.error('account/notifications:', e.message); res.status(500).json({ ok: false, error: 'Ошибка' }); }
 });
 
-// GET /api/account/telegram — статус привязки + ссылка для подключения бота.
+// GET /api/account/telegram — статус привязки Telegram.
+// Подключение — только по одноразовой ссылке (POST /telegram/link-code): id сотрудника
+// не секрет, поэтому старая ссылка «?start=<bitrix_id>» больше не работает.
 router.get('/telegram', requireAuth(), async (req, res) => {
   try {
-    const bitrixId = req.user.bitrix_user_id;
+    await require('../tg-bot').ensure();
     const botUsername = await getBotUsername();
-    if (!bitrixId) {
-      return res.json({ ok: true, hasBitrixLink: false, linked: false, botUsername,
-        note: 'Учётка не привязана к сотруднику Bitrix — попросите администратора указать сотрудника в вашей карточке.' });
-    }
-    const { rows } = await pool.query(
-      'SELECT telegram_username, telegram_chat_id, linked_at FROM ticketsmodule_telegram_links WHERE bitrix_user_id=$1', [bitrixId]);
-    const linked = rows.length > 0;
-    const deepLink = botUsername ? `https://t.me/${botUsername}?start=${bitrixId}` : null;
+    const u = (await pool.query('SELECT telegram_chat_id, bitrix_user_id FROM ticketsmodule_users WHERE id=$1', [req.user.id])).rows[0] || {};
+    let link = null;
+    if (u.bitrix_user_id) link = (await pool.query('SELECT telegram_username, linked_at FROM ticketsmodule_telegram_links WHERE bitrix_user_id=$1', [u.bitrix_user_id])).rows[0] || null;
     res.json({
-      ok: true, hasBitrixLink: true, linked, botUsername, deepLink,
-      username: linked ? rows[0].telegram_username : null,
-      linkedAt: linked ? rows[0].linked_at : null,
+      ok: true, botUsername,
+      linked: !!u.telegram_chat_id,                     // бот узнаёт и отвечает
+      legacyOnly: !u.telegram_chat_id && !!link,        // привязан старым способом — только уведомления
+      hasBitrixLink: !!u.bitrix_user_id,
+      username: link ? link.telegram_username : null,
+      linkedAt: link ? link.linked_at : null,
     });
   } catch (e) { console.error('account/telegram:', e.message); res.status(500).json({ ok: false, error: 'Ошибка' }); }
 });
 
-// POST /api/account/telegram/unlink — отвязать свой Telegram.
+// POST /api/account/telegram/link-code — одноразовая ссылка на 15 минут.
+router.post('/telegram/link-code', requireAuth(), async (req, res) => {
+  try {
+    const r = await require('../tg-bot').createLinkCode(req.user.id, 15);
+    if (!r.url) return res.status(503).json({ ok: false, error: 'Бот не настроен (нет TG_TOKEN)' });
+    res.json({ ok: true, url: r.url, ttlMin: r.ttlMin });
+  } catch (e) { console.error('account/telegram/link-code:', e.message); res.status(500).json({ ok: false, error: 'Ошибка' }); }
+});
+
+// POST /api/account/telegram/unlink — отвязать свой Telegram (и бот, и уведомления).
 router.post('/telegram/unlink', requireAuth(), async (req, res) => {
   try {
-    if (!req.user.bitrix_user_id) return res.status(400).json({ ok: false, error: 'Нет привязки к Bitrix' });
-    await pool.query('DELETE FROM ticketsmodule_telegram_links WHERE bitrix_user_id=$1', [req.user.bitrix_user_id]);
+    await require('../tg-bot').unlinkUser(req.user);
     await auditLog(req.user.id, req.user.username, 'SELF_TELEGRAM_UNLINKED', null, {}, req.ip, req.headers['user-agent']);
     res.json({ ok: true });
   } catch (e) { console.error('account/telegram/unlink:', e.message); res.status(500).json({ ok: false, error: 'Ошибка' }); }

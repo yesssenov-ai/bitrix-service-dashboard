@@ -528,15 +528,21 @@ async function loadTgLinks() {
         <td><strong>${esc(u.name)}</strong></td>
         <td>${u.linked ? '<span class="status-on"><span class="dot"></span>Подключён</span>' : '<span class="status-off"><span class="dot"></span>Не подключён</span>'}</td>
         <td class="log-time">${u.linkedAt ? new Date(u.linkedAt).toLocaleString('ru',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
-        <td><button class="btn btn-sm" onclick="copyTgLink(${u.id})">📋 Скопировать ссылку</button></td>
+        <td><button class="btn btn-sm" onclick="copyTgLink(${u.id})">Скопировать ссылку (24 ч)</button></td>
       </tr>`).join('')}</tbody>
     </table>`;
   } catch(e) { wrap.innerHTML = `<div class="empty">Ошибка: ${esc(e.message)}</div>`; }
 }
 
-function copyTgLink(userId) {
-  const link = `https://t.me/ProLab_Service_bot?start=${userId}`;
-  navigator.clipboard.writeText(link).then(() => toast('🔗 Ссылка скопирована', 'success'));
+// Одноразовая ссылка на сутки (старая ?start=<id> небезопасна и больше не работает).
+async function copyTgLink(bitrixUserId) {
+  try {
+    const r = await fetch('/admin/tg-link-code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bitrixUserId }) });
+    const d = await r.json();
+    if (!d.ok || !d.url) { toast(d.error || 'Ошибка', 'error'); return; }
+    await navigator.clipboard.writeText(d.url);
+    toast('Ссылка скопирована — одноразовая, действует 24 часа', 'success');
+  } catch (e) { toast('Ошибка связи', 'error'); }
 }
 
 // ── Массовый импорт учёток по сотрудникам Bitrix ──────────────────────────────

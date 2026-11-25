@@ -320,28 +320,36 @@ async function loadTelegram(){
   const r=await api('/api/account/telegram');
   if(!r.ok){box.innerHTML='<div class="empty">Не удалось загрузить</div>';return;}
   const d=r.data;
-  if(!d.hasBitrixLink){
-    box.innerHTML=`<div class="ro"><span>Статус</span><span><span class="badge off">недоступно</span></span></div>
-      <div class="hint" style="margin-top:10px">${esc(d.note||'Учётка не привязана к сотруднику Bitrix. Обратитесь к администратору, чтобы включить персональные уведомления.')}</div>`;
-    return;
-  }
   if(d.linked){
     box.innerHTML=`
       <div class="ro"><span>Статус</span><span><span class="badge on">подключён</span></span></div>
       <div class="ro"><span>Аккаунт</span><span>${d.username?('@'+esc(d.username)):'—'}</span></div>
-      <div class="ro"><span>Привязан</span><span>${fmtDate(d.linkedAt)}</span></div>
+      ${d.linkedAt?`<div class="ro"><span>Привязан</span><span>${fmtDate(d.linkedAt)}</span></div>`:''}
+      <div class="hint" style="margin-top:10px">Бот присылает уведомления ЦУП и отвечает на вопросы — текстом или голосом, правами вашей учётки. Пишущие действия выполняются только после вашей кнопки «Подтвердить».</div>
       <div class="row" style="margin-top:12px"><button class="btn btn-danger" onclick="unlinkTg()">Отвязать</button><span class="msg" id="tgMsg"></span></div>`;
-  }else{
-    const link=d.deepLink;
-    box.innerHTML=`
-      <div class="ro"><span>Статус</span><span><span class="badge off">не подключён</span></span></div>
-      <div class="hint" style="margin-top:10px">Нажмите кнопку (на телефоне откроется Telegram) и отправьте боту команду, которая подставится автоматически. После этого уведомления начнут приходить.</div>
-      <div class="row" style="margin-top:6px">
-        ${link?`<a class="btn btn-primary" href="${esc(link)}" target="_blank" rel="noopener">Подключить в Telegram</a>`:'<span class="msg err">Бот не настроен</span>'}
-        <button class="btn btn-ghost" onclick="loadTelegram()">Проверить статус</button>
-      </div>
-      ${link?`<div class="mono" style="margin-top:10px">${esc(link)}</div>`:''}`;
+    return;
   }
+  box.innerHTML=`
+    <div class="ro"><span>Статус</span><span><span class="badge off">${d.legacyOnly?'только уведомления':'не подключён'}</span></span></div>
+    <div class="hint" style="margin-top:10px">${d.legacyOnly
+      ?'Telegram привязан старым способом — приходят только уведомления. Подключите заново, чтобы бот ProLab AI отвечал вам на вопросы.'
+      :'Нажмите кнопку: откроется Telegram с личной одноразовой ссылкой. Ссылка действует 15 минут и срабатывает один раз.'}</div>
+    <div class="row" style="margin-top:6px">
+      <button class="btn btn-primary" id="tgLinkBtn" onclick="linkTg()">Подключить Telegram</button>
+      <button class="btn btn-ghost" onclick="loadTelegram()">Проверить статус</button>
+      <span class="msg" id="tgMsg"></span>
+    </div>
+    <div class="mono" id="tgLinkUrl" style="margin-top:10px;display:none"></div>`;
+}
+async function linkTg(){
+  const msg=document.getElementById('tgMsg');
+  // Окно открываем сразу (до ответа сервера), иначе браузер посчитает его всплывающим и заблокирует.
+  const w=window.open('about:blank','_blank');
+  const r=await api('/api/account/telegram/link-code',{method:'POST'});
+  if(!r.ok||!r.data.url){ if(w)w.close(); msg.className='msg err'; msg.textContent=(r.data&&r.data.error)||'Ошибка'; return; }
+  if(w) w.location.href=r.data.url;
+  const u=document.getElementById('tgLinkUrl'); u.style.display=''; u.textContent=r.data.url;
+  msg.className='msg ok'; msg.textContent='Откройте ссылку в Telegram и нажмите «Запустить» / Start, затем «Проверить статус».';
 }
 async function unlinkTg(){
   const r=await api('/api/account/telegram/unlink',{method:'POST'});

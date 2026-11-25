@@ -23,6 +23,8 @@ async function ensure() {
       created_at TIMESTAMPTZ DEFAULT NOW(),
       done_at TIMESTAMPTZ
     )`);
+    // Срок жизни предложения: вчерашнее «предлагаю» не должно выполняться по случайному нажатию.
+    await pool.query(`ALTER TABLE ticketsmodule_agent_actions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`);
     await pool.query(`CREATE TABLE IF NOT EXISTS ticketsmodule_agent_reminders (
       id SERIAL PRIMARY KEY,
       user_id INTEGER,
@@ -44,8 +46,8 @@ async function propose(user, kind, params, summary) {
   await ensure();
   const token = tok();
   await pool.query(
-    `INSERT INTO ticketsmodule_agent_actions (token, user_id, bitrix_user_id, kind, params, summary, status)
-     VALUES ($1,$2,$3,$4,$5,$6,'pending')`,
+    `INSERT INTO ticketsmodule_agent_actions (token, user_id, bitrix_user_id, kind, params, summary, status, expires_at)
+     VALUES ($1,$2,$3,$4,$5,$6,'pending', NOW() + INTERVAL '24 hours')`,
     [token, user && user.id, user && user.bitrix_user_id, kind, JSON.stringify(params || {}), summary || '']);
   return { token, summary: summary || '', kind, params: params || {} };
 }
@@ -59,6 +61,15 @@ async function confirm(token, user) {
   if (a.user_id !== (user && user.id)) return { ok: false, error: 'Подтвердить действие может только инициатор' };
   if (a.status === 'done') return { ok: true, already: true, result: a.result };
   if (a.status === 'cancelled') return { ok: false, error: 'Действие было отменено' };
+  if (a.status === 'pending' && a.expires_at && new Date(a.expires_at).getTime() < Date.now()) {
+    await pool.query(`UPDATE ticketsmodule_agent_actions SET status='expired' WHERE token=$1`, [token]);
+    return { ok: false, error: 'Предложение устарело (действует сутки) — попросите агента подготовить его заново' };
+  }
+  if (a.status === 'expired') return { ok: false, error: 'Предложение устарело — попросите агента подготовить его заново' };
+  if (a.status !== 'pending') return { ok: false, error: 'Действие уже обработано (статус: ' + a.status + ')' };
+  // Захват атомарно: два быстрых нажатия (или экран + Telegram) не выполнят действие дважды.
+  const claim = await pool.query(`UPDATE ticketsmodule_agent_actions SET status='running' WHERE token=$1 AND status='pending' RETURNING id`, [token]);
+  if (!claim.rowCount) return { ok: false, error: 'Действие уже выполняется' };
   const params = typeof a.params === 'string' ? JSON.parse(a.params) : (a.params || {});
   try {
     const result = await execute(a.kind, params, user);

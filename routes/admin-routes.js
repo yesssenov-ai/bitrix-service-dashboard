@@ -90,6 +90,20 @@ router.get('/tg-links', requireAuth(['superadmin']), async (req, res) => {
   } catch(e) { sanitizeError(e, res); }
 });
 
+// POST /admin/tg-link-code { bitrixUserId } — одноразовая ссылка на сутки для сотрудника
+// (переслать ему). Привязка идёт к учётке ЦУП с этим сотрудником Bitrix.
+router.post('/tg-link-code', requireAuth(['superadmin']), async (req, res) => {
+  try {
+    const bid = parseInt((req.body || {}).bitrixUserId, 10);
+    if (!bid) return res.status(400).json({ ok: false, error: 'Не указан сотрудник' });
+    const u = (await pool.query('SELECT id FROM ticketsmodule_users WHERE bitrix_user_id=$1 AND active=true ORDER BY id LIMIT 1', [bid])).rows[0];
+    if (!u) return res.status(404).json({ ok: false, error: 'У этого сотрудника нет учётки ЦУП — сначала заведите и привяжите её' });
+    const r = await require('../tg-bot').createLinkCode(u.id, 24 * 60);
+    try { await auditLog(req.user.id, req.user.username, 'TG_LINK_CODE_ISSUED', null, { bitrixUserId: bid, userId: u.id }, req.ip, req.headers['user-agent']); } catch (e) {}
+    res.json({ ok: true, url: r.url });
+  } catch (e) { sanitizeError(e, res); }
+});
+
 // GET /admin/employee-options — все сотрудники для привязки учётки к Bitrix.
 // В отличие от /tg-links (там фильтр id>10 для служебных учёток) здесь показываем
 // ВСЕХ реальных людей, включая ID ≤ 10 (напр. Куаныш Есенов = 4), исключая только

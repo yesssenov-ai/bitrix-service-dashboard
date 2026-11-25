@@ -259,6 +259,34 @@ router.post('/agent-export', requireAuth(VIEW_ROLES), express.json(), async (req
     res.status(400).json({ error: e.message || 'Не удалось выгрузить' });
   }
 });
+// GET /api/plsai/agent-export?token=… — та же выгрузка по ссылке (из Telegram-бота).
+router.get('/agent-export', requireAuth(VIEW_ROLES), (req, res, next) => { req.body = { token: String(req.query.token || '') }; next(); }, async (req, res) => {
+  try {
+    const agent = require('../plsai-agent');
+    const token = String((req.body || {}).token || '');
+    if (!token) return res.status(400).json({ error: 'Нет токена выгрузки' });
+    const { columns, rows } = await agent.exportAgentTable(token, req.user);
+    const XLSX = require('xlsx');
+    const header = columns.length ? columns : ['—'];
+    const aoa = [header].concat(rows.map(r => header.map(c => {
+      const v = r[c];
+      if (v == null) return '';
+      if (typeof v === 'object') return JSON.stringify(v);
+      return v;
+    })));
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = header.map(h => ({ wch: Math.min(48, Math.max(10, String(h).length + 2)) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'ProLab AI');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="ProLabAI.xlsx"');
+    res.send(buf);
+  } catch (e) {
+    console.error('POST /api/plsai/agent-export error:', e.message);
+    res.status(400).json({ error: e.message || 'Не удалось выгрузить' });
+  }
+});
 
 // POST /api/plsai/export { q } — тот же запрос, но отдаём Excel-файл.
 router.post('/export', requireAuth(VIEW_ROLES), express.json(), async (req, res) => {
