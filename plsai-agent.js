@@ -71,6 +71,17 @@ const TABLE_META = {
   ticketsmodule_module_access:    { tier: 'blocked' },
   ticketsmodule_audit_logs:       { tier: 'blocked' },
   ticketsmodule_notification_log: { tier: 'blocked' },
+  // Закрыто для всех, включая админа: аналитической ценности нет, цена утечки есть.
+  ticketsmodule_tg_link_codes:    { tier: 'blocked' },   // одноразовые коды привязки Telegram
+  ticketsmodule_tg_updates:       { tier: 'blocked' },
+  ticketsmodule_tg_turns:         { tier: 'blocked' },   // чужие разговоры с ботом
+  ticketsmodule_user_google:      { tier: 'blocked' },   // refresh-токены Gmail
+  ticketsmodule_agent_actions:    { tier: 'blocked' },   // токены подтверждения действий
+  ticketsmodule_agent_reminders:  { tier: 'blocked' },   // личные напоминания
+  ticketsmodule_msg_messages:     { tier: 'blocked' },   // личная переписка мессенджера
+  ticketsmodule_msg_reactions:    { tier: 'blocked' },
+  ticketsmodule_msg_played:       { tier: 'blocked' },
+  ticketsmodule_msg_presence:     { tier: 'blocked' },
 
   // Клиентский PII / финансы — только admin/coordinator/manager.
   ticketsmodule_mail_emails:            { tier: 'privileged', desc: 'входящие письма (модуль Почта): классификация, статусы ответов' },
@@ -133,6 +144,18 @@ const TABLE_META = {
   ticketsmodule_notified_overdue:            { tier: 'ref', desc: 'служебное: уже уведомлённые просрочки' },
 };
 
+// Таблица закрыта для агента? Явный tier в TABLE_META решает; таблица, которой нет
+// в карте, закрыта, если её имя похоже на хранилище учёток/секретов — так новая
+// таблица с токенами не откроется админу сама собой (по умолчанию — запрет).
+const BLOCK_PARTS = /(^|_)(users?|webauthn|logins?|passwords?|tokens?|secrets?|creds?|credentials|sessions?|link_codes|google|telegram|tg|push|prefs|audit|agent|otp|totp|keys?)(_|$)/;
+function isBlockedTable(t) {
+  t = String(t || '').toLowerCase();
+  if (!t.startsWith('ticketsmodule_')) return true;
+  const m = TABLE_META[t];
+  if (m) return m.tier === 'blocked';
+  return BLOCK_PARTS.test(t.slice('ticketsmodule_'.length));
+}
+
 // Кому какие таблицы доступны на чтение агентом.
 function allowedTablesFor(user, moduleCodes) {
   const role = user && user.role;
@@ -172,36 +195,29 @@ const SQL_KEYWORDS = new Set(['where', 'on', 'using', 'join', 'inner', 'left', '
 // Основную защиту всё равно даёт: запрос обязан начинаться с SELECT/WITH, быть
 // одиночным (без «;») и выполняться в READ ONLY транзакции (БД отклонит любую запись).
 // Опасные функции / системные каталоги (в SELECT им не место).
+// Плюс любые функции, исполняющие SQL из строки (query_to_xml, table_to_xml, ts_stat…):
+// они читают таблицы мимо проверки плана. И любые pg_*-функции.
+const FORBIDDEN_FN = /\b(\w*_to_xml\w*|query_to_\w+|ts_stat|lo_get|pg_\w+)\s*\(/i;
 const FORBIDDEN = /\b(pg_sleep|pg_read_file|pg_read_binary_file|pg_ls_dir|pg_ls_logdir|pg_stat_file|lo_import|lo_export|dblink|set_config|current_setting|information_schema|pg_catalog|pg_class|pg_attribute|pg_authid|pg_shadow|pg_roles|pg_user)\b/i;
 // Пишущие операции (в т.ч. внутри writable-CTE). Паттерны с \s+ не ловят обычные
 // колонки created_at/updated_at/comment (там нет пробела после ключевого слова).
 const WRITE = /(\binsert\s+into|\bupdate\s+\w|\bdelete\s+from|\bdrop\s+\w|\balter\s+\w|\btruncate\b|\bcreate\s+\w|\bgrant\s+\w|\brevoke\s+\w|\bmerge\s+into|\bcopy\s+\w|\bvacuum\b|\breindex\b)/i;
 
-function extractTables(sql) {
-  const tables = new Set();
-  const re = /\b(?:from|join)\s+"?([a-zA-Z_][a-zA-Z0-9_$.]*)"?/gi;
-  let m;
-  while ((m = re.exec(sql))) {
-    let name = m[1].toLowerCase();
-    if (name.includes('.')) name = name.split('.').pop();
-    tables.add(name);
-  }
-  return tables;
+// Все таблицы ЦУПа, упомянутые в тексте запроса — ГДЕ УГОДНО, а не только после
+// FROM/JOIN: «FROM a, b» раньше прятал b от проверки прав (найдено разбором из AN).
+function mentionedTables(sql) {
+  return new Set((String(sql).match(/\bticketsmodule_[a-z0-9_]+\b/gi) || []).map(t => t.toLowerCase()));
 }
 
-// Ограничение по отделу для sensitive-таблиц: заменяем ссылку на таблицу
-// подзапросом с фильтром, сохраняя алиас (или подставляя имя таблицы как алиас).
-function injectOwnerScope(sql, table, ownerCol, bids) {
+// Ограничение «свой отдел»: CTE с ИМЕНЕМ таблицы перекрывает её во всём запросе —
+// в запятых, подзапросах, CTE пользователя. Внутри CTE — public.<таблица> (реальная);
+// пользователю обращаться к таблицам со схемой запрещено, поэтому обойти нельзя.
+function withOwnerScope(sql, tables, bids) {
   const arr = 'ARRAY[' + bids.map(x => parseInt(x, 10)).filter(n => !isNaN(n)).join(',') + ']::bigint[]';
-  const sub = `(SELECT * FROM ${table} WHERE ${ownerCol} = ANY(${arr}))`;
-  const re = new RegExp('(\\bfrom\\s+|\\bjoin\\s+)' + table + '\\b(\\s+(?:as\\s+)?([a-zA-Z_][a-zA-Z0-9_]*))?', 'gi');
-  return sql.replace(re, (full, kw, aliasPart, alias) => {
-    // Настоящий алиас (не ключевое слово) — сохраняем его.
-    if (alias && !SQL_KEYWORDS.has(alias.toLowerCase())) return `${kw}${sub} ${alias}`;
-    // Иначе алиасом становится имя таблицы, а «проглоченный» хвост (например
-    // « WHERE …» или « ON …») возвращаем на место — иначе потеряем условие.
-    return `${kw}${sub} ${table}${aliasPart || ''}`;
-  });
+  const defs = tables.map(t => `${t} AS (SELECT * FROM public.${t} WHERE ${TABLE_META[t].owner} = ANY(${arr}))`).join(', ');
+  const m = sql.match(/^with\s+(recursive\s+)?/i);
+  if (m) return 'WITH ' + (m[1] ? 'RECURSIVE ' : '') + defs + ', ' + sql.slice(m[0].length);
+  return 'WITH ' + defs + ' ' + sql;
 }
 
 function ensureLimit(sql) {
@@ -211,33 +227,60 @@ function ensureLimit(sql) {
   return sql.replace(/;?\s*$/, '') + ` LIMIT ${ROW_CAP}`;
 }
 
-async function guardedSelect(rawSql, ctx) {
+// Все отношения из плана запроса (EXPLAIN VERBOSE): Postgres сам называет каждую
+// таблицу, которую тронет запрос, — это и есть авторитетная проверка, не регулярка.
+function relationsOf(node, out) {
+  out = out || [];
+  if (Array.isArray(node)) { node.forEach(n => relationsOf(n, out)); return out; }
+  if (node && typeof node === 'object') {
+    if (node['Relation Name']) out.push({ schema: node.Schema || 'public', name: String(node['Relation Name']).toLowerCase() });
+    for (const v of Object.values(node)) if (v && typeof v === 'object') relationsOf(v, out);
+  }
+  return out;
+}
+
+// Проверка по тексту (быстрый, понятный отказ) — до похода в базу.
+function precheck(rawSql, ctx) {
   let sql = String(rawSql || '').trim().replace(/;+\s*$/, '');
   if (!sql) throw new Error('Пустой SQL');
+  if (/--|\/\*/.test(sql)) throw new Error('Комментарии в SQL не допускаются');
   if (/;/.test(sql)) throw new Error('Разрешён только один запрос (без «;»)');
   if (!/^(select|with)\b/i.test(sql)) throw new Error('Разрешён только SELECT/WITH');
   if (WRITE.test(sql)) throw new Error('Разрешено только чтение (SELECT)');
-  if (FORBIDDEN.test(sql)) throw new Error('В запросе есть запрещённые функции/каталоги');
-
-  const refs = extractTables(sql);
+  if (FORBIDDEN.test(sql) || FORBIDDEN_FN.test(sql)) throw new Error('В запросе есть запрещённые функции/каталоги');
+  // Имена таблиц — без схемы и кавычек: public.ticketsmodule_x / "ticketsmodule_x" → ticketsmodule_x.
+  sql = sql.replace(/"?public"?\s*\.\s*"?(ticketsmodule_[a-z0-9_]+)"?/gi, (_, t) => t.toLowerCase())
+           .replace(/"(ticketsmodule_[a-z0-9_]+)"/gi, (_, t) => t.toLowerCase());
+  if (/\.\s*"?ticketsmodule_/i.test(sql)) throw new Error('Обращайся к таблицам без схемы (просто ticketsmodule_…)');
+  const refs = mentionedTables(sql);
   for (const t of refs) {
-    if (!t.startsWith('ticketsmodule_')) throw new Error(`Недоступная таблица: ${t}`);
+    if (isBlockedTable(t)) throw new Error(`Таблица «${t}» закрыта для агента`);
     if (!ctx.allowed.has(t)) throw new Error(`Нет доступа к таблице «${t}» для вашей роли`);
   }
-  // Построчное ограничение по отделу.
   if (ctx.ownerBids) {
-    for (const t of refs) {
-      const meta = TABLE_META[t];
-      if (meta && meta.owner) sql = injectOwnerScope(sql, t, meta.owner, ctx.ownerBids);
-    }
+    const scoped = [...refs].filter(t => TABLE_META[t] && TABLE_META[t].owner);
+    if (scoped.length) sql = withOwnerScope(sql, scoped, ctx.ownerBids);
   }
-  sql = ensureLimit(sql);
+  return ensureLimit(sql);
+}
 
+async function guardedSelect(rawSql, ctx) {
+  const sql = precheck(rawSql, ctx);
   const client = await agentPool().connect();
   try {
     await client.query('BEGIN');
     await client.query('SET TRANSACTION READ ONLY');
     await client.query(`SET LOCAL statement_timeout = ${STMT_TIMEOUT_MS}`);
+    await client.query('SET LOCAL search_path = public');
+    // Авторитетная проверка: план запроса называет ВСЕ таблицы (запятые, подзапросы,
+    // представления, чужие схемы вроде auth.users). Всё вне разрешённого — отказ.
+    const ex = await client.query('EXPLAIN (VERBOSE, FORMAT JSON) ' + sql);
+    const plan = ex.rows && ex.rows[0] && (ex.rows[0]['QUERY PLAN'] || Object.values(ex.rows[0])[0]);
+    for (const r of relationsOf(plan)) {
+      if (r.schema !== 'public') throw new Error(`Недоступный объект: ${r.schema}.${r.name}`);
+      if (isBlockedTable(r.name)) throw new Error(`Таблица «${r.name}» закрыта для агента`);
+      if (!ctx.allowed.has(r.name)) throw new Error(`Нет доступа к таблице «${r.name}» для вашей роли`);
+    }
     const r = await client.query(sql);
     await client.query('ROLLBACK');
     return { rows: r.rows || [], rowCount: r.rowCount || (r.rows ? r.rows.length : 0), sql };
@@ -248,6 +291,23 @@ async function guardedSelect(rawSql, ctx) {
     client.release();
   }
 }
+
+// Самопроверка второго слоя: если задана отдельная роль только на чтение, она
+// НЕ должна читать закрытые таблицы и писать что-либо. Иначе ярус держит только код.
+async function checkReadonlyRole() {
+  if (!process.env.PLSAI_READONLY_DATABASE_URL) { console.warn('⚠️ ProLab AI: PLSAI_READONLY_DATABASE_URL не задан — закрытые таблицы держит только код агента (см. scripts/plsai-readonly-role.sql)'); return { configured: false }; }
+  const res = { configured: true, readsBlocked: null, canWrite: null };
+  const c = await agentPool().connect();
+  try {
+    try { await c.query('SELECT 1 FROM public.ticketsmodule_users LIMIT 1'); res.readsBlocked = true; } catch (e) { res.readsBlocked = false; }
+    try { await c.query('BEGIN'); await c.query('CREATE TEMP TABLE _plsai_probe(x int)'); res.canWrite = true; } catch (e) { res.canWrite = false; } finally { await c.query('ROLLBACK').catch(() => {}); }
+  } finally { c.release(); }
+  if (res.readsBlocked) console.error('🚨 ProLab AI: роль PLSAI_READONLY_DATABASE_URL ЧИТАЕТ ticketsmodule_users — выдайте ей SELECT только по scripts/plsai-readonly-role.sql');
+  else if (res.canWrite) console.error('🚨 ProLab AI: роль только-на-чтение может создавать таблицы — проверьте права');
+  else console.log('✅ ProLab AI: отдельная роль только на чтение, закрытые таблицы недоступны на уровне базы');
+  return res;
+}
+setTimeout(() => { checkReadonlyRole().catch(e => console.error('ProLab AI readonly check:', e.message)); }, 20000);
 
 // ── Самообучение: банк примеров (Q → удачный SQL), рейтинг через 👍/👎 ────────
 const STOPWORDS = new Set(['и', 'в', 'во', 'на', 'по', 'за', 'от', 'до', 'из', 'у', 'о', 'об', 'с', 'со', 'к', 'ко', 'что', 'как', 'это', 'для', 'все', 'нам', 'мне', 'мы', 'ты', 'вы', 'он', 'она', 'они', 'а', 'но', 'или', 'же', 'ли', 'бы', 'не', 'да', 'нет', 'сколько', 'какие', 'какой', 'какая', 'где', 'когда', 'кто', 'чем', 'покажи', 'дай', 'мой', 'мои', 'сейчас', 'есть', 'быть', 'их', 'его', 'её']);
@@ -285,7 +345,7 @@ async function saveExample(user, question, finalSql, answer) {
   try {
     if (!finalSql) return null;
     const kw = keywordsOf(question);
-    const tables = [...extractTables(finalSql)].filter(t => t.startsWith('ticketsmodule_'));
+    const tables = [...mentionedTables(finalSql)];
     const nq = qnorm(question);
     const ex = await pool.query('SELECT id FROM ticketsmodule_plsai_examples WHERE qnorm=$1 LIMIT 1', [nq]);
     if (ex.rows.length) {
@@ -554,9 +614,8 @@ async function buildCtx(user) {
   // и любые модульные), кроме явно заблокированных (учётки/пароли/токены/аудит/PII).
   if (user && (user.role === 'admin' || user.role === 'superadmin')) {
     try {
-      const blocked = new Set(Object.entries(TABLE_META).filter(([, m]) => m.tier === 'blocked').map(([t]) => t));
       const r = await pool.query(`SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'ticketsmodule\\_%'`);
-      for (const row of r.rows) if (!blocked.has(row.tablename)) allowed.add(row.tablename);
+      for (const row of r.rows) if (!isBlockedTable(row.tablename)) allowed.add(row.tablename);
     } catch (e) { console.warn('buildCtx all-tables:', e.message); }
   }
   const ownerBids = ownerScopeBids(user, meBidOf(user));
@@ -786,4 +845,4 @@ async function listAvailableModels() {
   } catch (e) { return { ok: false, error: e.message }; }
 }
 
-module.exports = { buildSystem, nowKz, runAgent, allowedTablesFor, ownerScopeBids, guardedSelect, buildCtx, exportAgentTable, voteExample, TABLE_META, agentModelInfo, listAvailableModels };
+module.exports = { precheck, relationsOf, isBlockedTable, checkReadonlyRole, buildSystem, nowKz, runAgent, allowedTablesFor, ownerScopeBids, guardedSelect, buildCtx, exportAgentTable, voteExample, TABLE_META, agentModelInfo, listAvailableModels };
