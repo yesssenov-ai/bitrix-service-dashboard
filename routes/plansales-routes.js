@@ -106,13 +106,17 @@ router.get('/:id/comments', requireAuth(VIEW_ROLES), async (req, res) => {
     const { result } = await b24('crm.timeline.comment.list', {
       filter: { ENTITY_ID: id, ENTITY_TYPE: 'deal' }, order: { CREATED: 'DESC' },
     });
-    const items = (result || []).map(c => ({
-      id: c.ID,
-      text: c.COMMENT || '',
-      authorId: c.AUTHOR_ID || null,
-      author: c.AUTHOR_ID ? (USERS[c.AUTHOR_ID] || ('#' + c.AUTHOR_ID)) : '—',
-      created: c.CREATED || null,
-    }));
+    const { splitAuthored } = require('../comment-author');
+    const items = (result || []).map(c => {
+      const a = splitAuthored(c.COMMENT, c.AUTHOR_ID); // автор, записанный ЦУПом в текст
+      return {
+        id: c.ID,
+        text: a.text,
+        authorId: a.name ? null : (c.AUTHOR_ID || null),
+        author: a.name || (c.AUTHOR_ID ? (USERS[c.AUTHOR_ID] || ('#' + c.AUTHOR_ID)) : '—'),
+        created: c.CREATED || null,
+      };
+    });
     res.set('Cache-Control', 'no-store');
     res.json({ ok: true, items });
   } catch (e) {
@@ -138,16 +142,9 @@ router.post('/:id/comments', requireAuth(VIEW_ROLES), express.json(), async (req
     if (!canCommentDeal(req.user, dealMgr, bid)) {
       return res.status(403).json({ error: 'Комментировать можно только свои сделки и сделки своего отдела.' });
     }
-    const fields = { ENTITY_ID: id, ENTITY_TYPE: 'deal' };
-    if (bid) {
-      fields.AUTHOR_ID = bid;            // автор = текущий пользователь (по связке/имени)
-      fields.COMMENT = text;
-    } else {
-      // Учётка не связана с Bitrix и имя не совпало — иначе автором стал бы
-      // владелец вебхука. Сохраняем настоящего автора в тексте комментария.
-      const who = (req.user && (req.user.display_name || req.user.engineer_name)) || 'сотрудник ЦУП';
-      fields.COMMENT = `[${who}]: ${text}`;
-    }
+    // Битрикс через вебхук всегда ставит автором владельца вебхука (AUTHOR_ID
+    // игнорируется) — настоящего автора пишем в текст комментария.
+    const fields = { ENTITY_ID: id, ENTITY_TYPE: 'deal', COMMENT: require('../comment-author').authored(req.user, text) };
     const { result } = await b24('crm.timeline.comment.add', { fields });
     res.json({ ok: true, id: result, linked: !!bid });
   } catch (e) {

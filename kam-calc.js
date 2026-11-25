@@ -626,8 +626,8 @@ async function setProjectPlanned(projectName, date, userBid, role, by) {
 }
 
 // Комментарий на весь проект (п.5): тот же текст в таймлайн ВСЕХ сделок проекта
-// (из тех, что пользователь вправе менять). Автор = пользователь (AUTHOR_ID) либо
-// имя в тексте, если учётка не связана с Битриксом (как в «План продаж»).
+// (из тех, что пользователь вправе менять). Автор — в тексте «[Имя]: …»
+// (Битрикс через вебхук всегда ставит автором владельца вебхука).
 async function addProjectComment(projectName, text, user) {
   projectName = String(projectName || '').trim();
   text = String(text || '').trim();
@@ -643,11 +643,10 @@ async function addProjectComment(projectName, text, user) {
     targets = rows.filter(r => okCo[String(r.company_id)]);
   }
   const skipped = rows.length - targets.length;
-  const who = (user && (user.display_name || user.engineer_name)) || 'сотрудник ЦУП';
+  const COMMENT = require('./comment-author').authored(user, text);
   let applied = 0;
   for (const r of targets) {
-    const fields = { ENTITY_ID: r.deal_id, ENTITY_TYPE: 'deal' };
-    if (bid) { fields.AUTHOR_ID = bid; fields.COMMENT = text; } else { fields.COMMENT = `[${who}]: ${text}`; }
+    const fields = { ENTITY_ID: r.deal_id, ENTITY_TYPE: 'deal', COMMENT };
     try { await b24('crm.timeline.comment.add', { fields }); applied++; } catch (e) { /* продолжаем остальные */ }
   }
   return { ok: true, applied, skipped };

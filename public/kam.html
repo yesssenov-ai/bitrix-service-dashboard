@@ -141,6 +141,15 @@ a{color:var(--info);text-decoration:none}
 .arow{display:flex;align-items:center;gap:9px;padding:9px 15px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .arow:last-child{border-bottom:none}.arow.ind{padding-left:40px}
 .arow .an{flex:1;font-size:13.5px;font-weight:600;min-width:140px}
+.adm-tools{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.adm-tools .search{flex:1;min-width:220px;max-width:460px}
+.adm-chev{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;cursor:pointer;color:var(--text-3);flex:none;user-select:none;font-size:12px}
+.adm-chev:hover{background:var(--surface-3);color:var(--text)}
+.adm-chev.ph{visibility:hidden}
+.adm-grp-h .gn{cursor:pointer}
+.adm-cnt{font-size:11.5px;font-weight:600;color:var(--text-3);margin-left:6px}
+.adm-hit{background:color-mix(in srgb,var(--warn,#d97706) 22%,transparent);border-radius:3px}
+.mini-btn.del svg{width:14px;height:14px;vertical-align:-2px}
 .selbox{appearance:none;background:var(--surface-2);border:1px solid var(--line-2);border-radius:9px;padding:6px 26px 6px 10px;color:var(--text);font:inherit;font-size:12.5px;font-weight:600;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='%237f8a9c' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;max-width:210px}
 .mini-btn{border:1px solid var(--line-2);background:var(--surface);color:var(--text-2);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:650}
@@ -373,7 +382,12 @@ a{color:var(--info);text-decoration:none}
     <span class="inh">↗ КАМ/группа/подразделение сохраняются сразу</span>
   </div>
   <div style="font-size:12px;color:var(--text-3);background:var(--surface-2);border:1px dashed var(--line-2);border-radius:10px;padding:10px 13px;margin-bottom:14px">
-    🔐 Доступ: админ/координатор. Назначайте КАМ на любом уровне (наследуется вниз), заводите подразделения, переносите компании в группы. КАМ хранится в ЦУП; подразделение сделки пишется в Битрикс.</div>
+    Доступ: админ/координатор. Назначайте КАМ на любом уровне (наследуется вниз), заводите подразделения, переносите компании в группы. КАМ хранится в ЦУП; подразделение сделки пишется в Битрикс.</div>
+  <div class="adm-tools">
+    <div class="search"><svg class="sico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="admSearch" placeholder="Поиск: группа, компания или подразделение…" autocomplete="off"></div>
+    <button class="mini-btn" type="button" onclick="admExpandAll(true)">Развернуть всё</button>
+    <button class="mini-btn" type="button" onclick="admExpandAll(false)">Свернуть всё</button>
+  </div>
   <div id="admBody"><div class="spin">Загрузка…</div></div>
 </div>
 
@@ -829,47 +843,79 @@ async function setKam(level,key,val){ try{ await api('/assign-kam',{level,key:de
 async function doMove(companyId,companyName,group){ try{ await api('/move-company',{companyId:decodeURIComponent(companyId),companyName,group}); toast('Компания перенесена в «'+(group||'Без группы')+'»'); PTREE=null; TREE=await fetch('/api/kam/tree',{credentials:'include',cache:'no-store'}).then(r=>r.json()); renderTree(); renderAdm(); }catch(e){ toast('Ошибка: '+e.message); } }
 async function addUnit(companyId,companyName){ const name=prompt('Название отдела / лаборатории / факультета:'); if(!name)return; try{ await api('/unit',{companyId:decodeURIComponent(companyId),name,kind:'lab'}); toast('Подразделение заведено'); TREE=await fetch('/api/kam/tree',{credentials:'include',cache:'no-store'}).then(r=>r.json()); renderTree(); renderAdm(); }catch(e){ toast('Ошибка: '+e.message); } }
 async function delUnit(id){ if(!confirm('Удалить подразделение из реестра? (сделки не трогаются)'))return; try{ await api('/unit/'+id,null,'DELETE'); toast('Удалено'); TREE=await fetch('/api/kam/tree',{credentials:'include',cache:'no-store'}).then(r=>r.json()); renderTree(); renderAdm(); }catch(e){ toast('Ошибка: '+e.message); } }
+// Свёрнутые группы/компании (запоминаем между заходами).
+const ADM_LS='kamAdmCollapsed';
+let ADM_COLL=(()=>{try{return new Set(JSON.parse(localStorage.getItem(ADM_LS)||'[]'));}catch(e){return new Set();}})();
+function admSave(){try{localStorage.setItem(ADM_LS,JSON.stringify([...ADM_COLL]));}catch(e){}}
+function admToggle(key){ key=decodeURIComponent(key); ADM_COLL.has(key)?ADM_COLL.delete(key):ADM_COLL.add(key); admSave(); renderAdm(); }
+function admExpandAll(on){
+  ADM_COLL=new Set();
+  if(!on&&TREE){ (TREE.groups||[]).forEach(g=>{ ADM_COLL.add('g:'+g.name); (g.companies||[]).forEach(c=>ADM_COLL.add('c:'+c.id)); }); }
+  admSave(); renderAdm();
+}
+const admQ=()=>((document.getElementById('admSearch')||{}).value||'').trim().toLowerCase();
+function admHL(name,q){ const t=String(name||''); if(!q)return esc(t); const i=t.toLowerCase().indexOf(q); if(i<0)return esc(t); return esc(t.slice(0,i))+'<span class="adm-hit">'+esc(t.slice(i,i+q.length))+'</span>'+esc(t.slice(i+q.length)); }
+const ICO_TRASH='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg>';
 async function renderAdm(){
   const body=document.getElementById('admBody');
   if(!ADM.users){ try{ ADM.users=(await api('/users',null,'GET')).users; ADM.groups=(await api('/groups',null,'GET')).groups; }catch(e){ body.innerHTML='<div class="empty">Нет доступа к админке</div>'; return; } }
   if(!TREE){ TREE=await fetch('/api/kam/tree',{credentials:'include',cache:'no-store'}).then(r=>r.json()); }
+  const s=document.getElementById('admSearch');
+  if(s&&!s._bound){ s._bound=true; let t; s.addEventListener('input',()=>{ clearTimeout(t); t=setTimeout(()=>{ poolShown=40; renderAdm(); },150); }); }
+  const q=admQ();
   const groups=(TREE.groups||[]); const real=groups.filter(g=>g.name!=='Без группы'); const pool=groups.find(g=>g.name==='Без группы');
   const grpOpts=(sel)=>['<option value="">Без группы</option>',...(ADM.groups||[]).map(g=>`<option ${g===sel?'selected':''}>${esc(g)}</option>`)].join('');
-  let h='';
+  const has=x=>String(x||'').toLowerCase().includes(q);
+  const chev=(key,open,ph)=>`<span class="adm-chev${ph?' ph':''}" onclick="admToggle('${encodeURIComponent(key)}')" title="${open?'Свернуть':'Развернуть'}">${open?'▾':'▸'}</span>`;
+  let h='', found=0;
   real.forEach(g=>{
-    h+=`<div class="adm-grp"><div class="adm-grp-h"><span class="ttype g">Группа</span><span class="gn">${esc(g.name)}</span>
+    // Поиск: группа целиком, если совпало имя группы; иначе — только совпавшие компании/подразделения.
+    const gHit=q&&has(g.name);
+    let comps=(g.companies||[]).map(c=>{
+      const cHit=q&&has(c.name);
+      const labs=(c.labs||[]).filter(l=>!q||gHit||cHit||has(l.name));
+      return {c,labs,show:!q||gHit||cHit||labs.length>0};
+    }).filter(x=>x.show);
+    if(q&&!gHit&&!comps.length)return;
+    found++;
+    const gk='g:'+g.name, gOpen=q?true:!ADM_COLL.has(gk);
+    h+=`<div class="adm-grp"><div class="adm-grp-h">${chev(gk,gOpen)}<span class="ttype g">Группа</span><span class="gn" onclick="admToggle('${encodeURIComponent(gk)}')">${admHL(g.name,q)}<span class="adm-cnt">${(g.companies||[]).length} комп.</span></span>
       <span class="aklbl">КАМ группы</span>${kamSel('group',g.name,g.kam)}</div>`;
-    (g.companies||[]).forEach(c=>{
-      h+=`<div class="arow"><span class="ttype c">Комп.</span><span class="an">${esc(c.name)}</span>
+    if(gOpen) comps.forEach(({c,labs})=>{
+      const ck='c:'+c.id, cOpen=q?true:!ADM_COLL.has(ck), nl=(c.labs||[]).length;
+      h+=`<div class="arow">${chev(ck,cOpen,!nl)}<span class="ttype c">Комп.</span><span class="an">${admHL(c.name,q)}${nl&&!cOpen?`<span class="adm-cnt">${nl} подр.</span>`:''}</span>
         <select class="selbox" title="Группа" onchange="doMove('${encodeURIComponent(c.id)}',${jarg(c.name)},this.value)">${grpOpts(g.name)}</select>
         ${kamSel('company',c.id,c.kam)}
         <button class="mini-btn" onclick="addUnit('${encodeURIComponent(c.id)}',${jarg(c.name)})">+ Подразд.</button></div>`;
-      (c.labs||[]).forEach(l=>{
-        h+=`<div class="arow ind"><span class="ttype l">Подр.</span><span class="an">${esc(l.name)}${l.id?'':' <span style="font-size:10px;color:var(--text-faint)">(из сделок)</span>'}</span>
+      if(cOpen) labs.forEach(l=>{
+        h+=`<div class="arow ind"><span class="ttype l">Подр.</span><span class="an">${admHL(l.name,q)}${l.id?'':' <span style="font-size:10px;color:var(--text-faint)">(из сделок)</span>'}</span>
           ${l.id?kamSel('unit',l.id,l.kam):`<button class="mini-btn" onclick="addUnit('${encodeURIComponent(c.id)}',${jarg(c.name)})">Завести в реестр</button>`}
-          ${l.id?`<button class="mini-btn del" onclick="delUnit(${l.id})">🗑</button>`:''}</div>`;
+          ${l.id?`<button class="mini-btn del" title="Удалить подразделение из реестра" onclick="delUnit(${l.id})">${ICO_TRASH}</button>`:''}</div>`;
       });
     });
     h+=`</div>`;
   });
-  // Пул на разбор — показываем все (постранично) + фильтр, правка прямо в строке
-  window._poolAdm=pool||{companies:[]}; poolShown=40;
-  h+=`<div class="adm-grp"><div class="adm-grp-h"><span class="ttype" style="background:var(--surface-3);color:var(--text-3)">Пул</span><span class="gn">Без группы — разобрать (${pool?pool.companiesCount:0})</span>
-      <div class="search" style="margin-left:auto;max-width:300px"><svg class="sico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="admPoolSearch" placeholder="Фильтр по названию…"></div></div>
-    <div id="admPoolRes"></div></div>`;
+  // Пул на разбор — тот же поиск, постранично, правка прямо в строке
+  window._poolAdm=pool||{companies:[]};
+  const pk='g:Без группы', pOpen=q?true:!ADM_COLL.has(pk);
+  const poolHits=q?(window._poolAdm.companies||[]).filter(c=>has(c.name)).length:(pool?pool.companiesCount:0);
+  if(!q||poolHits){
+    found++;
+    h+=`<div class="adm-grp"><div class="adm-grp-h">${chev(pk,pOpen)}<span class="ttype" style="background:var(--surface-3);color:var(--text-3)">Пул</span><span class="gn" onclick="admToggle('${encodeURIComponent(pk)}')">Без группы — разобрать<span class="adm-cnt">${q?poolHits+' найдено':(pool?pool.companiesCount:0)}</span></span></div>
+      ${pOpen?'<div id="admPoolRes"></div>':''}</div>`;
+  }
+  if(!found) h='<div class="empty">Ничего не найдено</div>';
   body.innerHTML=h;
   renderPool();
-  const ps=document.getElementById('admPoolSearch');
-  if(ps)ps.addEventListener('input',()=>{ poolShown=40; renderPool(); });
 }
 let poolShown=40;
 function renderPool(){
   const box=document.getElementById('admPoolRes'); if(!box)return; const pool=window._poolAdm||{companies:[]};
-  const q=((document.getElementById('admPoolSearch')||{}).value||'').trim().toLowerCase();
+  const q=admQ();
   let list=pool.companies||[]; if(q)list=list.filter(c=>(c.name||'').toLowerCase().includes(q));
   const grpOpts=['<option value="">Без группы</option>',...(ADM.groups||[]).map(g=>`<option>${esc(g)}</option>`)].join('');
   const show=list.slice(0,poolShown);
-  box.innerHTML=show.map(c=>`<div class="arow"><span class="ttype c">Комп.</span><span class="an">${esc(c.name)}</span>
+  box.innerHTML=show.map(c=>`<div class="arow"><span class="ttype c">Комп.</span><span class="an">${admHL(c.name,q)}</span>
     <span class="tmeta" style="min-width:48px">${c.count} сд.</span>
     <select class="selbox" title="Группа" onchange="doMove('${encodeURIComponent(c.id)}',${jarg(c.name)},this.value)">${grpOpts}</select>
     ${kamSel('company',c.id,c.kam)}</div>`).join('')

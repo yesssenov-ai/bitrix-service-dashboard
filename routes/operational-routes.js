@@ -404,7 +404,7 @@ router.post('/deal/:id/comment', requireCap('comment'), async (req, res) => {
     const text = (req.body.text || '').trim();
     if (!id || !text) return res.status(400).json({ ok: false, error: 'Пустой комментарий' });
     if (!(await ensureOwnDealIfEngineer(req, res, id))) return;
-    await b24('crm.timeline.comment.add', { fields: { ENTITY_ID: id, ENTITY_TYPE: 'deal', COMMENT: `💬 ${req.user.display_name}: ${text}` } });
+    await b24('crm.timeline.comment.add', { fields: { ENTITY_ID: id, ENTITY_TYPE: 'deal', COMMENT: require('../comment-author').authored(req.user, text) } });
     await auditLog(req.user.id, req.user.username, 'OP_DEAL_COMMENT', id, { text: text.slice(0, 100) }, req.headers['x-forwarded-for'] || req.ip, req.headers['user-agent']);
     await invalidateDealDetail(id);
     res.json({ ok: true });

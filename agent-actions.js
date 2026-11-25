@@ -139,7 +139,7 @@ async function execute(kind, params, user) {
     if (!did) throw new Error('Не указан ID сделки');
     const comment = String(params.comment || '').trim();
     if (!comment) throw new Error('Пустой комментарий');
-    await b24('crm.timeline.comment.add', { fields: { ENTITY_ID: did, ENTITY_TYPE: 'deal', COMMENT: comment } });
+    await b24('crm.timeline.comment.add', { fields: { ENTITY_ID: did, ENTITY_TYPE: 'deal', COMMENT: require('./comment-author').authored(user, comment) } }); // автор — в тексте (вебхук пишет от владельца)
     return 'Комментарий добавлен к сделке ' + did;
   }
   if (kind === 'create_reminder') {

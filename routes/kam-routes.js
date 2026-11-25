@@ -186,7 +186,11 @@ router.get('/deal/:id/comments', requireAuth(VIEW_ROLES), async (req, res) => {
     const { USERS } = require('../constants');
     const id = parseInt(req.params.id, 10);
     const { result } = await b24('crm.timeline.comment.list', { filter: { ENTITY_ID: id, ENTITY_TYPE: 'deal' }, order: { CREATED: 'DESC' } });
-    const items = (result || []).map(c => ({ id: c.ID, text: c.COMMENT || '', author: c.AUTHOR_ID ? (USERS[c.AUTHOR_ID] || ('#' + c.AUTHOR_ID)) : '—', created: c.CREATED || null }));
+    const { splitAuthored } = require('../comment-author');
+    const items = (result || []).map(c => {
+      const a = splitAuthored(c.COMMENT, c.AUTHOR_ID); // автор, записанный ЦУПом в текст
+      return { id: c.ID, text: a.text, author: a.name || (c.AUTHOR_ID ? (USERS[c.AUTHOR_ID] || ('#' + c.AUTHOR_ID)) : '—'), created: c.CREATED || null };
+    });
     res.set('Cache-Control', 'no-store'); res.json({ ok: true, items });
   } catch (e) { res.status(500).json({ error: e.message, items: [] }); }
 });
@@ -199,10 +203,8 @@ router.post('/deal/:id/comments', requireAuth(VIEW_ROLES), express.json(), async
     const cid = await kam.dealCompanyId(id);
     if (!(await kam.canManageCompany(req.user.bitrix_user_id, req.user.role, cid)))
       return res.status(403).json({ error: 'Комментировать можно только сделки своих компаний (где вы назначены КАМ)' });
-    const bid = req.user.bitrix_user_id ? parseInt(req.user.bitrix_user_id, 10) : null;
-    const fields = { ENTITY_ID: id, ENTITY_TYPE: 'deal' };
-    if (bid) { fields.AUTHOR_ID = bid; fields.COMMENT = text; }
-    else { const who = (req.user && (req.user.display_name || req.user.engineer_name)) || 'сотрудник ЦУП'; fields.COMMENT = `[${who}]: ${text}`; }
+    // Битрикс ставит автором владельца вебхука — настоящего автора пишем в текст.
+    const fields = { ENTITY_ID: id, ENTITY_TYPE: 'deal', COMMENT: require('../comment-author').authored(req.user, text) };
     const { result } = await b24('crm.timeline.comment.add', { fields });
     res.json({ ok: true, id: result });
   } catch (e) { res.status(500).json({ error: e.message }); }

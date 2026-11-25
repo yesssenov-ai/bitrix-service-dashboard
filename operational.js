@@ -880,13 +880,17 @@ async function getDealComments(dealId, limit = 15, userMap = {}) {
       order: { CREATED: 'DESC' },
     });
     const items = (result || []).slice(0, limit);
+    const { splitAuthored } = require('./comment-author');
     return items.map(c => {
       const authorId = parseInt(c.AUTHOR_ID, 10);
+      // Автор, записанный ЦУПом в текст («[Имя]: …» / старое «💬 Имя: …»), — разбираем
+      // ДО вырезания BB-кодов, иначе «[Имя]» пропадёт вместе с ними.
+      const a = splitAuthored(decodeBitrixEmoji(c.COMMENT || ''), c.AUTHOR_ID);
       return {
         id: c.ID,
         date: c.CREATED || null,
-        authorId, author: resolveUser(authorId, userMap),
-        text: decodeBitrixEmoji((c.COMMENT || '').replace(/\[[^\]]+\]/g, '')).trim(),
+        authorId, author: a.name || resolveUser(authorId, userMap),
+        text: a.text.replace(/\[[^\]]+\]/g, '').trim(),
       };
     }).filter(c => c.text);
   } catch (e) {
