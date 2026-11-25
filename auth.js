@@ -16,7 +16,10 @@ for (const key of REQUIRED_ENV) {
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
-  max: 20,                        // запас под 70–100 пользователей онлайн (ищите пулер Supabase, если упрётесь)
+  // Пулер Supabase в session-режиме даёт 15 подключений на пользователя БД; при max 20
+  // на старте ловили EMAXCONNSESSION. 12 — с запасом под ручные подключения; сверх этого
+  // запросы ждут в очереди пула, а не падают. Переопределяется PG_POOL_MAX.
+  max: parseInt(process.env.PG_POOL_MAX || '12', 10),
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 8000,
 });

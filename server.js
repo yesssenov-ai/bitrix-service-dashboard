@@ -1006,6 +1006,10 @@ initDB().then(() => {
     // С TG_WEBHOOK_SECRET — вебхук /tg/hook (ставится сам), без него — безопасный long polling.
     // Старый опрос telegram-link-bot (/start <bitrix_id>) выключен: чужой id не секрет.
     require('./tg-bot').start().catch(e => console.error('tg-bot start error:', e.message));
+    // ProLab AI грузится лениво (при первом вопросе). Подгружаем его через минуту после
+    // старта, когда схлынет пик подключений, — тогда его самопроверка роли только на
+    // чтение (PLSAI_READONLY_DATABASE_URL) отпишется в лог сама: «✅ …» или «🚨 …».
+    setTimeout(() => { try { require('./plsai-agent'); } catch (e) { console.error('plsai-agent load:', e.message); } }, 60 * 1000);
     // Mail tracker (модуль «Почта»): poll inbox, alert on unanswered client emails, daily digest/report.
     // ПРИОСТАНОВЛЕН по просьбе: ни поллинга, ни писем, пока MAIL_TRACKER_ENABLED !== 'true'.
     // Ничего не удалено — чтобы снова включить, задай на Railway переменную MAIL_TRACKER_ENABLED=true.
