@@ -259,7 +259,11 @@ a{color:var(--info);text-decoration:none}
 .stcard .st-n{font-size:22px;font-weight:800;letter-spacing:-.6px;margin-top:5px;font-variant-numeric:tabular-nums}
 .stcard .st-s{font-size:11.5px;color:var(--text-3);font-weight:600;font-variant-numeric:tabular-nums}
 .deptgrid{display:flex;flex-direction:column;gap:5px}
-.deptrow{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 13px;font-size:12.5px}
+.deptrow{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 13px;font-size:12.5px;cursor:pointer;transition:.14s}
+.deptrow:hover{border-color:var(--line-2);background:var(--surface-2)}
+.deptrow.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.st-clear{font-size:11.5px;font-weight:600;color:var(--text-3);border:1px solid var(--line-2);border-radius:7px;padding:3px 9px;cursor:pointer;background:var(--surface);margin-left:10px}
+.st-clear:hover{color:var(--accent);border-color:var(--accent)}
 .deptrow .dn{font-weight:650;flex:1}.deptrow .dc{color:var(--text-3);font-size:11.5px;font-variant-numeric:tabular-nums}.deptrow .ds{font-weight:700;letter-spacing:-.2px;font-variant-numeric:tabular-nums}
 .ks-ta{border:1px solid var(--line-2);background:var(--surface-2);border-radius:11px;padding:11px 13px;font:inherit;font-size:13.5px;color:var(--text);outline:none;resize:vertical;min-height:70px}
 .ks-ta:focus{border-color:var(--accent)}
@@ -958,24 +962,42 @@ function renderStageDetail(data){
     <div class="panel head-card"><div class="hc-top"><div>
       <div class="hc-title"><span class="ttype c" style="font-size:11px;padding:4px 9px">Компания</span>${esc(data.company)}</div>
       <div class="hc-sub">${data.totalDeals} сделок · ${data.totalSumMln} млн ₸ pipeline</div></div></div></div>
-    <div class="sec-h"><h3>Стадии</h3><span class="cnt">нажмите стадию — покажу сделки</span></div>
+    <div class="sec-h"><h3>Стадии</h3><span class="cnt">нажмите стадию и/или отдел — покажу сделки</span></div>
     <div class="stgrid">${(data.stages||[]).map(s=>`<div class="stcard ${stagePhaseClass(s.phase)}" data-key="${esc(s.key)}" onclick="selectStage(this)"><div class="st-l">${esc(s.label)}</div><div class="st-n">${s.count}</div><div class="st-s">${s.sumMln} млн ₸</div></div>`).join('')}</div>
     <div class="sec-h"><h3>По отделам</h3></div>
-    <div class="deptgrid">${(data.byDept||[]).map(x=>`<div class="deptrow"><span class="dn">${esc(x.dept)}</span><span class="dc">${x.count} сд.</span><span class="ds">${x.sumMln} млн ₸</span></div>`).join('')||'<div class="empty">—</div>'}</div>
-    <div class="sec-h" id="stDealsH" style="display:none"><h3 id="stDealsTitle">Сделки</h3></div>
+    <div class="deptgrid">${(data.byDept||[]).map(x=>`<div class="deptrow" data-dept="${esc(x.dept)}" onclick="selectDept(this)" title="Показать сделки отдела"><span class="dn">${esc(x.dept)}</span><span class="dc">${x.count} сд.</span><span class="ds">${x.sumMln} млн ₸</span></div>`).join('')||'<div class="empty">—</div>'}</div>
+    <div class="sec-h" id="stDealsH" style="display:none"><h3 id="stDealsTitle">Сделки</h3><button type="button" class="st-clear" onclick="clearStageFilter()">Сбросить фильтр</button></div>
     <div id="stDeals"></div>`;
+  ST_SEL={stage:null,stageLabel:'',dept:null};
 }
+// Фильтр сделок компании: стадия и отдел — независимо, можно сочетать.
+// Повторный клик по выбранному — снять этот признак.
+let ST_SEL={stage:null,stageLabel:'',dept:null};
 function selectStage(card){
   if(!_stageData)return;
-  // Повторный клик по выбранной стадии — свернуть её сделки.
-  if(card.classList.contains('sel')){ card.classList.remove('sel'); document.getElementById('stDealsH').style.display='none'; document.getElementById('stDeals').innerHTML=''; return; }
-  document.querySelectorAll('#stageDetail .stcard').forEach(c=>c.classList.remove('sel')); card.classList.add('sel');
   const key=card.dataset.key;
-  const ds=(_stageData.deals||[]).filter(x=>x.stageKey===key);
-  document.getElementById('stDealsH').style.display='';
-  document.getElementById('stDealsTitle').textContent='Сделки · '+card.querySelector('.st-l').textContent+' ('+ds.length+')';
-  const box=document.getElementById('stDeals');
-  box.innerHTML=ds.length?`<div class="pdeals" style="display:block">${dealsBlock(ds)}</div>`:'<div class="empty">Нет сделок на этой стадии</div>';
+  if(ST_SEL.stage===key){ ST_SEL.stage=null; ST_SEL.stageLabel=''; }
+  else { ST_SEL.stage=key; ST_SEL.stageLabel=card.querySelector('.st-l').textContent; }
+  applyStageFilter();
+}
+function selectDept(row){
+  if(!_stageData)return;
+  const dep=row.dataset.dept;
+  ST_SEL.dept=(ST_SEL.dept===dep)?null:dep;
+  applyStageFilter();
+}
+function clearStageFilter(){ ST_SEL={stage:null,stageLabel:'',dept:null}; applyStageFilter(); }
+function applyStageFilter(){
+  document.querySelectorAll('#stageDetail .stcard').forEach(c=>c.classList.toggle('sel',c.dataset.key===ST_SEL.stage));
+  document.querySelectorAll('#stageDetail .deptrow').forEach(r=>r.classList.toggle('sel',r.dataset.dept===ST_SEL.dept));
+  const H=document.getElementById('stDealsH'), box=document.getElementById('stDeals');
+  if(!ST_SEL.stage&&!ST_SEL.dept){ H.style.display='none'; box.innerHTML=''; return; }
+  const ds=(_stageData.deals||[]).filter(x=>(!ST_SEL.stage||x.stageKey===ST_SEL.stage)&&(!ST_SEL.dept||(x.dept||'')===ST_SEL.dept));
+  const parts=[ST_SEL.stageLabel,ST_SEL.dept].filter(Boolean);
+  H.style.display='';
+  document.getElementById('stDealsTitle').textContent='Сделки · '+parts.join(' · ')+' ('+ds.length+')';
+  box.innerHTML=ds.length?`<div class="pdeals" style="display:block">${dealsBlock(ds)}</div>`
+    :`<div class="empty">Нет сделок${ST_SEL.stage?' на этой стадии':''}${ST_SEL.dept?' в отделе «'+esc(ST_SEL.dept)+'»':''}</div>`;
 }
 // ── Вкладка «Аналитика» (акцент на Key Account Management) ───────────────────
 function shade(hex,amt){ const h=hex.replace('#',''); const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);
