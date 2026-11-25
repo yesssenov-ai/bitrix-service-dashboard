@@ -302,7 +302,16 @@ async function checkReadonlyRole() {
     try { await c.query('SELECT 1 FROM public.ticketsmodule_users LIMIT 1'); res.readsBlocked = true; } catch (e) { res.readsBlocked = false; }
     try { await c.query('BEGIN'); await c.query('CREATE TEMP TABLE _plsai_probe(x int)'); res.canWrite = true; } catch (e) { res.canWrite = false; } finally { await c.query('ROLLBACK').catch(() => {}); }
   } finally { c.release(); }
-  if (res.readsBlocked) console.error('🚨 ProLab AI: роль PLSAI_READONLY_DATABASE_URL ЧИТАЕТ ticketsmodule_users — выдайте ей SELECT только по scripts/plsai-readonly-role.sql');
+  // RLS: роль без разрешающего правила видит 0 строк БЕЗ ошибки — агент тогда
+  // уверенно говорит «данных нет». Сверяем со основным подключением.
+  try {
+    const main = (await pool.query('SELECT count(*)::int AS n FROM ticketsmodule_stat_deals')).rows[0].n;
+    const ro = (await agentPool().query('SELECT count(*)::int AS n FROM ticketsmodule_stat_deals')).rows[0].n;
+    res.rlsHidesRows = main > 0 && ro === 0;
+  } catch (e) { res.rlsHidesRows = null; res.roError = e.message; }
+  if (res.rlsHidesRows) console.error('🚨 ProLab AI: роль только-на-чтение видит 0 строк сделок (RLS без правила) — агент отвечает «данных нет». Перезапустите scripts/plsai-readonly-role.sql');
+  else if (res.roError) console.error('🚨 ProLab AI: роль только-на-чтение не читает сделки: ' + res.roError);
+  else if (res.readsBlocked) console.error('🚨 ProLab AI: роль PLSAI_READONLY_DATABASE_URL ЧИТАЕТ ticketsmodule_users — выдайте ей SELECT только по scripts/plsai-readonly-role.sql');
   else if (res.canWrite) console.error('🚨 ProLab AI: роль только-на-чтение может создавать таблицы — проверьте права');
   else console.log('✅ ProLab AI: отдельная роль только на чтение, закрытые таблицы недоступны на уровне базы');
   return res;

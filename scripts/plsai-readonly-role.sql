@@ -6,11 +6,14 @@
 -- Скрипт идемпотентен: запускайте ПОВТОРНО после появления новых таблиц —
 -- новые таблицы по умолчанию закрыты для роли, пока не выдан SELECT.
 --
--- Запуск: Supabase → SQL Editor → вставить → заменить пароль → Run.
+-- Запуск: Supabase → SQL Editor → вставить файл как есть → Run. Пароль — отдельной командой (см. ниже).
 
+-- ПАРОЛЬ В ЭТОТ ФАЙЛ НЕ ВПИСЫВАТЬ: репозиторий публичный. Пароль задаётся ОДНОЙ
+-- отдельной командой прямо в SQL Editor и нигде не сохраняется:
+--     ALTER ROLE plsai_ro PASSWORD 'ваш-пароль';
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'plsai_ro') THEN
-    CREATE ROLE plsai_ro LOGIN PASSWORD '3654b90c82456dc010bba8be31354baf7291847878cbc94ac82474408e57b65b';
+    CREATE ROLE plsai_ro LOGIN;
   END IF;
 END $$;
 
@@ -57,6 +60,24 @@ BEGIN
     IF NOT (t = ANY(allowed_override))
        AND substring(t from 15) ~ '(^|_)(users?|webauthn|logins?|passwords?|tokens?|secrets?|creds?|credentials|sessions?|link_codes|google|telegram|tg|push|prefs|audit|agent|otp|totp|keys?)(_|$)' THEN CONTINUE; END IF;
     EXECUTE format('GRANT SELECT ON public.%I TO plsai_ro', t);
+  END LOOP;
+END $$;
+
+-- RLS. На таблицах с включённой защитой строк (Supabase часто её включает) роль
+-- без разрешающего правила видит 0 строк — без ошибки. Даём правило «читать всё»
+-- ТОЛЬКО этой роли и ТОЛЬКО там, где выше выдан SELECT. Закрытые таблицы не трогаем.
+DO $$
+DECLARE t text;
+BEGIN
+  FOR t IN
+    SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE n.nspname = 'public' AND c.relkind IN ('r','p') AND c.relrowsecurity
+       AND c.relname LIKE 'ticketsmodule\_%'
+       AND has_table_privilege('plsai_ro', c.oid, 'SELECT')
+  LOOP
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = t AND policyname = 'plsai_ro_read') THEN
+      EXECUTE format('CREATE POLICY plsai_ro_read ON public.%I FOR SELECT TO plsai_ro USING (true)', t);
+    END IF;
   END LOOP;
 END $$;
 
