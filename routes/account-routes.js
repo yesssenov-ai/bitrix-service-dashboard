@@ -150,8 +150,24 @@ router.post('/telegram/unlink', requireAuth(), async (req, res) => {
 
 // ── Почта Google (OAuth, только чтение) — статус и отключение. Сами токены наружу не отдаются.
 router.get('/google', requireAuth(), async (req, res) => {
-  try { res.json({ ok: true, ...(await require('../gmail-lib').status(req.user.id)) }); }
+  try {
+    const st = await require('../gmail-lib').status(req.user.id);
+    const digest = st.connected ? await require('../mail-digest').getSettings(req.user.id) : null;
+    res.json({ ok: true, ...st, digest });
+  }
   catch (e) { console.error('account/google:', e.message); res.status(500).json({ ok: false, error: 'Ошибка' }); }
+});
+// Сводка по почте в Telegram: время (ЧЧ:ММ по Казахстану или null — выключено), только будни.
+router.post('/google/digest', requireAuth(), async (req, res) => {
+  try {
+    const { at, weekdays } = req.body || {};
+    await require('../mail-digest').setSettings(req.user.id, at || null, weekdays !== false);
+    res.json({ ok: true });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+router.post('/google/digest/test', requireAuth(), async (req, res) => {
+  try { res.json(await require('../mail-digest').sendNow(req.user.id)); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 router.post('/google/disconnect', requireAuth(), async (req, res) => {
   try {

@@ -371,13 +371,36 @@ async function loadGoogle(){
     box.innerHTML=flash+`
       <div class="ro"><span>Ящик</span><span>${esc(d.email)}</span></div>
       <div class="ro"><span>Подключён</span><span>${fmtDate(d.since)}</span></div>
-      <div class="row" style="margin-top:12px"><button class="btn btn-danger" onclick="disconnectGoogle()">Отключить</button><span class="msg" id="gmMsg"></span></div>`;
+      <div class="ro"><span>Сводка в Telegram</span><span>
+        <select id="gmDigAt" class="inp" style="width:auto;display:inline-block" onchange="saveDigest()">
+          <option value="">выключена</option>
+          ${['07:30','08:00','08:30','09:00','09:30','10:00','12:00','14:00','17:00','18:00','19:00'].map(t=>`<option ${d.digest&&d.digest.at===t?'selected':''}>${t}</option>`).join('')}
+          ${d.digest&&d.digest.at&&!['07:30','08:00','08:30','09:00','09:30','10:00','12:00','14:00','17:00','18:00','19:00'].includes(d.digest.at)?`<option selected>${esc(d.digest.at)}</option>`:''}
+        </select>
+        <label style="margin-left:10px;font-size:13px"><input type="checkbox" id="gmDigWd" ${!d.digest||d.digest.weekdays?'checked':''} onchange="saveDigest()"> только будни</label>
+      </span></div>
+      <div class="hint" style="margin-top:6px">Каждый день в выбранное время (по Казахстану): сколько пришло и не прочитано, через какие группы, что ждёт вашего ответа больше суток. Нужен подключённый Telegram.</div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn btn-ghost" onclick="testDigest()">Прислать сводку сейчас</button>
+        <button class="btn btn-danger" onclick="disconnectGoogle()">Отключить почту</button>
+        <span class="msg" id="gmMsg"></span>
+      </div>`;
     return;
   }
   box.innerHTML=flash+`
     <div class="ro"><span>Статус</span><span><span class="badge off">${d.revoked?'доступ отозван':'не подключена'}</span></span></div>
     <div class="row" style="margin-top:10px"><a class="btn btn-primary" href="/google/connect">Подключить почту Google</a><span class="msg" id="gmMsg"></span></div>
     <div class="hint" style="margin-top:8px">Откроется окно Google: выберите рабочий аккаунт и разрешите «Просмотр писем». Доступ можно отозвать здесь или в настройках аккаунта Google.</div>`;
+}
+async function saveDigest(){
+  const at=document.getElementById('gmDigAt').value||null, weekdays=document.getElementById('gmDigWd').checked;
+  const r=await api('/api/account/google/digest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({at,weekdays})});
+  const m=document.getElementById('gmMsg'); m.className='msg '+(r.ok?'ok':'err'); m.textContent=r.ok?(at?('Сводка в '+at+(weekdays?' по будням':' каждый день')):'Сводка выключена'):((r.data&&r.data.error)||'Ошибка');
+}
+async function testDigest(){
+  const m=document.getElementById('gmMsg'); m.className='msg'; m.textContent='Собираю сводку…';
+  const r=await api('/api/account/google/digest/test',{method:'POST'});
+  m.className='msg '+(r.ok?'ok':'err'); m.textContent=r.ok?'Отправлено в Telegram':((r.data&&r.data.error)||'Ошибка');
 }
 async function disconnectGoogle(){
   const r=await api('/api/account/google/disconnect',{method:'POST'});

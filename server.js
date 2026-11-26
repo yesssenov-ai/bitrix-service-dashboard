@@ -1078,6 +1078,9 @@ initDB().then(() => {
         try { await require('./morning-digest').sendMorningDigests(); }
         catch (e) { console.error('morning digest error:', e.message); }
       }
+      // Сводка по личной почте Google — тот же цикл (второе расписание = второе место
+      // поломки). Порядок важен: сначала уведомления выше, потом почта.
+      require('./mail-digest').tick().catch(e => console.error('mail digest error:', e.message));
     }, 5 * 60 * 1000);
 
     // Автосинхронизация Компаний из Bitrix — КАЖДЫЙ день в 03:00 UTC (08:00 Алматы).

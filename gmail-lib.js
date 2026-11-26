@@ -98,7 +98,8 @@ async function finishConnect(user, code, state) {
   const prof = await gfetch(d.access_token, '/users/me/profile');
   const email = String(prof.emailAddress || '').toLowerCase();
   if (!email) throw new Error('Не удалось узнать адрес ящика');
-  await pool.query(`INSERT INTO ticketsmodule_user_google (user_id, email, token_enc) VALUES ($1,$2,$3)
+  // Новому ящику — сводка по умолчанию в 09:00 по будням (меняется/выключается в профиле).
+  await pool.query(`INSERT INTO ticketsmodule_user_google (user_id, email, token_enc, digest_at) VALUES ($1,$2,$3,'09:00')
     ON CONFLICT (user_id, email) DO UPDATE SET token_enc=$3, revoked_at=NULL`, [user.id, email, seal(d.refresh_token)]);
   _access.delete(user.id);
   return { email };
@@ -256,4 +257,30 @@ async function disconnect(userId) {
   _access.delete(userId);
 }
 
-module.exports = { configured, ensure, authUrl, finishConnect, status, disconnect, mailCount, mailFind, mailRead, signState, readState, seal, unseal, stripHtml, walk };
+// Сырые помощники для сводки: id писем по запросу (с пределом) и заголовки пачкой.
+async function listIds(token, q, cap) {
+  const ids = []; let pageToken = '';
+  do {
+    const d = await gfetch(token, '/users/me/messages', { q: q || '', maxResults: '500', fields: 'messages(id,threadId),nextPageToken', ...(pageToken ? { pageToken } : {}) });
+    for (const m of d.messages || []) ids.push(m);
+    pageToken = d.nextPageToken || '';
+  } while (pageToken && ids.length < cap);
+  return { ids: ids.slice(0, cap), capped: !!pageToken || ids.length > cap };
+}
+async function headersOf(token, ids, names) {
+  const qs = 'format=metadata&' + names.map(n => 'metadataHeaders=' + n).join('&') + '&fields=id,threadId,labelIds,internalDate,payload/headers';
+  return pmap(ids, 8, async id => {
+    const r = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?${qs}`, { headers: { authorization: 'Bearer ' + token }, timeout: 20000 });
+    if (!r.ok) return { id, error: 'HTTP ' + r.status };
+    const m = await r.json();
+    const h = (m.payload && m.payload.headers) || [];
+    const o = { id: m.id, thread: m.threadId, labels: m.labelIds || [], at: Number(m.internalDate) || 0 };
+    for (const n of names) o[n.toLowerCase()] = hdr(h, n.toLowerCase());
+    return o;
+  });
+}
+async function threadMeta(token, threadId) {
+  return gfetch(token, '/users/me/threads/' + threadId, { format: 'metadata', metadataHeaders: 'From', fields: 'id,messages(id,labelIds,internalDate,payload/headers)' });
+}
+
+module.exports = { accessToken, listIds, headersOf, threadMeta, configured, ensure, authUrl, finishConnect, status, disconnect, mailCount, mailFind, mailRead, signState, readState, seal, unseal, stripHtml, walk };

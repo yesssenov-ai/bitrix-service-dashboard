@@ -241,7 +241,7 @@ async function onButton(cb) {
   return settle(head + '\n\n✓ ' + (r.already ? 'Уже было выполнено: ' : '') + (r.result || 'Готово'));
 }
 
-const HELP = 'Я ProLab AI — помощник по ЦУП. Спрашивайте текстом или голосом: «сколько закупок на оплате», «сделки Жарова на стадии договора», «поставь задачу …».\n\nПишущие действия (задачи, комментарии, события) я только предлагаю — выполняются они после вашей кнопки «Подтвердить».\n\n/stop — отключить Telegram от ЦУП.';
+const HELP = 'Я ProLab AI — помощник по ЦУП. Спрашивайте текстом или голосом: «сколько закупок на оплате», «сделки Жарова на стадии договора», «поставь задачу …».\n\nПишущие действия (задачи, комментарии, события) я только предлагаю — выполняются они после вашей кнопки «Подтвердить».\n\n/digest — сводка по вашей почте Google прямо сейчас.\n/stop — отключить Telegram от ЦУП.';
 
 // ── Главный разбор обновления ────────────────────────────────────────────────
 async function handle(update) {
@@ -267,10 +267,18 @@ async function handle(update) {
   let text = raw.replace(/@[A-Za-z0-9_]{3,}bot\b/gi, ' ').replace(/\s+/g, ' ').trim();
 
   // Команды
-  const cmd = text.match(/^\/(start|stop|help)(?:@\w+)?(?:\s+(\S+))?/i);
+  const cmd = text.match(/^\/(start|stop|help|digest)(?:@\w+)?(?:\s+(\S+))?/i);
   if (cmd) {
     const c = cmd[1].toLowerCase();
     if (c === 'help') return say(chatId, HELP, thread);
+    if (c === 'digest') {
+      if (inGroup) return say(chatId, 'Сводку по почте присылаю только в личный чат.', thread);
+      const u = await userByTg(msg.from.id);
+      if (!u) return say(chatId, 'Я вас не узнаю. Откройте в ЦУП Профиль → «Подключить Telegram».');
+      await typing(chatId);
+      try { await require('./mail-digest').sendNow(u.id); } catch (e) { await say(chatId, 'Сводка не собрана: ' + e.message); }
+      return;
+    }
     if (inGroup && c !== 'help') return say(chatId, 'Подключение и отключение — только в личном чате со мной.', thread);
     if (c === 'stop') {
       const u = await userByTg(msg.from.id);
