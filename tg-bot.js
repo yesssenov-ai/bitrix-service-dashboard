@@ -37,6 +37,11 @@ function ensure() {
       at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
     await q(`CREATE INDEX IF NOT EXISTS idx_tg_turns_key ON ticketsmodule_tg_turns(user_id, chat_id, at DESC)`);
     await q(`ALTER TABLE ticketsmodule_users ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(32)`);
+    // Предмет разговора темы группы (thread_id 0 — группа без тем или «General»).
+    await q(`CREATE TABLE IF NOT EXISTS ticketsmodule_tg_topics (
+      chat_id VARCHAR(32) NOT NULL, thread_id INTEGER NOT NULL DEFAULT 0,
+      title VARCHAR(200), context TEXT, set_by INTEGER, at TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (chat_id, thread_id))`);
     await q(`CREATE INDEX IF NOT EXISTS idx_users_tg_chat ON ticketsmodule_users(telegram_chat_id)`);
   })();
   return _ready;
@@ -241,7 +246,7 @@ async function onButton(cb) {
   return settle(head + '\n\n✓ ' + (r.already ? 'Уже было выполнено: ' : '') + (r.result || 'Готово'));
 }
 
-const HELP = 'Я ProLab AI — помощник по ЦУП. Спрашивайте текстом или голосом: «сколько закупок на оплате», «сделки Жарова на стадии договора», «поставь задачу …».\n\nПишущие действия (задачи, комментарии, события) я только предлагаю — выполняются они после вашей кнопки «Подтвердить».\n\n/digest — сводка по вашей почте Google прямо сейчас.\n/stop — отключить Telegram от ЦУП.';
+const HELP = 'Я ProLab AI — помощник по ЦУП. Спрашивайте текстом или голосом: «сколько закупок на оплате», «сделки Жарова на стадии договора», «поставь задачу …».\n\nПишущие действия (задачи, комментарии, события) я только предлагаю — выполняются они после вашей кнопки «Подтвердить».\n\nВ группе зовите меня упоминанием или ответом на моё сообщение; «тема: …» — задать предмет разговора темы, «тема?» — посмотреть.\n/digest — сводка по вашей почте Google прямо сейчас.\n/stop — отключить Telegram от ЦУП.';
 
 // ── Главный разбор обновления ────────────────────────────────────────────────
 async function handle(update) {
@@ -300,6 +305,33 @@ async function handle(update) {
   const user = await userByTg(msg.from.id);   // в группе человек — это from.id, а не chat.id
   if (!user) return say(chatId, 'Я вас не узнаю. Откройте в ЦУП Профиль → «Подключить Telegram».', thread);
 
+  // Тема группы: «тема: закупки по Силлено, вопросы по срокам» / «тема?» / «тема: -».
+  // Настраивает тот, кто в теме сидит, — прямо в теме, без админки.
+  let topic = null;
+  if (inGroup) {
+    const tkey = [chatId, thread || 0];
+    const tTitle = msg.reply_to_message && msg.reply_to_message.forum_topic_created ? msg.reply_to_message.forum_topic_created.name : null;
+    const tm = text.match(/^тема\s*(\?|[:：]\s*([\s\S]*))$/i);
+    if (tm) {
+      if (tm[1] === '?') {
+        const r = await pool.query('SELECT title, context FROM ticketsmodule_tg_topics WHERE chat_id=$1 AND thread_id=$2', tkey);
+        return say(chatId, r.rows[0] && r.rows[0].context ? `Предмет этой темы: ${r.rows[0].context}` : 'Предмет темы не задан. Напишите: «тема: о чём здесь говорим».', thread);
+      }
+      const ctx = String(tm[2] || '').trim();
+      if (!ctx || /^(-|нет|сброс|очистить)$/i.test(ctx)) {
+        await pool.query('DELETE FROM ticketsmodule_tg_topics WHERE chat_id=$1 AND thread_id=$2', tkey);
+        return say(chatId, 'Предмет темы сброшен.', thread);
+      }
+      await pool.query(`INSERT INTO ticketsmodule_tg_topics (chat_id, thread_id, title, context, set_by) VALUES ($1,$2,$3,$4,$5)
+        ON CONFLICT (chat_id, thread_id) DO UPDATE SET context=$4, set_by=$5, at=NOW(), title=COALESCE($3, ticketsmodule_tg_topics.title)`,
+        [...tkey, tTitle, ctx.slice(0, 600), user.id]);
+      return say(chatId, `Запомнил: в этой теме по умолчанию говорим про «${ctx.slice(0, 200)}». Вопросы о другом тоже можно задавать.`, thread);
+    }
+    const r = await pool.query('SELECT title, context FROM ticketsmodule_tg_topics WHERE chat_id=$1 AND thread_id=$2', tkey).catch(() => ({ rows: [] }));
+    topic = r.rows[0] || null;
+    if (!topic && tTitle) topic = { title: tTitle, context: null };
+  }
+
   // Голос → текст (расшифровку показываем ДО ответа)
   if (!text && (msg.voice || msg.audio || msg.video_note)) {
     await typing(chatId, thread);
@@ -315,7 +347,10 @@ async function handle(update) {
   let out;
   try {
     const history = await historyOf(user.id, chatId, thread);
-    out = await require('./plsai-agent').runAgent(text, user, { history, source: 'tg' });
+    out = await require('./plsai-agent').runAgent(text, user, {
+      history, source: 'tg', group: inGroup,
+      topic: topic && (topic.context || (topic.title ? 'тема чата «' + topic.title + '»' : null)), topicTitle: topic && topic.title,
+    });
   } catch (e) {
     out = { ok: false, error: 'Ошибка агента: ' + e.message };
   } finally { clearInterval(keep); }
