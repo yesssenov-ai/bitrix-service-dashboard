@@ -238,6 +238,7 @@ app.use('/auth', require('./routes/auth-routes'));
 app.use('/admin', require('./routes/admin-routes'));
 app.use('/api/account', require('./routes/account-routes'));
 app.use('/tg', require('./routes/tg-routes'));   // вебхук Telegram (проверка секрета внутри)
+app.use('/google', require('./routes/google-routes')); // подключение личной почты Google (OAuth, только чтение)
 equipmentRoutes.setB24(b24);
 app.use('/equipment', equipmentRoutes.router);
 app.use('/licenses', require('./routes/licenses-routes'));

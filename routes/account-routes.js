@@ -148,6 +148,19 @@ router.post('/telegram/unlink', requireAuth(), async (req, res) => {
   } catch (e) { console.error('account/telegram/unlink:', e.message); res.status(500).json({ ok: false, error: 'Ошибка' }); }
 });
 
+// ── Почта Google (OAuth, только чтение) — статус и отключение. Сами токены наружу не отдаются.
+router.get('/google', requireAuth(), async (req, res) => {
+  try { res.json({ ok: true, ...(await require('../gmail-lib').status(req.user.id)) }); }
+  catch (e) { console.error('account/google:', e.message); res.status(500).json({ ok: false, error: 'Ошибка' }); }
+});
+router.post('/google/disconnect', requireAuth(), async (req, res) => {
+  try {
+    await require('../gmail-lib').disconnect(req.user.id);
+    await auditLog(req.user.id, req.user.username, 'GOOGLE_MAIL_DISCONNECTED', null, {}, req.ip, req.headers['user-agent']);
+    res.json({ ok: true });
+  } catch (e) { console.error('account/google/disconnect:', e.message); res.status(500).json({ ok: false, error: 'Ошибка' }); }
+});
+
 // ── Личные настройки (ключ-значение): напр. флаг «видел онбординг-тур» ──
 router.get('/prefs/:key', requireAuth(), async (req, res) => {
   try {
