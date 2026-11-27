@@ -104,6 +104,31 @@ router.post('/tg-link-code', requireAuth(['superadmin']), async (req, res) => {
   } catch (e) { sanitizeError(e, res); }
 });
 
+// ── Google Диск ЦУП (общий диск; учётка подключается через /google/drive/connect) ──
+router.get('/drive', requireAuth(['superadmin']), async (req, res) => {
+  try {
+    const dl = require('../drive-lib');
+    const st = await dl.status();
+    let drives = [];
+    if (st.connected) { try { drives = await dl.listSharedDrives(); } catch (e) { st.error = e.message; } }
+    res.json({ ok: true, ...st, drives });
+  } catch (e) { sanitizeError(e, res); }
+});
+router.post('/drive/select', requireAuth(['superadmin']), async (req, res) => {
+  try {
+    const dr = await require('../drive-lib').selectDrive(String((req.body || {}).driveId || ''));
+    try { await auditLog(req.user.id, req.user.username, 'GOOGLE_DRIVE_SELECTED', null, { drive: dr.name }, req.ip, req.headers['user-agent']); } catch (e) {}
+    res.json({ ok: true, drive: dr });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+router.post('/drive/disconnect', requireAuth(['superadmin']), async (req, res) => {
+  try {
+    await require('../drive-lib').disconnect();
+    try { await auditLog(req.user.id, req.user.username, 'GOOGLE_DRIVE_DISCONNECTED', null, {}, req.ip, req.headers['user-agent']); } catch (e) {}
+    res.json({ ok: true });
+  } catch (e) { sanitizeError(e, res); }
+});
+
 // GET /admin/employee-options — все сотрудники для привязки учётки к Bitrix.
 // В отличие от /tg-links (там фильтр id>10 для служебных учёток) здесь показываем
 // ВСЕХ реальных людей, включая ID ≤ 10 (напр. Куаныш Есенов = 4), исключая только

@@ -195,6 +195,7 @@ th:last-child,td:last-child{text-align:right;}
     <button class="tab" onclick="showTab('tglinks',this)">🔔 Telegram-уведомления</button>
     <button class="tab" onclick="showTab('notiflog',this)">📨 Лог уведомлений</button>
     <button class="tab" onclick="showTab('feedback',this)">💬 Обратная связь</button>
+    <button class="tab" id="tabBtnDrive" onclick="showTab('drive',this)">Google Диск ЦУП</button>
   </div>
 
   <!-- USERS TAB -->
@@ -279,6 +280,20 @@ th:last-child,td:last-child{text-align:right;}
         </p>
       </div>
       <div id="tgLinksTable"><div class="empty">Загрузка…</div></div>
+    </div>
+  </div>
+
+  <!-- GOOGLE DRIVE TAB -->
+  <div id="tabDrive" style="display:none">
+    <div class="card">
+      <div class="card-head"><span class="card-title">Google Диск ЦУП</span></div>
+      <div class="modal-body">
+        <p style="font-size:13px;color:var(--text-3);margin-bottom:12px;line-height:1.6">
+          ЦУП работает с ОДНИМ общим диском компании от имени технической учётки (admin@). Туда сами складываются файлы закупок
+          (Закупки / год / закупка / документ), а ProLab AI ищет и читает документы на этом диске. Личные диски сотрудников ЦУПу недоступны.
+        </p>
+        <div id="driveBox"><div class="empty">Загрузка…</div></div>
+      </div>
     </div>
   </div>
 
@@ -471,11 +486,48 @@ function showTab(tab, el) {
   document.getElementById('tabTglinks').style.display = tab === 'tglinks' ? '' : 'none';
   document.getElementById('tabNotiflog').style.display = tab === 'notiflog' ? '' : 'none';
   document.getElementById('tabFeedback').style.display = tab === 'feedback' ? '' : 'none';
+  document.getElementById('tabDrive').style.display = tab === 'drive' ? '' : 'none';
+  if (tab === 'drive') loadDrive();
   if (tab === 'logs') loadLogs();
   if (tab === 'tglinks') loadTgLinks();
   if (tab === 'notiflog') loadNotifLog();
   if (tab === 'feedback') loadFeedback();
 }
+
+// ── Google Диск ЦУП ──
+async function loadDrive() {
+  const box = document.getElementById('driveBox');
+  const p = new URLSearchParams(location.search), st = p.get('drive'), msg = p.get('msg');
+  const flash = st ? `<div style="margin-bottom:10px;font-size:13px;color:${st==='ok'?'var(--good,#2e7d32)':'var(--bad,#c62828)'}">${st==='ok'?'Подключено: '+esc(msg||''):esc(msg||'Ошибка')}</div>` : '';
+  if (st) history.replaceState(null, '', location.pathname + '#drive');
+  let d; try { d = await (await fetch('/admin/drive')).json(); } catch (e) { box.innerHTML = '<div class="empty">Ошибка связи</div>'; return; }
+  if (!d.ok) { box.innerHTML = '<div class="empty">' + esc(d.error || 'Ошибка') + '</div>'; return; }
+  if (!d.configured) { box.innerHTML = flash + '<div class="empty">OAuth-клиент Google не настроен (переменные GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_TOKEN_KEY).</div>'; return; }
+  if (!d.connected) {
+    box.innerHTML = flash + `<p style="font-size:13px;margin-bottom:10px">1) Включите Google Drive API в проекте Google Cloud. 2) Создайте общий диск «ЦУП» и добавьте туда admin@ с ролью «Менеджер контента». 3) Нажмите кнопку и в окне Google выберите <b>admin@</b>.</p>
+      <a class="btn btn-primary" href="/google/drive/connect">Подключить Google Диск</a>`;
+    return;
+  }
+  const opts = (d.drives || []).map(x => `<option value="${esc(x.id)}" ${x.id===d.driveId?'selected':''}>${esc(x.name)}</option>`).join('');
+  box.innerHTML = flash + `
+    <div style="font-size:13px;line-height:2">Учётка: <b>${esc(d.email || '—')}</b><br>
+    Общий диск: ${d.driveName ? '<b>'+esc(d.driveName)+'</b>' : '<span style="color:var(--bad,#c62828)">не выбран — файлы не копируются</span>'}</div>
+    ${d.error ? `<div style="color:var(--bad,#c62828);font-size:13px">${esc(d.error)}</div>` : ''}
+    <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
+      ${(d.drives||[]).length ? `<select id="driveSel" class="input" style="max-width:320px">${d.driveId?'':'<option value="">— выберите общий диск —</option>'}${opts}</select>
+      <button class="btn btn-primary" onclick="selectDrive()">Сохранить</button>` : '<span style="font-size:13px;color:var(--text-3)">Учётка не состоит ни в одном общем диске — добавьте её в диск «ЦУП» и обновите страницу.</span>'}
+      <button class="btn" onclick="if(confirm('Отключить Google Диск от ЦУП?'))disconnectDrive()">Отключить</button>
+      <a class="btn" href="/google/drive/connect">Переподключить</a>
+    </div>`;
+}
+async function selectDrive() {
+  const id = document.getElementById('driveSel').value; if (!id) return;
+  const r = await fetch('/admin/drive/select', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ driveId: id }) });
+  const d = await r.json(); if (!d.ok) { toast(d.error || 'Ошибка', 'error'); return; }
+  toast('Общий диск выбран: ' + d.drive.name, 'success'); loadDrive();
+}
+async function disconnectDrive() { await fetch('/admin/drive/disconnect', { method: 'POST' }); loadDrive(); }
+if (location.hash === '#drive' || new URLSearchParams(location.search).get('drive')) setTimeout(() => { const b = document.getElementById('tabBtnDrive'); if (b) showTab('drive', b); }, 300);
 
 const FB_KIND = { idea: '💡 Идея', problem: '🐞 Проблема' };
 const FB_STBADGE = {

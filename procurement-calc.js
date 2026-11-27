@@ -108,6 +108,7 @@ function ensureSchema() {
         uploaded_by INTEGER,
         uploaded_at TIMESTAMPTZ DEFAULT NOW());
       ALTER TABLE ticketsmodule_procurement_files ADD COLUMN IF NOT EXISTS bitrix_file_id INTEGER;
+      ALTER TABLE ticketsmodule_procurement_files ADD COLUMN IF NOT EXISTS drive_file_id VARCHAR(100);
       ALTER TABLE ticketsmodule_procurement_files ADD COLUMN IF NOT EXISTS amount NUMERIC; -- сумма по счёту (для слота invoice)
       CREATE INDEX IF NOT EXISTS idx_proc_files_req ON ticketsmodule_procurement_files(request_id);
       -- Отгрузка по сделке: менеджер склада фиксирует «всё отправлено клиенту».
@@ -129,6 +130,7 @@ function ensureSchema() {
       CREATE INDEX IF NOT EXISTS idx_proc_ship_files_deal ON ticketsmodule_procurement_ship_files(deal_id);
       -- Трек-номер и перевозчик для отгрузок (когда шлём службой доставки, а не транспортом).
       ALTER TABLE ticketsmodule_procurement_ship_files ADD COLUMN IF NOT EXISTS track_number VARCHAR(120);
+      ALTER TABLE ticketsmodule_procurement_ship_files ADD COLUMN IF NOT EXISTS drive_file_id VARCHAR(100);
       ALTER TABLE ticketsmodule_procurement_ship_files ADD COLUMN IF NOT EXISTS carrier VARCHAR(60);
       -- Отсечка авто-создания закупок из подборов: на ПЕРВОМ запуске сюда попадают
       -- все УЖЕ завершённые подборы (как «предсуществующие») — по ним закупки НЕ
@@ -1551,6 +1553,8 @@ async function addFile(localId, slot, { filename, mime, base64, warehouse, accep
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
     [localId, slot, filename || 'file', mime || null, base64 || null, warehouse || null, acceptDate || null, comment || null,
      (amount != null && amount !== '') ? Number(amount) : null, uploadedBy || null]);
+  // Копия на общий диск «ЦУП» (Google Диск) — в фоне, пока байты ещё в content_b64.
+  require('./drive-lib').mirrorProcurementFile(ins.rows[0].id).catch(() => {});
   // Пересобираем поле Битрикса всем набором (формат B), если поле найдено.
   if (code) await pushSlotFull(localId, slot);
   // Уведомление об оплате шлём НЕ при загрузке платёжки, а при переходе на
@@ -1574,12 +1578,16 @@ async function addFilesBatch(localId, slot, files, uploadedBy) {
   const code = (await resolveDocFields())[slot];
   if (!code && !BEST_EFFORT_SLOTS.has(slot)) throw userFacing('В Битриксе не найдено поле для «' + (SLOT_LABELS[slot] || slot) + '»');
   const before = (await pool.query('SELECT COUNT(*)::int AS n FROM ticketsmodule_procurement_files WHERE request_id=$1 AND slot=$2', [localId, slot])).rows[0].n || 0;
+  const newIds = [];
   for (const f of files) {
-    await pool.query(
+    const r = await pool.query(
       `INSERT INTO ticketsmodule_procurement_files (request_id, slot, filename, mime, content_b64, warehouse, accept_date, comment, uploaded_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
       [localId, slot, f.filename || 'file', f.mime || null, f.base64, f.warehouse || null, f.acceptDate || null, f.comment || null, uploadedBy || null]);
+    newIds.push(r.rows[0].id);
   }
+  // Копии на общий диск «ЦУП» — в фоне, по очереди.
+  (async () => { for (const id of newIds) await require('./drive-lib').mirrorProcurementFile(id); })().catch(() => {});
   if (code) await pushSlotFull(localId, slot); // синхронизируем набор в Битрикс, если поле есть
   // Досылаем уведомление, если добавили сверх первого файла слота.
   if (before > 0 || files.length > 1) {
@@ -1813,6 +1821,7 @@ async function addShipFile(dealId, itemId, { filename, mime, base64 } = {}, byBi
     `INSERT INTO ticketsmodule_procurement_ship_files (deal_id, item_id, filename, mime, content_b64, uploaded_by)
      VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
     [Number(dealId), itemId ? Number(itemId) : null, filename || 'ТТН', mime || null, base64, byBid || null]);
+  require('./drive-lib').mirrorShipFile(ins.rows[0].id).catch(() => {});   // копия на Google Диск ЦУП
   // ТТН в поле «ТТН» Битрикса: доотправка → в свою закупку; основная (без itemId)
   // → в главную закупку сделки. Пишем ВСЕМ набором (формат B). Best-effort.
   (async () => {

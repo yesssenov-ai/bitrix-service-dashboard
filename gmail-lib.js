@@ -283,4 +283,4 @@ async function threadMeta(token, threadId) {
   return gfetch(token, '/users/me/threads/' + threadId, { format: 'metadata', metadataHeaders: 'From', fields: 'id,messages(id,labelIds,internalDate,payload/headers)' });
 }
 
-module.exports = { accessToken, listIds, headersOf, threadMeta, configured, ensure, authUrl, finishConnect, status, disconnect, mailCount, mailFind, mailRead, signState, readState, seal, unseal, stripHtml, walk };
+module.exports = { REDIRECT, tokenCall, accessToken, listIds, headersOf, threadMeta, configured, ensure, authUrl, finishConnect, status, disconnect, mailCount, mailFind, mailRead, signState, readState, seal, unseal, stripHtml, walk };
